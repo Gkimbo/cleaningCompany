@@ -29,6 +29,7 @@ import BookForClientModal from "./BookForClientModal";
 import SetupRecurringModal from "./SetupRecurringModal";
 import { usePricing } from "../../context/PricingContext";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 // Home Picker Modal Component
 const HomePickerModal = ({ visible, onClose, homes, onSelectHome, actionType }) => {
   if (!visible) return null;
@@ -213,7 +214,7 @@ const PaymentSetupBanner = ({ onPress }) => (
 );
 
 const MyClientsPage = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const { pricing } = usePricing();
   const [clients, setClients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -557,7 +558,7 @@ const MyClientsPage = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <View style={styles.headerContent}>

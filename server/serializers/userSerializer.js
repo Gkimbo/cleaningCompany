@@ -81,6 +81,9 @@ class UserSerializer {
 			"businessName",
 			"businessLogo",
 			"yearsInBusiness",
+			"accountFrozen",
+			"accountFrozenAt",
+			"accountFrozenReason",
 		];
 		const serializedUser = {};
 

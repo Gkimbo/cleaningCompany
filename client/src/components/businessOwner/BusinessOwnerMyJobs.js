@@ -15,6 +15,7 @@ import { formatCurrency } from "../../services/formatters";
 import { parseLocalDate } from "../../utils/dateUtils";
 import FetchData from "../../services/fetchRequests/fetchData";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const JobCard = ({ job, onPress }) => {
   const appointmentDate = parseLocalDate(job.date);
   const today = new Date();
@@ -92,7 +93,7 @@ const JobCard = ({ job, onPress }) => {
 };
 
 const BusinessOwnerMyJobs = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -137,7 +138,7 @@ const BusinessOwnerMyJobs = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.headerTitle}>My Marketplace Jobs</Text>

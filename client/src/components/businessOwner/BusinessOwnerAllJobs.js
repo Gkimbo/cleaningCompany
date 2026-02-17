@@ -15,6 +15,7 @@ import { formatCurrency } from "../../services/formatters";
 import { parseLocalDate } from "../../utils/dateUtils";
 import FetchData from "../../services/fetchRequests/fetchData";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 // Segmented Control Component
 const SegmentedControl = ({ options, selected, onChange }) => (
   <View style={styles.segmentedControl}>
@@ -289,7 +290,7 @@ const EmptyState = ({ filter, sourceFilter, assignmentFilter }) => {
 };
 
 const BusinessOwnerAllJobs = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -375,7 +376,7 @@ const BusinessOwnerAllJobs = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={16} color={colors.text.primary} />
         </Pressable>
         <View style={styles.headerCenter}>

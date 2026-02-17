@@ -54,6 +54,18 @@ const validatePassword = (password) => {
   return null;
 };
 
+// Helper to safely decrypt a field with error handling
+const safeDecrypt = (value) => {
+  if (!value) return null;
+  try {
+    const EncryptionService = require("../../../services/EncryptionService");
+    return EncryptionService.decrypt(value);
+  } catch (error) {
+    console.error("Decryption failed:", error.message);
+    return "[encrypted]";
+  }
+};
+
 usersRouter.post("/", async (req, res) => {
   try {
     const { firstName, lastName, username, password, email, termsId, privacyPolicyId, referralCode } = req.body;
@@ -563,7 +575,9 @@ usersRouter.post("/new-hr", async (req, res) => {
     }
 
     // Check if username or email already exists
-    let existingUser = await User.findOne({ where: { email } });
+    const EncryptionService = require("../../../services/EncryptionService");
+    const emailHash = EncryptionService.hash(email.toLowerCase());
+    let existingUser = await User.findOne({ where: { emailHash } });
     if (existingUser) {
       return res.status(409).json({ error: "Email already exists" });
     }
@@ -727,24 +741,26 @@ usersRouter.patch("/hr-staff/:id", async (req, res) => {
     }
 
     // Validate email if provided
+    const EncryptionService = require("../../../services/EncryptionService");
     if (email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         return res.status(400).json({ error: "Please enter a valid email address" });
       }
 
-      // Check if email is already taken by another user
-      const existingUser = await User.findOne({ where: { email } });
+      // Check if email is already taken by another user (using emailHash for encrypted comparison)
+      const emailHash = EncryptionService.hash(email.toLowerCase());
+      const existingUser = await User.findOne({ where: { emailHash } });
       if (existingUser && existingUser.id !== parseInt(id)) {
         return res.status(409).json({ error: "Email is already in use" });
       }
     }
 
-    // Update HR employee details
+    // Update HR employee details (model beforeUpdate hook handles encryption)
     const updateData = {};
     if (firstName !== undefined) updateData.firstName = firstName;
     if (lastName !== undefined) updateData.lastName = lastName;
-    if (email !== undefined) updateData.email = email;
+    if (email !== undefined) updateData.email = email.toLowerCase();
     if (phone !== undefined) updateData.phone = phone || null;
 
     await hrUser.update(updateData);
@@ -752,7 +768,6 @@ usersRouter.patch("/hr-staff/:id", async (req, res) => {
     console.log(`✅ HR employee ${id} updated by owner ${caller.id}`);
 
     // Decrypt PII fields for response
-    const EncryptionService = require("../../../services/EncryptionService");
     return res.status(200).json({
       message: "HR employee updated successfully",
       user: {
@@ -804,6 +819,31 @@ usersRouter.delete("/hr-staff/:id", async (req, res) => {
       return res.status(400).json({ error: "User is not an HR employee" });
     }
 
+    // Check for active case assignments and reassign them to owner
+    const { CancellationAppeal } = models;
+    if (CancellationAppeal) {
+      const activeAppeals = await CancellationAppeal.count({
+        where: {
+          assignedTo: id,
+          status: { [Op.in]: ["submitted", "under_review", "awaiting_documents"] },
+        },
+      });
+
+      if (activeAppeals > 0) {
+        // Reassign to owner (the caller)
+        await CancellationAppeal.update(
+          { assignedTo: caller.id },
+          {
+            where: {
+              assignedTo: id,
+              status: { [Op.in]: ["submitted", "under_review", "awaiting_documents"] },
+            },
+          }
+        );
+        console.log(`✅ Reassigned ${activeAppeals} appeals from HR ${id} to owner ${caller.id}`);
+      }
+    }
+
     // Remove associated records
     await UserBills.destroy({ where: { userId: id } });
     await ConversationParticipant.destroy({ where: { userId: id } });
@@ -832,6 +872,311 @@ usersRouter.delete("/hr-staff/:id", async (req, res) => {
   } catch (error) {
     console.error("Error removing HR employee:", error);
     return res.status(500).json({ error: "Failed to remove HR employee" });
+  }
+});
+
+// =============================================
+// IT STAFF MANAGEMENT ROUTES
+// =============================================
+
+// POST /api/v1/users/new-it - Owner creates IT account
+usersRouter.post("/new-it", async (req, res) => {
+  try {
+    const { firstName, lastName, username, password, email, phone } = req.body;
+
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || caller.type !== "owner") {
+      return res.status(403).json({ error: "Only owner can create IT accounts" });
+    }
+
+    // Validate required fields
+    if (!username || !password || !email) {
+      return res.status(400).json({ error: "Username, password, and email are required" });
+    }
+
+    // Validate username doesn't contain "owner"
+    if (username.toLowerCase().includes("owner")) {
+      return res.status(400).json({ error: "Username cannot contain the word 'owner'" });
+    }
+
+    // Validate password strength
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
+    }
+
+    // Check if username or email already exists
+    const EncryptionService = require("../../../services/EncryptionService");
+    const emailHash = EncryptionService.hash(email.toLowerCase());
+    let existingUser = await User.findOne({ where: { emailHash } });
+    if (existingUser) {
+      return res.status(409).json({ error: "Email already exists" });
+    }
+
+    existingUser = await User.findOne({ where: { username } });
+    if (existingUser) {
+      return res.status(410).json({ error: "Username already exists" });
+    }
+
+    // Create IT user (password is hashed by User model's beforeCreate hook)
+    const newUser = await User.create({
+      firstName: firstName || "",
+      lastName: lastName || "",
+      username,
+      password,
+      email,
+      phone: phone || null,
+      type: "it",
+      notifications: ["phone", "email"],
+    });
+
+    // Create UserBills record
+    await UserBills.create({
+      userId: newUser.id,
+      appointmentDue: 0,
+      cancellationFee: 0,
+      totalDue: 0,
+    });
+
+    // Add IT user to existing "IT Team" internal conversation if it exists
+    const itGroupConvo = await Conversation.findOne({
+      where: { conversationType: "internal", title: "IT Team" },
+    });
+    if (itGroupConvo) {
+      await ConversationParticipant.findOrCreate({
+        where: {
+          conversationId: itGroupConvo.id,
+          userId: newUser.id,
+        },
+      });
+      console.log(`✅ Added new IT staff to existing IT Team conversation`);
+    }
+
+    // Send welcome email with credentials
+    const itFirstName = firstName || username;
+    const itLastName = lastName || "";
+
+    await Email.sendEmailCongragulations(
+      itFirstName,
+      itLastName,
+      username,
+      password,
+      email,
+      "it"
+    );
+
+    console.log(`✅ New IT account created: ${username}`);
+
+    const serializedUser = UserSerializer.serializeOne(newUser.dataValues);
+    return res.status(201).json({ user: serializedUser });
+  } catch (error) {
+    console.error("Error creating IT account:", error);
+    res.status(500).json({ error: "Failed to create IT account" });
+  }
+});
+
+// GET /api/v1/users/it-staff - Owner gets list of all IT employees
+usersRouter.get("/it-staff", async (req, res) => {
+  try {
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || caller.type !== "owner") {
+      return res.status(403).json({ error: "Only owner can access IT staff list" });
+    }
+
+    // Fetch all IT employees
+    const itStaff = await User.findAll({
+      where: { type: "it" },
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Explicitly decrypt PII fields
+    const serializedItStaff = itStaff.map((user) => ({
+      id: user.id,
+      firstName: safeDecrypt(user.firstName),
+      lastName: safeDecrypt(user.lastName),
+      username: user.username,
+      email: safeDecrypt(user.email),
+      phone: safeDecrypt(user.phone),
+      createdAt: user.createdAt,
+    }));
+
+    return res.status(200).json({ itStaff: serializedItStaff });
+  } catch (error) {
+    console.error("Error fetching IT staff:", error);
+    return res.status(500).json({ error: "Failed to fetch IT staff" });
+  }
+});
+
+// PATCH /api/v1/users/it-staff/:id - Owner updates IT employee details
+usersRouter.patch("/it-staff/:id", async (req, res) => {
+  const { id } = req.params;
+  const { firstName, lastName, email, phone } = req.body;
+
+  try {
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || caller.type !== "owner") {
+      return res.status(403).json({ error: "Only owner can update IT staff" });
+    }
+
+    // Find the IT employee
+    const itUser = await User.findByPk(id);
+    if (!itUser) {
+      return res.status(404).json({ error: "IT employee not found" });
+    }
+
+    if (itUser.type !== "it") {
+      return res.status(400).json({ error: "User is not an IT employee" });
+    }
+
+    // Validate email if provided
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "Please enter a valid email address" });
+      }
+
+      // Check if email is already taken by another user (using emailHash for encrypted comparison)
+      const EncryptionService = require("../../../services/EncryptionService");
+      const emailHash = EncryptionService.hash(email.toLowerCase());
+      const existingUser = await User.findOne({ where: { emailHash } });
+      if (existingUser && existingUser.id !== parseInt(id)) {
+        return res.status(409).json({ error: "Email is already in use" });
+      }
+    }
+
+    // Update IT employee details
+    const updateData = {};
+    if (firstName !== undefined) updateData.firstName = firstName;
+    if (lastName !== undefined) updateData.lastName = lastName;
+    if (email !== undefined) updateData.email = email;
+    if (phone !== undefined) updateData.phone = phone || null;
+
+    await itUser.update(updateData);
+
+    console.log(`✅ IT employee ${id} updated by owner ${caller.id}`);
+
+    // Decrypt PII fields for response
+    return res.status(200).json({
+      message: "IT employee updated successfully",
+      user: {
+        id: itUser.id,
+        firstName: safeDecrypt(itUser.firstName),
+        lastName: safeDecrypt(itUser.lastName),
+        username: itUser.username,
+        email: safeDecrypt(itUser.email),
+        phone: safeDecrypt(itUser.phone),
+      },
+    });
+  } catch (error) {
+    console.error("Error updating IT employee:", error);
+    return res.status(500).json({ error: "Failed to update IT employee" });
+  }
+});
+
+// DELETE /api/v1/users/it-staff/:id - Owner removes IT employee
+usersRouter.delete("/it-staff/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || caller.type !== "owner") {
+      return res.status(403).json({ error: "Only owner can remove IT staff" });
+    }
+
+    // Find the IT employee
+    const itUser = await User.findByPk(id);
+    if (!itUser) {
+      return res.status(404).json({ error: "IT employee not found" });
+    }
+
+    if (itUser.type !== "it") {
+      return res.status(400).json({ error: "User is not an IT employee" });
+    }
+
+    // Remove associated records
+    await UserBills.destroy({ where: { userId: id } });
+    await ConversationParticipant.destroy({ where: { userId: id } });
+
+    // Cancel any referrals associated with this user
+    const { Referral } = models;
+    if (Referral) {
+      // Cancel referrals where this user was the referrer
+      await Referral.update(
+        { status: "cancelled" },
+        { where: { referrerId: id, status: { [Op.in]: ["pending", "qualified"] } } }
+      );
+      // Cancel referrals where this user was referred
+      await Referral.update(
+        { status: "cancelled" },
+        { where: { referredId: id, status: { [Op.in]: ["pending", "qualified"] } } }
+      );
+    }
+
+    // Delete the IT user
+    await itUser.destroy();
+
+    console.log(`✅ IT employee ${id} removed by owner ${caller.id}`);
+
+    return res.status(200).json({ message: "IT employee removed successfully" });
+  } catch (error) {
+    console.error("Error removing IT employee:", error);
+    return res.status(500).json({ error: "Failed to remove IT employee" });
   }
 });
 

@@ -15,6 +15,7 @@ import {
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -819,7 +820,7 @@ const TerminateModal = ({ visible, employee, onClose, onConfirm, isSubmitting })
 
 // Main Component
 const EmployeeManagement = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [employees, setEmployees] = useState([]);
@@ -1011,7 +1012,7 @@ const EmployeeManagement = ({ state }) => {
       <View style={styles.header}>
         {/* Top Row - Back button and Add button */}
         <View style={styles.headerTopRow}>
-          <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+          <Pressable style={styles.backButton} onPress={() => goBack()}>
             <Icon name="arrow-left" size={16} color="#fff" />
           </Pressable>
           <Pressable

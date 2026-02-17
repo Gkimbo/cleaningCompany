@@ -107,6 +107,10 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
+		paymentTermsAcceptedVersion: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
 		lastDeviceType: {
 			type: DataTypes.STRING,
 			allowNull: true,

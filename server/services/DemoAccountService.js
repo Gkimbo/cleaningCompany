@@ -53,6 +53,7 @@ const ROLE_TYPE_MAP = {
 	preferredCleaner: "cleaner", // Preferred cleaners are cleaners with platinum tier perks
 	largeHomeOwner: null, // Large home owner is a homeowner with a large home (for multi-cleaner jobs)
 	businessClient: null, // Business client is a homeowner who is a client of a business owner
+	it: "it", // IT staff for tech support
 };
 
 // Demo account email prefixes for identification
@@ -67,6 +68,7 @@ const DEMO_USERNAMES = {
 	largeBusinessOwner: "demo_large_business",
 	preferredCleaner: "demo_preferred_cleaner",
 	largeHomeOwner: "demo_large_home_owner",
+	it: "demo_it",
 };
 
 class DemoAccountService {
@@ -140,10 +142,10 @@ class DemoAccountService {
 	 */
 	static async createPreviewSession(ownerId, role, options = {}) {
 		try {
-			// Verify the owner is actually an owner
+			// Verify the user is an owner or IT staff
 			const owner = await User.findByPk(ownerId);
-			if (!owner || owner.type !== "owner") {
-				throw new Error("Only platform owners can create preview sessions");
+			if (!owner || (owner.type !== "owner" && owner.type !== "it")) {
+				throw new Error("Only platform owners or IT staff can create preview sessions");
 			}
 
 			// Get the demo account for this role
@@ -221,8 +223,8 @@ class DemoAccountService {
 	static async endPreviewSession(ownerId) {
 		try {
 			const owner = await User.findByPk(ownerId);
-			if (!owner || owner.type !== "owner") {
-				throw new Error("Invalid owner ID for ending preview session");
+			if (!owner || (owner.type !== "owner" && owner.type !== "it")) {
+				throw new Error("Invalid user ID for ending preview session");
 			}
 
 			// Clear the currentPreviewOwnerId from all demo accounts for this owner
@@ -283,6 +285,7 @@ class DemoAccountService {
 		if (user.type === "cleaner") return "cleaner";
 		if (user.type === "owner") return "owner";
 		if (user.type === "humanResources") return "humanResources";
+		if (user.type === "it") return "it";
 		return "homeowner";
 	}
 
@@ -345,6 +348,12 @@ class DemoAccountService {
 				label: "Large Home Owner",
 				description: "Homeowner with large home for team jobs",
 				icon: "home",
+			},
+			{
+				role: "it",
+				label: "IT Support",
+				description: "Handle tech support tickets and disputes",
+				icon: "headphones",
 			},
 		];
 	}
@@ -513,7 +522,7 @@ class DemoAccountService {
 						userId: demoHomeowner.id,
 						homeId: demoHome.id,
 						date: today,
-						price: "18000",
+						price: "180", // Price in dollars ($180.00)
 						paid: true,
 						bringTowels: "yes",
 						bringSheets: "no",
@@ -934,6 +943,10 @@ class DemoAccountService {
 			homeowner: "demo_homeowner",
 			businessOwner: "demo_business_owner",
 			employee: "demo_employee",
+			humanResources: "demo_hr",
+			largeBusinessOwner: "demo_large_business",
+			preferredCleaner: "demo_preferred_cleaner",
+			it: "demo_it",
 		};
 
 		const username = roleToUsername[role];

@@ -31,6 +31,7 @@ const ROLE_ICONS = {
 	largeBusinessOwner: "building",
 	preferredCleaner: "star",
 	largeHomeOwner: "home",
+	it: "headphones",
 };
 
 // Role label mapping
@@ -44,6 +45,7 @@ const ROLE_LABELS = {
 	largeBusinessOwner: "Elite Partner",
 	preferredCleaner: "Preferred Cleaner",
 	largeHomeOwner: "Large Home Owner",
+	it: "IT Support",
 };
 
 // Role color mapping
@@ -57,6 +59,7 @@ const ROLE_COLORS = {
 	largeBusinessOwner: colors.primary[500],
 	preferredCleaner: colors.warning[400],
 	largeHomeOwner: colors.success[400],
+	it: colors.primary[400],
 };
 
 // All available roles for switching
@@ -70,6 +73,7 @@ const ALL_ROLES = [
 	"largeBusinessOwner",
 	"preferredCleaner",
 	"largeHomeOwner",
+	"it",
 ];
 
 const ExitPreviewButton = () => {
@@ -92,7 +96,6 @@ const ExitPreviewButton = () => {
 	const handleExit = async () => {
 		const result = await exitPreviewMode();
 		if (result.success) {
-			// Navigate to home page which will show owner profile
 			navigate("/");
 		}
 	};
@@ -118,8 +121,6 @@ const ExitPreviewButton = () => {
 						if (result.success) {
 							setShowResetSuccess(true);
 							setTimeout(() => setShowResetSuccess(false), 3000);
-							// Navigate to home to force a full refresh of dashboard data
-							// This ensures the component remounts with the new session token
 							navigate("/");
 							Alert.alert(
 								"Demo Data Reset",
@@ -161,72 +162,44 @@ const ExitPreviewButton = () => {
 
 	return (
 		<View style={styles.container}>
-			{/* Role Badge - Now clickable to open role switcher */}
-			<Pressable
-				style={({ pressed }) => [
-					styles.roleBadge,
-					{ backgroundColor: roleColor + "15" },
-					pressed && styles.roleBadgePressed,
-				]}
-				onPress={() => setShowRoleSwitcher(true)}
-				disabled={isActionDisabled}
-			>
-				{isSwitching ? (
-					<ActivityIndicator size="small" color={roleColor} />
-				) : (
-					<Icon name={roleIcon} size={14} color={roleColor} />
-				)}
-				<Text style={[styles.roleBadgeText, { color: roleColor }]}>
-					{isSwitching ? "Switching..." : `Viewing as ${roleLabel}`}
-				</Text>
-				<Icon name="exchange" size={12} color={roleColor} style={styles.switchIcon} />
-			</Pressable>
-
-			{/* Success Badge */}
-			{showResetSuccess && (
-				<View style={styles.successBadge}>
-					<Icon name="check-circle" size={14} color={colors.success[600]} />
-					<Text style={styles.successBadgeText}>Demo data reset!</Text>
-				</View>
-			)}
-
-			{/* Button Row */}
-			<View style={styles.buttonRow}>
-				{/* Switch Role Button */}
+			{/* Main Preview Bar */}
+			<View style={styles.previewBar}>
+				{/* Role Badge - Clickable to open role switcher */}
 				<Pressable
 					style={({ pressed }) => [
-						styles.switchButton,
-						pressed && styles.switchButtonPressed,
+						styles.roleBadge,
+						pressed && styles.roleBadgePressed,
 					]}
 					onPress={() => setShowRoleSwitcher(true)}
 					disabled={isActionDisabled}
 				>
 					{isSwitching ? (
-						<ActivityIndicator size="small" color={colors.primary[700]} />
+						<ActivityIndicator size="small" color={colors.neutral[0]} />
 					) : (
-						<>
-							<Icon name="exchange" size={14} color={colors.primary[700]} />
-							<Text style={styles.switchButtonText}>Switch</Text>
-						</>
+						<Icon name={roleIcon} size={14} color={colors.neutral[0]} />
 					)}
+					<Text style={styles.roleBadgeText}>
+						{isSwitching ? "Switching..." : roleLabel}
+					</Text>
+					<Icon name="chevron-down" size={10} color={colors.neutral[300]} style={styles.chevronIcon} />
 				</Pressable>
 
-				{/* Reset Demo Data Button */}
+				{/* Divider */}
+				<View style={styles.divider} />
+
+				{/* Reset Button */}
 				<Pressable
 					style={({ pressed }) => [
-						styles.resetButton,
-						pressed && styles.resetButtonPressed,
+						styles.actionButton,
+						pressed && styles.actionButtonPressed,
 					]}
 					onPress={handleResetDemoData}
 					disabled={isActionDisabled}
 				>
 					{isResetting ? (
-						<ActivityIndicator size="small" color={colors.warning[700]} />
+						<ActivityIndicator size="small" color={colors.neutral[0]} />
 					) : (
-						<>
-							<Icon name="refresh" size={14} color={colors.warning[700]} />
-							<Text style={styles.resetButtonText}>Reset</Text>
-						</>
+						<Icon name="refresh" size={14} color={colors.neutral[0]} />
 					)}
 				</Pressable>
 
@@ -243,12 +216,20 @@ const ExitPreviewButton = () => {
 						<ActivityIndicator size="small" color={colors.neutral[0]} />
 					) : (
 						<>
-							<Icon name="sign-out" size={16} color={colors.neutral[0]} />
-							<Text style={styles.exitButtonText}>Exit</Text>
+							<Icon name="sign-out" size={14} color={colors.neutral[0]} />
+							<Text style={styles.exitButtonText}>Exit Preview</Text>
 						</>
 					)}
 				</Pressable>
 			</View>
+
+			{/* Success Badge */}
+			{showResetSuccess && (
+				<View style={styles.successBadge}>
+					<Icon name="check-circle" size={14} color={colors.success[600]} />
+					<Text style={styles.successBadgeText}>Demo data reset!</Text>
+				</View>
+			)}
 
 			{/* Role Switcher Modal */}
 			<Modal
@@ -323,9 +304,22 @@ const styles = StyleSheet.create({
 	container: {
 		position: "absolute",
 		bottom: spacing.xl,
+		left: spacing.lg,
 		right: spacing.lg,
-		alignItems: "flex-end",
+		alignItems: "center",
 		zIndex: 9999,
+	},
+	previewBar: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: colors.neutral[800],
+		borderRadius: radius.full,
+		paddingLeft: spacing.sm,
+		paddingRight: spacing.xs,
+		paddingVertical: spacing.xs,
+		...shadows.lg,
+		borderWidth: 1,
+		borderColor: colors.neutral[700],
 	},
 	roleBadge: {
 		flexDirection: "row",
@@ -333,19 +327,53 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.md,
 		paddingVertical: spacing.sm,
 		borderRadius: radius.full,
-		marginBottom: spacing.sm,
-		...shadows.md,
+		backgroundColor: colors.neutral[700],
 	},
 	roleBadgePressed: {
-		opacity: 0.8,
-		transform: [{ scale: 0.98 }],
+		backgroundColor: colors.neutral[600],
 	},
 	roleBadgeText: {
 		fontSize: typography.fontSize.sm,
-		fontWeight: typography.fontWeight.medium,
+		fontWeight: typography.fontWeight.semibold,
+		marginLeft: spacing.sm,
+		color: colors.neutral[0],
+	},
+	chevronIcon: {
 		marginLeft: spacing.sm,
 	},
-	switchIcon: {
+	divider: {
+		width: 1,
+		height: 24,
+		backgroundColor: colors.neutral[600],
+		marginHorizontal: spacing.sm,
+	},
+	actionButton: {
+		width: 36,
+		height: 36,
+		borderRadius: radius.full,
+		backgroundColor: colors.neutral[700],
+		alignItems: "center",
+		justifyContent: "center",
+		marginRight: spacing.xs,
+	},
+	actionButtonPressed: {
+		backgroundColor: colors.neutral[600],
+	},
+	exitButton: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: colors.error[600],
+		paddingHorizontal: spacing.md,
+		paddingVertical: spacing.sm,
+		borderRadius: radius.full,
+	},
+	exitButtonPressed: {
+		backgroundColor: colors.error[700],
+	},
+	exitButtonText: {
+		color: colors.neutral[0],
+		fontSize: typography.fontSize.sm,
+		fontWeight: typography.fontWeight.semibold,
 		marginLeft: spacing.sm,
 	},
 	successBadge: {
@@ -355,7 +383,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.md,
 		paddingVertical: spacing.sm,
 		borderRadius: radius.full,
-		marginBottom: spacing.sm,
+		marginTop: spacing.sm,
 		...shadows.sm,
 	},
 	successBadgeText: {
@@ -363,72 +391,6 @@ const styles = StyleSheet.create({
 		fontWeight: typography.fontWeight.medium,
 		marginLeft: spacing.sm,
 		color: colors.success[700],
-	},
-	buttonRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: spacing.sm,
-	},
-	switchButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		backgroundColor: colors.primary[100],
-		paddingHorizontal: spacing.md,
-		paddingVertical: spacing.md,
-		borderRadius: radius.full,
-		borderWidth: 1,
-		borderColor: colors.primary[300],
-		...shadows.md,
-	},
-	switchButtonPressed: {
-		backgroundColor: colors.primary[200],
-		transform: [{ scale: 0.98 }],
-	},
-	switchButtonText: {
-		color: colors.primary[700],
-		fontSize: typography.fontSize.sm,
-		fontWeight: typography.fontWeight.semibold,
-		marginLeft: spacing.xs,
-	},
-	resetButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		backgroundColor: colors.warning[100],
-		paddingHorizontal: spacing.md,
-		paddingVertical: spacing.md,
-		borderRadius: radius.full,
-		borderWidth: 1,
-		borderColor: colors.warning[300],
-		...shadows.md,
-	},
-	resetButtonPressed: {
-		backgroundColor: colors.warning[200],
-		transform: [{ scale: 0.98 }],
-	},
-	resetButtonText: {
-		color: colors.warning[700],
-		fontSize: typography.fontSize.sm,
-		fontWeight: typography.fontWeight.semibold,
-		marginLeft: spacing.xs,
-	},
-	exitButton: {
-		flexDirection: "row",
-		alignItems: "center",
-		backgroundColor: colors.error[600],
-		paddingHorizontal: spacing.lg,
-		paddingVertical: spacing.md,
-		borderRadius: radius.full,
-		...shadows.lg,
-	},
-	exitButtonPressed: {
-		backgroundColor: colors.error[700],
-		transform: [{ scale: 0.98 }],
-	},
-	exitButtonText: {
-		color: colors.neutral[0],
-		fontSize: typography.fontSize.base,
-		fontWeight: typography.fontWeight.semibold,
-		marginLeft: spacing.sm,
 	},
 	// Modal styles
 	modalOverlay: {

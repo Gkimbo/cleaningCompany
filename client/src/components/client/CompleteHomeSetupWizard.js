@@ -24,6 +24,7 @@ import {
 } from "../../services/styles/theme";
 import { usePricing } from "../../context/PricingContext";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const STEPS = {
   ACCESS: 0,
   LINENS: 1,
@@ -41,7 +42,7 @@ const BED_SIZE_OPTIONS = [
 
 const CompleteHomeSetupWizard = ({ state, dispatch }) => {
   const { id } = useParams();
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const { user } = useContext(AuthContext);
   const { pricing } = usePricing();
 
@@ -246,7 +247,7 @@ const CompleteHomeSetupWizard = ({ state, dispatch }) => {
     } else if (currentStep === STEPS.REVIEW) {
       setCurrentStep(STEPS.LINENS);
     } else {
-      navigate(-1);
+      goBack();
     }
   };
 

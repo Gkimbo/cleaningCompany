@@ -165,6 +165,22 @@ jest.mock("expo-linking", () => ({
   useURL: jest.fn(),
 }));
 
+// Mock react-router-native - provides default mocks for navigation hooks
+// Individual tests can override this with their own jest.mock() calls
+jest.mock("react-router-native", () => ({
+  useNavigate: () => jest.fn(),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
+  useParams: () => ({}),
+  useSearchParams: () => [new URLSearchParams(), jest.fn()],
+  Link: "Link",
+  Route: "Route",
+  Routes: "Routes",
+  Navigate: "Navigate",
+  Outlet: "Outlet",
+  NativeRouter: ({ children }) => children,
+  MemoryRouter: ({ children }) => children,
+}));
+
 // Mock fetch
 global.fetch = jest.fn(() =>
   Promise.resolve({

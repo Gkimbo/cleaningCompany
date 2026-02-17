@@ -28,9 +28,21 @@ const {
   updateAllHomesServiceAreaStatus,
 } = require("../../../config/businessConfig");
 const EmailClass = require("../../../services/sendNotifications/EmailClass");
+const NotificationService = require("../../../services/NotificationService");
 
 const ownerDashboardRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
+
+// Helper to safely decrypt a field with error handling
+const safeDecrypt = (value) => {
+  if (!value) return null;
+  try {
+    return EncryptionService.decrypt(value);
+  } catch (error) {
+    console.error("Decryption failed:", error.message);
+    return "[encrypted]";
+  }
+};
 
 // Middleware to verify owner access
 const verifyOwner = async (req, res, next) => {
@@ -240,10 +252,12 @@ ownerDashboardRouter.get(
       const oneMonthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
       const oneYearAgo = new Date(now - 365 * 24 * 60 * 60 * 1000);
 
-      // Total counts
+      // Total counts - exclude demo accounts
+      const demoFilter = { isDemoAccount: { [Op.ne]: true } };
+
       // All cleaners: users with type = "cleaner"
       const totalCleaners = await User.count({
-        where: { type: "cleaner" },
+        where: { type: "cleaner", ...demoFilter },
       }).catch(() => 0);
 
       // Cleaners with availability set (have daysWorking configured)
@@ -251,16 +265,32 @@ ownerDashboardRouter.get(
         where: {
           type: "cleaner",
           daysWorking: { [Op.ne]: null },
+          ...demoFilter,
         },
       }).catch(() => 0);
 
       // Homeowners: users who have at least one home registered
-      const totalHomes = await UserHomes.count().catch(() => 0);
+      const totalHomes = await UserHomes.count({
+        include: [{
+          model: User,
+          as: "user",
+          where: demoFilter,
+          required: true,
+          attributes: [],
+        }],
+      }).catch(() => 0);
 
-      // Count distinct homeowners (users who own at least one home)
+      // Count distinct homeowners (users who own at least one home) - excluding demo
       const homeownerCountResult = await UserHomes.count({
         distinct: true,
         col: 'userId',
+        include: [{
+          model: User,
+          as: "user",
+          where: demoFilter,
+          required: true,
+          attributes: [],
+        }],
       }).catch(() => 0);
       const totalHomeowners = homeownerCountResult;
 
@@ -268,10 +298,11 @@ ownerDashboardRouter.get(
       const totalRegisteredUsers = await User.count({
         where: {
           [Op.or]: [{ type: null }, { type: "" }, { type: "homeowner" }],
+          ...demoFilter,
         },
       }).catch(() => 0);
 
-      // Owners
+      // Owners - don't filter demo for owners (real platform owners)
       const totalOwners = await User.count({
         where: { type: "owner" },
       }).catch(() => 0);
@@ -288,7 +319,7 @@ ownerDashboardRouter.get(
         where: { status: "rejected" },
       }).catch(() => 0);
 
-      // Active users (logged in within time period)
+      // Active users (logged in within time period) - exclude demo accounts
       const getActiveUsers = async (since, userType) => {
         try {
           if (userType === "homeowner") {
@@ -296,6 +327,7 @@ ownerDashboardRouter.get(
               where: {
                 lastLogin: { [Op.gte]: since },
                 [Op.or]: [{ type: null }, { type: "" }, { type: "homeowner" }],
+                ...demoFilter,
               },
             });
           }
@@ -303,6 +335,7 @@ ownerDashboardRouter.get(
             where: {
               lastLogin: { [Op.gte]: since },
               type: userType,
+              ...demoFilter,
             },
           });
         } catch {
@@ -331,7 +364,7 @@ ownerDashboardRouter.get(
         getActiveUsers(oneYearAgo, "homeowner"),
       ]);
 
-      // New user signups over time (for chart)
+      // New user signups over time (for chart) - exclude demo accounts
       let userGrowth = [];
       try {
         userGrowth = await User.findAll({
@@ -345,6 +378,7 @@ ownerDashboardRouter.get(
           ],
           where: {
             createdAt: { [Op.gte]: oneYearAgo },
+            isDemoAccount: { [Op.ne]: true },
           },
           group: [
             sequelize.fn("DATE_TRUNC", "month", sequelize.col("createdAt")),
@@ -449,19 +483,23 @@ ownerDashboardRouter.get(
       const now = new Date();
       const oneYearAgo = new Date(now - 365 * 24 * 60 * 60 * 1000);
 
-      // Total appointments
-      const totalAppointments = await UserAppointments.count().catch(() => 0);
+      // Total appointments - exclude demo appointments
+      const demoApptFilter = { isDemoAppointment: { [Op.ne]: true } };
+      const totalAppointments = await UserAppointments.count({
+        where: demoApptFilter,
+      }).catch(() => 0);
       const completedAppointments = await UserAppointments.count({
-        where: { completed: true },
+        where: { completed: true, ...demoApptFilter },
       }).catch(() => 0);
       const upcomingAppointments = await UserAppointments.count({
         where: {
           completed: false,
           date: { [Op.gte]: now },
+          ...demoApptFilter,
         },
       }).catch(() => 0);
 
-      // Appointments by month (for chart)
+      // Appointments by month (for chart) - exclude demo appointments
       let appointmentsByMonth = [];
       try {
         appointmentsByMonth = await UserAppointments.findAll({
@@ -475,6 +513,7 @@ ownerDashboardRouter.get(
           ],
           where: {
             date: { [Op.gte]: oneYearAgo },
+            ...demoApptFilter,
           },
           group: [sequelize.fn("DATE_TRUNC", "month", sequelize.col("date"))],
           order: [
@@ -498,7 +537,7 @@ ownerDashboardRouter.get(
         monthly: (appointmentsByMonth || []).map((m) => ({
           month: m.month,
           count: parseInt(m.count) || 0,
-          revenueCents: parseInt(m.revenue) * 100 || 0,
+          revenueCents: Math.round(parseFloat(m.revenue || 0) * 100),
         })),
       });
     } catch (error) {
@@ -606,13 +645,14 @@ ownerDashboardRouter.get("/quick-stats", verifyOwner, async (req, res) => {
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
 
-    // Today's appointments
+    // Today's appointments - exclude demo appointments
     const todaysAppointments = await UserAppointments.count({
       where: {
         date: {
           [Op.gte]: todayStart,
           [Op.lt]: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000),
         },
+        isDemoAppointment: { [Op.ne]: true },
       },
     }).catch(() => 0);
 
@@ -621,19 +661,21 @@ ownerDashboardRouter.get("/quick-stats", verifyOwner, async (req, res) => {
       where: { status: "pending" },
     }).catch(() => 0);
 
-    // New users this week
+    // New users this week - exclude demo accounts
     const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
     const newUsersThisWeek = await User.count({
       where: {
         createdAt: { [Op.gte]: weekAgo },
+        isDemoAccount: { [Op.ne]: true },
       },
     }).catch(() => 0);
 
-    // Completed cleanings this week
+    // Completed cleanings this week - exclude demo appointments
     const completedThisWeek = await UserAppointments.count({
       where: {
         completed: true,
         date: { [Op.gte]: weekAgo },
+        isDemoAppointment: { [Op.ne]: true },
       },
     }).catch(() => 0);
 
@@ -658,12 +700,24 @@ ownerDashboardRouter.get(
   verifyOwner,
   async (req, res) => {
     try {
-      // Get count of homes outside service area
+      // Filter to exclude demo homes (homes owned by demo accounts)
+      const demoFilter = {
+        model: User,
+        as: "user",
+        where: { isDemoAccount: { [Op.ne]: true } },
+        required: true,
+        attributes: [],
+      };
+
+      // Get count of homes outside service area - exclude demo homes
       const homesOutsideArea = await UserHomes.count({
         where: { outsideServiceArea: true },
+        include: [demoFilter],
       }).catch(() => 0);
 
-      const totalHomes = await UserHomes.count().catch(() => 0);
+      const totalHomes = await UserHomes.count({
+        include: [demoFilter],
+      }).catch(() => 0);
 
       res.json({
         config: businessConfig.serviceAreas,
@@ -733,43 +787,47 @@ ownerDashboardRouter.get(
       const yearStart = new Date(now);
       yearStart.setFullYear(yearStart.getFullYear() - 1);
 
-      // Signup counts
+      // Signup counts - exclude demo accounts
+      const demoFilter = { isDemoAccount: { [Op.ne]: true } };
+
       const signupsToday = await User.count({
-        where: { createdAt: { [Op.gte]: todayStart } },
+        where: { createdAt: { [Op.gte]: todayStart }, ...demoFilter },
       }).catch(() => 0);
 
       const signupsThisWeek = await User.count({
-        where: { createdAt: { [Op.gte]: weekStart } },
+        where: { createdAt: { [Op.gte]: weekStart }, ...demoFilter },
       }).catch(() => 0);
 
       const signupsThisMonth = await User.count({
-        where: { createdAt: { [Op.gte]: monthStart } },
+        where: { createdAt: { [Op.gte]: monthStart }, ...demoFilter },
       }).catch(() => 0);
 
       const signupsThisYear = await User.count({
-        where: { createdAt: { [Op.gte]: yearStart } },
+        where: { createdAt: { [Op.gte]: yearStart }, ...demoFilter },
       }).catch(() => 0);
 
-      const signupsAllTime = await User.count().catch(() => 0);
+      const signupsAllTime = await User.count({
+        where: demoFilter,
+      }).catch(() => 0);
 
-      // Active users (using lastLogin as proxy for sessions)
+      // Active users (using lastLogin as proxy for sessions) - exclude demo accounts
       const activeToday = await User.count({
-        where: { lastLogin: { [Op.gte]: todayStart } },
+        where: { lastLogin: { [Op.gte]: todayStart }, ...demoFilter },
       }).catch(() => 0);
 
       const activeThisWeek = await User.count({
-        where: { lastLogin: { [Op.gte]: weekStart } },
+        where: { lastLogin: { [Op.gte]: weekStart }, ...demoFilter },
       }).catch(() => 0);
 
       const activeThisMonth = await User.count({
-        where: { lastLogin: { [Op.gte]: monthStart } },
+        where: { lastLogin: { [Op.gte]: monthStart }, ...demoFilter },
       }).catch(() => 0);
 
       const activeAllTime = await User.count({
-        where: { lastLogin: { [Op.ne]: null } },
+        where: { lastLogin: { [Op.ne]: null }, ...demoFilter },
       }).catch(() => 0);
 
-      // Calculate retention rates
+      // Calculate retention rates - exclude demo accounts
       // Day N retention = % of users who signed up at least N days ago and logged in at least N days after signup
       async function calculateRetention(days) {
         try {
@@ -780,6 +838,7 @@ ownerDashboardRouter.get(
           const usersSignedUp = await User.count({
             where: {
               createdAt: { [Op.lte]: cutoffDate },
+              ...demoFilter,
             },
           });
 
@@ -792,6 +851,7 @@ ownerDashboardRouter.get(
               createdAt: { [Op.lte]: cutoffDate },
               lastLogin: { [Op.ne]: null },
               [Op.and]: sequelize.literal(`"lastLogin" >= "createdAt" + interval '${days} days'`),
+              ...demoFilter,
             },
           });
 
@@ -806,22 +866,24 @@ ownerDashboardRouter.get(
       const day7Retention = await calculateRetention(7);
       const day30Retention = await calculateRetention(30);
 
-      // Calculate engagement metrics based on loginCount
-      const totalUsers = await User.count().catch(() => 0);
+      // Calculate engagement metrics based on loginCount - exclude demo accounts
+      const totalUsers = await User.count({
+        where: demoFilter,
+      }).catch(() => 0);
 
       // Users who have logged in at least once
       const usersWhoLoggedIn = await User.count({
-        where: { loginCount: { [Op.gte]: 1 } },
+        where: { loginCount: { [Op.gte]: 1 }, ...demoFilter },
       }).catch(() => 0);
 
       // Users who have logged in more than once (returning users)
       const returningUsers = await User.count({
-        where: { loginCount: { [Op.gte]: 2 } },
+        where: { loginCount: { [Op.gte]: 2 }, ...demoFilter },
       }).catch(() => 0);
 
       // Highly engaged users (logged in 5+ times)
       const highlyEngagedUsers = await User.count({
-        where: { loginCount: { [Op.gte]: 5 } },
+        where: { loginCount: { [Op.gte]: 5 }, ...demoFilter },
       }).catch(() => 0);
 
       // Calculate average logins per user
@@ -830,6 +892,7 @@ ownerDashboardRouter.get(
           [sequelize.fn("AVG", sequelize.col("loginCount")), "avgLogins"],
           [sequelize.fn("SUM", sequelize.col("loginCount")), "totalLogins"],
         ],
+        where: demoFilter,
         raw: true,
       }).catch(() => ({ avgLogins: 0, totalLogins: 0 }));
 
@@ -851,9 +914,9 @@ ownerDashboardRouter.get(
         ? Math.round((highlyEngagedUsers / usersWhoLoggedIn) * 100)
         : 0;
 
-      // Calculate device breakdown from lastDeviceType
+      // Calculate device breakdown from lastDeviceType - exclude demo accounts
       const deviceCounts = await User.findAll({
-        where: { lastDeviceType: { [Op.ne]: null } },
+        where: { lastDeviceType: { [Op.ne]: null }, ...demoFilter },
         attributes: [
           "lastDeviceType",
           [sequelize.fn("COUNT", sequelize.col("id")), "count"],
@@ -937,6 +1000,7 @@ ownerDashboardRouter.get(
   verifyOwner,
   async (req, res) => {
     try {
+      // Exclude demo homes (homes owned by demo accounts)
       const homes = await UserHomes.findAll({
         where: { outsideServiceArea: true },
         include: [
@@ -944,6 +1008,8 @@ ownerDashboardRouter.get(
             model: User,
             as: "user",
             attributes: ["id", "username", "email"],
+            where: { isDemoAccount: { [Op.ne]: true } },
+            required: true,
           },
         ],
         attributes: ["id", "nickName", "address", "city", "state", "zipcode"],
@@ -962,7 +1028,7 @@ ownerDashboardRouter.get(
             ? {
                 id: h.user.id,
                 username: h.user.username,
-                email: EncryptionService.decrypt(h.user.email),
+                email: safeDecrypt(h.user.email),
               }
             : null,
         })),
@@ -1019,7 +1085,7 @@ ownerDashboardRouter.get(
       }
 
       // ==========================================
-      // 2. REPEAT BOOKING RATE
+      // 2. REPEAT BOOKING RATE - exclude demo appointments
       // ==========================================
       let repeatBookingRate = { rate: 0, repeatBookers: 0, singleBookers: 0, totalHomeowners: 0 };
       try {
@@ -1029,6 +1095,7 @@ ownerDashboardRouter.get(
             "userId",
             [sequelize.fn("COUNT", sequelize.col("id")), "bookingCount"],
           ],
+          where: { isDemoAppointment: { [Op.ne]: true } },
           group: ["userId"],
           raw: true,
         });
@@ -1048,7 +1115,7 @@ ownerDashboardRouter.get(
       }
 
       // ==========================================
-      // 3. SUBSCRIPTION % (Frequent bookers - 3+ bookings)
+      // 3. SUBSCRIPTION % (Frequent bookers - 3+ bookings) - exclude demo appointments
       // ==========================================
       let subscriptionRate = { rate: 0, frequentBookers: 0, regularBookers: 0, occasionalBookers: 0 };
       try {
@@ -1057,6 +1124,7 @@ ownerDashboardRouter.get(
             "userId",
             [sequelize.fn("COUNT", sequelize.col("id")), "bookingCount"],
           ],
+          where: { isDemoAppointment: { [Op.ne]: true } },
           group: ["userId"],
           raw: true,
         });
@@ -1144,21 +1212,22 @@ ownerDashboardRouter.get(
         cleanerStats: [],
       };
       try {
-        // Get all cleaners
+        // Get all cleaners - exclude demo accounts
         const cleaners = await User.findAll({
-          where: { type: "cleaner" },
+          where: { type: "cleaner", isDemoAccount: { [Op.ne]: true } },
           attributes: ["id", "username", "cleanerRating"],
         });
 
-        // Get completed appointments count
+        // Get completed appointments count - exclude demo appointments
         const totalCompleted = await UserAppointments.count({
-          where: { completed: true },
+          where: { completed: true, isDemoAppointment: { [Op.ne]: true } },
         });
 
-        // Get assigned appointments (past date or completed)
+        // Get assigned appointments (past date or completed) - exclude demo appointments
         const totalAssigned = await UserAppointments.count({
           where: {
             hasBeenAssigned: true,
+            isDemoAppointment: { [Op.ne]: true },
             [Op.or]: [
               { completed: true },
               { date: { [Op.lt]: now.toISOString().split("T")[0] } },
@@ -1169,9 +1238,9 @@ ownerDashboardRouter.get(
         // Calculate completion rate
         const completionRate = totalAssigned > 0 ? Math.round((totalCompleted / totalAssigned) * 100) : 0;
 
-        // Get average cleaner rating
+        // Get average cleaner rating - exclude demo accounts
         const avgRatingResult = await User.findOne({
-          where: { type: "cleaner", cleanerRating: { [Op.gt]: 0 } },
+          where: { type: "cleaner", cleanerRating: { [Op.gt]: 0 }, isDemoAccount: { [Op.ne]: true } },
           attributes: [[sequelize.fn("AVG", sequelize.col("cleanerRating")), "avgRating"]],
           raw: true,
         });
@@ -1244,8 +1313,8 @@ ownerDashboardRouter.get("/settings", verifyOwner, async (req, res) => {
     const owner = req.user;
 
     res.json({
-      email: EncryptionService.decrypt(owner.email),
-      notificationEmail: owner.notificationEmail ? EncryptionService.decrypt(owner.notificationEmail) : null,
+      email: safeDecrypt(owner.email),
+      notificationEmail: safeDecrypt(owner.notificationEmail),
       effectiveNotificationEmail: owner.getNotificationEmail(),
       notifications: owner.notifications || [],
     });
@@ -1725,8 +1794,6 @@ ownerDashboardRouter.get("/priority-perks/history", verifyOwner, async (req, res
       offset: parseInt(offset, 10),
     });
 
-    const EncryptionService = require("../../../services/EncryptionService");
-
     const formattedHistory = history.map((entry) => ({
       id: entry.id,
       changedAt: entry.createdAt,
@@ -1734,7 +1801,7 @@ ownerDashboardRouter.get("/priority-perks/history", verifyOwner, async (req, res
       changedBy: entry.changer
         ? {
             id: entry.changer.id,
-            name: `${EncryptionService.decrypt(entry.changer.firstName) || ""} ${EncryptionService.decrypt(entry.changer.lastName) || ""}`.trim() || entry.changer.username,
+            name: `${safeDecrypt(entry.changer.firstName) || ""} ${safeDecrypt(entry.changer.lastName) || ""}`.trim() || entry.changer.username,
           }
         : null,
       changes: entry.changes,
@@ -1782,5 +1849,604 @@ function formatChangeSummary(changes) {
 
   return summaries;
 }
+
+// =====================
+// CLEANER MANAGEMENT ENDPOINTS
+// =====================
+
+/**
+ * GET /cleaners
+ * Get all cleaners with their frozen status (owner only)
+ */
+ownerDashboardRouter.get("/cleaners", verifyOwner, async (req, res) => {
+  try {
+    const { status } = req.query; // "all", "active", "frozen"
+
+    const where = { type: "cleaner", isDemoAccount: { [Op.ne]: true } };
+
+    if (status === "frozen") {
+      where.accountFrozen = true;
+    } else if (status === "active") {
+      where.accountFrozen = { [Op.ne]: true };
+    }
+
+    const cleaners = await User.findAll({
+      where,
+      attributes: [
+        "id",
+        "username",
+        "firstName",
+        "lastName",
+        "email",
+        "phone",
+        "accountFrozen",
+        "accountFrozenAt",
+        "accountFrozenReason",
+        "createdAt",
+        "lastLogin",
+        "daysWorking",
+        "warningCount",
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Fetch metrics for all cleaners in parallel
+    const cleanerIds = cleaners.map((c) => c.id);
+    const cleanerUsernames = cleaners.map((c) => c.username);
+
+    // Get job counts and earnings for each cleaner
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [jobMetrics, reviewMetrics] = await Promise.all([
+      // Job metrics - completed jobs
+      sequelize.query(
+        `SELECT
+          ua."employeesAssigned",
+          COUNT(*) as total_jobs,
+          SUM(CASE WHEN ua."completed" = true THEN 1 ELSE 0 END) as completed_jobs,
+          SUM(CASE WHEN ua."completed" = true THEN CAST(ua."price" AS INTEGER) ELSE 0 END) as total_earnings,
+          SUM(CASE WHEN ua."completed" = true AND ua."createdAt" >= :startOfMonth THEN CAST(ua."price" AS INTEGER) ELSE 0 END) as monthly_earnings
+        FROM "UserAppointments" ua
+        WHERE ua."hasBeenAssigned" = true
+        GROUP BY ua."employeesAssigned"`,
+        {
+          replacements: { startOfMonth },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      ),
+      // Review metrics - average rating per cleaner
+      UserReviews.findAll({
+        where: {
+          userId: { [Op.in]: cleanerIds },
+          reviewType: "homeowner_to_cleaner",
+        },
+        attributes: [
+          "userId",
+          [sequelize.fn("AVG", sequelize.col("review")), "avgRating"],
+          [sequelize.fn("COUNT", sequelize.col("id")), "reviewCount"],
+        ],
+        group: ["userId"],
+        raw: true,
+      }),
+    ]);
+
+    // Build lookup maps
+    const reviewMap = {};
+    reviewMetrics.forEach((r) => {
+      reviewMap[r.userId] = {
+        avgRating: parseFloat(r.avgRating) || 0,
+        reviewCount: parseInt(r.reviewCount) || 0,
+      };
+    });
+
+    // Calculate job metrics per cleaner (from employeesAssigned array)
+    const jobMap = {};
+    cleanerUsernames.forEach((username) => {
+      jobMap[username] = {
+        totalJobs: 0,
+        completedJobs: 0,
+        totalEarnings: 0,
+        monthlyEarnings: 0,
+      };
+    });
+    jobMetrics.forEach((row) => {
+      const assigned = row.employeesAssigned || [];
+      assigned.forEach((username) => {
+        if (jobMap[username]) {
+          jobMap[username].totalJobs += parseInt(row.total_jobs) || 0;
+          jobMap[username].completedJobs += parseInt(row.completed_jobs) || 0;
+          // Split earnings among assigned cleaners
+          const share = assigned.length > 0 ? 1 / assigned.length : 1;
+          jobMap[username].totalEarnings +=
+            Math.round((parseInt(row.total_earnings) || 0) * share);
+          jobMap[username].monthlyEarnings +=
+            Math.round((parseInt(row.monthly_earnings) || 0) * share);
+        }
+      });
+    });
+
+    const serializedCleaners = cleaners.map((c) => {
+      const reviews = reviewMap[c.id] || { avgRating: 0, reviewCount: 0 };
+      const jobs = jobMap[c.username] || {
+        totalJobs: 0,
+        completedJobs: 0,
+        totalEarnings: 0,
+        monthlyEarnings: 0,
+      };
+      const reliabilityScore =
+        jobs.totalJobs > 0
+          ? Math.round((jobs.completedJobs / jobs.totalJobs) * 100)
+          : null;
+
+      return {
+        id: c.id,
+        username: c.username,
+        firstName: safeDecrypt(c.firstName),
+        lastName: safeDecrypt(c.lastName),
+        email: safeDecrypt(c.email),
+        phone: safeDecrypt(c.phone),
+        accountFrozen: c.accountFrozen || false,
+        accountFrozenAt: c.accountFrozenAt,
+        accountFrozenReason: c.accountFrozenReason,
+        createdAt: c.createdAt,
+        lastLogin: c.lastLogin,
+        hasAvailability: c.daysWorking && c.daysWorking.length > 0,
+        warningCount: c.warningCount || 0,
+        // Performance metrics
+        jobsCompleted: jobs.completedJobs,
+        avgRating: reviews.avgRating,
+        reviewCount: reviews.reviewCount,
+        reliabilityScore,
+        // Earnings
+        totalEarnings: jobs.totalEarnings,
+        monthlyEarnings: jobs.monthlyEarnings,
+      };
+    });
+
+    return res.status(200).json({ cleaners: serializedCleaners });
+  } catch (error) {
+    console.error("[Owner Dashboard] Error fetching cleaners:", error);
+    return res.status(500).json({ error: "Failed to fetch cleaners" });
+  }
+});
+
+/**
+ * POST /cleaners/:cleanerId/freeze
+ * Freeze a cleaner account (owner only)
+ */
+ownerDashboardRouter.post(
+  "/cleaners/:cleanerId/freeze",
+  verifyOwner,
+  async (req, res) => {
+    try {
+      const { cleanerId } = req.params;
+      const { reason } = req.body;
+
+      if (!reason || reason.trim().length < 5) {
+        return res
+          .status(400)
+          .json({ error: "A reason is required (at least 5 characters)" });
+      }
+
+      const cleaner = await User.findByPk(cleanerId);
+      if (!cleaner) {
+        return res.status(404).json({ error: "Cleaner not found" });
+      }
+
+      if (cleaner.type !== "cleaner") {
+        return res.status(400).json({ error: "User is not a cleaner" });
+      }
+
+      if (cleaner.accountFrozen) {
+        return res.status(400).json({ error: "Account is already frozen" });
+      }
+
+      await cleaner.update({
+        accountFrozen: true,
+        accountFrozenAt: new Date(),
+        accountFrozenReason: reason.trim(),
+        accountStatusUpdatedById: req.user.id,
+      });
+
+      // Send notification to cleaner
+      const io = req.app.get("io");
+      try {
+        await NotificationService.notifyUser({
+          userId: parseInt(cleanerId),
+          type: "account_frozen",
+          title: "Account Frozen",
+          message:
+            "Your account has been frozen. Please contact support for assistance.",
+          data: {
+            frozenAt: new Date().toISOString(),
+            reason: reason.trim(),
+          },
+          io,
+        });
+      } catch (notifyErr) {
+        console.error(
+          "[Owner Dashboard] Error sending freeze notification:",
+          notifyErr
+        );
+      }
+
+      console.log(
+        `[Owner Dashboard] Cleaner ${cleanerId} frozen by owner ${req.user.id}. Reason: ${reason}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Cleaner account frozen successfully",
+        cleaner: {
+          id: cleaner.id,
+          accountFrozen: true,
+          accountFrozenAt: cleaner.accountFrozenAt,
+          accountFrozenReason: cleaner.accountFrozenReason,
+        },
+      });
+    } catch (error) {
+      console.error("[Owner Dashboard] Error freezing cleaner:", error);
+      return res.status(500).json({ error: "Failed to freeze cleaner account" });
+    }
+  }
+);
+
+/**
+ * POST /cleaners/:cleanerId/unfreeze
+ * Unfreeze a cleaner account (owner only)
+ */
+ownerDashboardRouter.post(
+  "/cleaners/:cleanerId/unfreeze",
+  verifyOwner,
+  async (req, res) => {
+    try {
+      const { cleanerId } = req.params;
+
+      const cleaner = await User.findByPk(cleanerId);
+      if (!cleaner) {
+        return res.status(404).json({ error: "Cleaner not found" });
+      }
+
+      if (cleaner.type !== "cleaner") {
+        return res.status(400).json({ error: "User is not a cleaner" });
+      }
+
+      if (!cleaner.accountFrozen) {
+        return res.status(400).json({ error: "Account is not frozen" });
+      }
+
+      await cleaner.update({
+        accountFrozen: false,
+        accountFrozenAt: null,
+        accountFrozenReason: null,
+        accountStatusUpdatedById: req.user.id,
+      });
+
+      // Send notification to cleaner
+      const io = req.app.get("io");
+      try {
+        await NotificationService.notifyUser({
+          userId: parseInt(cleanerId),
+          type: "account_unfrozen",
+          title: "Account Restored",
+          message:
+            "Your account has been restored. You now have full access to the platform.",
+          data: {
+            unfrozenAt: new Date().toISOString(),
+          },
+          io,
+        });
+      } catch (notifyErr) {
+        console.error(
+          "[Owner Dashboard] Error sending unfreeze notification:",
+          notifyErr
+        );
+      }
+
+      console.log(
+        `[Owner Dashboard] Cleaner ${cleanerId} unfrozen by owner ${req.user.id}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Cleaner account unfrozen successfully",
+        cleaner: {
+          id: cleaner.id,
+          accountFrozen: false,
+        },
+      });
+    } catch (error) {
+      console.error("[Owner Dashboard] Error unfreezing cleaner:", error);
+      return res
+        .status(500)
+        .json({ error: "Failed to unfreeze cleaner account" });
+    }
+  }
+);
+
+/**
+ * GET /cleaners/:cleanerId/details
+ * Get detailed cleaner profile with metrics and earnings (owner only)
+ */
+ownerDashboardRouter.get(
+  "/cleaners/:cleanerId/details",
+  verifyOwner,
+  async (req, res) => {
+    try {
+      const { cleanerId } = req.params;
+
+      const cleaner = await User.findByPk(cleanerId, {
+        attributes: [
+          "id",
+          "username",
+          "firstName",
+          "lastName",
+          "email",
+          "phone",
+          "accountFrozen",
+          "accountFrozenAt",
+          "accountFrozenReason",
+          "createdAt",
+          "lastLogin",
+          "daysWorking",
+          "warningCount",
+        ],
+      });
+
+      if (!cleaner) {
+        return res.status(404).json({ error: "Cleaner not found" });
+      }
+
+      if (cleaner.type && cleaner.type !== "cleaner") {
+        return res.status(400).json({ error: "User is not a cleaner" });
+      }
+
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      // Get all appointments where this cleaner was assigned
+      const appointments = await UserAppointments.findAll({
+        where: {
+          employeesAssigned: { [Op.contains]: [cleaner.username] },
+        },
+        attributes: ["id", "completed", "price", "date", "createdAt"],
+      });
+
+      // Calculate metrics
+      const totalJobs = appointments.length;
+      const completedJobs = appointments.filter((a) => a.completed).length;
+      const reliabilityScore =
+        totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : null;
+
+      // Calculate earnings
+      let totalEarnings = 0;
+      let monthlyEarnings = 0;
+      appointments.forEach((a) => {
+        if (a.completed) {
+          const price = parseInt(a.price) || 0;
+          totalEarnings += price;
+          if (new Date(a.createdAt) >= startOfMonth) {
+            monthlyEarnings += price;
+          }
+        }
+      });
+      const avgPerJob = completedJobs > 0 ? Math.round(totalEarnings / completedJobs) : 0;
+
+      // Get reviews
+      const reviews = await UserReviews.findAll({
+        where: {
+          userId: cleanerId,
+          reviewType: "homeowner_to_cleaner",
+        },
+        attributes: ["review"],
+      });
+
+      const avgRating =
+        reviews.length > 0
+          ? reviews.reduce((sum, r) => sum + r.review, 0) / reviews.length
+          : 0;
+
+      return res.status(200).json({
+        cleaner: {
+          id: cleaner.id,
+          username: cleaner.username,
+          firstName: safeDecrypt(cleaner.firstName),
+          lastName: safeDecrypt(cleaner.lastName),
+          email: safeDecrypt(cleaner.email),
+          phone: safeDecrypt(cleaner.phone),
+          accountFrozen: cleaner.accountFrozen || false,
+          accountFrozenAt: cleaner.accountFrozenAt,
+          accountFrozenReason: cleaner.accountFrozenReason,
+          warningCount: cleaner.warningCount || 0,
+          createdAt: cleaner.createdAt,
+          lastLogin: cleaner.lastLogin,
+          daysWorking: cleaner.daysWorking || [],
+        },
+        metrics: {
+          totalJobsCompleted: completedJobs,
+          totalJobsAssigned: totalJobs,
+          averageRating: Math.round(avgRating * 10) / 10,
+          reliabilityScore,
+          totalReviews: reviews.length,
+        },
+        earnings: {
+          totalEarnings,
+          earningsThisMonth: monthlyEarnings,
+          averagePerJob: avgPerJob,
+        },
+      });
+    } catch (error) {
+      console.error("[Owner Dashboard] Error fetching cleaner details:", error);
+      return res.status(500).json({ error: "Failed to fetch cleaner details" });
+    }
+  }
+);
+
+/**
+ * GET /cleaners/:cleanerId/job-history
+ * Get paginated job history for a cleaner (owner only)
+ */
+ownerDashboardRouter.get(
+  "/cleaners/:cleanerId/job-history",
+  verifyOwner,
+  async (req, res) => {
+    try {
+      const { cleanerId } = req.params;
+      const { page = 1, limit = 20, status = "all" } = req.query;
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+
+      const cleaner = await User.findByPk(cleanerId, {
+        attributes: ["id", "username"],
+      });
+
+      if (!cleaner) {
+        return res.status(404).json({ error: "Cleaner not found" });
+      }
+
+      // Build where clause
+      const where = {
+        employeesAssigned: { [Op.contains]: [cleaner.username] },
+      };
+
+      if (status === "completed") {
+        where.completed = true;
+      } else if (status === "cancelled") {
+        where.completed = false;
+      }
+
+      const { count, rows: appointments } = await UserAppointments.findAndCountAll({
+        where,
+        include: [
+          {
+            model: UserHomes,
+            as: "home",
+            attributes: ["address", "city", "state"],
+          },
+        ],
+        order: [["date", "DESC"]],
+        limit: parseInt(limit),
+        offset,
+      });
+
+      // Get reviews for these appointments
+      const appointmentIds = appointments.map((a) => a.id);
+      const reviews = await UserReviews.findAll({
+        where: {
+          appointmentId: { [Op.in]: appointmentIds },
+          reviewType: "homeowner_to_cleaner",
+        },
+        attributes: ["appointmentId", "review"],
+      });
+
+      const reviewMap = {};
+      reviews.forEach((r) => {
+        reviewMap[r.appointmentId] = r.review;
+      });
+
+      const jobs = appointments.map((a) => ({
+        id: a.id,
+        date: a.date,
+        homeAddress: a.home ? safeDecrypt(a.home.address) : null,
+        homeCity: a.home ? a.home.city : null,
+        homeState: a.home ? a.home.state : null,
+        status: a.completed ? "completed" : "incomplete",
+        price: parseInt(a.price) || 0,
+        rating: reviewMap[a.id] || null,
+      }));
+
+      return res.status(200).json({
+        jobs,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: count,
+          totalPages: Math.ceil(count / parseInt(limit)),
+        },
+      });
+    } catch (error) {
+      console.error("[Owner Dashboard] Error fetching job history:", error);
+      return res.status(500).json({ error: "Failed to fetch job history" });
+    }
+  }
+);
+
+/**
+ * POST /cleaners/:cleanerId/warning
+ * Issue a formal warning to a cleaner (owner only)
+ */
+ownerDashboardRouter.post(
+  "/cleaners/:cleanerId/warning",
+  verifyOwner,
+  async (req, res) => {
+    try {
+      const { cleanerId } = req.params;
+      const { reason, severity = "minor" } = req.body;
+
+      if (!reason || reason.trim().length < 10) {
+        return res
+          .status(400)
+          .json({ error: "A reason is required (at least 10 characters)" });
+      }
+
+      if (!["minor", "major"].includes(severity)) {
+        return res
+          .status(400)
+          .json({ error: "Severity must be 'minor' or 'major'" });
+      }
+
+      const cleaner = await User.findByPk(cleanerId);
+      if (!cleaner) {
+        return res.status(404).json({ error: "Cleaner not found" });
+      }
+
+      if (cleaner.type !== "cleaner") {
+        return res.status(400).json({ error: "User is not a cleaner" });
+      }
+
+      const newWarningCount = (cleaner.warningCount || 0) + 1;
+
+      await cleaner.update({
+        warningCount: newWarningCount,
+      });
+
+      // Send notification to cleaner
+      const io = req.app.get("io");
+      try {
+        await NotificationService.notifyUser({
+          userId: parseInt(cleanerId),
+          type: "warning_issued",
+          title: `${severity === "major" ? "Major" : "Minor"} Warning Issued`,
+          message: `You have received a ${severity} warning: ${reason.trim()}`,
+          data: {
+            warningCount: newWarningCount,
+            severity,
+            reason: reason.trim(),
+            issuedAt: new Date().toISOString(),
+          },
+          io,
+        });
+      } catch (notifyErr) {
+        console.error(
+          "[Owner Dashboard] Error sending warning notification:",
+          notifyErr
+        );
+      }
+
+      console.log(
+        `[Owner Dashboard] Warning issued to cleaner ${cleanerId} by owner ${req.user.id}. Severity: ${severity}. Reason: ${reason}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Warning issued successfully",
+        warningCount: newWarningCount,
+      });
+    } catch (error) {
+      console.error("[Owner Dashboard] Error issuing warning:", error);
+      return res.status(500).json({ error: "Failed to issue warning" });
+    }
+  }
+);
 
 module.exports = ownerDashboardRouter;

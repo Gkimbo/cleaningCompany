@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-5113_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-5364_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -18,7 +18,7 @@
 
 ## Overview
 
-Kleanr is a comprehensive cleaning service marketplace platform that connects homeowners with professional cleaners and cleaning businesses. The platform supports multiple user types including platform clients, independent cleaners, business owners with their own clients, HR staff, and platform administrators.
+Kleanr is a comprehensive cleaning service marketplace platform that connects homeowners with professional cleaners and cleaning businesses. The platform supports multiple user types including platform clients, independent cleaners, business owners with their own clients, HR staff, IT support staff, and platform administrators.
 
 **Key Capabilities:**
 - Multi-tenant cleaning service marketplace with offline support
@@ -49,6 +49,8 @@ Kleanr is a comprehensive cleaning service marketplace platform that connects ho
 - **Bi-weekly batch payouts** for employees (every other Friday)
 - **Database-driven pricing** with owner-configurable fees via PricingConfig
 - **Employee pay types** supporting hourly, percentage, and flat/per-job rates
+- **IT Support System** with ticket management and user search
+- **Service Area Management** with city-based and radius-based restrictions
 
 ---
 
@@ -156,7 +158,8 @@ API_NINJA_API_KEY=your_api_ninja_key
 | **Business Client** | Corporate client of a business owner, book via business portal |
 | **Business Employee** | Works for a business owner, accepts assigned jobs, tracks earnings |
 | **HR Staff** | Handle disputes, review suspicious activity reports, manage support |
-| **Owner** | Platform administrator with full access to all features |
+| **IT Support** | Handle technical tickets, user search, account management |
+| **Owner** | Platform administrator with full access to all features, IT staff management |
 
 ### Authentication & Account Management
 
@@ -338,13 +341,26 @@ Handle situations when guests haven't left by checkout time:
 - **Internal Messaging**: Communicate with owner and other HR staff
 - **Quick Stats Dashboard**: Overview of pending items and metrics
 
+### IT Support Staff Features
+
+- **IT Dashboard**: Centralized queue for technical support tickets
+- **Ticket Categories**: App crashes, login problems, billing errors, security issues, data requests
+- **Priority Levels**: Low/Normal/High/Critical with SLA tracking
+- **Ticket Assignment**: Self-assign tickets from queue
+- **Status Workflow**: Submitted → In Progress → Awaiting Info → Resolved → Closed
+- **User Search**: Find users by email, username, or ID
+- **Account Actions**: Freeze/unfreeze accounts, assist with password resets
+- **Resolution Notes**: Document solutions and outcomes
+- **Quick Stats**: Open tickets, SLA compliance, average resolution time
+
 ### Owner/Admin Features
 
 - **Financial Dashboard**: Revenue metrics (today, week, month, year, all-time)
 - **Platform Withdrawals**: Transfer earnings to bank via Stripe
 - **Stripe Balance**: View pending and available platform balance
 - **Preview as Role**: Test the app as any user type via demo accounts
-- **Employee Management**: Create/edit/delete HR staff and cleaner employees
+- **Employee Management**: Create/edit/delete HR staff, IT staff, and cleaner employees
+- **IT Staff Management**: Full CRUD for IT support staff with auto-generated passwords
 - **Pricing Configuration**: Set base prices, per-bed/bath fees, cancellation fees
 - **Advanced Pricing**: Half bath fees, sheet/towel fees, time window premiums
 - **Incentive Programs**: Configure cleaner fee reductions and homeowner discounts
@@ -944,6 +960,45 @@ Handle situations when guests haven't left by checkout time:
 | `GET` | `/api/v1/analytics/disputes` | Get dispute frequency | Owner |
 | `GET` | `/api/v1/analytics/pay-overrides` | Get pay override statistics | Owner |
 
+### IT Dashboard
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/it-dashboard/quick-stats` | Get IT dashboard statistics | IT/Owner |
+| `GET` | `/api/v1/it-dashboard/disputes` | Get IT disputes queue | IT/Owner |
+| `POST` | `/api/v1/it-dashboard/disputes/:id/assign` | Assign dispute to self | IT/Owner |
+| `POST` | `/api/v1/it-dashboard/disputes/:id/resolve` | Resolve dispute | IT/Owner |
+| `PATCH` | `/api/v1/it-dashboard/disputes/:id/status` | Update dispute status | IT/Owner |
+
+### IT Disputes
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/it-disputes/submit` | Submit new IT dispute | Yes |
+| `GET` | `/api/v1/it-disputes/my-disputes` | Get user's own disputes | Yes |
+| `GET` | `/api/v1/it-disputes/:id` | Get dispute details | Yes |
+| `POST` | `/api/v1/it-disputes/:id/add-info` | Add additional information | Yes |
+| `GET` | `/api/v1/it-disputes/categories/list` | Get dispute categories | Yes |
+
+### IT Support Tools
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/it-support/user-search` | Search users by email/username/ID | IT/Owner |
+| `GET` | `/api/v1/it-support/user/:id` | Get user details | IT/Owner |
+| `POST` | `/api/v1/it-support/user/:id/freeze` | Freeze user account | IT/Owner |
+| `POST` | `/api/v1/it-support/user/:id/unfreeze` | Unfreeze user account | IT/Owner |
+
+### Service Areas
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/service-areas/config` | Get current service area config | Owner |
+| `PUT` | `/api/v1/service-areas/config` | Update service area config | Owner |
+| `POST` | `/api/v1/service-areas/validate` | Validate address against service area | Yes |
+| `GET` | `/api/v1/service-areas/history` | Get config change history | Owner |
+| `POST` | `/api/v1/service-areas/recheck-all-homes` | Recheck all homes against config | Owner |
+
 ### Employee Timesheets
 
 | Method | Endpoint | Description | Auth |
@@ -968,7 +1023,7 @@ Handle situations when guests haven't left by checkout time:
 
 ## Database
 
-### Models (65 Total)
+### Models (67 Total)
 
 #### Core Models
 
@@ -1103,6 +1158,13 @@ Handle situations when guests haven't left by checkout time:
 | Model | Description |
 |-------|-------------|
 | `AnalyticsEvent` | Event tracking for flows, job duration, offline usage, disputes, pay overrides |
+
+#### IT Support Models
+
+| Model | Description |
+|-------|-------------|
+| `ITDispute` | IT support tickets with category, priority, status, and resolution tracking |
+| `ServiceAreaConfig` | Geographic service area configuration (city-based or radius-based modes) |
 
 ### Migrations
 
@@ -1704,7 +1766,7 @@ socket.on('mark_read', { conversationId, userId });
 ## Testing
 
 ```bash
-# Run all tests (5113 tests across 202 test suites)
+# Run all tests (5364 tests across 212 test suites)
 npm test
 
 # Run specific test file
@@ -1762,7 +1824,12 @@ npm test -- --watch
 | Transit Time | 28 | Distance calculation, scheduling optimization |
 | Business Client | 35 | Business client portal, corporate bookings |
 | Bi-Weekly Payouts | 34 | Employee batch payout processing |
-| **Total** | **5113** | 202 test suites |
+| IT Dashboard | 67 | Ticket queue, assignment, resolution |
+| IT Disputes | 45 | Submission, categories, status workflow |
+| IT Support Tools | 34 | User search, account freeze/unfreeze |
+| IT Account Management | 56 | CRUD for IT staff, password generation |
+| Service Areas | 49 | Config, validation, history, bulk recheck |
+| **Total** | **5364** | 212 test suites |
 
 ---
 

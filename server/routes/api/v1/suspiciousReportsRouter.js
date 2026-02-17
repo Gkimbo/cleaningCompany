@@ -202,8 +202,88 @@ suspiciousReportsRouter.get("/stats", verifyHROrOwner, async (req, res) => {
 });
 
 /**
+ * GET /user/:userId/history
+ * Get all reports for a specific user (as reported)
+ * NOTE: This must come BEFORE /:id to avoid route conflict
+ */
+suspiciousReportsRouter.get("/user/:userId/history", verifyHROrOwner, async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const reports = await SuspiciousActivityReport.findAll({
+      where: { reportedUserId: userId },
+      include: [
+        {
+          model: User,
+          as: "reporter",
+          attributes: ["id", "firstName", "lastName", "type"],
+        },
+        {
+          model: User,
+          as: "reviewedBy",
+          attributes: ["id", "firstName", "lastName"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Get user info
+    const user = await User.findByPk(userId, {
+      attributes: [
+        "id",
+        "username",
+        "firstName",
+        "lastName",
+        "type",
+        "accountFrozen",
+        "accountFrozenAt",
+        "accountFrozenReason",
+        "warningCount",
+      ],
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    return res.json({
+      user: {
+        id: user.id,
+        name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+        username: user.username,
+        type: user.type,
+        accountStatus: user.accountFrozen ? "suspended" :
+          user.warningCount > 0 ? "warned" : "active",
+        warningCount: user.warningCount,
+        accountFrozenAt: user.accountFrozenAt,
+        accountFrozenReason: user.accountFrozenReason,
+      },
+      reports: reports.map((report) => ({
+        id: report.id,
+        messageContent: report.messageContent,
+        suspiciousContentTypes: report.suspiciousContentTypes,
+        status: report.status,
+        createdAt: report.createdAt,
+        reviewedAt: report.reviewedAt,
+        reviewNotes: report.reviewNotes,
+        reporter: report.reporter
+          ? `${report.reporter.firstName || ""} ${report.reporter.lastName || ""}`.trim()
+          : "Unknown",
+        reviewedBy: report.reviewedBy
+          ? `${report.reviewedBy.firstName || ""} ${report.reviewedBy.lastName || ""}`.trim()
+          : null,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching user report history:", error);
+    return res.status(500).json({ error: "Failed to fetch user report history" });
+  }
+});
+
+/**
  * GET /:id
  * Get a specific report with full details
+ * NOTE: This catch-all route must come AFTER all specific routes
  */
 suspiciousReportsRouter.get("/:id", verifyHROrOwner, async (req, res) => {
   const { id } = req.params;
@@ -355,84 +435,6 @@ suspiciousReportsRouter.get("/:id", verifyHROrOwner, async (req, res) => {
   } catch (error) {
     console.error("Error fetching report details:", error);
     return res.status(500).json({ error: "Failed to fetch report details" });
-  }
-});
-
-/**
- * GET /user/:userId/history
- * Get all reports for a specific user (as reported)
- */
-suspiciousReportsRouter.get("/user/:userId/history", verifyHROrOwner, async (req, res) => {
-  const { userId } = req.params;
-
-  try {
-    const reports = await SuspiciousActivityReport.findAll({
-      where: { reportedUserId: userId },
-      include: [
-        {
-          model: User,
-          as: "reporter",
-          attributes: ["id", "firstName", "lastName", "type"],
-        },
-        {
-          model: User,
-          as: "reviewedBy",
-          attributes: ["id", "firstName", "lastName"],
-        },
-      ],
-      order: [["createdAt", "DESC"]],
-    });
-
-    // Get user info
-    const user = await User.findByPk(userId, {
-      attributes: [
-        "id",
-        "username",
-        "firstName",
-        "lastName",
-        "type",
-        "accountFrozen",
-        "accountFrozenAt",
-        "accountFrozenReason",
-        "warningCount",
-      ],
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    return res.json({
-      user: {
-        id: user.id,
-        name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
-        username: user.username,
-        type: user.type,
-        accountStatus: user.accountFrozen ? "suspended" :
-          user.warningCount > 0 ? "warned" : "active",
-        warningCount: user.warningCount,
-        accountFrozenAt: user.accountFrozenAt,
-        accountFrozenReason: user.accountFrozenReason,
-      },
-      reports: reports.map((report) => ({
-        id: report.id,
-        messageContent: report.messageContent,
-        suspiciousContentTypes: report.suspiciousContentTypes,
-        status: report.status,
-        createdAt: report.createdAt,
-        reviewedAt: report.reviewedAt,
-        reviewNotes: report.reviewNotes,
-        reporter: report.reporter
-          ? `${report.reporter.firstName || ""} ${report.reporter.lastName || ""}`.trim()
-          : "Unknown",
-        reviewedBy: report.reviewedBy
-          ? `${report.reviewedBy.firstName || ""} ${report.reviewedBy.lastName || ""}`.trim()
-          : null,
-      })),
-    });
-  } catch (error) {
-    console.error("Error fetching user report history:", error);
-    return res.status(500).json({ error: "Failed to fetch user report history" });
   }
 });
 

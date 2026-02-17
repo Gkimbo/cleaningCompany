@@ -148,6 +148,11 @@ class EmployeeJobAssignmentSerializer {
       serialized.notes = data.notes;
     }
 
+    // Handle nested user relationship (home.user)
+    if (data.user) {
+      serialized.user = this.serializeUser(data.user);
+    }
+
     return serialized;
   }
 

@@ -84,10 +84,18 @@ import AcceptEmployeeInvitationScreen from "../src/components/employee/AcceptEmp
 import TermsEditor from "../src/components/owner/TermsEditor";
 import PricingManagement from "../src/components/owner/PricingManagement";
 import TierManagement from "../src/components/owner/TierManagement";
+import ServiceAreaManagement from "../src/components/owner/ServiceAreaManagement";
 import IncentivesManagement from "../src/components/owner/IncentivesManagement";
 import PlatformWithdrawals from "../src/components/owner/PlatformWithdrawals";
 import HREmployeeManagement from "../src/components/owner/HREmployeeManagement";
+import ITEmployeeManagement from "../src/components/owner/ITEmployeeManagement";
 import ChecklistEditor from "../src/components/owner/ChecklistEditor";
+import PlatformEarningsCalculator from "../src/components/owner/PlatformEarningsCalculator";
+import CleanerManagement from "../src/components/owner/CleanerManagement";
+import CleanerDetailPage from "../src/components/owner/CleanerDetailPage";
+
+// Shared components
+import FrozenAccountWrapper from "../src/components/shared/FrozenAccountWrapper";
 
 // Cleaner components
 import RecommendedSupplies from "../src/components/cleaner/RecommendedSupplies";
@@ -192,6 +200,10 @@ export default function App() {
     businessName: null,
     businessLogo: null,
     yearsInBusiness: null,
+    // Frozen account state
+    accountFrozen: false,
+    accountFrozenReason: null,
+    accountFrozenAt: null,
   });
 
   const fetchStripeConfig = async () => {
@@ -234,6 +246,17 @@ export default function App() {
       // Set marketplace cleaner flag
       if (user.user.isMarketplaceCleaner !== undefined) {
         dispatch({ type: "SET_MARKETPLACE_CLEANER", payload: user.user.isMarketplaceCleaner });
+      }
+      // Set frozen account state if applicable
+      if (user.user.accountFrozen) {
+        dispatch({
+          type: "SET_ACCOUNT_FROZEN",
+          payload: {
+            isFrozen: true,
+            reason: user.user.accountFrozenReason,
+            frozenAt: user.user.accountFrozenAt,
+          },
+        });
       }
       if (user.user.daysWorking !== null) {
         setEmployeeDays(user.user.daysWorking);
@@ -283,6 +306,7 @@ export default function App() {
           <NativeRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <SafeAreaView style={appStyles.container}>
               <TopBar dispatch={dispatch} state={state} />
+              <FrozenAccountWrapper state={state}>
               <Routes>
               <Route
                 path="/"
@@ -352,6 +376,11 @@ export default function App() {
               <Route
                 path="/earnings-calculator"
                 element={<BusinessCalculator state={state} />}
+              />
+              {/* Platform Earnings Calculator (Owner) */}
+              <Route
+                path="/platform-earnings-calculator"
+                element={<PlatformEarningsCalculator state={state} />}
               />
               <Route
                 path="/all-reviews"
@@ -607,6 +636,11 @@ export default function App() {
                 path="/owner/tiers"
                 element={<TierManagement state={state} />}
               />
+              {/* Owner Service Area Management */}
+              <Route
+                path="/owner/service-areas"
+                element={<ServiceAreaManagement state={state} />}
+              />
               {/* Owner Incentives */}
               <Route
                 path="/owner/incentives"
@@ -621,6 +655,21 @@ export default function App() {
               <Route
                 path="/owner/hr-management"
                 element={<HREmployeeManagement state={state} />}
+              />
+              {/* Owner IT Management */}
+              <Route
+                path="/owner/it-management"
+                element={<ITEmployeeManagement state={state} />}
+              />
+              {/* Owner Cleaner Management */}
+              <Route
+                path="/owner/cleaners"
+                element={<CleanerManagement state={state} />}
+              />
+              {/* Owner Cleaner Detail Page */}
+              <Route
+                path="/owner/cleaners/:cleanerId"
+                element={<CleanerDetailPage state={state} />}
               />
               {/* Owner Checklist Editor */}
               <Route
@@ -772,6 +821,7 @@ export default function App() {
                 element={<EmployeeProfilePage state={state} />}
               />
             </Routes>
+              </FrozenAccountWrapper>
               <ExitPreviewButton />
             </SafeAreaView>
           </NativeRouter>

@@ -9,9 +9,9 @@ import {
   View,
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import { useNavigate } from "react-router-native";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
 import GiveBonusModal from "./GiveBonusModal";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -466,7 +466,7 @@ const SectionHeader = ({ title, icon, isPremium, isLocked }) => (
 
 // Main Analytics Dashboard Component
 const BusinessAnalyticsDashboard = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [analytics, setAnalytics] = useState(null);
@@ -538,7 +538,7 @@ const BusinessAnalyticsDashboard = ({ state }) => {
     <View style={styles.container}>
       {/* Fixed Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.title}>Analytics</Text>

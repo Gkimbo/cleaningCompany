@@ -10,7 +10,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigate } from "react-router-native";
 import * as DocumentPicker from "expo-document-picker";
 import { WebView } from "react-native-webview";
 import Markdown from "react-native-markdown-display";
@@ -23,8 +22,9 @@ import {
 } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const TermsEditor = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const textInputRef = useRef(null);
   const [selectedType, setSelectedType] = useState("homeowner");
   const [contentType, setContentType] = useState("text");
@@ -560,7 +560,7 @@ const TermsEditor = ({ state }) => {
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+        <Pressable onPress={() => goBack()} style={styles.backButton}>
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
         <Text style={styles.headerTitle}>

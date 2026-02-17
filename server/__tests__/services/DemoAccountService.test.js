@@ -459,7 +459,7 @@ describe("DemoAccountService", () => {
 			});
 
 			await expect(DemoAccountService.createPreviewSession(50, "cleaner")).rejects.toThrow(
-				"Only platform owners can create preview sessions"
+				"Only platform owners or IT staff can create preview sessions"
 			);
 		});
 
@@ -467,7 +467,7 @@ describe("DemoAccountService", () => {
 			mockUserFindByPk.mockResolvedValue(null);
 
 			await expect(DemoAccountService.createPreviewSession(999, "cleaner")).rejects.toThrow(
-				"Only platform owners can create preview sessions"
+				"Only platform owners or IT staff can create preview sessions"
 			);
 		});
 
@@ -536,7 +536,7 @@ describe("DemoAccountService", () => {
 			mockUserFindByPk.mockResolvedValue(null);
 
 			await expect(DemoAccountService.endPreviewSession(999)).rejects.toThrow(
-				"Invalid owner ID for ending preview session"
+				"Invalid user ID for ending preview session"
 			);
 		});
 
@@ -547,7 +547,7 @@ describe("DemoAccountService", () => {
 			});
 
 			await expect(DemoAccountService.endPreviewSession(50)).rejects.toThrow(
-				"Invalid owner ID for ending preview session"
+				"Invalid user ID for ending preview session"
 			);
 		});
 	});
@@ -624,10 +624,10 @@ describe("DemoAccountService", () => {
 	});
 
 	describe("getAvailableRoles", () => {
-		it("should return all 9 preview roles", () => {
+		it("should return all 10 preview roles", () => {
 			const roles = DemoAccountService.getAvailableRoles();
 
-			expect(roles).toHaveLength(9);
+			expect(roles).toHaveLength(10);
 			expect(roles.map(r => r.role)).toEqual([
 				"cleaner",
 				"homeowner",
@@ -638,6 +638,7 @@ describe("DemoAccountService", () => {
 				"largeBusinessOwner",
 				"preferredCleaner",
 				"largeHomeOwner",
+				"it",
 			]);
 		});
 

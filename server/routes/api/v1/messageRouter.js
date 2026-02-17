@@ -485,6 +485,16 @@ messageRouter.post("/conversation/appointment", authenticateToken, async (req, r
       });
     }
 
+    // Decrypt user PII fields before returning
+    if (conversation?.participants) {
+      const plainConv = conversation.toJSON ? conversation.toJSON() : conversation;
+      plainConv.participants = plainConv.participants.map((part) => ({
+        ...part,
+        user: part.user ? decryptUserFields(part.user) : null,
+      }));
+      return res.json({ conversation: plainConv });
+    }
+
     return res.json({ conversation });
   } catch (error) {
     console.error("Error creating/getting appointment conversation:", error);
@@ -814,6 +824,16 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
       // sent just by clicking "Get Help".
     }
 
+    // Decrypt user PII fields before returning
+    if (conversation?.participants) {
+      const plainConv = conversation.toJSON ? conversation.toJSON() : conversation;
+      plainConv.participants = plainConv.participants.map((part) => ({
+        ...part,
+        user: part.user ? decryptUserFields(part.user) : null,
+      }));
+      return res.json({ conversation: plainConv });
+    }
+
     return res.json({ conversation });
   } catch (error) {
     console.error("Error creating/getting support conversation:", error);
@@ -1085,6 +1105,16 @@ messageRouter.post("/conversation/cleaner-client", authenticateToken, async (req
           },
         ],
       });
+    }
+
+    // Decrypt user PII fields before returning
+    if (conversation?.participants) {
+      const plainConv = conversation.toJSON ? conversation.toJSON() : conversation;
+      plainConv.participants = plainConv.participants.map((part) => ({
+        ...part,
+        user: part.user ? decryptUserFields(part.user) : null,
+      }));
+      return res.json({ conversation: plainConv });
     }
 
     return res.json({ conversation });
@@ -1439,6 +1469,123 @@ messageRouter.post("/conversation/hr-direct", authenticateToken, async (req, res
     return res.json({ conversation, created });
   } catch (error) {
     console.error("Error creating/getting HR direct conversation:", error);
+    return res.status(500).json({ error: "Failed to create direct conversation" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/conversation/owner-direct
+ * Create or get a 1-on-1 conversation between owner and any user (cleaner, client, etc.)
+ * Owner only
+ */
+messageRouter.post("/conversation/owner-direct", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { targetUserId } = req.body;
+
+    if (!targetUserId || !isValidId(targetUserId)) {
+      return res.status(400).json({ error: "Valid targetUserId is required" });
+    }
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Must be owner
+    if (user.type !== "owner") {
+      return res.status(403).json({ error: "Only owner can use this endpoint" });
+    }
+
+    const targetUser = await User.findByPk(targetUserId);
+    if (!targetUser) {
+      return res.status(404).json({ error: "Target user not found" });
+    }
+
+    if (targetUser.id === userId) {
+      return res.status(400).json({ error: "Cannot message yourself" });
+    }
+
+    // Check for existing 1-on-1 internal conversation
+    const userParticipations = await ConversationParticipant.findAll({
+      where: { userId },
+      include: [
+        {
+          model: Conversation,
+          as: "conversation",
+          where: { conversationType: "internal" },
+          include: [
+            {
+              model: ConversationParticipant,
+              as: "participants",
+            },
+          ],
+        },
+      ],
+    });
+
+    // Find a conversation with exactly 2 participants (this user + target user)
+    let existingConversation = null;
+    for (const participation of userParticipations) {
+      const conv = participation.conversation;
+      if (conv && conv.participants && conv.participants.length === 2) {
+        const participantIds = conv.participants.map((p) => p.userId);
+        if (participantIds.includes(userId) && participantIds.includes(parseInt(targetUserId))) {
+          existingConversation = conv;
+          break;
+        }
+      }
+    }
+
+    if (existingConversation) {
+      return res.status(200).json({ conversation: existingConversation });
+    }
+
+    // Create new conversation
+    const targetFirstName = safeDecrypt(targetUser.firstName) || targetUser.username;
+    const ownerFirstName = safeDecrypt(user.firstName) || user.username;
+    const title = `${ownerFirstName} & ${targetFirstName}`;
+
+    const newConversation = await Conversation.create({
+      title,
+      conversationType: "internal",
+      createdBy: userId,
+    });
+
+    // Add both participants
+    await ConversationParticipant.bulkCreate([
+      { conversationId: newConversation.id, userId },
+      { conversationId: newConversation.id, userId: parseInt(targetUserId) },
+    ]);
+
+    // Fetch complete conversation
+    const fullConversation = await Conversation.findByPk(newConversation.id, {
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "username", "firstName", "lastName", "type"],
+            },
+          ],
+        },
+      ],
+    });
+
+    // Notify target user via socket
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`user_${targetUserId}`).emit("new_conversation", {
+        conversation: fullConversation,
+      });
+    }
+
+    return res.status(201).json({ conversation: fullConversation });
+  } catch (error) {
+    console.error("Error creating/getting owner direct conversation:", error);
     return res.status(500).json({ error: "Failed to create direct conversation" });
   }
 });

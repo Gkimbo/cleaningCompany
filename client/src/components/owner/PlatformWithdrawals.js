@@ -10,9 +10,9 @@ import {
   View,
   Modal,
 } from "react-native";
-import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import OwnerDashboardService from "../../services/fetchRequests/OwnerDashboardService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -22,7 +22,7 @@ import {
 } from "../../services/styles/theme";
 
 const PlatformWithdrawals = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [balance, setBalance] = useState(null);
@@ -175,7 +175,7 @@ const PlatformWithdrawals = ({ state }) => {
       <View style={styles.header}>
         <Pressable
           testID="back-button"
-          onPress={() => navigate(-1)}
+          onPress={() => goBack()}
           style={styles.backButton}
         >
           <Icon name="arrow-left" size={16} color={colors.primary[600]} />

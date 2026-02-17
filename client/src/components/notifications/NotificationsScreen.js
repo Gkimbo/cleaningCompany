@@ -18,9 +18,10 @@ import RebookingModal from "../cleaner/RebookingModal";
 import BusinessOwnerDeclinedModal from "../client/BusinessOwnerDeclinedModal";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const NotificationsScreen = () => {
   const { state } = useContext(UserContext);
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const { onNotification, onNotificationCountUpdate } = useSocket();
 
   const [notifications, setNotifications] = useState([]);
@@ -213,7 +214,7 @@ const NotificationsScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+        <Pressable onPress={() => goBack()} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color={colors.neutral[700]} />
         </Pressable>
         <Text style={styles.headerTitle}>Notifications</Text>

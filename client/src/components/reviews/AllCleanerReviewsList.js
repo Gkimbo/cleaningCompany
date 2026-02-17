@@ -15,6 +15,7 @@ import FetchData from "../../services/fetchRequests/fetchData";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
 import CleanerConflictModal from "./CleanerConflictModal";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 // Review Card component with multi-aspect support
 const ReviewCardWithAspects = ({ review, renderStars, formatDate }) => {
   const [expanded, setExpanded] = useState(false);
@@ -118,7 +119,7 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
   const [showConflictModal, setShowConflictModal] = useState(false);
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 16 : width < 800 ? 20 : 24;
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const location = useLocation();
   const { id } = useParams();
 
@@ -162,7 +163,7 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
       // Go back to cleaner requests list
       navigate("/client-requests");
     } else {
-      navigate(-1);
+      goBack();
     }
   };
 

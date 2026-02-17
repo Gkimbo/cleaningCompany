@@ -23,6 +23,7 @@ class MessageSerializer {
 			firstName: this.decryptUserField(data.firstName),
 			lastName: this.decryptUserField(data.lastName),
 			email: this.decryptUserField(data.email),
+			phone: this.decryptUserField(data.phone),
 			type: data.type
 		};
 	}

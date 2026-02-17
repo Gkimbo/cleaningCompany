@@ -131,8 +131,31 @@ const businessConfig = {
   ],
 };
 
+// Convert miles to meters for radius calculations
+const MILES_TO_METERS = 1609.34;
+
 /**
- * Helper function to check if an address is within the service area
+ * Get service area config from database with fallback to static config
+ * @returns {Promise<object>} Service area configuration object
+ */
+async function getServiceAreaConfig() {
+  try {
+    // Dynamic import to avoid circular dependency
+    const { ServiceAreaConfig } = require("../models");
+    const dbConfig = await ServiceAreaConfig.getFormattedConfig();
+    if (dbConfig) {
+      return { ...dbConfig, source: "database" };
+    }
+  } catch (error) {
+    // ServiceAreaConfig model may not be loaded yet during startup
+    console.log("[BusinessConfig] Using static service area config (DB not available)");
+  }
+  return { ...businessConfig.serviceAreas, mode: "list", source: "config" };
+}
+
+/**
+ * Helper function to check if an address is within the service area (sync version)
+ * Uses static config only - for backwards compatibility
  * @param {string} city - City name
  * @param {string} state - State abbreviation
  * @param {string} zipcode - 5-digit zipcode
@@ -171,6 +194,83 @@ function isInServiceArea(city, state, zipcode) {
   return {
     isServiceable,
     message: isServiceable ? "" : serviceAreas.outsideAreaMessage,
+  };
+}
+
+/**
+ * Async helper function to check if an address is within the service area
+ * Checks database config first, then falls back to static config
+ * Supports both list mode (cities/zipcodes) and radius mode (lat/lng + miles)
+ * @param {string} city - City name
+ * @param {string} state - State abbreviation
+ * @param {string} zipcode - 5-digit zipcode
+ * @param {number|null} latitude - Optional latitude for radius mode
+ * @param {number|null} longitude - Optional longitude for radius mode
+ * @returns {Promise<object>} { isServiceable: boolean, message: string }
+ */
+async function isInServiceAreaAsync(city, state, zipcode, latitude = null, longitude = null) {
+  const config = await getServiceAreaConfig();
+
+  // If service area restriction is disabled, allow all valid addresses
+  if (!config.enabled) {
+    return { isServiceable: true, message: "" };
+  }
+
+  // Handle radius mode
+  if (config.mode === "radius" && config.centerLatitude && config.centerLongitude) {
+    // Radius mode requires coordinates
+    if (latitude !== null && longitude !== null) {
+      const { calculateDistance } = require("../utils/geoUtils");
+      const distance = calculateDistance(
+        config.centerLatitude,
+        config.centerLongitude,
+        latitude,
+        longitude
+      );
+
+      if (distance !== null) {
+        const radiusMeters = (config.radiusMiles || 25) * MILES_TO_METERS;
+        const isServiceable = distance <= radiusMeters;
+        return {
+          isServiceable,
+          message: isServiceable ? "" : config.outsideAreaMessage,
+        };
+      }
+    }
+    // If no coordinates provided in radius mode, fall through to list check
+    // (This allows the feature to work even if geocoding failed)
+  }
+
+  // List mode (or fallback if radius mode but no coordinates)
+  const normalizedCity = city?.toLowerCase().trim();
+  const normalizedState = state?.toUpperCase().trim();
+  const normalizedZipcode = zipcode?.trim();
+
+  const cities = config.cities || [];
+  const states = config.states || [];
+  const zipcodes = config.zipcodes || [];
+
+  // Check if city is in service area
+  const cityMatch = cities.some(
+    (serviceCity) => serviceCity.toLowerCase() === normalizedCity
+  );
+
+  // Check if state is in service area
+  const stateMatch = states.some(
+    (serviceState) => serviceState.toUpperCase() === normalizedState
+  );
+
+  // Check if zipcode matches (exact or prefix)
+  const zipcodeMatch = zipcodes.some((serviceZip) =>
+    normalizedZipcode?.startsWith(serviceZip)
+  );
+
+  // Address is serviceable if city matches AND state matches, OR if zipcode matches
+  const isServiceable = (cityMatch && stateMatch) || zipcodeMatch;
+
+  return {
+    isServiceable,
+    message: isServiceable ? "" : (config.outsideAreaMessage || businessConfig.serviceAreas.outsideAreaMessage),
   };
 }
 
@@ -270,8 +370,9 @@ async function updateAllHomesServiceAreaStatus(
     let updatedCount = 0;
 
     for (const home of allHomes) {
-      const { city, state, zipcode, address, nickName } = home.dataValues;
-      const { isServiceable } = isInServiceArea(city, state, zipcode);
+      const { city, state, zipcode, address, nickName, latitude, longitude } = home.dataValues;
+      // Use async version to check database config
+      const { isServiceable } = await isInServiceAreaAsync(city, state, zipcode, latitude, longitude);
       const shouldBeOutside = !isServiceable;
       const wasOutside = home.dataValues.outsideServiceArea;
 
@@ -397,6 +498,8 @@ async function getTimeWindowSurchargeAsync(timeWindow) {
 module.exports = {
   businessConfig,
   isInServiceArea,
+  isInServiceAreaAsync,
+  getServiceAreaConfig,
   getCleanersNeeded,
   getTimeWindowSurcharge,
   getTimeWindowSurchargeAsync,

@@ -15,10 +15,11 @@ import { UserContext } from "../../context/UserContext";
 import NotificationsService from "../../services/fetchRequests/NotificationsService";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const NotificationDetailScreen = () => {
   const { id } = useParams();
   const { state } = useContext(UserContext);
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
 
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -248,7 +249,7 @@ const NotificationDetailScreen = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+          <Pressable onPress={() => goBack()} style={styles.backButton}>
             <Feather name="arrow-left" size={24} color={colors.neutral[700]} />
           </Pressable>
           <Text style={styles.headerTitle}>Notification</Text>
@@ -271,7 +272,7 @@ const NotificationDetailScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+        <Pressable onPress={() => goBack()} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color={colors.neutral[700]} />
         </Pressable>
         <Text style={styles.headerTitle}>Notification Details</Text>

@@ -30,6 +30,7 @@ const PushNotification = require("../../../services/sendNotifications/PushNotifi
 const { getPricingConfig } = require("../../../config/businessConfig");
 const BusinessVolumeService = require("../../../services/BusinessVolumeService");
 const EncryptionService = require("../../../services/EncryptionService");
+const NotificationService = require("../../../services/NotificationService");
 const {
   parseTimeWindow,
   getAutoCompleteConfig,
@@ -2974,6 +2975,31 @@ async function runDailyPaymentCheck() {
                   paymentCapturedAt: new Date()
                 });
               }
+            }
+
+            // Notify homeowner that payment was captured
+            try {
+              let cleanerName = "your cleaner";
+              if (cleanerIds.length > 0) {
+                const cleaner = await User.findByPk(cleanerIds[0], {
+                  attributes: ["firstName"]
+                });
+                if (cleaner && cleaner.firstName) {
+                  cleanerName = EncryptionService.decrypt(cleaner.firstName);
+                }
+              }
+
+              await NotificationService.notifyPaymentCaptured({
+                userId: appointment.userId,
+                amount: paymentIntent.amount_received || paymentIntent.amount,
+                appointmentDate,
+                appointmentId: appointment.id,
+                cleanerName,
+                io: null
+              });
+              console.log(`Payment notification sent to user ${appointment.userId}`);
+            } catch (notifyErr) {
+              console.error("Failed to send payment captured notification:", notifyErr.message);
             }
           } catch (err) {
             console.error("Stripe capture failed:", err.message);

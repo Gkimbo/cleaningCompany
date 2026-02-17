@@ -12,6 +12,10 @@ jest.mock("react-router-native", () => ({
   useNavigate: () => jest.fn(),
   useParams: () => ({ id: "123" }),
   useLocation: () => ({
+    key: "test-key",
+    pathname: "/",
+    search: "",
+    hash: "",
     state: {
       fromRequests: true,
       requestId: 1,
@@ -361,6 +365,7 @@ describe("AllCleanerReviewsList Component", () => {
       // Override useLocation to return missing values
       jest.doMock("react-router-native", () => ({
         useNavigate: () => jest.fn(),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
         useParams: () => ({ id: "123" }),
         useLocation: () => ({
           state: {

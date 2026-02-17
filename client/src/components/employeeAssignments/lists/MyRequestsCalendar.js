@@ -38,6 +38,7 @@ import {
 import { usePricing } from "../../../context/PricingContext";
 import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
 
+import useSafeNavigation from "../../../hooks/useSafeNavigation";
 // Format time constraint for display: "10-3" → "10am - 3pm"
 const formatTimeConstraint = (time) => {
   if (!time || time.toLowerCase() === "anytime") return "Anytime";
@@ -97,7 +98,7 @@ const MyRequestsCalendar = ({ state }) => {
   // Track which request linens dropdowns are expanded
   const [expandedLinens, setExpandedLinens] = useState({});
 
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
 
   const toggleLinens = useCallback((requestId) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -434,7 +435,7 @@ const MyRequestsCalendar = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="angle-left" size={20} color={colors.primary[600]} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>

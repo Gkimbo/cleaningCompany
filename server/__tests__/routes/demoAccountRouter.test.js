@@ -114,7 +114,7 @@ describe("Demo Account Router", () => {
 				.set("Authorization", `Bearer ${mockOwnerToken}`);
 
 			expect(response.status).toBe(403);
-			expect(response.body.error).toBe("Owner access required");
+			expect(response.body.error).toBe("Owner or IT access required");
 		});
 
 		it("should reject when user not found", async () => {

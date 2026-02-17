@@ -13,6 +13,7 @@ import {
 import { useNavigate, useParams } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -249,7 +250,7 @@ const PaymentMethodOption = ({ icon, label, value, selected, onSelect }) => (
 
 // Main Component
 const EmployeeEditForm = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -434,7 +435,7 @@ const EmployeeEditForm = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.title}>Edit Employee</Text>
@@ -679,7 +680,7 @@ const EmployeeEditForm = ({ state }) => {
 
       {/* Save Button */}
       <View style={styles.footer}>
-        <Pressable style={styles.cancelButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.cancelButton} onPress={() => goBack()}>
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </Pressable>
         <Pressable

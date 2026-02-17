@@ -10,9 +10,9 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import HRManagementService from "../../services/fetchRequests/HRManagementService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -96,7 +96,7 @@ const EmployeeCard = ({ employee, onEdit, onDelete }) => {
 };
 
 const HREmployeeManagement = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hrStaff, setHrStaff] = useState([]);
@@ -367,7 +367,7 @@ const HREmployeeManagement = ({ state }) => {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+        <Pressable onPress={() => goBack()} style={styles.backButton}>
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
         <Text style={styles.headerTitle}>HR Management</Text>

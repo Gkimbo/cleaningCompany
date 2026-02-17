@@ -248,6 +248,20 @@ class PushNotification {
     });
   }
 
+  // 17b. Payment captured notification (to homeowner)
+  static async sendPushPaymentCaptured(expoPushToken, amount, appointmentDate, cleanerName) {
+    const formattedAmount = typeof amount === "number" ? `$${(amount / 100).toFixed(2)}` : amount;
+    const title = "✅ Payment Processed";
+    const body = `Your payment of ${formattedAmount} was taken for your appointment on ${appointmentDate}. Being cleaned by ${cleanerName}.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "payment_captured",
+      amount,
+      appointmentDate,
+      cleanerName,
+    });
+  }
+
   // 18. Supply reminder (to cleaner - morning of appointment)
   static async sendPushSupplyReminder(expoPushToken, cleanerName, appointmentDate, address) {
     const fullAddress = `${address.street}, ${address.city}`;
@@ -794,6 +808,38 @@ class PushNotification {
       issueType,
       priority,
       actionRequired: true,
+    });
+  }
+
+  // 54. IT dispute submitted (to IT staff)
+  static async sendPushITDispute(expoPushToken, reporterName, categoryLabel, caseNumber, priority) {
+    const priorityEmoji = {
+      critical: "🚨",
+      high: "🔴",
+      normal: "🔵",
+      low: "⚪",
+    };
+    const emoji = priorityEmoji[priority] || "🔵";
+    const title = `${emoji} New IT Issue`;
+    const body = `${reporterName} reported: ${categoryLabel}. Case: ${caseNumber}`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "it_dispute_submitted",
+      caseNumber,
+      priority,
+      actionRequired: true,
+    });
+  }
+
+  // 55. IT dispute resolved (to reporter)
+  static async sendPushITDisputeResolved(expoPushToken, caseNumber) {
+    const title = "IT Issue Resolved";
+    const body = `Your IT issue (${caseNumber}) has been resolved. Tap for details.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "it_dispute_resolved",
+      caseNumber,
+      actionRequired: false,
     });
   }
 }

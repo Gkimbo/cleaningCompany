@@ -11,164 +11,154 @@ import {
   Modal,
   TextInput,
   Image,
+  Alert,
 } from "react-native";
 import { useNavigate } from "react-router-native";
-import { Picker } from "@react-native-picker/picker";
-import Icon from "react-native-vector-icons/FontAwesome";
+import Icon from "react-native-vector-icons/FontAwesome5";
 import HRDashboardService from "../../services/fetchRequests/HRDashboardService";
 import CreateSupportTicketModal from "../conflicts/modals/CreateSupportTicketModal";
-import {
-  colors,
-  spacing,
-  radius,
-  typography,
-  shadows,
-} from "../../services/styles/theme";
+import { shadows } from "../../services/styles/theme";
+
+// Tool tabs for resolution
+const TOOL_TABS = [
+  { key: "details", label: "Details", icon: "info-circle" },
+  { key: "parties", label: "Parties", icon: "users" },
+  { key: "history", label: "History", icon: "history" },
+  { key: "tools", label: "Tools", icon: "tools" },
+];
 
 const { width: screenWidth } = Dimensions.get("window");
 
-// Quick Action Button Component
-const QuickActionButton = ({ icon, label, onPress, color = colors.primary[500], badge }) => (
-  <Pressable
-    style={({ pressed }) => [
-      styles.quickAction,
-      pressed && styles.quickActionPressed,
-    ]}
-    onPress={onPress}
-  >
-    <View style={[styles.quickActionIcon, { backgroundColor: color + "15" }]}>
-      <Icon name={icon} size={22} color={color} />
-      {badge > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text>
+// Modern Stat Card
+const StatCard = ({ title, value, icon, color, trend, trendUp, subtitle }) => (
+  <View style={[styles.statCard, { borderTopColor: color }]}>
+    <View style={styles.statCardHeader}>
+      <View style={[styles.statIconWrap, { backgroundColor: color + "15" }]}>
+        <Icon name={icon} size={16} color={color} />
+      </View>
+      {trend && (
+        <View style={[styles.trendBadge, { backgroundColor: trendUp ? "#DCFCE7" : "#FEE2E2" }]}>
+          <Icon name={trendUp ? "arrow-up" : "arrow-down"} size={8} color={trendUp ? "#16A34A" : "#DC2626"} />
+          <Text style={[styles.trendText, { color: trendUp ? "#16A34A" : "#DC2626" }]}>{trend}</Text>
         </View>
       )}
     </View>
-    <Text style={styles.quickActionLabel}>{label}</Text>
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{title}</Text>
+    {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
+  </View>
+);
+
+// Action Button
+const ActionButton = ({ icon, label, color, onPress, badge }) => (
+  <Pressable
+    style={({ pressed }) => [
+      styles.actionBtn,
+      pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] },
+    ]}
+    onPress={onPress}
+  >
+    <View style={[styles.actionBtnIcon, { backgroundColor: color }]}>
+      <Icon name={icon} size={18} color="#fff" />
+      {badge > 0 && (
+        <View style={styles.actionBadge}>
+          <Text style={styles.actionBadgeText}>{badge > 99 ? "99+" : badge}</Text>
+        </View>
+      )}
+    </View>
+    <Text style={styles.actionBtnLabel}>{label}</Text>
   </Pressable>
 );
 
-// Status badge component for disputes
-const StatusBadge = ({ status }) => {
-  const statusConfig = {
-    pending_homeowner: { label: "Awaiting Homeowner", color: colors.warning[600], bg: colors.warning[50], icon: "clock-o" },
-    approved: { label: "Approved", color: colors.success[600], bg: colors.success[50], icon: "check" },
-    denied: { label: "Homeowner Denied", color: colors.error[600], bg: colors.error[50], icon: "exclamation-circle" },
-    pending_owner: { label: "Needs Your Review", color: colors.warning[600], bg: colors.warning[50], icon: "eye" },
-    expired: { label: "Expired", color: colors.error[600], bg: colors.error[50], icon: "clock-o" },
-    owner_approved: { label: "Resolved", color: colors.success[600], bg: colors.success[50], icon: "check-circle" },
-    owner_denied: { label: "Claim Denied", color: colors.error[600], bg: colors.error[50], icon: "times-circle" },
+// Status Chip
+const StatusChip = ({ status }) => {
+  const configs = {
+    pending_homeowner: { label: "Awaiting", bg: "#FEF3C7", color: "#D97706", icon: "clock" },
+    approved: { label: "Approved", bg: "#DCFCE7", color: "#16A34A", icon: "check" },
+    denied: { label: "Denied", bg: "#FEE2E2", color: "#DC2626", icon: "times" },
+    pending_owner: { label: "Review", bg: "#E9D5FF", color: "#7C3AED", icon: "eye" },
+    expired: { label: "Expired", bg: "#FEE2E2", color: "#DC2626", icon: "clock" },
+    owner_approved: { label: "Resolved", bg: "#DCFCE7", color: "#16A34A", icon: "check-circle" },
+    owner_denied: { label: "Claim Denied", bg: "#FEE2E2", color: "#DC2626", icon: "times-circle" },
   };
-
-  const config = statusConfig[status] || { label: status, color: colors.text.tertiary, bg: colors.neutral[100], icon: "question" };
+  const config = configs[status] || { label: status, bg: "#E5E7EB", color: "#6B7280", icon: "question" };
 
   return (
-    <View style={[styles.statusBadge, { backgroundColor: config.bg }]}>
-      <Icon name={config.icon} size={12} color={config.color} style={{ marginRight: 4 }} />
-      <Text style={[styles.statusBadgeText, { color: config.color }]}>{config.label}</Text>
+    <View style={[styles.chip, { backgroundColor: config.bg }]}>
+      <Icon name={config.icon} size={10} color={config.color} />
+      <Text style={[styles.chipText, { color: config.color }]}>{config.label}</Text>
     </View>
   );
 };
 
-// Enhanced Stat Card Component
-const StatCard = ({ title, value, icon, color = colors.primary[500], onPress, subtitle }) => (
-  <Pressable
-    onPress={onPress}
-    style={({ pressed }) => [
-      styles.statCard,
-      pressed && onPress && styles.statCardPressed,
-    ]}
-  >
-    <View style={[styles.statIconContainer, { backgroundColor: color + "15" }]}>
-      <Icon name={icon} size={18} color={color} />
-    </View>
-    <Text style={styles.statValue}>{value}</Text>
-    <Text style={styles.statTitle}>{title}</Text>
-    {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
-  </Pressable>
-);
-
-// Section Header Component
-const SectionHeader = ({ title, icon, onPress, actionText }) => (
-  <View style={styles.sectionHeader}>
-    <View style={styles.sectionTitleRow}>
-      {icon && <Icon name={icon} size={16} color={colors.text.primary} style={{ marginRight: 8 }} />}
-      <Text style={styles.sectionTitle}>{title}</Text>
-    </View>
-    {onPress && (
-      <Pressable onPress={onPress} style={styles.sectionActionButton}>
-        <Text style={styles.sectionAction}>{actionText || "View All"}</Text>
-        <Icon name="chevron-right" size={12} color={colors.primary[500]} style={{ marginLeft: 4 }} />
-      </Pressable>
-    )}
-  </View>
-);
-
-// Enhanced Dispute Card Component
+// Dispute Card
 const DisputeCard = ({ dispute, onPress }) => {
-  const formatDate = (dateString) => {
-    const options = { month: "short", day: "numeric" };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+  const formatTime = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays < 1) return "Today";
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const priceDifference = Number(dispute.priceDifference) || 0;
-  const homeAddress = dispute.home
-    ? `${dispute.home.address}, ${dispute.home.city}`
-    : "Unknown address";
+  const homeAddress = dispute.home ? `${dispute.home.address}` : "Unknown";
   const cleanerName = dispute.cleaner
-    ? `${dispute.cleaner.firstName} ${dispute.cleaner.lastName}`
-    : "Unknown cleaner";
-
-  const needsReview = dispute.status === "denied" || dispute.status === "expired" || dispute.status === "pending_owner";
+    ? `${dispute.cleaner.firstName} ${dispute.cleaner.lastName?.charAt(0)}.`
+    : "Unknown";
+  const needsReview = ["denied", "expired", "pending_owner"].includes(dispute.status);
+  const priceDiff = Number(dispute.priceDifference) || 0;
 
   return (
     <Pressable
       style={({ pressed }) => [
         styles.disputeCard,
         needsReview && styles.disputeCardUrgent,
-        pressed && styles.cardPressed,
+        pressed && { transform: [{ scale: 0.98 }], opacity: 0.9 },
       ]}
       onPress={() => onPress(dispute)}
     >
-      <View style={styles.disputeCardHeader}>
-        <StatusBadge status={dispute.status} />
+      <View style={styles.disputeHeader}>
+        <StatusChip status={dispute.status} />
         {needsReview && (
-          <View style={styles.actionNeededBadge}>
-            <Text style={styles.actionNeededText}>Action Needed</Text>
+          <View style={styles.urgentBadge}>
+            <Icon name="exclamation" size={8} color="#DC2626" />
+            <Text style={styles.urgentText}>Action</Text>
           </View>
         )}
       </View>
 
-      <Text style={styles.homeAddress} numberOfLines={1}>{homeAddress}</Text>
+      <Text style={styles.disputeAddress} numberOfLines={1}>{homeAddress}</Text>
 
-      <View style={styles.disputeInfoRow}>
-        <View style={styles.disputeInfoItem}>
-          <Icon name="user" size={12} color={colors.text.tertiary} />
-          <Text style={styles.disputeInfoText}>{cleanerName}</Text>
+      <View style={styles.disputeMeta}>
+        <View style={styles.disputeMetaItem}>
+          <Icon name="user" size={12} color="#9CA3AF" solid />
+          <Text style={styles.disputeMetaText}>{cleanerName}</Text>
         </View>
         {dispute.appointment && (
-          <View style={styles.disputeInfoItem}>
-            <Icon name="calendar" size={12} color={colors.text.tertiary} />
-            <Text style={styles.disputeInfoText}>{formatDate(dispute.appointment.date)}</Text>
+          <View style={styles.disputeMetaItem}>
+            <Icon name="calendar" size={12} color="#9CA3AF" />
+            <Text style={styles.disputeMetaText}>{formatTime(dispute.appointment.date)}</Text>
           </View>
         )}
       </View>
 
-      <View style={styles.sizeComparisonRow}>
-        <View style={styles.sizeItem}>
+      <View style={styles.disputeSizeRow}>
+        <View style={styles.sizeBox}>
           <Text style={styles.sizeLabel}>Listed</Text>
-          <Text style={styles.sizeValue}>{dispute.originalNumBeds}bd / {dispute.originalNumBaths}ba</Text>
+          <Text style={styles.sizeValue}>{dispute.originalNumBeds}bd/{dispute.originalNumBaths}ba</Text>
         </View>
-        <Icon name="long-arrow-right" size={16} color={colors.text.tertiary} />
-        <View style={styles.sizeItem}>
+        <Icon name="arrow-right" size={12} color="#9CA3AF" />
+        <View style={styles.sizeBox}>
           <Text style={styles.sizeLabel}>Reported</Text>
           <Text style={[styles.sizeValue, styles.sizeValueHighlight]}>
-            {dispute.reportedNumBeds}bd / {dispute.reportedNumBaths}ba
+            {dispute.reportedNumBeds}bd/{dispute.reportedNumBaths}ba
           </Text>
         </View>
-        {priceDifference > 0 && (
-          <View style={styles.priceDiffBadge}>
-            <Text style={styles.priceDiffText}>+${priceDifference.toFixed(0)}</Text>
+        {priceDiff > 0 && (
+          <View style={styles.priceBadge}>
+            <Text style={styles.priceText}>+${priceDiff.toFixed(0)}</Text>
           </View>
         )}
       </View>
@@ -176,56 +166,57 @@ const DisputeCard = ({ dispute, onPress }) => {
   );
 };
 
-// Enhanced Conversation Card Component
+// Conversation Card
 const ConversationCard = ({ conversation, onPress }) => {
-  const formatDate = (dateString) => {
+  const formatTime = (dateString) => {
     if (!dateString) return "";
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    if (diffMins < 1) return "now";
+    if (diffMins < 60) return `${diffMins}m`;
+    if (diffHours < 24) return `${diffHours}h`;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const customerName = conversation.customer?.name || conversation.title || "Support Conversation";
+  const customerName = conversation.customer?.name || conversation.title || "Support";
   const customerType = conversation.customer?.type;
   const initials = customerName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.conversationCard, pressed && styles.cardPressed]}
+      style={({ pressed }) => [
+        styles.conversationCard,
+        pressed && { transform: [{ scale: 0.98 }], opacity: 0.9 },
+      ]}
       onPress={() => onPress(conversation)}
     >
       <View style={[
         styles.avatar,
-        { backgroundColor: customerType === "cleaner" ? colors.secondary[100] : colors.primary[100] }
+        { backgroundColor: customerType === "cleaner" ? "#DDD6FE" : "#DBEAFE" }
       ]}>
         <Text style={[
           styles.avatarText,
-          { color: customerType === "cleaner" ? colors.secondary[700] : colors.primary[700] }
+          { color: customerType === "cleaner" ? "#7C3AED" : "#2563EB" }
         ]}>
           {initials}
         </Text>
       </View>
       <View style={styles.conversationContent}>
         <View style={styles.conversationHeader}>
-          <Text style={styles.conversationTitle} numberOfLines={1}>{customerName}</Text>
-          <Text style={styles.conversationTime}>{formatDate(conversation.lastMessageAt)}</Text>
+          <Text style={styles.conversationName} numberOfLines={1}>{customerName}</Text>
+          <Text style={styles.conversationTime}>{formatTime(conversation.lastMessageAt)}</Text>
         </View>
         {customerType && (
           <View style={[
-            styles.userTypeBadge,
-            { backgroundColor: customerType === "cleaner" ? colors.secondary[50] : colors.primary[50] }
+            styles.typeBadge,
+            { backgroundColor: customerType === "cleaner" ? "#F3E8FF" : "#EFF6FF" }
           ]}>
             <Text style={[
-              styles.userTypeBadgeText,
-              { color: customerType === "cleaner" ? colors.secondary[700] : colors.primary[700] }
+              styles.typeBadgeText,
+              { color: customerType === "cleaner" ? "#7C3AED" : "#2563EB" }
             ]}>
               {customerType === "cleaner" ? "Cleaner" : "Client"}
             </Text>
@@ -237,22 +228,12 @@ const ConversationCard = ({ conversation, onPress }) => {
           </Text>
         )}
       </View>
-      <Icon name="chevron-right" size={14} color={colors.text.tertiary} />
+      <Icon name="chevron-right" size={14} color="#D1D5DB" />
     </Pressable>
   );
 };
 
-// Empty State Component
-const EmptyState = ({ icon, title, subtitle }) => (
-  <View style={styles.emptySection}>
-    <View style={styles.emptyIconContainer}>
-      <Icon name={icon} size={28} color={colors.text.tertiary} />
-    </View>
-    <Text style={styles.emptyTitle}>{title}</Text>
-    {subtitle && <Text style={styles.emptySubtitle}>{subtitle}</Text>}
-  </View>
-);
-
+// Main HR Dashboard
 const HRDashboard = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -262,7 +243,7 @@ const HRDashboard = ({ state, dispatch }) => {
   const [conversations, setConversations] = useState([]);
   const [error, setError] = useState(null);
 
-  // Detail modal state
+  // Modal states
   const [selectedDispute, setSelectedDispute] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showCreateTicketModal, setShowCreateTicketModal] = useState(false);
@@ -273,9 +254,22 @@ const HRDashboard = ({ state, dispatch }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  const bedOptions = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12+"];
-  const bathOptions = ["1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5", "5.5", "6", "6.5", "7", "7.5", "8+"];
-  const halfBathOptions = ["0", "1", "2", "3", "4", "5+"];
+  // Tool states
+  const [activeToolTab, setActiveToolTab] = useState("details");
+  const [cleanerProfile, setCleanerProfile] = useState(null);
+  const [homeownerProfile, setHomeownerProfile] = useState(null);
+  const [homeDetails, setHomeDetails] = useState(null);
+  const [claimHistory, setClaimHistory] = useState(null);
+  const [loadingTools, setLoadingTools] = useState(false);
+  const [toolAction, setToolAction] = useState(null);
+  const [creditAmount, setCreditAmount] = useState("");
+  const [creditReason, setCreditReason] = useState("");
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationBody, setNotificationBody] = useState("");
+
+  const bedOptions = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"];
+  const bathOptions = ["1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5+"];
+  const halfBathOptions = ["0", "1", "2", "3+"];
 
   useEffect(() => {
     if (state.currentUser.token) {
@@ -284,11 +278,8 @@ const HRDashboard = ({ state, dispatch }) => {
   }, [state.currentUser.token]);
 
   const fetchDashboardData = async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     setError(null);
 
     try {
@@ -302,17 +293,15 @@ const HRDashboard = ({ state, dispatch }) => {
       setDisputes(disputesData.disputes || []);
       setConversations(conversationsData.conversations || []);
     } catch (err) {
-      console.error("[HRDashboard] Error fetching data:", err);
-      setError("Failed to load dashboard data");
+      console.error("[HRDashboard] Error:", err);
+      setError("Failed to load dashboard");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  const onRefresh = useCallback(() => {
-    fetchDashboardData(true);
-  }, [state.currentUser.token]);
+  const onRefresh = useCallback(() => fetchDashboardData(true), [state.currentUser.token]);
 
   const handleDisputePress = (dispute) => {
     setSelectedDispute(dispute);
@@ -321,7 +310,173 @@ const HRDashboard = ({ state, dispatch }) => {
     setFinalHalfBaths(dispute.reportedNumHalfBaths?.toString() || "0");
     setOwnerNote("");
     setSubmitError("");
+    setActiveToolTab("details");
+    setCleanerProfile(null);
+    setHomeownerProfile(null);
+    setHomeDetails(null);
+    setClaimHistory(null);
+    setToolAction(null);
+    setCreditAmount("");
+    setCreditReason("");
+    setNotificationTitle("");
+    setNotificationBody("");
     setShowDetailModal(true);
+  };
+
+  // Load party profiles
+  const loadPartyProfiles = async () => {
+    if (!selectedDispute) return;
+    setLoadingTools(true);
+    try {
+      const [cleanerRes, homeownerRes] = await Promise.all([
+        selectedDispute.cleaner?.id
+          ? HRDashboardService.getUserProfile(state.currentUser.token, selectedDispute.cleaner.id)
+          : Promise.resolve({ profile: null }),
+        selectedDispute.homeowner?.id
+          ? HRDashboardService.getUserProfile(state.currentUser.token, selectedDispute.homeowner.id)
+          : Promise.resolve({ profile: null }),
+      ]);
+      setCleanerProfile(cleanerRes.profile);
+      setHomeownerProfile(homeownerRes.profile);
+    } catch (err) {
+      console.error("Error loading profiles:", err);
+    } finally {
+      setLoadingTools(false);
+    }
+  };
+
+  // Load home and claim history
+  const loadHistory = async () => {
+    if (!selectedDispute) return;
+    setLoadingTools(true);
+    try {
+      const [homeRes, claimRes] = await Promise.all([
+        selectedDispute.home?.id
+          ? HRDashboardService.getHomeDetails(state.currentUser.token, selectedDispute.home.id)
+          : Promise.resolve({ home: null }),
+        selectedDispute.cleaner?.id
+          ? HRDashboardService.getCleanerClaimHistory(state.currentUser.token, selectedDispute.cleaner.id)
+          : Promise.resolve({ claims: [] }),
+      ]);
+      setHomeDetails(homeRes.home);
+      setClaimHistory(claimRes);
+    } catch (err) {
+      console.error("Error loading history:", err);
+    } finally {
+      setLoadingTools(false);
+    }
+  };
+
+  // Handle tab change
+  const handleTabChange = (tabKey) => {
+    setActiveToolTab(tabKey);
+    if (tabKey === "parties" && !cleanerProfile && !homeownerProfile) {
+      loadPartyProfiles();
+    }
+    if (tabKey === "history" && !homeDetails && !claimHistory) {
+      loadHistory();
+    }
+  };
+
+  // Tool actions
+  const handleMarkFalseClaim = async (userId, userType) => {
+    Alert.alert(
+      "Mark False Claim",
+      `This will increment the false ${userType === "cleaner" ? "claim" : "home size"} count for this user. Continue?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm",
+          style: "destructive",
+          onPress: async () => {
+            setLoadingTools(true);
+            const result = await HRDashboardService.markFalseClaim(
+              state.currentUser.token,
+              userId,
+              userType,
+              `Dispute #${selectedDispute.id}`,
+              selectedDispute.id
+            );
+            setLoadingTools(false);
+            if (result.success) {
+              Alert.alert("Success", "False claim marked successfully");
+              loadPartyProfiles();
+            } else {
+              Alert.alert("Error", result.error || "Failed to mark false claim");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleIssueCredit = async (userId) => {
+    if (!creditAmount || isNaN(parseFloat(creditAmount)) || parseFloat(creditAmount) <= 0) {
+      Alert.alert("Error", "Please enter a valid amount");
+      return;
+    }
+    setLoadingTools(true);
+    const result = await HRDashboardService.issueCredit(
+      state.currentUser.token,
+      userId,
+      parseFloat(creditAmount),
+      creditReason || `Dispute resolution #${selectedDispute.id}`,
+      selectedDispute.appointment?.id
+    );
+    setLoadingTools(false);
+    if (result.success) {
+      Alert.alert("Success", `$${creditAmount} credit issued successfully`);
+      setCreditAmount("");
+      setCreditReason("");
+      setToolAction(null);
+    } else {
+      Alert.alert("Error", result.error || "Failed to issue credit");
+    }
+  };
+
+  const handleSendNotification = async (userId) => {
+    if (!notificationTitle || !notificationBody) {
+      Alert.alert("Error", "Please enter title and message");
+      return;
+    }
+    setLoadingTools(true);
+    const result = await HRDashboardService.sendNotification(
+      state.currentUser.token,
+      userId,
+      notificationTitle,
+      notificationBody
+    );
+    setLoadingTools(false);
+    if (result.success) {
+      Alert.alert("Success", "Notification sent successfully");
+      setNotificationTitle("");
+      setNotificationBody("");
+      setToolAction(null);
+    } else {
+      Alert.alert("Error", result.error || "Failed to send notification");
+    }
+  };
+
+  const handleUpdateHomeSize = async () => {
+    if (!selectedDispute?.home?.id) return;
+    setLoadingTools(true);
+    const result = await HRDashboardService.updateHomeSize(
+      state.currentUser.token,
+      selectedDispute.home.id,
+      {
+        numBeds: finalBeds,
+        numBaths: finalBaths,
+        numHalfBaths: finalHalfBaths,
+        reason: `HR resolution for dispute #${selectedDispute.id}`,
+      }
+    );
+    setLoadingTools(false);
+    if (result.success) {
+      Alert.alert("Success", "Home size updated successfully");
+      loadHistory();
+    } else {
+      Alert.alert("Error", result.error || "Failed to update home size");
+    }
   };
 
   const handleConversationPress = (conversation) => {
@@ -330,7 +485,7 @@ const HRDashboard = ({ state, dispatch }) => {
 
   const handleResolveDispute = async (approve) => {
     if (!finalBeds || !finalBaths) {
-      setSubmitError("Please select final bedroom and bathroom counts");
+      setSubmitError("Please select bedroom and bathroom counts");
       return;
     }
 
@@ -357,202 +512,191 @@ const HRDashboard = ({ state, dispatch }) => {
         setSubmitError(result.error || "Failed to resolve dispute");
       }
     } catch (err) {
-      setSubmitError("An error occurred. Please try again.");
+      setSubmitError("An error occurred");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
-    return "Good evening";
-  };
-
   const pendingCount = quickStats?.pendingDisputes || 0;
   const needsActionCount = disputes.filter(d =>
-    d.status === "denied" || d.status === "expired" || d.status === "pending_owner"
+    ["denied", "expired", "pending_owner"].includes(d.status)
   ).length;
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary[500]} />
-        <Text style={styles.loadingText}>Loading your dashboard...</Text>
+      <View style={styles.loadingWrap}>
+        <View style={styles.loadingCard}>
+          <ActivityIndicator size="large" color="#7C3AED" />
+          <Text style={styles.loadingText}>Loading Dashboard</Text>
+        </View>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Icon name="exclamation-circle" size={48} color={colors.error[400]} />
-        <Text style={styles.errorTitle}>Something went wrong</Text>
-        <Text style={styles.errorText}>{error}</Text>
-        <Pressable style={styles.retryButton} onPress={fetchDashboardData}>
-          <Icon name="refresh" size={16} color={colors.white} style={{ marginRight: 8 }} />
-          <Text style={styles.retryButtonText}>Try Again</Text>
-        </Pressable>
+      <View style={styles.loadingWrap}>
+        <View style={styles.errorCard}>
+          <Icon name="exclamation-triangle" size={32} color="#EF4444" />
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable style={styles.retryBtn} onPress={() => fetchDashboardData()}>
+            <Icon name="redo" size={14} color="#fff" />
+            <Text style={styles.retryText}>Try Again</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={[colors.primary[500]]}
-          tintColor={colors.primary[500]}
-        />
-      }
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.greeting}>{getGreeting()}</Text>
-          <Text style={styles.headerTitle}>HR Dashboard</Text>
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#7C3AED" />
+        }
+      >
+        {/* Hero Header */}
+        <View style={styles.hero}>
+          <View style={styles.heroContent}>
+            <Text style={styles.heroGreeting}>Human Resources</Text>
+            <Text style={styles.heroTitle}>Dashboard</Text>
+          </View>
+          <View style={styles.heroIcon}>
+            <Icon name="gavel" size={28} color="rgba(255,255,255,0.9)" />
+          </View>
         </View>
-        <Text style={styles.headerDate}>
-          {new Date().toLocaleDateString("en-US", {
-            weekday: "short",
-            month: "short",
-            day: "numeric",
-          })}
-        </Text>
-      </View>
 
-      {/* Quick Actions */}
-      <View style={styles.quickActionsContainer}>
-        <Text style={styles.quickActionsTitle}>Quick Actions</Text>
-        <View style={styles.quickActionsRow}>
-          <QuickActionButton
-            icon="users"
+        {/* Quick Actions */}
+        <View style={styles.actionsWrap}>
+          <ActionButton
+            icon="user-plus"
             label="Applications"
-            color={colors.secondary[500]}
+            color="#8B5CF6"
+            badge={quickStats?.pendingApplications || 0}
             onPress={() => navigate("/list-of-applications")}
-            badge={quickStats?.pendingApplications}
           />
-          <QuickActionButton
-            icon="id-card"
+          <ActionButton
+            icon="users"
             label="Employees"
-            color={colors.primary[500]}
+            color="#6366F1"
             onPress={() => navigate("/employees")}
           />
-          <QuickActionButton
+          <ActionButton
             icon="balance-scale"
             label="Conflicts"
-            color={colors.error[500]}
+            color="#EF4444"
+            badge={quickStats?.pendingConflicts || 0}
             onPress={() => navigate("/conflicts")}
-            badge={quickStats?.pendingConflicts}
           />
-          <QuickActionButton
-            icon="flag"
-            label="New Ticket"
-            color={colors.warning[500]}
+          <ActionButton
+            icon="plus-circle"
+            label="Ticket"
+            color="#F59E0B"
             onPress={() => setShowCreateTicketModal(true)}
           />
-          <QuickActionButton
-            icon="comments"
-            label="Messages"
-            color={colors.success[500]}
-            onPress={() => navigate("/messages")}
-            badge={quickStats?.unreadMessages}
-          />
         </View>
-      </View>
 
-      {/* Stats Overview */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statsRow}>
-          <StatCard
-            title="Pending Disputes"
-            value={pendingCount}
-            icon="exclamation-triangle"
-            color={pendingCount > 0 ? colors.warning[500] : colors.success[500]}
-            subtitle={needsActionCount > 0 ? `${needsActionCount} need action` : null}
-          />
-          <StatCard
-            title="Support Chats"
-            value={quickStats?.supportConversations || 0}
-            icon="comments-o"
-            color={colors.primary[500]}
-          />
-        </View>
-        <View style={styles.statsRow}>
-          <StatCard
-            title="Resolved This Week"
-            value={quickStats?.disputesResolvedThisWeek || 0}
-            icon="check-circle"
-            color={colors.success[500]}
-          />
-          <StatCard
-            title="Active Cleaners"
-            value={quickStats?.activeCleaners || 0}
-            icon="user-circle"
-            color={colors.secondary[500]}
-          />
-        </View>
-      </View>
-
-      {/* Pending Disputes Section */}
-      <SectionHeader
-        title="Disputes Requiring Attention"
-        icon="gavel"
-      />
-      {disputes.length === 0 ? (
-        <EmptyState
-          icon="check-circle"
-          title="All caught up!"
-          subtitle="No pending disputes to review"
-        />
-      ) : (
-        <View style={styles.cardList}>
-          {disputes.slice(0, 5).map((dispute) => (
-            <DisputeCard
-              key={dispute.id}
-              dispute={dispute}
-              onPress={handleDisputePress}
+        {/* Stats Grid */}
+        <View style={styles.statsWrap}>
+          <Text style={styles.sectionLabel}>Overview</Text>
+          <View style={styles.statsGrid}>
+            <StatCard
+              title="Pending Disputes"
+              value={pendingCount}
+              icon="exclamation-triangle"
+              color={pendingCount > 0 ? "#F59E0B" : "#10B981"}
+              subtitle={needsActionCount > 0 ? `${needsActionCount} need action` : null}
             />
-          ))}
+            <StatCard
+              title="Support Chats"
+              value={quickStats?.supportConversations || 0}
+              icon="comments"
+              color="#6366F1"
+            />
+            <StatCard
+              title="Resolved"
+              value={quickStats?.disputesResolvedThisWeek || 0}
+              icon="check-circle"
+              color="#10B981"
+              trend="This week"
+            />
+            <StatCard
+              title="Active Cleaners"
+              value={quickStats?.activeCleaners || 0}
+              icon="user-check"
+              color="#8B5CF6"
+            />
+          </View>
+        </View>
+
+        {/* Disputes Section */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>Disputes Requiring Attention</Text>
+            <Text style={styles.sectionCount}>{disputes.length} open</Text>
+          </View>
+
+          {disputes.length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Icon name="check-double" size={28} color="#10B981" />
+              </View>
+              <Text style={styles.emptyTitle}>All Caught Up!</Text>
+              <Text style={styles.emptyText}>No pending disputes to review</Text>
+            </View>
+          ) : (
+            disputes.slice(0, 5).map((dispute) => (
+              <DisputeCard
+                key={dispute.id}
+                dispute={dispute}
+                onPress={handleDisputePress}
+              />
+            ))
+          )}
+
           {disputes.length > 5 && (
-            <Pressable style={styles.viewMoreButton}>
-              <Text style={styles.viewMoreText}>View All {disputes.length} Disputes</Text>
-              <Icon name="chevron-right" size={12} color={colors.primary[500]} />
+            <Pressable style={styles.viewAllBtn}>
+              <Text style={styles.viewAllText}>View All {disputes.length} Disputes</Text>
+              <Icon name="chevron-right" size={12} color="#7C3AED" />
             </Pressable>
           )}
         </View>
-      )}
 
-      {/* Support Conversations Section */}
-      <SectionHeader
-        title="Recent Support Messages"
-        icon="envelope"
-        onPress={() => navigate("/messages")}
-        actionText="All Messages"
-      />
-      {conversations.length === 0 ? (
-        <EmptyState
-          icon="inbox"
-          title="No messages"
-          subtitle="Support conversations will appear here"
-        />
-      ) : (
-        <View style={styles.cardList}>
-          {conversations.slice(0, 4).map((conversation) => (
-            <ConversationCard
-              key={conversation.id}
-              conversation={conversation}
-              onPress={handleConversationPress}
-            />
-          ))}
+        {/* Conversations Section */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>Recent Messages</Text>
+            <Pressable onPress={() => navigate("/messages")} style={styles.seeAllBtn}>
+              <Text style={styles.seeAllText}>See All</Text>
+              <Icon name="chevron-right" size={10} color="#7C3AED" />
+            </Pressable>
+          </View>
+
+          {conversations.length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Icon name="inbox" size={28} color="#9CA3AF" />
+              </View>
+              <Text style={styles.emptyTitle}>No Messages</Text>
+              <Text style={styles.emptyText}>Support conversations will appear here</Text>
+            </View>
+          ) : (
+            conversations.slice(0, 4).map((conversation) => (
+              <ConversationCard
+                key={conversation.id}
+                conversation={conversation}
+                onPress={handleConversationPress}
+              />
+            ))
+          )}
         </View>
-      )}
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
 
       {/* Create Support Ticket Modal */}
       <CreateSupportTicketModal
@@ -569,118 +713,111 @@ const HRDashboard = ({ state, dispatch }) => {
       <Modal
         visible={showDetailModal}
         animationType="slide"
-        transparent={true}
+        transparent
         onRequestClose={() => setShowDetailModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {/* Fixed Header */}
-            <View style={styles.modalHeaderFixed}>
-              <View style={styles.modalHandle} />
-              <View style={styles.modalHeader}>
-                <View>
-                  <Text style={styles.modalTitle}>Dispute Details</Text>
-                  <Text style={styles.modalSubtitle}>#{selectedDispute?.id}</Text>
-                </View>
-                <Pressable
-                  style={styles.closeButton}
-                  onPress={() => setShowDetailModal(false)}
-                >
-                  <Icon name="times" size={18} color={colors.text.primary} />
-                </Pressable>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Dispute Details</Text>
+                <Text style={styles.modalSubtitle}>#{selectedDispute?.id}</Text>
               </View>
+              <Pressable style={styles.modalClose} onPress={() => setShowDetailModal(false)}>
+                <Icon name="times" size={18} color="#6B7280" />
+              </Pressable>
             </View>
 
-            {/* Scrollable Content */}
-            <ScrollView
-              style={styles.modalScrollView}
-              contentContainerStyle={styles.modalScrollContent}
-              showsVerticalScrollIndicator={true}
-              bounces={true}
-            >
+            {/* Tool Tabs */}
+            <View style={styles.toolTabsRow}>
+              {TOOL_TABS.map((tab) => (
+                <Pressable
+                  key={tab.key}
+                  style={[styles.toolTab, activeToolTab === tab.key && styles.toolTabActive]}
+                  onPress={() => handleTabChange(tab.key)}
+                >
+                  <Icon
+                    name={tab.icon}
+                    size={14}
+                    color={activeToolTab === tab.key ? "#7C3AED" : "#9CA3AF"}
+                  />
+                  <Text style={[styles.toolTabText, activeToolTab === tab.key && styles.toolTabTextActive]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
 
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {selectedDispute && (
                 <>
-                  <View style={styles.modalStatusRow}>
-                    <StatusBadge status={selectedDispute.status} />
-                  </View>
+                  {/* Details Tab */}
+                  {activeToolTab === "details" && (
+                    <>
+                      <View style={styles.modalStatusRow}>
+                        <StatusChip status={selectedDispute.status} />
+                      </View>
 
-                  {/* Property Info Card */}
+                  {/* Property Card */}
                   <View style={styles.infoCard}>
                     <View style={styles.infoCardHeader}>
-                      <Icon name="home" size={16} color={colors.primary[500]} />
-                      <Text style={styles.infoCardTitle}>Property</Text>
+                      <Icon name="home" size={14} color="#7C3AED" />
+                      <Text style={styles.infoCardLabel}>Property</Text>
                     </View>
-                    <Text style={styles.infoCardValue}>
-                      {selectedDispute.home?.address}
-                    </Text>
-                    <Text style={styles.infoCardSubvalue}>
-                      {selectedDispute.home?.city}, {selectedDispute.home?.state} {selectedDispute.home?.zipcode}
+                    <Text style={styles.infoCardValue}>{selectedDispute.home?.address}</Text>
+                    <Text style={styles.infoCardSub}>
+                      {selectedDispute.home?.city}, {selectedDispute.home?.state}
                     </Text>
                   </View>
 
-                  {/* Parties Info */}
+                  {/* Parties */}
                   <View style={styles.partiesRow}>
-                    <View style={[styles.partyCard, styles.partyCardCleaner]}>
-                      <View style={styles.partyHeader}>
-                        <Icon name="user" size={18} color={colors.secondary[600]} />
-                        <Text style={styles.partyLabel}>Cleaner</Text>
-                      </View>
+                    <View style={[styles.partyCard, { backgroundColor: "#F3E8FF", borderColor: "#DDD6FE" }]}>
+                      <Icon name="user" size={16} color="#7C3AED" />
+                      <Text style={styles.partyLabel}>Cleaner</Text>
                       <Text style={styles.partyName}>
                         {selectedDispute.cleaner?.firstName} {selectedDispute.cleaner?.lastName}
                       </Text>
                       {selectedDispute.cleaner?.falseClaimCount > 0 && (
-                        <View style={styles.warningBadge}>
-                          <Icon name="warning" size={12} color={colors.warning[600]} />
-                          <Text style={styles.warningBadgeText}>
-                            {selectedDispute.cleaner.falseClaimCount} prior false claims
-                          </Text>
+                        <View style={styles.warningRow}>
+                          <Icon name="exclamation-triangle" size={10} color="#D97706" />
+                          <Text style={styles.warningText}>{selectedDispute.cleaner.falseClaimCount} prior claims</Text>
                         </View>
                       )}
                     </View>
-                    <View style={[styles.partyCard, styles.partyCardHomeowner]}>
-                      <View style={styles.partyHeader}>
-                        <Icon name="home" size={18} color={colors.primary[600]} />
-                        <Text style={styles.partyLabel}>Homeowner</Text>
-                      </View>
+                    <View style={[styles.partyCard, { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }]}>
+                      <Icon name="home" size={16} color="#2563EB" />
+                      <Text style={styles.partyLabel}>Homeowner</Text>
                       <Text style={styles.partyName}>
                         {selectedDispute.homeowner?.firstName} {selectedDispute.homeowner?.lastName}
                       </Text>
                       {selectedDispute.homeowner?.falseHomeSizeCount > 0 && (
-                        <View style={styles.warningBadge}>
-                          <Icon name="warning" size={12} color={colors.warning[600]} />
-                          <Text style={styles.warningBadgeText}>
-                            {selectedDispute.homeowner.falseHomeSizeCount} prior size issues
-                          </Text>
+                        <View style={styles.warningRow}>
+                          <Icon name="exclamation-triangle" size={10} color="#D97706" />
+                          <Text style={styles.warningText}>{selectedDispute.homeowner.falseHomeSizeCount} size issues</Text>
                         </View>
                       )}
                     </View>
                   </View>
 
-                  {/* Size Comparison Card */}
+                  {/* Size Comparison */}
                   <View style={styles.comparisonCard}>
                     <Text style={styles.comparisonTitle}>Size Discrepancy</Text>
                     <View style={styles.comparisonBoxes}>
-                      <View style={styles.comparisonBox}>
-                        <Text style={styles.comparisonBoxLabel}>On File</Text>
-                        <Text style={styles.comparisonBoxValue}>
-                          {selectedDispute.originalNumBeds} bed
-                        </Text>
-                        <Text style={styles.comparisonBoxValue}>
-                          {selectedDispute.originalNumBaths} bath
-                        </Text>
+                      <View style={styles.compBox}>
+                        <Text style={styles.compBoxLabel}>On File</Text>
+                        <Text style={styles.compBoxValue}>{selectedDispute.originalNumBeds} bed</Text>
+                        <Text style={styles.compBoxValue}>{selectedDispute.originalNumBaths} bath</Text>
                       </View>
-                      <View style={styles.comparisonArrow}>
-                        <Icon name="arrow-right" size={20} color={colors.text.tertiary} />
+                      <View style={styles.compArrow}>
+                        <Icon name="arrow-right" size={16} color="#9CA3AF" />
                       </View>
-                      <View style={[styles.comparisonBox, styles.comparisonBoxHighlight]}>
-                        <Text style={styles.comparisonBoxLabel}>Reported</Text>
-                        <Text style={styles.comparisonBoxValueHighlight}>
-                          {selectedDispute.reportedNumBeds} bed
-                        </Text>
-                        <Text style={styles.comparisonBoxValueHighlight}>
-                          {selectedDispute.reportedNumBaths} bath
-                        </Text>
+                      <View style={[styles.compBox, styles.compBoxHighlight]}>
+                        <Text style={styles.compBoxLabel}>Reported</Text>
+                        <Text style={styles.compBoxValueHL}>{selectedDispute.reportedNumBeds} bed</Text>
+                        <Text style={styles.compBoxValueHL}>{selectedDispute.reportedNumBaths} bath</Text>
                       </View>
                     </View>
                     <View style={styles.priceDiffRow}>
@@ -694,20 +831,12 @@ const HRDashboard = ({ state, dispatch }) => {
                   {/* Photos */}
                   {selectedDispute.photos && selectedDispute.photos.length > 0 && (
                     <View style={styles.photosSection}>
-                      <Text style={styles.photosSectionTitle}>
-                        <Icon name="camera" size={14} color={colors.text.primary} /> Evidence Photos
-                      </Text>
+                      <Text style={styles.photosSectionTitle}>Evidence Photos</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                         {selectedDispute.photos.map((photo) => (
                           <View key={photo.id} style={styles.photoItem}>
-                            <Image
-                              source={{ uri: photo.photoUrl }}
-                              style={styles.photoImage}
-                              resizeMode="cover"
-                            />
-                            <Text style={styles.photoLabel}>
-                              {photo.roomType} #{photo.roomNumber}
-                            </Text>
+                            <Image source={{ uri: photo.photoUrl }} style={styles.photoImage} resizeMode="cover" />
+                            <Text style={styles.photoLabel}>{photo.roomType} #{photo.roomNumber}</Text>
                           </View>
                         ))}
                       </ScrollView>
@@ -733,525 +862,1039 @@ const HRDashboard = ({ state, dispatch }) => {
                   )}
 
                   {/* Resolution Form */}
-                  {(selectedDispute.status === "pending_owner" ||
-                    selectedDispute.status === "denied" ||
-                    selectedDispute.status === "expired") && (
+                  {["pending_owner", "denied", "expired"].includes(selectedDispute.status) && (
                     <View style={styles.resolutionForm}>
-                      <View style={styles.formTitleRow}>
-                        <Icon name="gavel" size={20} color={colors.primary[600]} />
+                      <View style={styles.formHeader}>
+                        <Icon name="gavel" size={18} color="#7C3AED" />
                         <Text style={styles.formTitle}>Make Your Decision</Text>
                       </View>
-                      <Text style={styles.formDescription}>
-                        Set the final room counts for this property. This will update the home's listing and affect future pricing.
+                      <Text style={styles.formDesc}>
+                        Set the final room counts for this property.
                       </Text>
 
                       {/* Bedrooms */}
-                      <View style={styles.selectorSection}>
-                        <Text style={styles.selectorLabel}>
-                          <Icon name="bed" size={14} color={colors.text.primary} /> Bedrooms
-                        </Text>
-                        <View style={styles.selectorRow}>
-                          {bedOptions.map((option) => (
-                            <Pressable
-                              key={option}
-                              style={[
-                                styles.selectorButton,
-                                finalBeds === option && styles.selectorButtonActive,
-                              ]}
-                              onPress={() => setFinalBeds(option)}
-                            >
-                              <Text
-                                style={[
-                                  styles.selectorButtonText,
-                                  finalBeds === option && styles.selectorButtonTextActive,
-                                ]}
-                              >
-                                {option}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </View>
+                      <Text style={styles.selectorLabel}>Bedrooms</Text>
+                      <View style={styles.selectorRow}>
+                        {bedOptions.map((opt) => (
+                          <Pressable
+                            key={opt}
+                            style={[styles.selectorBtn, finalBeds === opt && styles.selectorBtnActive]}
+                            onPress={() => setFinalBeds(opt)}
+                          >
+                            <Text style={[styles.selectorBtnText, finalBeds === opt && styles.selectorBtnTextActive]}>
+                              {opt}
+                            </Text>
+                          </Pressable>
+                        ))}
                       </View>
 
-                      {/* Full Baths */}
-                      <View style={styles.selectorSection}>
-                        <Text style={styles.selectorLabel}>
-                          <Icon name="bath" size={14} color={colors.text.primary} /> Full Baths
-                        </Text>
-                        <View style={styles.selectorRow}>
-                          {bathOptions.map((option) => (
-                            <Pressable
-                              key={option}
-                              style={[
-                                styles.selectorButton,
-                                finalBaths === option && styles.selectorButtonActive,
-                              ]}
-                              onPress={() => setFinalBaths(option)}
-                            >
-                              <Text
-                                style={[
-                                  styles.selectorButtonText,
-                                  finalBaths === option && styles.selectorButtonTextActive,
-                                ]}
-                              >
-                                {option}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </View>
+                      {/* Bathrooms */}
+                      <Text style={styles.selectorLabel}>Bathrooms</Text>
+                      <View style={styles.selectorRow}>
+                        {bathOptions.map((opt) => (
+                          <Pressable
+                            key={opt}
+                            style={[styles.selectorBtn, finalBaths === opt && styles.selectorBtnActive]}
+                            onPress={() => setFinalBaths(opt)}
+                          >
+                            <Text style={[styles.selectorBtnText, finalBaths === opt && styles.selectorBtnTextActive]}>
+                              {opt}
+                            </Text>
+                          </Pressable>
+                        ))}
                       </View>
 
                       {/* Half Baths */}
-                      <View style={styles.selectorSection}>
-                        <Text style={styles.selectorLabel}>
-                          <Icon name="tint" size={14} color={colors.text.primary} /> Half Baths
-                        </Text>
-                        <View style={styles.selectorRow}>
-                          {halfBathOptions.map((option) => (
-                            <Pressable
-                              key={option}
-                              style={[
-                                styles.selectorButton,
-                                finalHalfBaths === option && styles.selectorButtonActive,
-                              ]}
-                              onPress={() => setFinalHalfBaths(option)}
-                            >
-                              <Text
-                                style={[
-                                  styles.selectorButtonText,
-                                  finalHalfBaths === option && styles.selectorButtonTextActive,
-                                ]}
-                              >
-                                {option}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </View>
+                      <Text style={styles.selectorLabel}>Half Baths</Text>
+                      <View style={styles.selectorRow}>
+                        {halfBathOptions.map((opt) => (
+                          <Pressable
+                            key={opt}
+                            style={[styles.selectorBtn, finalHalfBaths === opt && styles.selectorBtnActive]}
+                            onPress={() => setFinalHalfBaths(opt)}
+                          >
+                            <Text style={[styles.selectorBtnText, finalHalfBaths === opt && styles.selectorBtnTextActive]}>
+                              {opt}
+                            </Text>
+                          </Pressable>
+                        ))}
                       </View>
 
-                      <Text style={styles.notesLabel}>Resolution Notes (Optional)</Text>
+                      <Text style={styles.notesInputLabel}>Resolution Notes (Optional)</Text>
                       <TextInput
                         style={styles.textArea}
                         value={ownerNote}
                         onChangeText={setOwnerNote}
                         placeholder="Explain your decision..."
+                        placeholderTextColor="#9CA3AF"
                         multiline
                         numberOfLines={3}
-                        placeholderTextColor={colors.text.tertiary}
                       />
 
-                      {submitError ? (
+                      {submitError && (
                         <View style={styles.errorBanner}>
-                          <Icon name="exclamation-circle" size={14} color={colors.error[600]} />
+                          <Icon name="exclamation-circle" size={14} color="#DC2626" />
                           <Text style={styles.errorBannerText}>{submitError}</Text>
                         </View>
-                      ) : null}
+                      )}
 
                       <View style={styles.buttonRow}>
                         <Pressable
-                          style={[styles.actionButton, styles.denyButton]}
+                          style={[styles.decisionBtn, styles.denyBtn]}
                           onPress={() => handleResolveDispute(false)}
                           disabled={isSubmitting}
                         >
                           {isSubmitting ? (
-                            <ActivityIndicator size="small" color={colors.white} />
+                            <ActivityIndicator size="small" color="#fff" />
                           ) : (
                             <>
-                              <Icon name="times" size={16} color={colors.white} />
-                              <Text style={styles.buttonText}>Deny Claim</Text>
+                              <Icon name="times" size={14} color="#fff" />
+                              <Text style={styles.decisionBtnText}>Deny</Text>
                             </>
                           )}
                         </Pressable>
                         <Pressable
-                          style={[styles.actionButton, styles.approveButton]}
+                          style={[styles.decisionBtn, styles.approveBtn]}
                           onPress={() => handleResolveDispute(true)}
                           disabled={isSubmitting}
                         >
                           {isSubmitting ? (
-                            <ActivityIndicator size="small" color={colors.white} />
+                            <ActivityIndicator size="small" color="#fff" />
                           ) : (
                             <>
-                              <Icon name="check" size={16} color={colors.white} />
-                              <Text style={styles.buttonText}>Approve Claim</Text>
+                              <Icon name="check" size={14} color="#fff" />
+                              <Text style={styles.decisionBtnText}>Approve</Text>
                             </>
                           )}
                         </Pressable>
                       </View>
                     </View>
                   )}
+                    </>
+                  )}
+
+                  {/* Parties Tab */}
+                  {activeToolTab === "parties" && (
+                    <>
+                      {loadingTools ? (
+                        <View style={styles.toolLoadingWrap}>
+                          <ActivityIndicator size="large" color="#7C3AED" />
+                          <Text style={styles.toolLoadingText}>Loading profiles...</Text>
+                        </View>
+                      ) : (
+                        <>
+                          {/* Cleaner Profile */}
+                          {cleanerProfile && (
+                            <View style={styles.profileCard}>
+                              <View style={styles.profileCardHeader}>
+                                <View style={[styles.profileAvatar, { backgroundColor: "#F3E8FF" }]}>
+                                  <Icon name="broom" size={20} color="#7C3AED" />
+                                </View>
+                                <View style={styles.profileInfo}>
+                                  <Text style={styles.profileName}>
+                                    {cleanerProfile.firstName} {cleanerProfile.lastName}
+                                  </Text>
+                                  <Text style={styles.profileType}>Cleaner</Text>
+                                </View>
+                              </View>
+
+                              <View style={styles.profileStatsRow}>
+                                <View style={styles.profileStat}>
+                                  <Text style={styles.profileStatValue}>{cleanerProfile.stats?.falseClaimCount || 0}</Text>
+                                  <Text style={styles.profileStatLabel}>False Claims</Text>
+                                </View>
+                                <View style={styles.profileStat}>
+                                  <Text style={styles.profileStatValue}>{cleanerProfile.stats?.homeSizeDisputes || 0}</Text>
+                                  <Text style={styles.profileStatLabel}>Total Disputes</Text>
+                                </View>
+                                <View style={styles.profileStat}>
+                                  <Text style={styles.profileStatValue}>{cleanerProfile.stats?.reviewsReceived || 0}</Text>
+                                  <Text style={styles.profileStatLabel}>Reviews</Text>
+                                </View>
+                              </View>
+
+                              {cleanerProfile.ownerPrivateNotes && (
+                                <View style={styles.profileNotes}>
+                                  <Text style={styles.profileNotesLabel}>HR Notes</Text>
+                                  <Text style={styles.profileNotesText}>{cleanerProfile.ownerPrivateNotes}</Text>
+                                </View>
+                              )}
+
+                              <View style={styles.profileActions}>
+                                <Pressable
+                                  style={styles.profileActionBtn}
+                                  onPress={() => handleMarkFalseClaim(cleanerProfile.id, "cleaner")}
+                                >
+                                  <Icon name="flag" size={12} color="#DC2626" />
+                                  <Text style={styles.profileActionText}>Mark False Claim</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={styles.profileActionBtn}
+                                  onPress={() => setToolAction({ type: "credit", userId: cleanerProfile.id, userName: cleanerProfile.firstName })}
+                                >
+                                  <Icon name="dollar-sign" size={12} color="#10B981" />
+                                  <Text style={styles.profileActionText}>Issue Credit</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={styles.profileActionBtn}
+                                  onPress={() => setToolAction({ type: "notify", userId: cleanerProfile.id, userName: cleanerProfile.firstName })}
+                                >
+                                  <Icon name="bell" size={12} color="#6366F1" />
+                                  <Text style={styles.profileActionText}>Notify</Text>
+                                </Pressable>
+                              </View>
+                            </View>
+                          )}
+
+                          {/* Homeowner Profile */}
+                          {homeownerProfile && (
+                            <View style={styles.profileCard}>
+                              <View style={styles.profileCardHeader}>
+                                <View style={[styles.profileAvatar, { backgroundColor: "#DBEAFE" }]}>
+                                  <Icon name="home" size={20} color="#2563EB" />
+                                </View>
+                                <View style={styles.profileInfo}>
+                                  <Text style={styles.profileName}>
+                                    {homeownerProfile.firstName} {homeownerProfile.lastName}
+                                  </Text>
+                                  <Text style={styles.profileType}>Homeowner</Text>
+                                </View>
+                              </View>
+
+                              <View style={styles.profileStatsRow}>
+                                <View style={styles.profileStat}>
+                                  <Text style={styles.profileStatValue}>{homeownerProfile.stats?.falseHomeSizeCount || 0}</Text>
+                                  <Text style={styles.profileStatLabel}>Size Issues</Text>
+                                </View>
+                                <View style={styles.profileStat}>
+                                  <Text style={styles.profileStatValue}>{homeownerProfile.stats?.cancellationCount || 0}</Text>
+                                  <Text style={styles.profileStatLabel}>Cancellations</Text>
+                                </View>
+                                <View style={styles.profileStat}>
+                                  <Text style={styles.profileStatValue}>{homeownerProfile.homes?.length || 0}</Text>
+                                  <Text style={styles.profileStatLabel}>Homes</Text>
+                                </View>
+                              </View>
+
+                              {homeownerProfile.ownerPrivateNotes && (
+                                <View style={styles.profileNotes}>
+                                  <Text style={styles.profileNotesLabel}>HR Notes</Text>
+                                  <Text style={styles.profileNotesText}>{homeownerProfile.ownerPrivateNotes}</Text>
+                                </View>
+                              )}
+
+                              <View style={styles.profileActions}>
+                                <Pressable
+                                  style={styles.profileActionBtn}
+                                  onPress={() => handleMarkFalseClaim(homeownerProfile.id, "homeowner")}
+                                >
+                                  <Icon name="flag" size={12} color="#DC2626" />
+                                  <Text style={styles.profileActionText}>Mark Size Issue</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={styles.profileActionBtn}
+                                  onPress={() => setToolAction({ type: "credit", userId: homeownerProfile.id, userName: homeownerProfile.firstName })}
+                                >
+                                  <Icon name="dollar-sign" size={12} color="#10B981" />
+                                  <Text style={styles.profileActionText}>Issue Credit</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={styles.profileActionBtn}
+                                  onPress={() => setToolAction({ type: "notify", userId: homeownerProfile.id, userName: homeownerProfile.firstName })}
+                                >
+                                  <Icon name="bell" size={12} color="#6366F1" />
+                                  <Text style={styles.profileActionText}>Notify</Text>
+                                </Pressable>
+                              </View>
+                            </View>
+                          )}
+
+                          {/* Action Forms */}
+                          {toolAction?.type === "credit" && (
+                            <View style={styles.actionFormCard}>
+                              <Text style={styles.actionFormTitle}>Issue Credit to {toolAction.userName}</Text>
+                              <TextInput
+                                style={styles.actionInput}
+                                placeholder="Amount ($)"
+                                placeholderTextColor="#9CA3AF"
+                                keyboardType="decimal-pad"
+                                value={creditAmount}
+                                onChangeText={setCreditAmount}
+                              />
+                              <TextInput
+                                style={[styles.actionInput, { height: 80 }]}
+                                placeholder="Reason (optional)"
+                                placeholderTextColor="#9CA3AF"
+                                multiline
+                                value={creditReason}
+                                onChangeText={setCreditReason}
+                              />
+                              <View style={styles.actionFormBtns}>
+                                <Pressable
+                                  style={styles.actionCancelBtn}
+                                  onPress={() => setToolAction(null)}
+                                >
+                                  <Text style={styles.actionCancelText}>Cancel</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={styles.actionSubmitBtn}
+                                  onPress={() => handleIssueCredit(toolAction.userId)}
+                                  disabled={loadingTools}
+                                >
+                                  {loadingTools ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                  ) : (
+                                    <Text style={styles.actionSubmitText}>Issue Credit</Text>
+                                  )}
+                                </Pressable>
+                              </View>
+                            </View>
+                          )}
+
+                          {toolAction?.type === "notify" && (
+                            <View style={styles.actionFormCard}>
+                              <Text style={styles.actionFormTitle}>Send Notification to {toolAction.userName}</Text>
+                              <TextInput
+                                style={styles.actionInput}
+                                placeholder="Title"
+                                placeholderTextColor="#9CA3AF"
+                                value={notificationTitle}
+                                onChangeText={setNotificationTitle}
+                              />
+                              <TextInput
+                                style={[styles.actionInput, { height: 100 }]}
+                                placeholder="Message"
+                                placeholderTextColor="#9CA3AF"
+                                multiline
+                                value={notificationBody}
+                                onChangeText={setNotificationBody}
+                              />
+                              <View style={styles.actionFormBtns}>
+                                <Pressable
+                                  style={styles.actionCancelBtn}
+                                  onPress={() => setToolAction(null)}
+                                >
+                                  <Text style={styles.actionCancelText}>Cancel</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={styles.actionSubmitBtn}
+                                  onPress={() => handleSendNotification(toolAction.userId)}
+                                  disabled={loadingTools}
+                                >
+                                  {loadingTools ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                  ) : (
+                                    <Text style={styles.actionSubmitText}>Send</Text>
+                                  )}
+                                </Pressable>
+                              </View>
+                            </View>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+
+                  {/* History Tab */}
+                  {activeToolTab === "history" && (
+                    <>
+                      {loadingTools ? (
+                        <View style={styles.toolLoadingWrap}>
+                          <ActivityIndicator size="large" color="#7C3AED" />
+                          <Text style={styles.toolLoadingText}>Loading history...</Text>
+                        </View>
+                      ) : (
+                        <>
+                          {/* Home Details */}
+                          {homeDetails && (
+                            <View style={styles.historyCard}>
+                              <View style={styles.historyCardHeader}>
+                                <Icon name="home" size={16} color="#7C3AED" />
+                                <Text style={styles.historyCardTitle}>Property History</Text>
+                              </View>
+                              <Text style={styles.historyAddress}>{homeDetails.address}</Text>
+                              <Text style={styles.historySubtext}>
+                                {homeDetails.city}, {homeDetails.state} {homeDetails.zipcode}
+                              </Text>
+                              <View style={styles.historySizeRow}>
+                                <Text style={styles.historySizeLabel}>Current Size:</Text>
+                                <Text style={styles.historySizeValue}>
+                                  {homeDetails.numBeds} bed / {homeDetails.numBaths} bath
+                                  {homeDetails.numHalfBaths > 0 && ` / ${homeDetails.numHalfBaths} half`}
+                                </Text>
+                              </View>
+
+                              {homeDetails.disputeHistory?.length > 0 && (
+                                <>
+                                  <Text style={styles.historyListTitle}>Past Disputes</Text>
+                                  {homeDetails.disputeHistory.slice(0, 5).map((d, i) => (
+                                    <View key={i} style={styles.historyListItem}>
+                                      <View style={styles.historyListDot} />
+                                      <View style={styles.historyListContent}>
+                                        <Text style={styles.historyListText}>
+                                          {d.originalSize} to {d.reportedSize}
+                                        </Text>
+                                        <Text style={styles.historyListMeta}>
+                                          {d.status} - {new Date(d.createdAt).toLocaleDateString()}
+                                        </Text>
+                                      </View>
+                                    </View>
+                                  ))}
+                                </>
+                              )}
+                            </View>
+                          )}
+
+                          {/* Cleaner Claim History */}
+                          {claimHistory && (
+                            <View style={styles.historyCard}>
+                              <View style={styles.historyCardHeader}>
+                                <Icon name="clipboard-list" size={16} color="#F59E0B" />
+                                <Text style={styles.historyCardTitle}>Cleaner Claim History</Text>
+                              </View>
+                              <Text style={styles.historySubtext}>{claimHistory.cleaner?.name}</Text>
+
+                              <View style={styles.claimStatsRow}>
+                                <View style={styles.claimStat}>
+                                  <Text style={styles.claimStatValue}>{claimHistory.stats?.totalClaims || 0}</Text>
+                                  <Text style={styles.claimStatLabel}>Total</Text>
+                                </View>
+                                <View style={styles.claimStat}>
+                                  <Text style={[styles.claimStatValue, { color: "#10B981" }]}>
+                                    {claimHistory.stats?.approvedClaims || 0}
+                                  </Text>
+                                  <Text style={styles.claimStatLabel}>Approved</Text>
+                                </View>
+                                <View style={styles.claimStat}>
+                                  <Text style={[styles.claimStatValue, { color: "#EF4444" }]}>
+                                    {claimHistory.stats?.deniedClaims || 0}
+                                  </Text>
+                                  <Text style={styles.claimStatLabel}>Denied</Text>
+                                </View>
+                                <View style={styles.claimStat}>
+                                  <Text style={[styles.claimStatValue, { color: "#6366F1" }]}>
+                                    {claimHistory.stats?.approvalRate || 0}%
+                                  </Text>
+                                  <Text style={styles.claimStatLabel}>Rate</Text>
+                                </View>
+                              </View>
+
+                              {claimHistory.claims?.length > 0 && (
+                                <>
+                                  <Text style={styles.historyListTitle}>Recent Claims</Text>
+                                  {claimHistory.claims.slice(0, 5).map((c, i) => (
+                                    <View key={i} style={styles.historyListItem}>
+                                      <View
+                                        style={[
+                                          styles.historyListDot,
+                                          {
+                                            backgroundColor: ["approved", "owner_approved"].includes(c.status)
+                                              ? "#10B981"
+                                              : ["denied", "owner_denied"].includes(c.status)
+                                              ? "#EF4444"
+                                              : "#F59E0B",
+                                          },
+                                        ]}
+                                      />
+                                      <View style={styles.historyListContent}>
+                                        <Text style={styles.historyListText} numberOfLines={1}>
+                                          {c.home}
+                                        </Text>
+                                        <Text style={styles.historyListMeta}>
+                                          {c.originalSize} to {c.reportedSize} ({c.status})
+                                        </Text>
+                                      </View>
+                                    </View>
+                                  ))}
+                                </>
+                              )}
+                            </View>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+
+                  {/* Tools Tab */}
+                  {activeToolTab === "tools" && (
+                    <View style={styles.toolsContainer}>
+                      <Text style={styles.toolsSectionTitle}>Resolution Actions</Text>
+
+                      {/* Update Home Size */}
+                      <View style={styles.toolCard}>
+                        <View style={styles.toolCardHeader}>
+                          <Icon name="ruler-combined" size={18} color="#7C3AED" />
+                          <Text style={styles.toolCardTitle}>Update Home Size</Text>
+                        </View>
+                        <Text style={styles.toolCardDesc}>
+                          Permanently update the home's registered size.
+                        </Text>
+
+                        <View style={styles.toolSizeSelectors}>
+                          <View style={styles.toolSizeSelector}>
+                            <Text style={styles.toolSizeSelectorLabel}>Beds</Text>
+                            <View style={styles.toolSizeOptions}>
+                              {["1", "2", "3", "4", "5", "6+"].map((opt) => (
+                                <Pressable
+                                  key={opt}
+                                  style={[styles.toolSizeOption, finalBeds === opt && styles.toolSizeOptionActive]}
+                                  onPress={() => setFinalBeds(opt)}
+                                >
+                                  <Text style={[styles.toolSizeOptionText, finalBeds === opt && styles.toolSizeOptionTextActive]}>
+                                    {opt}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          </View>
+                          <View style={styles.toolSizeSelector}>
+                            <Text style={styles.toolSizeSelectorLabel}>Baths</Text>
+                            <View style={styles.toolSizeOptions}>
+                              {["1", "1.5", "2", "2.5", "3", "4+"].map((opt) => (
+                                <Pressable
+                                  key={opt}
+                                  style={[styles.toolSizeOption, finalBaths === opt && styles.toolSizeOptionActive]}
+                                  onPress={() => setFinalBaths(opt)}
+                                >
+                                  <Text style={[styles.toolSizeOptionText, finalBaths === opt && styles.toolSizeOptionTextActive]}>
+                                    {opt}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          </View>
+                        </View>
+
+                        <Pressable
+                          style={styles.toolActionBtn}
+                          onPress={handleUpdateHomeSize}
+                          disabled={loadingTools}
+                        >
+                          {loadingTools ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <>
+                              <Icon name="save" size={14} color="#fff" />
+                              <Text style={styles.toolActionBtnText}>Update Home Size</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      </View>
+
+                      {/* Quick Actions */}
+                      <View style={styles.toolCard}>
+                        <View style={styles.toolCardHeader}>
+                          <Icon name="bolt" size={18} color="#F59E0B" />
+                          <Text style={styles.toolCardTitle}>Quick Actions</Text>
+                        </View>
+
+                        <View style={styles.quickActionsGrid}>
+                          <Pressable
+                            style={styles.quickActionBtn}
+                            onPress={() => {
+                              if (selectedDispute?.cleaner?.id) {
+                                handleMarkFalseClaim(selectedDispute.cleaner.id, "cleaner");
+                              }
+                            }}
+                          >
+                            <View style={[styles.quickActionIcon, { backgroundColor: "#FEE2E2" }]}>
+                              <Icon name="flag" size={16} color="#DC2626" />
+                            </View>
+                            <Text style={styles.quickActionLabel}>Mark Cleaner{"\n"}False Claim</Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.quickActionBtn}
+                            onPress={() => {
+                              if (selectedDispute?.homeowner?.id) {
+                                handleMarkFalseClaim(selectedDispute.homeowner.id, "homeowner");
+                              }
+                            }}
+                          >
+                            <View style={[styles.quickActionIcon, { backgroundColor: "#FEF3C7" }]}>
+                              <Icon name="home" size={16} color="#D97706" />
+                            </View>
+                            <Text style={styles.quickActionLabel}>Mark Owner{"\n"}Size Issue</Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.quickActionBtn}
+                            onPress={() => {
+                              if (selectedDispute?.cleaner?.id) {
+                                setToolAction({
+                                  type: "credit",
+                                  userId: selectedDispute.cleaner.id,
+                                  userName: selectedDispute.cleaner.firstName,
+                                });
+                              }
+                            }}
+                          >
+                            <View style={[styles.quickActionIcon, { backgroundColor: "#DCFCE7" }]}>
+                              <Icon name="dollar-sign" size={16} color="#16A34A" />
+                            </View>
+                            <Text style={styles.quickActionLabel}>Credit{"\n"}Cleaner</Text>
+                          </Pressable>
+
+                          <Pressable
+                            style={styles.quickActionBtn}
+                            onPress={() => {
+                              if (selectedDispute?.homeowner?.id) {
+                                setToolAction({
+                                  type: "credit",
+                                  userId: selectedDispute.homeowner.id,
+                                  userName: selectedDispute.homeowner.firstName,
+                                });
+                              }
+                            }}
+                          >
+                            <View style={[styles.quickActionIcon, { backgroundColor: "#E0E7FF" }]}>
+                              <Icon name="dollar-sign" size={16} color="#4F46E5" />
+                            </View>
+                            <Text style={styles.quickActionLabel}>Credit{"\n"}Homeowner</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      {/* Credit Form if active */}
+                      {toolAction?.type === "credit" && (
+                        <View style={styles.actionFormCard}>
+                          <Text style={styles.actionFormTitle}>Issue Credit to {toolAction.userName}</Text>
+                          <TextInput
+                            style={styles.actionInput}
+                            placeholder="Amount ($)"
+                            placeholderTextColor="#9CA3AF"
+                            keyboardType="decimal-pad"
+                            value={creditAmount}
+                            onChangeText={setCreditAmount}
+                          />
+                          <TextInput
+                            style={[styles.actionInput, { height: 80 }]}
+                            placeholder="Reason (optional)"
+                            placeholderTextColor="#9CA3AF"
+                            multiline
+                            value={creditReason}
+                            onChangeText={setCreditReason}
+                          />
+                          <View style={styles.actionFormBtns}>
+                            <Pressable style={styles.actionCancelBtn} onPress={() => setToolAction(null)}>
+                              <Text style={styles.actionCancelText}>Cancel</Text>
+                            </Pressable>
+                            <Pressable
+                              style={styles.actionSubmitBtn}
+                              onPress={() => handleIssueCredit(toolAction.userId)}
+                              disabled={loadingTools}
+                            >
+                              {loadingTools ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <Text style={styles.actionSubmitText}>Issue Credit</Text>
+                              )}
+                            </Pressable>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  <View style={{ height: 40 }} />
                 </>
               )}
             </ScrollView>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.neutral[50],
+    backgroundColor: "#F3F4F6",
   },
-  contentContainer: {
-    paddingBottom: spacing["3xl"],
-  },
-  loadingContainer: {
+  scrollView: {
     flex: 1,
+  },
+
+  // Loading
+  loadingWrap: {
+    flex: 1,
+    backgroundColor: "#F3F4F6",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.neutral[50],
+  },
+  loadingCard: {
+    backgroundColor: "#fff",
+    padding: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    ...shadows.lg,
   },
   loadingText: {
-    marginTop: spacing.lg,
-    fontSize: typography.fontSize.base,
-    color: colors.text.secondary,
+    marginTop: 16,
+    fontSize: 16,
+    color: "#6B7280",
+    fontWeight: "500",
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
+  errorCard: {
+    backgroundColor: "#fff",
+    padding: 32,
+    borderRadius: 16,
     alignItems: "center",
-    backgroundColor: colors.neutral[50],
-    padding: spacing.xl,
+    ...shadows.lg,
   },
   errorTitle: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginTop: 16,
   },
   errorText: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.secondary,
-    textAlign: "center",
-    marginBottom: spacing.xl,
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 8,
+    marginBottom: 20,
   },
-  retryButton: {
+  retryBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.primary[500],
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
+    backgroundColor: "#7C3AED",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 8,
   },
-  retryButtonText: {
-    fontSize: typography.fontSize.base,
-    color: colors.white,
-    fontWeight: typography.fontWeight.semibold,
+  retryText: {
+    color: "#fff",
+    fontWeight: "600",
   },
-  // Header
-  header: {
+
+  // Hero
+  hero: {
+    backgroundColor: "#7C3AED",
+    paddingTop: 48,
+    paddingBottom: 32,
+    paddingHorizontal: 20,
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
-    backgroundColor: colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.neutral[100],
+    alignItems: "center",
   },
-  headerContent: {
+  heroContent: {
     flex: 1,
   },
-  greeting: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginBottom: spacing.xs,
-  },
-  headerTitle: {
-    fontSize: typography.fontSize["2xl"],
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  headerDate: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.tertiary,
-    backgroundColor: colors.neutral[100],
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.md,
-  },
-  // Quick Actions
-  quickActionsContainer: {
-    backgroundColor: colors.white,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  quickActionsTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.secondary,
-    marginBottom: spacing.md,
+  heroGreeting: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "500",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
-  quickActionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  heroTitle: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#fff",
+    marginTop: 4,
   },
-  quickAction: {
-    alignItems: "center",
-    flex: 1,
-  },
-  quickActionPressed: {
-    opacity: 0.7,
-  },
-  quickActionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: radius.xl,
-    alignItems: "center",
+  heroIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(255,255,255,0.15)",
     justifyContent: "center",
-    marginBottom: spacing.sm,
+    alignItems: "center",
+  },
+
+  // Actions
+  actionsWrap: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: "#fff",
+    marginTop: -16,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    ...shadows.md,
+  },
+  actionBtn: {
+    flex: 1,
+    alignItems: "center",
+  },
+  actionBtnIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
     position: "relative",
   },
-  badge: {
+  actionBadge: {
     position: "absolute",
-    top: -4,
-    right: -4,
-    backgroundColor: colors.error[500],
+    top: -6,
+    right: -6,
+    backgroundColor: "#EF4444",
     borderRadius: 10,
     minWidth: 20,
     height: 20,
-    alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 6,
+    alignItems: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: "#fff",
   },
-  badgeText: {
-    color: colors.white,
+  actionBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  actionBtnLabel: {
     fontSize: 11,
-    fontWeight: typography.fontWeight.bold,
-  },
-  quickActionLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+    color: "#6B7280",
     fontWeight: "500",
   },
+
   // Stats
-  statsContainer: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+  statsWrap: {
+    paddingHorizontal: 16,
+    marginTop: 24,
   },
-  statsRow: {
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 12,
+  },
+  statsGrid: {
     flexDirection: "row",
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    flexWrap: "wrap",
+    gap: 12,
   },
   statCard: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
+    width: (screenWidth - 44) / 2,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    borderTopWidth: 3,
     ...shadows.sm,
   },
-  statCardPressed: {
-    opacity: 0.9,
+  statCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
   },
-  statIconContainer: {
+  statIconWrap: {
     width: 36,
     height: 36,
-    borderRadius: radius.lg,
-    alignItems: "center",
+    borderRadius: 10,
     justifyContent: "center",
-    marginBottom: spacing.sm,
+    alignItems: "center",
+  },
+  trendBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 2,
+  },
+  trendText: {
+    fontSize: 10,
+    fontWeight: "600",
   },
   statValue: {
-    fontSize: typography.fontSize["2xl"],
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#1F2937",
   },
-  statTitle: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
+  statLabel: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginTop: 2,
   },
   statSubtitle: {
-    fontSize: typography.fontSize.xs,
-    color: colors.warning[600],
-    marginTop: spacing.xs,
+    fontSize: 11,
+    color: "#D97706",
+    marginTop: 4,
     fontWeight: "500",
   },
-  // Section Header
+
+  // Section
+  sectionWrap: {
+    paddingHorizontal: 16,
+    marginTop: 24,
+  },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
+    marginBottom: 12,
   },
-  sectionTitleRow: {
+  sectionCount: {
+    fontSize: 13,
+    color: "#9CA3AF",
+  },
+  seeAllBtn: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 4,
   },
-  sectionTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  sectionActionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  sectionAction: {
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[500],
+  seeAllText: {
+    fontSize: 13,
+    color: "#7C3AED",
     fontWeight: "600",
   },
+
   // Empty State
-  emptySection: {
+  emptyState: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 40,
     alignItems: "center",
-    padding: spacing["2xl"],
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.lg,
-    borderRadius: radius.xl,
     ...shadows.sm,
   },
-  emptyIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.neutral[100],
-    alignItems: "center",
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#F3F4F6",
     justifyContent: "center",
-    marginBottom: spacing.md,
+    alignItems: "center",
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 4,
   },
-  emptySubtitle: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.tertiary,
-    marginTop: spacing.xs,
+  emptyText: {
+    fontSize: 14,
+    color: "#9CA3AF",
   },
-  // Card List
-  cardList: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
+
+  // Chip
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
   },
+  chipText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+
   // Dispute Card
   disputeCard: {
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
     ...shadows.sm,
   },
   disputeCardUrgent: {
     borderLeftWidth: 4,
-    borderLeftColor: colors.warning[500],
+    borderLeftColor: "#F59E0B",
   },
-  cardPressed: {
-    opacity: 0.95,
-    transform: [{ scale: 0.99 }],
-  },
-  disputeCardHeader: {
+  disputeHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing.sm,
+    marginBottom: 8,
   },
-  actionNeededBadge: {
-    backgroundColor: colors.error[50],
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-  },
-  actionNeededText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.error[600],
-    fontWeight: "600",
-  },
-  statusBadge: {
+  urgentBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.md,
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
   },
-  statusBadgeText: {
-    fontSize: typography.fontSize.xs,
+  urgentText: {
+    fontSize: 10,
     fontWeight: "600",
+    color: "#DC2626",
   },
-  homeAddress: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
+  disputeAddress: {
+    fontSize: 15,
     fontWeight: "600",
-    marginBottom: spacing.sm,
+    color: "#1F2937",
+    marginBottom: 8,
   },
-  disputeInfoRow: {
+  disputeMeta: {
     flexDirection: "row",
-    gap: spacing.lg,
-    marginBottom: spacing.md,
+    gap: 16,
+    marginBottom: 12,
   },
-  disputeInfoItem: {
+  disputeMetaItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
+    gap: 4,
   },
-  disputeInfoText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+  disputeMetaText: {
+    fontSize: 12,
+    color: "#9CA3AF",
   },
-  sizeComparisonRow: {
+  disputeSizeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    paddingTop: spacing.md,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: colors.neutral[100],
+    borderTopColor: "#F3F4F6",
+    gap: 12,
   },
-  sizeItem: {
+  sizeBox: {
     flex: 1,
   },
   sizeLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
+    fontSize: 10,
+    color: "#9CA3AF",
     marginBottom: 2,
   },
   sizeValue: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.primary,
+    fontSize: 13,
     fontWeight: "600",
+    color: "#1F2937",
   },
   sizeValueHighlight: {
-    color: colors.primary[600],
+    color: "#7C3AED",
   },
-  priceDiffBadge: {
-    backgroundColor: colors.success[50],
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.md,
+  priceBadge: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  priceDiffText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.success[600],
-    fontWeight: typography.fontWeight.bold,
+  priceText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#16A34A",
   },
-  viewMoreButton: {
+  viewAllBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: spacing.md,
-    gap: spacing.xs,
+    paddingVertical: 12,
+    gap: 4,
   },
-  viewMoreText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[500],
+  viewAllText: {
+    fontSize: 14,
+    color: "#7C3AED",
     fontWeight: "600",
   },
+
   // Conversation Card
   conversationCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
     ...shadows.sm,
   },
   avatar: {
@@ -1260,11 +1903,11 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: spacing.md,
+    marginRight: 12,
   },
   avatarText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.bold,
+    fontSize: 14,
+    fontWeight: "700",
   },
   conversationContent: {
     flex: 1,
@@ -1273,420 +1916,789 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
-  conversationTitle: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
+  conversationName: {
+    fontSize: 15,
     fontWeight: "600",
+    color: "#1F2937",
     flex: 1,
-    marginRight: spacing.sm,
+    marginRight: 8,
   },
   conversationTime: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
+    fontSize: 12,
+    color: "#9CA3AF",
   },
-  userTypeBadge: {
+  typeBadge: {
     alignSelf: "flex-start",
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: radius.sm,
-    marginBottom: spacing.xs,
+    borderRadius: 4,
+    marginBottom: 4,
   },
-  userTypeBadgeText: {
-    fontSize: typography.fontSize.xs,
+  typeBadgeText: {
+    fontSize: 10,
     fontWeight: "500",
   },
   conversationPreview: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+    fontSize: 13,
+    color: "#6B7280",
   },
-  // Modal Styles
+
+  // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "flex-end",
   },
-  modalContent: {
-    backgroundColor: colors.white,
+  modalSheet: {
+    backgroundColor: "#F9FAFB",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    height: "85%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    elevation: 25,
-  },
-  modalHeaderFixed: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.neutral[200],
+    maxHeight: "90%",
   },
   modalHandle: {
-    width: 48,
-    height: 5,
-    backgroundColor: colors.neutral[400],
-    borderRadius: 3,
+    width: 40,
+    height: 4,
+    backgroundColor: "#D1D5DB",
+    borderRadius: 2,
     alignSelf: "center",
-    marginBottom: spacing.lg,
+    marginTop: 12,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingBottom: spacing.lg,
+    alignItems: "flex-start",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
   },
   modalTitle: {
-    fontSize: typography.fontSize["2xl"],
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#1F2937",
   },
   modalSubtitle: {
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[500],
-    marginTop: 4,
+    fontSize: 14,
+    color: "#7C3AED",
     fontWeight: "500",
+    marginTop: 2,
   },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.neutral[200],
-    alignItems: "center",
+  modalClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F3F4F6",
     justifyContent: "center",
+    alignItems: "center",
   },
-  modalScrollView: {
-    flex: 1,
-  },
-  modalScrollContent: {
-    padding: spacing.xl,
-    paddingBottom: spacing["3xl"],
+  modalBody: {
+    padding: 16,
   },
   modalStatusRow: {
-    marginBottom: spacing.lg,
+    marginBottom: 16,
   },
+
   // Info Card
   infoCard: {
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.primary[100],
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    ...shadows.sm,
   },
   infoCardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacing.sm,
+    gap: 8,
+    marginBottom: 8,
   },
-  infoCardTitle: {
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[600],
-    marginLeft: spacing.sm,
+  infoCardLabel: {
+    fontSize: 12,
+    color: "#7C3AED",
     fontWeight: "600",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
   infoCardValue: {
-    fontSize: typography.fontSize.lg,
-    color: colors.text.primary,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
   },
-  infoCardSubvalue: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.secondary,
-    marginTop: 4,
+  infoCardSub: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 2,
   },
+
   // Parties
   partiesRow: {
     flexDirection: "row",
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+    gap: 10,
+    marginBottom: 12,
   },
   partyCard: {
     flex: 1,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    borderWidth: 2,
-  },
-  partyCardCleaner: {
-    backgroundColor: colors.secondary[50],
-    borderColor: colors.secondary[300],
-  },
-  partyCardHomeowner: {
-    backgroundColor: colors.primary[50],
-    borderColor: colors.primary[300],
-  },
-  partyHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.sm,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
   },
   partyLabel: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginLeft: spacing.sm,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontSize: 11,
+    color: "#6B7280",
+    fontWeight: "500",
+    marginTop: 8,
+    marginBottom: 2,
   },
   partyName: {
-    fontSize: typography.fontSize.lg,
-    color: colors.text.primary,
-    fontWeight: "700",
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1F2937",
   },
-  warningBadge: {
+  warningRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing.xs,
+    marginTop: 6,
     gap: 4,
   },
-  warningBadgeText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.warning[600],
+  warningText: {
+    fontSize: 11,
+    color: "#D97706",
   },
-  // Comparison Card
+
+  // Comparison
   comparisonCard: {
-    backgroundColor: colors.warning[50],
-    borderRadius: radius.xl,
-    padding: spacing.xl,
-    marginBottom: spacing.lg,
-    borderWidth: 2,
-    borderColor: colors.warning[200],
+    backgroundColor: "#FEF3C7",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
   },
   comparisonTitle: {
-    fontSize: typography.fontSize.sm,
-    color: colors.warning[700],
-    fontWeight: "700",
-    marginBottom: spacing.lg,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#92400E",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    marginBottom: 12,
   },
   comparisonBoxes: {
     flexDirection: "row",
     alignItems: "center",
   },
-  comparisonBox: {
+  compBox: {
     flex: 1,
-    backgroundColor: colors.white,
-    borderRadius: radius.md,
-    padding: spacing.md,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    padding: 12,
     alignItems: "center",
   },
-  comparisonBoxHighlight: {
-    backgroundColor: colors.primary[50],
+  compBoxHighlight: {
+    backgroundColor: "#EEF2FF",
     borderWidth: 1,
-    borderColor: colors.primary[200],
+    borderColor: "#C7D2FE",
   },
-  comparisonArrow: {
-    paddingHorizontal: spacing.sm,
+  compArrow: {
+    paddingHorizontal: 8,
   },
-  comparisonBoxLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
-    marginBottom: spacing.xs,
+  compBoxLabel: {
+    fontSize: 10,
+    color: "#6B7280",
+    marginBottom: 4,
   },
-  comparisonBoxValue: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.primary,
+  compBoxValue: {
+    fontSize: 13,
     fontWeight: "600",
+    color: "#1F2937",
   },
-  comparisonBoxValueHighlight: {
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[700],
-    fontWeight: typography.fontWeight.bold,
+  compBoxValueHL: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#7C3AED",
   },
   priceDiffRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.neutral[200],
-    gap: spacing.sm,
+    marginTop: 12,
+    gap: 8,
   },
   priceDiffLabel: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+    fontSize: 13,
+    color: "#6B7280",
   },
   priceDiffValue: {
-    fontSize: typography.fontSize.lg,
-    color: colors.success[600],
-    fontWeight: typography.fontWeight.bold,
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#16A34A",
   },
+
   // Photos
   photosSection: {
-    marginBottom: spacing.md,
+    marginBottom: 12,
   },
   photosSectionTitle: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.primary,
+    fontSize: 14,
     fontWeight: "600",
-    marginBottom: spacing.md,
+    color: "#1F2937",
+    marginBottom: 10,
   },
   photoItem: {
-    marginRight: spacing.md,
+    marginRight: 10,
   },
   photoImage: {
-    width: 120,
-    height: 90,
-    borderRadius: radius.lg,
+    width: 100,
+    height: 75,
+    borderRadius: 8,
   },
   photoLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
+    fontSize: 10,
+    color: "#6B7280",
+    marginTop: 4,
     textAlign: "center",
   },
+
   // Notes
   notesSection: {
-    marginBottom: spacing.md,
+    marginBottom: 12,
   },
   noteCard: {
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
   },
   noteLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
+    fontSize: 11,
+    color: "#9CA3AF",
     fontWeight: "500",
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
   noteText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.primary,
+    fontSize: 14,
+    color: "#374151",
     lineHeight: 20,
   },
+
   // Resolution Form
   resolutionForm: {
-    marginTop: spacing.xl,
-    paddingTop: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.xl,
-    borderWidth: 2,
-    borderColor: colors.primary[200],
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    ...shadows.sm,
   },
-  formTitleRow: {
+  formHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    gap: 10,
+    marginBottom: 8,
   },
   formTitle: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
   },
-  formDescription: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.secondary,
-    marginBottom: spacing.xl,
-    lineHeight: 22,
-  },
-  selectorSection: {
-    marginBottom: spacing.lg,
+  formDesc: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 16,
   },
   selectorLabel: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
-    fontWeight: "700",
-    marginBottom: spacing.md,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 10,
+    marginTop: 8,
   },
   selectorRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.sm,
+    gap: 8,
   },
-  selectorButton: {
-    backgroundColor: colors.white,
-    borderWidth: 2,
-    borderColor: colors.neutral[300],
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    minWidth: 50,
+  selectorBtn: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    minWidth: 48,
     alignItems: "center",
   },
-  selectorButtonActive: {
-    backgroundColor: colors.primary[600],
-    borderColor: colors.primary[600],
+  selectorBtnActive: {
+    backgroundColor: "#7C3AED",
   },
-  selectorButtonText: {
-    fontSize: typography.fontSize.base,
+  selectorBtnText: {
+    fontSize: 14,
     fontWeight: "600",
-    color: colors.text.primary,
+    color: "#4B5563",
   },
-  selectorButtonTextActive: {
-    color: colors.white,
+  selectorBtnTextActive: {
+    color: "#fff",
   },
-  notesLabel: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
-    fontWeight: "700",
-    marginBottom: spacing.sm,
-    marginTop: spacing.md,
+  notesInputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginTop: 16,
+    marginBottom: 8,
   },
   textArea: {
-    backgroundColor: colors.white,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    minHeight: 100,
-    textAlignVertical: "top",
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
-    marginTop: spacing.sm,
+    backgroundColor: "#F9FAFB",
     borderWidth: 1,
-    borderColor: colors.neutral[300],
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    minHeight: 80,
+    color: "#1F2937",
   },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.error[50],
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    marginTop: spacing.md,
-    gap: spacing.sm,
+    backgroundColor: "#FEE2E2",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
   },
   errorBannerText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.error[600],
+    fontSize: 13,
+    color: "#DC2626",
     flex: 1,
   },
   buttonRow: {
     flexDirection: "row",
-    gap: spacing.md,
-    marginTop: spacing.xl,
+    gap: 12,
+    marginTop: 20,
   },
-  actionButton: {
+  decisionBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.xl,
-    ...shadows.md,
+    paddingVertical: 14,
+    borderRadius: 10,
+    gap: 8,
   },
-  approveButton: {
-    backgroundColor: colors.success[600],
+  approveBtn: {
+    backgroundColor: "#10B981",
   },
-  denyButton: {
-    backgroundColor: colors.error[600],
+  denyBtn: {
+    backgroundColor: "#EF4444",
   },
-  buttonText: {
-    fontSize: typography.fontSize.base,
-    color: colors.white,
+  decisionBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#fff",
+  },
+
+  // Tool Tabs
+  toolTabsRow: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    paddingHorizontal: 12,
+  },
+  toolTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    gap: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  toolTabActive: {
+    borderBottomColor: "#7C3AED",
+  },
+  toolTabText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#9CA3AF",
+  },
+  toolTabTextActive: {
+    color: "#7C3AED",
+    fontWeight: "600",
+  },
+
+  // Tool Loading
+  toolLoadingWrap: {
+    padding: 40,
+    alignItems: "center",
+  },
+  toolLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#6B7280",
+  },
+
+  // Profile Cards
+  profileCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    ...shadows.sm,
+  },
+  profileCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  profileAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  profileName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  profileType: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  profileStatsRow: {
+    flexDirection: "row",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  profileStat: {
+    flex: 1,
+    alignItems: "center",
+  },
+  profileStatValue: {
+    fontSize: 20,
     fontWeight: "700",
+    color: "#1F2937",
+  },
+  profileStatLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  profileNotes: {
+    backgroundColor: "#FEF3C7",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  profileNotesLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#92400E",
+    marginBottom: 4,
+  },
+  profileNotesText: {
+    fontSize: 13,
+    color: "#78350F",
+  },
+  profileActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  profileActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F6",
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  profileActionText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#374151",
+  },
+
+  // Action Forms
+  actionFormCard: {
+    backgroundColor: "#EEF2FF",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#C7D2FE",
+  },
+  actionFormTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#4338CA",
+    marginBottom: 12,
+  },
+  actionInput: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: "#1F2937",
+    marginBottom: 10,
+  },
+  actionFormBtns: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  actionCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: 8,
+    backgroundColor: "#E5E7EB",
+  },
+  actionCancelText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#4B5563",
+  },
+  actionSubmitBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: 8,
+    backgroundColor: "#7C3AED",
+  },
+  actionSubmitText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#fff",
+  },
+
+  // History Cards
+  historyCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    ...shadows.sm,
+  },
+  historyCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  historyCardTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  historyAddress: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#1F2937",
+  },
+  historySubtext: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  historySizeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    gap: 8,
+  },
+  historySizeLabel: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  historySizeValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#7C3AED",
+  },
+  historyListTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  historyListItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 8,
+  },
+  historyListDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#9CA3AF",
+    marginTop: 6,
+    marginRight: 10,
+  },
+  historyListContent: {
+    flex: 1,
+  },
+  historyListText: {
+    fontSize: 14,
+    color: "#1F2937",
+  },
+  historyListMeta: {
+    fontSize: 12,
+    color: "#9CA3AF",
+    marginTop: 2,
+  },
+
+  // Claim Stats
+  claimStatsRow: {
+    flexDirection: "row",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  claimStat: {
+    flex: 1,
+    alignItems: "center",
+  },
+  claimStatValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  claimStatLabel: {
+    fontSize: 10,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+
+  // Tools Container
+  toolsContainer: {
+    padding: 4,
+  },
+  toolsSectionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginBottom: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  toolCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    ...shadows.sm,
+  },
+  toolCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+  },
+  toolCardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  toolCardDesc: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginBottom: 16,
+  },
+  toolSizeSelectors: {
+    marginBottom: 16,
+  },
+  toolSizeSelector: {
+    marginBottom: 12,
+  },
+  toolSizeSelectorLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  toolSizeOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  toolSizeOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+    minWidth: 44,
+    alignItems: "center",
+  },
+  toolSizeOptionActive: {
+    backgroundColor: "#7C3AED",
+  },
+  toolSizeOptionText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#4B5563",
+  },
+  toolSizeOptionTextActive: {
+    color: "#fff",
+  },
+  toolActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#7C3AED",
+    paddingVertical: 14,
+    borderRadius: 10,
+    gap: 8,
+  },
+  toolActionBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#fff",
+  },
+
+  // Quick Actions Grid
+  quickActionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 8,
+  },
+  quickActionBtn: {
+    width: (screenWidth - 80) / 2,
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+  },
+  quickActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  quickActionLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#374151",
+    textAlign: "center",
+    lineHeight: 16,
   },
 });
 

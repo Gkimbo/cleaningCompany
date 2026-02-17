@@ -5,6 +5,7 @@ import { render, fireEvent, waitFor, act } from "@testing-library/react-native";
 const mockNavigate = jest.fn();
 jest.mock("react-router-native", () => ({
   useNavigate: () => mockNavigate,
+  useLocation: () => ({ key: "test-history-key", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 // Mock react-native-gesture-handler

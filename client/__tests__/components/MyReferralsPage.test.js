@@ -6,6 +6,7 @@ import { Alert, Share } from "react-native";
 const mockNavigate = jest.fn();
 jest.mock("react-router-native", () => ({
   useNavigate: () => mockNavigate,
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 // Mock ReferralService

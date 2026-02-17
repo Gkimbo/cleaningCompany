@@ -12,6 +12,7 @@ import {
 import { useNavigate, useParams } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessEmployeeService from "../../services/fetchRequests/BusinessEmployeeService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -81,7 +82,7 @@ const CoWorkerCard = ({ employee, isSelf }) => (
 
 // Main Component
 const EmployeeJobDetail = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const { assignmentId } = useParams();
   const [loading, setLoading] = useState(true);
   const [job, setJob] = useState(null);
@@ -233,7 +234,7 @@ const EmployeeJobDetail = ({ state }) => {
         <Icon name="exclamation-circle" size={48} color={colors.error[400]} />
         <Text style={styles.errorTitle}>Error</Text>
         <Text style={styles.errorText}>{error || "Job not found"}</Text>
-        <Pressable style={styles.retryButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.retryButton} onPress={() => goBack()}>
           <Text style={styles.retryButtonText}>Go Back</Text>
         </Pressable>
       </View>
@@ -254,7 +255,7 @@ const EmployeeJobDetail = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.headerTitle}>Job Details</Text>

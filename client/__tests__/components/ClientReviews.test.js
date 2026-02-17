@@ -9,6 +9,7 @@ jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
 // Mock react-router-native
 jest.mock("react-router-native", () => ({
   useNavigate: () => jest.fn(),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 describe("ClientReviews Component", () => {

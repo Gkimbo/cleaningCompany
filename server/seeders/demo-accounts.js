@@ -142,6 +142,14 @@ const DEMO_ACCOUNTS = {
 		avgRating: 4.95,
 		totalReviews: 150,
 	},
+	it: {
+		username: "demo_it",
+		email: "demo_it@sparkle.demo",
+		firstName: "Alex",
+		lastName: "TechSupport",
+		type: "it",
+		isBusinessOwner: false,
+	},
 };
 
 // Helper to generate future dates
@@ -3094,6 +3102,38 @@ async function createDemoAccounts() {
 		console.log("  - Preferred cleaner setup complete (Platinum tier: 20 homes, 7% bonus)");
 	}
 
+	// ============================================
+	// DEMO IT DATA
+	// - UserBills record (required for IT accounts)
+	// - Access to IT Dashboard
+	// ============================================
+	if (createdAccounts.it) {
+		console.log("\n--- Creating Demo IT Data ---");
+
+		const demoIT = createdAccounts.it;
+
+		// Create UserBills record for IT (required)
+		try {
+			let itBill = await UserBills.findOne({
+				where: { userId: demoIT.id },
+			});
+
+			if (!itBill) {
+				await UserBills.create({
+					userId: demoIT.id,
+					appointmentDue: 0,
+					cancellationFee: 0,
+					totalDue: 0,
+				});
+				console.log("  - Created UserBills record for IT user");
+			}
+		} catch (error) {
+			console.error("  - Error creating IT bill:", error.message);
+		}
+
+		console.log("  - IT user setup complete (can access IT Dashboard)");
+	}
+
 	console.log("\n=================================");
 	console.log("Demo Account Creation Complete!");
 	console.log("=================================\n");
@@ -3113,6 +3153,7 @@ async function createDemoAccounts() {
 	console.log("  - Demo HR: 6 scenarios - 2 active appeals, 1 overdue appeal, 1 home size dispute, 2 resolved appeals");
 	console.log("  - Demo Large Business: 100 clients, 5 employees, 110 cleanings/month (7% FEE TIER), verified status");
 	console.log("  - Demo Preferred Cleaner: 20 preferred homes, PLATINUM tier (7% bonus, 24h payouts, early access)");
+	console.log("  - Demo IT: Access to IT Dashboard, can handle tech support tickets");
 	console.log("\nNote: Owners can access preview mode from the Owner Dashboard.");
 
 	return createdAccounts;

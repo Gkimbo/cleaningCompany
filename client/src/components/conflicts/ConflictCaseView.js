@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { useParams, useNavigate } from "react-router-native";
+import { useParams } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { AuthContext } from "../../services/AuthContext";
 import ConflictService from "../../services/fetchRequests/ConflictService";
@@ -37,6 +37,7 @@ import PhotoViewerModal from "./modals/PhotoViewerModal";
 import PhotoComparisonModal from "./modals/PhotoComparisonModal";
 import AddNoteModal from "./modals/AddNoteModal";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const BASE_TABS = [
   { id: "overview", label: "Overview", icon: "info-circle" },
   { id: "evidence", label: "Evidence", icon: "camera" },
@@ -54,7 +55,7 @@ const SUPPORT_TABS = [
 
 const ConflictCaseView = () => {
   const { caseId, caseType } = useParams();
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const { user } = useContext(AuthContext);
 
   const [caseData, setCaseData] = useState(null);
@@ -182,7 +183,7 @@ const ConflictCaseView = () => {
 
   const handleResolveSuccess = () => {
     onRefresh();
-    navigate(-1);
+    goBack();
   };
 
   const formatTimeRemaining = (seconds) => {
@@ -290,7 +291,7 @@ const ConflictCaseView = () => {
       <View style={styles.errorContainer}>
         <Icon name="exclamation-triangle" size={48} color={colors.error[400]} />
         <Text style={styles.errorTitle}>Case not found</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigate(-1)}>
+        <TouchableOpacity style={styles.backButton} onPress={() => goBack()}>
           <Text style={styles.backButtonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -304,7 +305,7 @@ const ConflictCaseView = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backArrow} onPress={() => navigate(-1)}>
+        <TouchableOpacity style={styles.backArrow} onPress={() => goBack()}>
           <Icon name="arrow-left" size={20} color={colors.text.primary} />
         </TouchableOpacity>
 

@@ -36,16 +36,16 @@ const verifyOwner = async (req, res, next) => {
 			return res.status(401).json({ error: "User not found" });
 		}
 
-		// Check if this is a direct owner or a preview session
-		if (user.type === "owner") {
-			// Direct owner access
+		// Check if this is a direct owner/IT staff or a preview session
+		if (user.type === "owner" || user.type === "it") {
+			// Direct owner or IT staff access
 			req.user = user;
 			req.ownerId = user.id;
 			req.isPreviewMode = false;
 		} else if (decoded.originalOwnerId) {
-			// This is a preview session token - verify the original owner exists
-			const originalOwner = await User.findByPk(decoded.originalOwnerId);
-			if (!originalOwner || originalOwner.type !== "owner") {
+			// This is a preview session token - verify the original owner/IT staff exists
+			const originalUser = await User.findByPk(decoded.originalOwnerId);
+			if (!originalUser || (originalUser.type !== "owner" && originalUser.type !== "it")) {
 				return res.status(403).json({ error: "Invalid preview session" });
 			}
 			req.user = user;
@@ -53,7 +53,7 @@ const verifyOwner = async (req, res, next) => {
 			req.isPreviewMode = true;
 			req.previewRole = decoded.previewRole;
 		} else {
-			return res.status(403).json({ error: "Owner access required" });
+			return res.status(403).json({ error: "Owner or IT access required" });
 		}
 
 		next();

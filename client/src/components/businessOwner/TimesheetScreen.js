@@ -13,6 +13,7 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
 import EmployeeWorkloadCard from "./EmployeeWorkloadCard";
 import AssignJobModal from "./AssignJobModal";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -159,7 +160,7 @@ const JobRow = ({ job }) => {
 
 // Main Component
 const TimesheetScreen = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timesheetData, setTimesheetData] = useState(null);
@@ -292,7 +293,7 @@ const TimesheetScreen = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.title}>

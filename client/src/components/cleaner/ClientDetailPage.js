@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigate, useParams } from "react-router-native";
+import { useParams } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
 import {
@@ -26,6 +26,7 @@ import EditClientHomeModal from "./EditClientHomeModal";
 import BookForClientModal from "./BookForClientModal";
 import SetupRecurringModal from "./SetupRecurringModal";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 // Home picker modal component
 const HomePickerModal = ({ visible, onClose, homes, onSelectHome, actionType }) => {
   if (!visible) return null;
@@ -477,7 +478,7 @@ const EmptyAppointments = ({ tab }) => (
 );
 
 const ClientDetailPage = ({ state, dispatch }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const { clientId } = useParams();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -509,7 +510,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
 
       if (data.error) {
         Alert.alert("Error", data.error);
-        navigate(-1);
+        goBack();
         return;
       }
 
@@ -524,7 +525,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
     } catch (error) {
       console.error("Error fetching client data:", error);
       Alert.alert("Error", "Failed to load client details");
-      navigate(-1);
+      goBack();
     } finally {
       setIsLoading(false);
     }
@@ -780,7 +781,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
         <Text style={styles.errorText}>Client not found</Text>
         <Pressable
           style={styles.backButtonLarge}
-          onPress={() => navigate(-1)}
+          onPress={() => goBack()}
         >
           <Text style={styles.backButtonLargeText}>Go Back</Text>
         </Pressable>
@@ -817,7 +818,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
       <View style={styles.header}>
         <Pressable
           style={styles.backButton}
-          onPress={() => navigate(-1)}
+          onPress={() => goBack()}
         >
           <Feather name="arrow-left" size={24} color={colors.text.primary} />
         </Pressable>

@@ -812,6 +812,34 @@ router.post("/:type/:id/assign", async (req, res) => {
 			});
 		}
 
+		// Validate assignee exists and is active
+		const { User } = require("../../../models");
+		const assignee = await User.findByPk(parseInt(assigneeId));
+
+		if (!assignee) {
+			return res.status(404).json({
+				success: false,
+				error: "Assignee not found",
+			});
+		}
+
+		// Check if assignee is HR or owner
+		if (!["humanResources", "owner"].includes(assignee.type)) {
+			return res.status(400).json({
+				success: false,
+				error: "Assignee must be HR staff or owner",
+			});
+		}
+
+		// Check if assignee account is locked or frozen
+		const isLocked = assignee.lockedUntil && new Date(assignee.lockedUntil) > new Date();
+		if (isLocked || assignee.accountFrozen) {
+			return res.status(400).json({
+				success: false,
+				error: "Cannot assign to locked or frozen account",
+			});
+		}
+
 		const result = await ConflictResolutionService.assignCase(
 			parseInt(id),
 			type,

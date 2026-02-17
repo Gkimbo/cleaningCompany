@@ -1249,6 +1249,198 @@ class NotificationService {
     });
   }
 
+  // =====================================
+  // IT Dispute Notifications
+  // =====================================
+
+  /**
+   * Notify IT staff about a new IT dispute
+   * @param {Object} params
+   * @param {number} params.itStaffId - IT staff user ID
+   * @param {string} params.reporterName - Name of the user who submitted the dispute
+   * @param {number} params.disputeId - IT Dispute ID
+   * @param {string} params.caseNumber - Case number (IT-YYYYMMDD-00001)
+   * @param {string} params.category - Dispute category
+   * @param {string} params.categoryLabel - Human-readable category label
+   * @param {string} params.priority - Dispute priority (low, normal, high, critical)
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyITDisputeSubmitted({
+    itStaffId,
+    reporterName,
+    disputeId,
+    caseNumber,
+    category,
+    categoryLabel,
+    priority,
+    io = null,
+  }) {
+    const priorityPrefix = priority === "critical" ? "CRITICAL: " : priority === "high" ? "HIGH: " : "";
+    const title = `${priorityPrefix}New IT Issue`;
+
+    return this.notifyUser({
+      userId: itStaffId,
+      type: "it_dispute_submitted",
+      title,
+      body: `${reporterName} reported: ${categoryLabel || category}`,
+      data: {
+        disputeId,
+        caseNumber,
+        category,
+        priority,
+      },
+      actionRequired: true,
+      sendPush: true,
+      sendEmail: priority === "critical" || priority === "high",
+      io,
+    });
+  }
+
+  /**
+   * Notify IT staff that a dispute has been assigned to them
+   * @param {Object} params
+   * @param {number} params.itStaffId - IT staff user ID being notified
+   * @param {number} params.disputeId - IT Dispute ID
+   * @param {string} params.caseNumber - Case number
+   * @param {string} params.categoryLabel - Human-readable category label
+   * @param {string} params.assignerName - Name of person who assigned
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyITDisputeAssigned({
+    itStaffId,
+    disputeId,
+    caseNumber,
+    categoryLabel,
+    assignerName,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: itStaffId,
+      type: "it_dispute_assigned",
+      title: "IT Issue Assigned to You",
+      body: `${assignerName} assigned ${caseNumber} (${categoryLabel}) to you.`,
+      data: {
+        disputeId,
+        caseNumber,
+      },
+      actionRequired: true,
+      sendPush: true,
+      sendEmail: true,
+      io,
+    });
+  }
+
+  /**
+   * Notify reporter that their IT dispute has been resolved
+   * @param {Object} params
+   * @param {number} params.reporterId - Reporter user ID
+   * @param {number} params.disputeId - IT Dispute ID
+   * @param {string} params.caseNumber - Case number
+   * @param {string} params.resolutionNotes - Notes about the resolution (optional)
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyITDisputeResolved({
+    reporterId,
+    disputeId,
+    caseNumber,
+    resolutionNotes,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: reporterId,
+      type: "it_dispute_resolved",
+      title: "IT Issue Resolved",
+      body: `Your IT issue (${caseNumber}) has been resolved. Tap for details.`,
+      data: {
+        disputeId,
+        caseNumber,
+        resolutionNotes,
+      },
+      actionRequired: false,
+      sendPush: true,
+      sendEmail: true,
+      io,
+    });
+  }
+
+  /**
+   * Notify reporter about an update to their IT dispute
+   * @param {Object} params
+   * @param {number} params.reporterId - Reporter user ID
+   * @param {number} params.disputeId - IT Dispute ID
+   * @param {string} params.caseNumber - Case number
+   * @param {string} params.updateMessage - Message about the update
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyITDisputeUpdated({
+    reporterId,
+    disputeId,
+    caseNumber,
+    updateMessage,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: reporterId,
+      type: "it_dispute_updated",
+      title: "IT Issue Update",
+      body: `Update on ${caseNumber}: ${updateMessage}`,
+      data: {
+        disputeId,
+        caseNumber,
+      },
+      actionRequired: false,
+      sendPush: true,
+      sendEmail: false,
+      io,
+    });
+  }
+
+  /**
+   * Notify homeowner that their payment has been captured
+   * Sent 3 days before appointment when payment is processed
+   * @param {Object} params - Notification parameters
+   * @param {number} params.userId - Homeowner user ID
+   * @param {number} params.amount - Amount charged in cents
+   * @param {string} params.appointmentDate - Appointment date string
+   * @param {number} params.appointmentId - Appointment ID
+   * @param {string} params.cleanerName - Name of assigned cleaner
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyPaymentCaptured({
+    userId,
+    amount,
+    appointmentDate,
+    appointmentId,
+    cleanerName,
+    io = null,
+  }) {
+    const formattedAmount =
+      typeof amount === "number" ? `$${(amount / 100).toFixed(2)}` : amount;
+    const formattedDate = formatDate(appointmentDate);
+
+    return this.notifyUser({
+      userId,
+      type: "payment_captured",
+      title: "Payment Processed",
+      body: `Your payment of ${formattedAmount} was taken for your appointment on ${formattedDate}. Being cleaned by ${cleanerName}.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        amount,
+        cleanerName,
+      },
+      actionRequired: false,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendPaymentCapturedEmail,
+        args: [appointmentDate, formattedAmount, cleanerName],
+      },
+      io,
+    });
+  }
+
   /**
    * Find an expired notification of a specific type
    * @param {number} userId - User ID

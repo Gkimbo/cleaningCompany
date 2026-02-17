@@ -18,6 +18,9 @@ const reducer = (state, action) => {
         businessLogo: null,
         yearsInBusiness: null,
         linkedAccounts: [],
+        accountFrozen: false,
+        accountFrozenReason: null,
+        accountFrozenAt: null,
       };
     case "ERROR":
       return {
@@ -318,6 +321,21 @@ const reducer = (state, action) => {
         requests: [],
         conversations: [],
         currentMessages: [],
+      };
+    // Frozen account actions
+    case "SET_ACCOUNT_FROZEN":
+      return {
+        ...state,
+        accountFrozen: action.payload.isFrozen,
+        accountFrozenReason: action.payload.reason,
+        accountFrozenAt: action.payload.frozenAt,
+      };
+    case "CLEAR_ACCOUNT_FROZEN":
+      return {
+        ...state,
+        accountFrozen: false,
+        accountFrozenReason: null,
+        accountFrozenAt: null,
       };
     default:
       throw new Error();

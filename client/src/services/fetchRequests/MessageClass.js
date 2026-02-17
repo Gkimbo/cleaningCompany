@@ -277,6 +277,33 @@ class MessageService {
   }
 
   /**
+   * Create or get a 1-on-1 conversation between owner and any user (owner only)
+   */
+  static async createOwnerDirectConversation(targetUserId, token) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/messages/conversation/owner-direct`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ targetUserId }),
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create conversation");
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error creating owner direct conversation:", error);
+      return { error: error.message };
+    }
+  }
+
+  /**
    * Create a custom group conversation with selected members
    */
   static async createGroupConversation(memberIds, title, token) {

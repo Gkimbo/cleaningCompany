@@ -7,6 +7,7 @@ import TermsEditor from "../../src/components/owner/TermsEditor";
 const mockNavigate = jest.fn();
 jest.mock("react-router-native", () => ({
   useNavigate: () => mockNavigate,
+  useLocation: () => ({ key: "test-history-key", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 // Mock the API_BASE

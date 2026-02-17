@@ -17,6 +17,7 @@ import JobFlowService from "../../../services/fetchRequests/JobFlowService";
 import CreateEditFlowModal from "./CreateEditFlowModal";
 import ChecklistEditor from "./ChecklistEditor";
 
+import useSafeNavigation from "../../../hooks/useSafeNavigation";
 const PHOTO_REQUIREMENT_LABELS = {
   required: { label: "Required", icon: "camera", color: colors.primary[600] },
   optional: { label: "Optional", icon: "camera", color: colors.neutral[500] },
@@ -24,7 +25,7 @@ const PHOTO_REQUIREMENT_LABELS = {
 };
 
 const FlowDetailScreen = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const { flowId } = useParams();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -151,7 +152,7 @@ const FlowDetailScreen = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={16} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>

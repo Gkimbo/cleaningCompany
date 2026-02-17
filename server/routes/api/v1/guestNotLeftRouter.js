@@ -426,66 +426,10 @@ router.get("/pending", authenticateToken, async (req, res) => {
 	}
 });
 
-/**
- * Get report details by ID
- * GET /api/v1/guest-not-left/:id
- */
-router.get("/:id", authenticateToken, async (req, res) => {
-	try {
-		const { GuestNotLeftReport, UserAppointments, UserHomes, User } = require("../../../models");
-
-		const report = await GuestNotLeftReport.findByPk(req.params.id, {
-			include: [
-				{
-					model: User,
-					as: "reporter",
-					attributes: ["id", "firstName", "lastName"],
-				},
-			],
-		});
-
-		if (!report) {
-			return res.status(404).json({
-				success: false,
-				error: "Report not found",
-			});
-		}
-
-		// Check authorization
-		const appointment = await UserAppointments.findByPk(report.appointmentId, {
-			include: [{ model: UserHomes, as: "home" }],
-		});
-
-		const currentUser = await User.findByPk(req.userId, { attributes: ["id", "type"] });
-		const isReporter = report.reportedBy === req.userId;
-		const isHomeowner = appointment && appointment.userId === req.userId;
-		const isOwnerOrHR = currentUser && ["owner", "hr"].includes(currentUser.type);
-
-		if (!isReporter && !isHomeowner && !isOwnerOrHR) {
-			return res.status(403).json({
-				success: false,
-				error: "Not authorized to view this report",
-			});
-		}
-
-		const serialized = GuestNotLeftService.serializeTenantPresentReport(report, appointment);
-
-		res.json({
-			success: true,
-			report: serialized,
-		});
-	} catch (error) {
-		console.error("[GuestNotLeft] Get report error:", error);
-		res.status(500).json({
-			success: false,
-			error: "Failed to retrieve report",
-		});
-	}
-});
-
 // ====================
 // STATS ENDPOINTS (for anti-gaming review)
 // ====================
+// NOTE: These must come BEFORE /:id to avoid route conflict
 
 /**
  * Get cleaner stats (HR/Owner only)
@@ -560,6 +504,64 @@ router.get("/stats/home/:homeId", authenticateToken, async (req, res) => {
 		res.status(500).json({
 			success: false,
 			error: "Failed to retrieve home stats",
+		});
+	}
+});
+
+/**
+ * Get report details by ID
+ * GET /api/v1/guest-not-left/:id
+ * NOTE: This catch-all route must come LAST after all specific routes
+ */
+router.get("/:id", authenticateToken, async (req, res) => {
+	try {
+		const { GuestNotLeftReport, UserAppointments, UserHomes, User } = require("../../../models");
+
+		const report = await GuestNotLeftReport.findByPk(req.params.id, {
+			include: [
+				{
+					model: User,
+					as: "reporter",
+					attributes: ["id", "firstName", "lastName"],
+				},
+			],
+		});
+
+		if (!report) {
+			return res.status(404).json({
+				success: false,
+				error: "Report not found",
+			});
+		}
+
+		// Check authorization
+		const appointment = await UserAppointments.findByPk(report.appointmentId, {
+			include: [{ model: UserHomes, as: "home" }],
+		});
+
+		const currentUser = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		const isReporter = report.reportedBy === req.userId;
+		const isHomeowner = appointment && appointment.userId === req.userId;
+		const isOwnerOrHR = currentUser && ["owner", "hr"].includes(currentUser.type);
+
+		if (!isReporter && !isHomeowner && !isOwnerOrHR) {
+			return res.status(403).json({
+				success: false,
+				error: "Not authorized to view this report",
+			});
+		}
+
+		const serialized = GuestNotLeftService.serializeTenantPresentReport(report, appointment);
+
+		res.json({
+			success: true,
+			report: serialized,
+		});
+	} catch (error) {
+		console.error("[GuestNotLeft] Get report error:", error);
+		res.status(500).json({
+			success: false,
+			error: "Failed to retrieve report",
 		});
 	}
 });

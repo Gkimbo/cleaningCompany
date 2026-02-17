@@ -32,12 +32,14 @@ import GetHelpButton from "./messaging/GetHelpButton";
 import TaxFormsSection from "./tax/TaxFormsSection";
 import OwnerDashboard from "./owner/OwnerDashboard";
 import HRDashboard from "./hr/HRDashboard";
+import ITDashboard from "./it/ITDashboard";
 import ClientDashboard from "./client/ClientDashboard";
 import CleanerDashboard from "./cleaner/CleanerDashboard";
 import { EmployeeDashboard } from "./businessEmployee";
 import BusinessOwnerProfile from "./businessOwner/BusinessOwnerProfile";
 import IncentiveBanner from "./incentives/IncentiveBanner";
 import IncentivesService from "../services/fetchRequests/IncentivesService";
+import FrozenAccountBanner from "./shared/FrozenAccountBanner";
 
 const HomePage = ({ state, dispatch }) => {
   const [redirect, setRedirect] = useState(false);
@@ -274,6 +276,11 @@ const HomePage = ({ state, dispatch }) => {
     return <HRDashboard state={state} dispatch={dispatch} />;
   }
 
+  // Show IT Dashboard for IT staff
+  if (state.account === "it" && state.currentUser.token) {
+    return <ITDashboard state={state} dispatch={dispatch} />;
+  }
+
   // Show Employee Dashboard for business employees (no marketplace access)
   if (state.account === "employee" && state.currentUser.token) {
     return <EmployeeDashboard state={state} />;
@@ -286,6 +293,15 @@ const HomePage = ({ state, dispatch }) => {
 
   // Show Cleaner Dashboard for marketplace cleaners
   if (state.account === "cleaner" && state.currentUser.token) {
+    // Show frozen banner for frozen cleaners
+    if (state.accountFrozen) {
+      return (
+        <ScrollView style={{ flex: 1 }}>
+          <FrozenAccountBanner reason={state.accountFrozenReason} />
+          <CleanerDashboard state={state} dispatch={dispatch} />
+        </ScrollView>
+      );
+    }
     return <CleanerDashboard state={state} dispatch={dispatch} />;
   }
 

@@ -6,7 +6,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-10724_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-11261_Passing-brightgreen?style=for-the-badge)
 
 **A comprehensive cleaning service marketplace platform connecting homeowners with professional cleaners and cleaning businesses**
 
@@ -18,7 +18,7 @@
 
 ## Overview
 
-Kleanr is a full-stack mobile platform that connects vacation rental hosts with professional cleaners and cleaning businesses. The platform supports multiple user types including homeowners, independent cleaners, business owners with their own employees, HR staff for dispute resolution, and platform administrators.
+Kleanr is a full-stack mobile platform that connects vacation rental hosts with professional cleaners and cleaning businesses. The platform supports multiple user types including homeowners, independent cleaners, business owners with their own employees, HR staff for dispute resolution, IT support staff for technical issues, and platform administrators.
 
 **Key Capabilities:**
 - Multi-tenant cleaning service marketplace with offline support
@@ -163,13 +163,31 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 </td>
 <td width="50%" valign="top">
 
+### IT Support Staff
+
+- **IT Dashboard**: Centralized queue for technical support tickets
+- **Dispute Categories**: App crashes, login problems, billing errors, security issues, data requests
+- **Priority Management**: Low/Normal/High/Critical priority levels with SLA tracking
+- **Ticket Assignment**: Self-assign tickets and track resolution
+- **Status Workflow**: Submitted → In Progress → Awaiting Info → Resolved → Closed
+- **User Search**: Find users by email, username, or ID for support
+- **Account Actions**: Freeze/unfreeze accounts, reset passwords
+- **Quick Stats**: Overview of open tickets, SLA compliance, resolution times
+- **Resolution Notes**: Document solutions for future reference
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
 ### Platform Owner/Admin
 
 - **Financial Dashboard**: Revenue metrics (today, week, month, year, all-time)
 - **Platform Withdrawals**: Transfer earnings via Stripe
 - **Internal Analytics**: Track flow abandonment, job duration, offline usage, disputes, pay overrides
 - **Preview as Role**: Test the app as any user type (Cleaner, Homeowner, Business Owner, Employee)
-- **Employee Management**: Create/edit HR staff and cleaners
+- **Employee Management**: Create/edit HR staff, IT staff, and cleaners
+- **IT Employee Management**: Full CRUD for IT support staff with auto-generated passwords
 - **Pricing Configuration**: Base prices, per-bed/bath fees, time windows, cancellation fees, last-minute fees
 - **Large Business Fees**: Configure volume thresholds and reduced fees for high-volume business owners
 - **Incentive Programs**: Configure cleaner fee reductions, homeowner discounts
@@ -213,6 +231,8 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | **Cancellation Appeals** | 72-hour appeal window for both cleaners and homeowners. 48-hour HR review SLA. Supports penalty waiver, full/partial refunds. Financial breakdown with automatic calculations. |
 | **Job Ledger** | Double-entry accounting system tracking all job-related financial transactions. Stripe reconciliation, balance tracking, automated entry creation for fees, payouts, refunds. |
 | **Cancellation Audit Log** | Immutable event tracking for all cancellation-related actions. Captures actor, changes, timestamps for compliance and dispute resolution. |
+| **IT Support System** | User-submitted technical support tickets with categorization (app crashes, login issues, billing errors, security, data requests). Priority levels (low/normal/high/critical) with SLA tracking. IT staff dashboard for ticket management, user search, and account actions. |
+| **Service Area Management** | Platform owners configure geographic restrictions for cleaners. City-based or radius-based modes. Validates addresses against service area. Bulk recheck of existing homes when config changes. |
 | **Preview as Role** | Platform owners can preview the app as any user type using demo accounts. Preserves owner state for seamless return. Full functionality with demo data. |
 | **Internal Analytics** | Platform-level metrics dashboard for owners. Flow abandonment tracking with step-by-step funnel analysis. Job duration statistics (avg/min/max/percentiles). Offline usage monitoring (sync success rate, duration). Dispute and pay override frequency with breakdowns by type/reason. Date range filtering (7/30/90 days). |
 | **Transit Time** | Automatic calculation of travel time between jobs for scheduling optimization. Factors in distance and traffic patterns. Helps prevent overbooking and late arrivals. |
@@ -384,6 +404,7 @@ kleanr/
 │   │   │   ├── client/              # Homeowner dashboard & features
 │   │   │   ├── employeeAssignments/ # Job assignments, photos, checklists
 │   │   │   ├── hr/                  # HR staff features
+│   │   │   ├── it/                  # IT support staff features
 │   │   │   ├── messaging/           # Real-time chat
 │   │   │   ├── multiCleaner/        # Multi-cleaner job support
 │   │   │   ├── offline/             # Offline mode UI
@@ -407,7 +428,7 @@ kleanr/
 │   └── package.json
 │
 ├── server/                          # Express.js API Server
-│   ├── routes/api/v1/               # 35 API routers
+│   ├── routes/api/v1/               # 39 API routers
 │   │   ├── appointmentsRouter.js    # Scheduling endpoints
 │   │   ├── businessEmployeeRouter.js # Employee management
 │   │   ├── businessOwnerRouter.js   # Business owner features
@@ -432,8 +453,12 @@ kleanr/
 │   │   ├── conflictRouter.js        # Conflict resolution center
 │   │   ├── cancellationAppealRouter.js  # Cancellation appeals
 │   │   ├── demoAccountRouter.js     # Preview as Role
-│   │   └── analyticsRouter.js       # Internal analytics
-│   ├── services/                    # 41 business logic services
+│   │   ├── analyticsRouter.js       # Internal analytics
+│   │   ├── itDashboardRouter.js     # IT support dashboard
+│   │   ├── itDisputeRouter.js       # IT dispute tickets
+│   │   ├── itSupportToolsRouter.js  # IT support tools
+│   │   └── serviceAreaRouter.js     # Service area config
+│   ├── services/                    # 43 business logic services
 │   │   ├── BusinessEmployeeService.js # Employee management
 │   │   ├── CalculatePrice.js        # Dynamic pricing logic
 │   │   ├── calendarSyncService.js   # iCal parsing & sync
@@ -458,7 +483,7 @@ kleanr/
 │   ├── models/                      # 60 Sequelize models
 │   ├── serializers/                 # 37 API serializers
 │   ├── migrations/                  # Database migrations
-│   ├── __tests__/                   # 4504 server tests
+│   ├── __tests__/                   # 5364 server tests
 │   └── package.json
 │
 └── README.md
@@ -476,17 +501,18 @@ kleanr/
 | **Business Client** | Corporate client of a business owner | Book via business portal, manage company properties, view service history |
 | **Business Employee** | Works for a business owner | Accept assigned jobs, track earnings, availability settings, coworker messaging |
 | **HR Staff** | Support and moderation team | Handle disputes, review reports, manage support, freeze accounts |
-| **Owner** | Platform administrator | Full access: financials, employees, pricing, settings, reports, tax filing |
+| **IT Support** | Technical support team | Handle technical tickets, user search, account management, system monitoring |
+| **Owner** | Platform administrator | Full access: financials, employees, pricing, settings, reports, tax filing, IT staff management |
 
 ---
 
 ## Testing
 
 ```bash
-# Run all server tests (5113 tests)
+# Run all server tests (5364 tests)
 cd server && npm test
 
-# Run all client tests (5611 tests)
+# Run all client tests (5897 tests)
 cd client && npm test
 
 # Run specific test file
@@ -542,9 +568,13 @@ npm test -- --watch
 | Preview as Role | 129 | Context, modals, demo account services |
 | Internal Analytics | 89 | Event tracking, dashboard stats, aggregations |
 | Multi-Cleaner Router | 76 | Job creation, offers, room assignments |
-| **Server Total** | **5113** | 202 test suites |
-| **Client Total** | **5611** | 198 test suites |
-| **Combined Total** | **10724** | 400 test suites |
+| IT Dashboard | 92 | Ticket management, assignment, resolution |
+| IT Disputes | 67 | Submission, categories, priorities, status |
+| IT Management | 45 | CRUD operations, password generation |
+| Service Area | 56 | Config, validation, history, bulk recheck |
+| **Server Total** | **5364** | 212 test suites |
+| **Client Total** | **5897** | 208 test suites |
+| **Combined Total** | **11261** | 420 test suites |
 
 ---
 
@@ -552,7 +582,7 @@ npm test -- --watch
 
 See [Server README](./server/README.md) for complete API documentation.
 
-### Endpoint Summary (35 Routers, 200+ Endpoints)
+### Endpoint Summary (39 Routers, 220+ Endpoints)
 
 | Category | Router | Key Endpoints |
 |----------|--------|---------------|
@@ -577,6 +607,10 @@ See [Server README](./server/README.md) for complete API documentation.
 | **Appeals** | cancellationAppealRouter | Submit, review, decide, stats |
 | **Demo Accounts** | demoAccountRouter | Preview enter/exit, role selection |
 | **Analytics** | analyticsRouter | Flow abandonment, job duration, offline usage, disputes, pay overrides |
+| **IT Dashboard** | itDashboardRouter | Quick stats, dispute queue, assignment, resolution |
+| **IT Disputes** | itDisputeRouter | Submit, view, add info, categories |
+| **IT Support Tools** | itSupportToolsRouter | User search, account freeze/unfreeze |
+| **Service Areas** | serviceAreaRouter | Config, validation, history, bulk recheck |
 
 ---
 
@@ -636,7 +670,7 @@ Real-time communication via Socket.io:
 
 ---
 
-## Database Models (66 Total)
+## Database Models (68 Total)
 
 ### Core Models
 - User, UserHomes, UserAppointments, UserBills
@@ -679,6 +713,9 @@ Real-time communication via Socket.io:
 
 ### Analytics
 - AnalyticsEvent
+
+### IT Support
+- ITDispute, ServiceAreaConfig
 
 ---
 

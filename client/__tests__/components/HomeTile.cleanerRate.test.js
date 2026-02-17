@@ -28,6 +28,7 @@ jest.mock("../../src/services/styles/HomePageStyles", () => ({}));
 const mockNavigate = jest.fn();
 jest.mock("react-router-native", () => ({
   useNavigate: () => mockNavigate,
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 import HomeTile from "../../src/components/tiles/HomeTile";

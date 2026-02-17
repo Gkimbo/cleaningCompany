@@ -41,6 +41,14 @@ jest.mock("../../services/ConflictResolutionService", () => ({
 	assignCase: (...args) => mockAssignCase(...args),
 }));
 
+// Mock User model for assign endpoint validation
+const mockUserFindByPk = jest.fn();
+jest.mock("../../models", () => ({
+	User: {
+		findByPk: (...args) => mockUserFindByPk(...args),
+	},
+}));
+
 const conflictRouter = require("../../routes/api/v1/conflictRouter");
 
 // Create test app
@@ -51,6 +59,7 @@ app.use("/api/v1/conflicts", conflictRouter);
 describe("Conflict Router", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockUserFindByPk.mockReset();
 	});
 
 	describe("GET /api/v1/conflicts/queue", () => {
@@ -531,6 +540,13 @@ describe("Conflict Router", () => {
 
 	describe("POST /api/v1/conflicts/:type/:id/assign", () => {
 		it("should assign case successfully", async () => {
+			// Mock the User lookup for assignee validation
+			mockUserFindByPk.mockResolvedValue({
+				id: 5,
+				type: "humanResources",
+				accountFrozen: false,
+				lockedUntil: null,
+			});
 			mockAssignCase.mockResolvedValue({ success: true });
 
 			const response = await request(app)

@@ -23,12 +23,25 @@ const HomeSizeAdjustmentSerializer = require("../../../serializers/HomeSizeAdjus
 
 const hrDashboardRouter = express.Router();
 
+// Helper to safely decrypt a field with error handling
+const safeDecrypt = (value) => {
+  if (!value) return null;
+  try {
+    return EncryptionService.decrypt(value);
+  } catch (error) {
+    console.error("Decryption failed:", error.message);
+    return "[encrypted]";
+  }
+};
+
 /**
  * GET /disputes/pending
  * Get all disputes that need HR attention
  */
 hrDashboardRouter.get("/disputes/pending", verifyHROrOwner, async (req, res) => {
   try {
+    const { includeDemoData } = req.query;
+
     const requests = await HomeSizeAdjustmentRequest.findAll({
       where: {
         status: {
@@ -44,7 +57,10 @@ hrDashboardRouter.get("/disputes/pending", verifyHROrOwner, async (req, res) => 
         {
           model: UserAppointments,
           as: "appointment",
-          attributes: ["id", "date", "price"],
+          attributes: ["id", "date", "price", "isDemoAppointment"],
+          // Filter out demo appointments unless explicitly requested
+          where: includeDemoData === "true" ? {} : { [Op.or]: [{ isDemoAppointment: false }, { isDemoAppointment: null }] },
+          required: true,
         },
         {
           model: User,
@@ -179,12 +195,12 @@ hrDashboardRouter.get("/support-conversations", verifyHROrOwner, async (req, res
         lastMessage: conv.messages?.[0]?.content?.substring(0, 100),
         lastMessageAt: conv.messages?.[0]?.createdAt,
         lastMessageSender: conv.messages?.[0]?.sender
-          ? `${EncryptionService.decrypt(conv.messages[0].sender.firstName)} ${EncryptionService.decrypt(conv.messages[0].sender.lastName)}`
+          ? `${safeDecrypt(conv.messages[0].sender.firstName)} ${safeDecrypt(conv.messages[0].sender.lastName)}`
           : null,
         customer: customer?.user
           ? {
               id: customer.user.id,
-              name: `${EncryptionService.decrypt(customer.user.firstName)} ${EncryptionService.decrypt(customer.user.lastName)}`,
+              name: `${safeDecrypt(customer.user.firstName)} ${safeDecrypt(customer.user.lastName)}`,
               type: customer.user.type,
             }
           : null,

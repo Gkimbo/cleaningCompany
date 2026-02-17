@@ -41,6 +41,11 @@ const idVerificationRouter = require("./api/v1/idVerificationRouter");
 const cleanerApprovalRouter = require("./api/v1/cleanerApprovalRouter");
 const guestNotLeftRouter = require("./api/v1/guestNotLeftRouter");
 const newHomeRequestRouter = require("./api/v1/newHomeRequestRouter");
+const itDashboardRouter = require("./api/v1/itDashboardRouter");
+const itDisputeRouter = require("./api/v1/itDisputeRouter");
+const itSupportToolsRouter = require("./api/v1/itSupportToolsRouter");
+const hrSupportToolsRouter = require("./api/v1/hrSupportToolsRouter");
+const serviceAreaRouter = require("./api/v1/serviceAreaRouter");
 
 const rootRouter = new express.Router();
 
@@ -85,6 +90,11 @@ rootRouter.use("/api/v1/id-verification", idVerificationRouter);
 rootRouter.use("/api/v1/cleaner-approval", cleanerApprovalRouter);
 rootRouter.use("/api/v1/guest-not-left", guestNotLeftRouter);
 rootRouter.use("/api/v1/new-home-requests", newHomeRequestRouter);
+rootRouter.use("/api/v1/it-dashboard", itDashboardRouter);
+rootRouter.use("/api/v1/it-disputes", itDisputeRouter);
+rootRouter.use("/api/v1/it-support", itSupportToolsRouter);
+rootRouter.use("/api/v1/hr-support", hrSupportToolsRouter);
+rootRouter.use("/api/v1/service-areas", serviceAreaRouter);
 
 rootRouter.use("/", clientRouter);
 

@@ -1438,12 +1438,30 @@ Kleanr System`;
       const transporter = createTransporter();
       const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipcode}`;
 
+      // Calculate actual days until appointment
+      const now = new Date();
+      const apptDate = new Date(appointmentDate);
+      const timeDiff = apptDate.getTime() - now.getTime();
+      const daysUntil = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+
+      let daysText, daysTextPlain;
+      if (daysUntil <= 0) {
+        daysText = "<strong>today</strong>";
+        daysTextPlain = "today";
+      } else if (daysUntil === 1) {
+        daysText = "<strong>tomorrow</strong>";
+        daysTextPlain = "tomorrow";
+      } else {
+        daysText = `in <strong>${daysUntil} days</strong>`;
+        daysTextPlain = `in ${daysUntil} days`;
+      }
+
       const htmlContent = createEmailTemplate({
         title: "Appointment Notice",
         subtitle: "No cleaner assigned yet",
         headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
         greeting: `Hi ${userName},`,
-        content: `<p>Your upcoming cleaning appointment is in <strong>3 days</strong> and has not yet been assigned to a cleaner.</p>`,
+        content: `<p>Your upcoming cleaning appointment is ${daysText} and has not yet been assigned to a cleaner.</p>`,
         infoBox: {
           icon: "📅",
           title: "Appointment Details",
@@ -1474,7 +1492,7 @@ Kleanr System`;
 
       const textContent = `Hi ${userName},
 
-Your upcoming cleaning appointment is in 3 days and has not yet been assigned to a cleaner.
+Your upcoming cleaning appointment is ${daysTextPlain} and has not yet been assigned to a cleaner.
 
 APPOINTMENT DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -1929,6 +1947,85 @@ Kleanr Support Team`;
       return info.response;
     } catch (error) {
       console.error("❌ Error sending payment failed reminder email:", error);
+    }
+  }
+
+  // Payment captured notification email to homeowner
+  static async sendPaymentCapturedEmail(email, firstName, amount, appointmentDate, cleanerName) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASSWORD,
+        },
+      });
+
+      // Format date nicely
+      let formattedDate;
+      if (appointmentDate instanceof Date) {
+        formattedDate = appointmentDate.toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        });
+      } else {
+        // If it's a string date like "2026-02-12"
+        const dateObj = new Date(appointmentDate + "T12:00:00");
+        formattedDate = dateObj.toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        });
+      }
+
+      // Format amount (assuming it's in cents)
+      const formattedAmount = typeof amount === "number"
+        ? `$${(amount / 100).toFixed(2)}`
+        : amount;
+
+      const htmlContent = createEmailTemplate({
+        title: "Payment Processed",
+        subtitle: "Your upcoming cleaning appointment is confirmed",
+        greeting: `Hi ${firstName},`,
+        content: `
+          <p>Your payment has been successfully processed for your upcoming cleaning appointment. Your home is all set to be cleaned!</p>
+        `,
+        infoBox: {
+          icon: "✅",
+          title: "Payment Details",
+          items: [
+            { label: "Amount", value: formattedAmount },
+            { label: "Appointment Date", value: formattedDate },
+            { label: "Cleaner", value: cleanerName },
+          ],
+        },
+        successBox: {
+          icon: "🏠",
+          text: "Your cleaner is scheduled and ready to make your home sparkle!",
+          bgColor: "#f0fdf4",
+          borderColor: "#22c55e",
+          textColor: "#166534",
+        },
+        footerMessage: "Thank you for choosing Kleanr! If you need to make any changes, please open the app.",
+        headerColor: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Payment Confirmed - ${formattedAmount} for ${formattedDate}`,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Payment captured email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment captured email:", error);
     }
   }
 
@@ -6226,6 +6323,262 @@ The Kleanr Team`;
       return info.response;
     } catch (error) {
       console.error("❌ Error sending new home declined email:", error);
+    }
+  }
+
+  /**
+   * Send IT dispute notification email to IT staff
+   * @param {string} email - IT staff email
+   * @param {string} staffFirstName - IT staff first name
+   * @param {string} reporterName - Name of the user who submitted the dispute
+   * @param {string} caseNumber - Case number (IT-YYYYMMDD-00001)
+   * @param {string} categoryLabel - Human-readable category label
+   * @param {string} priority - Dispute priority (low, normal, high, critical)
+   * @param {string} description - Brief description of the issue
+   */
+  static async sendITDisputeNotification(email, staffFirstName, reporterName, caseNumber, categoryLabel, priority, description) {
+    try {
+      const transporter = createTransporter();
+
+      // Determine urgency colors based on priority
+      const priorityColors = {
+        critical: { bg: "#dc2626", text: "#ffffff" },
+        high: { bg: "#f59e0b", text: "#ffffff" },
+        normal: { bg: "#3b82f6", text: "#ffffff" },
+        low: { bg: "#64748b", text: "#ffffff" },
+      };
+      const colors = priorityColors[priority] || priorityColors.normal;
+
+      const priorityLabel = priority.toUpperCase();
+      const isUrgent = priority === "critical" || priority === "high";
+
+      const htmlContent = createEmailTemplate({
+        title: "New IT Issue Reported",
+        subtitle: caseNumber,
+        headerColor: priority === "critical"
+          ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+          : priority === "high"
+          ? "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
+          : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
+        greeting: `Hi ${staffFirstName},`,
+        content: `
+          <p>A new IT issue has been reported that requires your attention.</p>
+          <p><strong>${reporterName}</strong> has submitted a support request.</p>
+        `,
+        infoBox: {
+          icon: "🔧",
+          title: "Issue Details",
+          items: [
+            { label: "Case Number", value: caseNumber },
+            { label: "Category", value: categoryLabel },
+            { label: "Priority", value: `<span style="background-color: ${colors.bg}; color: ${colors.text}; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${priorityLabel}</span>` },
+            { label: "Description", value: description.length > 200 ? description.substring(0, 200) + "..." : description },
+          ],
+        },
+        warningBox: isUrgent ? {
+          bgColor: priority === "critical" ? "#fee2e2" : "#fef3c7",
+          borderColor: priority === "critical" ? "#dc2626" : "#f59e0b",
+          textColor: priority === "critical" ? "#991b1b" : "#92400e",
+          icon: priority === "critical" ? "🚨" : "⚠️",
+          text: priority === "critical"
+            ? "This is a CRITICAL issue requiring immediate attention. SLA: 4 hours."
+            : "This is a HIGH priority issue. SLA: 24 hours.",
+        } : null,
+        ctaText: "Log into the Kleanr app to review and respond to this issue.",
+        footerMessage: "Thank you for keeping Kleanr running smoothly!",
+      });
+
+      const textContent = `
+Hi ${staffFirstName},
+
+A new IT issue has been reported that requires your attention.
+
+CASE DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Case Number: ${caseNumber}
+Reporter: ${reporterName}
+Category: ${categoryLabel}
+Priority: ${priorityLabel}
+Description: ${description}
+
+${isUrgent ? `⚠️ This is a ${priorityLabel} priority issue. SLA: ${priority === "critical" ? "4 hours" : "24 hours"}.` : ""}
+
+Log into the Kleanr app to review and respond to this issue.
+
+Best regards,
+The Kleanr IT Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `${isUrgent ? `[${priorityLabel}] ` : ""}New IT Issue: ${categoryLabel} (${caseNumber})`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ IT dispute notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending IT dispute notification email:", error);
+    }
+  }
+
+  /**
+   * Send IT dispute resolution email to the reporter
+   * @param {string} email - Reporter's email
+   * @param {string} reporterFirstName - Reporter's first name
+   * @param {string} caseNumber - Case number
+   * @param {string} categoryLabel - Human-readable category label
+   * @param {string} resolutionNotes - Notes about the resolution
+   */
+  static async sendITDisputeResolved(email, reporterFirstName, caseNumber, categoryLabel, resolutionNotes) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "IT Issue Resolved",
+        subtitle: caseNumber,
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Hi ${reporterFirstName},`,
+        content: `
+          <p>Great news! Your IT issue has been resolved.</p>
+          <p>Our IT team has addressed your request and closed the case.</p>
+        `,
+        infoBox: {
+          icon: "✅",
+          title: "Resolution Details",
+          items: [
+            { label: "Case Number", value: caseNumber },
+            { label: "Category", value: categoryLabel },
+            { label: "Status", value: '<span style="background-color: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">RESOLVED</span>' },
+            ...(resolutionNotes ? [{ label: "Resolution Notes", value: resolutionNotes }] : []),
+          ],
+        },
+        ctaText: "If you have any further questions or the issue persists, please submit a new IT support request through the app.",
+        footerMessage: "Thank you for your patience!",
+      });
+
+      const textContent = `
+Hi ${reporterFirstName},
+
+Great news! Your IT issue has been resolved.
+
+CASE DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Case Number: ${caseNumber}
+Category: ${categoryLabel}
+Status: RESOLVED
+${resolutionNotes ? `Resolution Notes: ${resolutionNotes}` : ""}
+
+If you have any further questions or the issue persists, please submit a new IT support request through the app.
+
+Best regards,
+The Kleanr IT Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Your IT Issue Has Been Resolved (${caseNumber})`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ IT dispute resolved email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending IT dispute resolved email:", error);
+    }
+  }
+
+  // Unassigned Expired Appointment Email
+
+  static async sendUnassignedExpiredNotification(
+    email,
+    address,
+    userName,
+    appointmentDate
+  ) {
+    try {
+      const transporter = createTransporter();
+      const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipcode}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Appointment Cancelled",
+        subtitle: "No cleaner was available",
+        headerColor: "linear-gradient(135deg, #ef4444 0%, #f87171 100%)",
+        greeting: `Hi ${userName},`,
+        content: `<p>We're sorry, but your cleaning appointment scheduled for <strong>${formatDate(appointmentDate)}</strong> has been automatically cancelled because no cleaner was available to take this job.</p>
+          <p>We sincerely apologize for the inconvenience.</p>`,
+        infoBox: {
+          icon: "📅",
+          title: "Cancelled Appointment",
+          items: [
+            { label: "Address", value: fullAddress },
+            { label: "Original Date", value: formatDate(appointmentDate) },
+            { label: "Status", value: "❌ Cancelled" },
+          ],
+        },
+        warningBox: {
+          icon: "💡",
+          text: "<strong>Ready to rebook?</strong> Open the Kleanr app to schedule a new appointment. We recommend booking a few days in advance to ensure cleaner availability.",
+          bgColor: "#dbeafe",
+          borderColor: "#3b82f6",
+          textColor: "#1e40af",
+        },
+        steps: {
+          title: "📝 Next Steps",
+          items: [
+            "Open the Kleanr app",
+            "Navigate to your home and tap 'Book Cleaning'",
+            "Select a new date that works for you",
+          ],
+        },
+        ctaText: "We value your business and hope to serve you soon!",
+        footerMessage: "Thank you for your understanding",
+      });
+
+      const textContent = `Hi ${userName},
+
+We're sorry, but your cleaning appointment scheduled for ${formatDate(appointmentDate)} has been automatically cancelled because no cleaner was available to take this job.
+
+We sincerely apologize for the inconvenience.
+
+CANCELLED APPOINTMENT
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${fullAddress}
+Original Date: ${formatDate(appointmentDate)}
+Status: Cancelled
+
+READY TO REBOOK?
+━━━━━━━━━━━━━━━━━━━━━━
+Open the Kleanr app to schedule a new appointment. We recommend booking a few days in advance to ensure cleaner availability.
+
+NEXT STEPS
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Navigate to your home and tap 'Book Cleaning'
+3. Select a new date that works for you
+
+We value your business and hope to serve you soon!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `❌ Appointment Cancelled - No Cleaner Available for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Unassigned expired notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending unassigned expired notification email:", error);
     }
   }
 }

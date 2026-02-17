@@ -414,6 +414,12 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				icon: "star",
 				color: "#FBBF24",
 			},
+			it: {
+				label: "IT Support",
+				description: "Handle tech support tickets and disputes",
+				icon: "headphones",
+				color: "#6366F1",
+			},
 		};
 		return roleInfo[role] || roleInfo.cleaner;
 	}, []);

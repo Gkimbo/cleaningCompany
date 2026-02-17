@@ -16,6 +16,7 @@ import { API_BASE } from "../../services/config";
 import { formatCurrency } from "../../services/formatters";
 import { parseLocalDate } from "../../utils/dateUtils";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 // Helper to format time window display
 const formatTimeWindow = (timeWindow) => {
   if (!timeWindow) return null;
@@ -45,7 +46,7 @@ const parseConfig = (config) => {
 
 const BusinessOwnerJobDetails = ({ state }) => {
   const { appointmentId } = useParams();
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [jobData, setJobData] = useState(null);
@@ -230,7 +231,7 @@ const BusinessOwnerJobDetails = ({ state }) => {
         Alert.alert(
           "Job Declined",
           "The client has been notified and can choose to cancel or find another cleaner.",
-          [{ text: "OK", onPress: () => navigate(-1) }]
+          [{ text: "OK", onPress: () => goBack() }]
         );
       } else {
         Alert.alert("Error", data.error || "Failed to decline job");
@@ -264,7 +265,7 @@ const BusinessOwnerJobDetails = ({ state }) => {
           <Icon name="refresh" size={16} color="#fff" />
           <Text style={styles.retryButtonText}>Try Again</Text>
         </Pressable>
-        <Pressable style={styles.backLink} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backLink} onPress={() => goBack()}>
           <Icon name="arrow-left" size={14} color="#6366f1" />
           <Text style={styles.backLinkText}>Go Back</Text>
         </Pressable>
@@ -286,7 +287,7 @@ const BusinessOwnerJobDetails = ({ state }) => {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backArrow} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backArrow} onPress={() => goBack()}>
           <Icon name="arrow-left" size={20} color="#374151" />
         </Pressable>
         <Text style={styles.headerTitle}>Job Details</Text>

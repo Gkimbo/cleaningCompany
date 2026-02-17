@@ -10,9 +10,9 @@ import {
   View,
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import { useNavigate } from "react-router-native";
 import { UserContext } from "../../context/UserContext";
 import CleanerApprovalService from "../../services/fetchRequests/CleanerApprovalService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -23,7 +23,7 @@ import {
 
 const PendingCleanerApprovals = () => {
   const { state } = useContext(UserContext);
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [requests, setRequests] = useState([]);
@@ -250,7 +250,7 @@ const PendingCleanerApprovals = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.headerTitle}>Cleaner Requests</Text>

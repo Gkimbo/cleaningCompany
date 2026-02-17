@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -303,7 +304,7 @@ const EmptyState = ({ icon, title, message, action, actionLabel }) => (
 
 // Main Component
 const EmployeeMessaging = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState([]);
   const [conversations, setConversations] = useState([]);
@@ -439,7 +440,7 @@ const EmployeeMessaging = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <View style={styles.headerCenter}>

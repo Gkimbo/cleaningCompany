@@ -4,6 +4,7 @@ import { render, waitFor, fireEvent, act } from "@testing-library/react-native";
 // Mock dependencies
 jest.mock("react-router-native", () => ({
   useNavigate: () => jest.fn(),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 jest.mock("@expo/vector-icons", () => ({

@@ -15,6 +15,7 @@ import {
 import { useNavigate, useLocation } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -645,7 +646,7 @@ const EditHoursModal = ({ visible, payout, onClose, onSave, isSubmitting }) => {
 
 // Main Component
 const PayrollScreen = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const location = useLocation();
   const scrollViewRef = useRef(null);
 
@@ -985,7 +986,7 @@ const PayrollScreen = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.title}>Payroll</Text>

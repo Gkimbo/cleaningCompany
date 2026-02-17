@@ -13,6 +13,7 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import { API_BASE } from "../../services/config";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const baseURL = API_BASE.replace("/api/v1", "");
 
 const Bill = ({ state, dispatch }) => {
@@ -23,7 +24,7 @@ const Bill = ({ state, dispatch }) => {
   const [payingCancellationFee, setPayingCancellationFee] = useState(false);
   const [allAppointments, setAllAppointments] = useState([]);
   const [homes, setHomes] = useState([]);
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
 
   const cancellationFee = Math.max(0, state?.bill?.cancellationFee || 0);
   const totalDue = Math.max(0, state?.bill?.totalDue || 0);
@@ -238,7 +239,7 @@ const Bill = ({ state, dispatch }) => {
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="chevron-left" size={14} color={colors.primary[600]} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>

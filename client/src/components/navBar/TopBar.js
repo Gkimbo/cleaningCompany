@@ -47,12 +47,14 @@ import ReferralsButton from "./ReferralsButton";
 import MyReferralsButton from "./MyReferralsButton";
 import ChecklistEditorButton from "./ChecklistEditorButton";
 import HRManagementButton from "./HRManagementButton";
+import ITManagementButton from "./ITManagementButton";
 import TermsEditorButton from "./TermsEditorButton";
 import WithdrawalsButton from "./WithdrawalsButton";
 import MyClientsButton from "./MyClientsButton";
 import MyHomesButton from "./MyHomesButton";
 import SuspiciousReportsButton from "./SuspiciousReportsButton";
 import CalculatorButton from "./CalculatorButton";
+import PlatformCalculatorButton from "./PlatformCalculatorButton";
 
 // Helper to get display name for current account type
 const getCurrentAccountDisplayName = (account) => {
@@ -60,6 +62,7 @@ const getCurrentAccountDisplayName = (account) => {
   if (account === "employee") return "Employee";
   if (account === "cleaner") return "Cleaner";
   if (account === "humanResources") return "HR Staff";
+  if (account === "it") return "IT Support";
   return "Homeowner";
 };
 
@@ -326,6 +329,7 @@ const TopBar = ({ dispatch, state }) => {
       return state.isMarketplaceCleaner ? "marketplace_cleaner" : "cleaner";
     }
     if (state.account === "humanResources") return "hr";
+    if (state.account === "it") return "it";
     return "homeowner";
   };
 
@@ -425,7 +429,7 @@ const TopBar = ({ dispatch, state }) => {
                             <ManageEmployees closeModal={closeModal} />
                             <ManagePricingButton closeModal={closeModal} />
                             <ManageTiersButton closeModal={closeModal} />
-                            <CalculatorButton closeModal={closeModal} />
+                            <PlatformCalculatorButton closeModal={closeModal} />
                             <ReferralsButton closeModal={closeModal} />
                             <SeeAllAppointments closeModal={closeModal} />
                             <UnassignedAppointmentsButton
@@ -435,6 +439,7 @@ const TopBar = ({ dispatch, state }) => {
                             <IncentivesButton closeModal={closeModal} />
                             <ChecklistEditorButton closeModal={closeModal} />
                             <HRManagementButton closeModal={closeModal} />
+                            <ITManagementButton closeModal={closeModal} />
                             <SuspiciousReportsButton closeModal={closeModal} />
                             <TermsEditorButton closeModal={closeModal} />
                             <WithdrawalsButton closeModal={closeModal} />
@@ -480,6 +485,10 @@ const TopBar = ({ dispatch, state }) => {
                             <ViewApplicationsButton closeModal={closeModal} />
                             <ManageEmployees closeModal={closeModal} />
                             <SuspiciousReportsButton closeModal={closeModal} />
+                          </>
+                        ) : state.account === "it" ? (
+                          <>
+                            {/* IT users only see Account Settings and Sign Out (rendered below) */}
                           </>
                         ) : (
                           <>

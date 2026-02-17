@@ -13,6 +13,7 @@ jest.mock("../../src/services/stripe", () => ({
 const mockNavigate = jest.fn();
 jest.mock("react-router-native", () => ({
   useNavigate: () => mockNavigate,
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");

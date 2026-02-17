@@ -25,8 +25,9 @@ class ReferralService {
       const prefix = firstName.slice(0, 4).padEnd(4, "X");
 
       // Generate 4 random alphanumeric characters
+      // Use 6 bytes to ensure enough alphanumeric chars after filtering base64 special chars
       const randomChars = crypto
-        .randomBytes(3)
+        .randomBytes(6)
         .toString("base64")
         .replace(/[^A-Z0-9]/gi, "")
         .toUpperCase()
