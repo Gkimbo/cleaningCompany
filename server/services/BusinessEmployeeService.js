@@ -9,6 +9,8 @@ const {
   BusinessEmployee,
   User,
   EmployeeJobAssignment,
+  TermsAndConditions,
+  UserTermsAcceptance,
   sequelize,
 } = require("../models");
 
@@ -265,6 +267,7 @@ class BusinessEmployeeService {
    * @param {string} [userData.phone]
    * @param {number} [userData.termsId]
    * @param {number} [userData.privacyPolicyId]
+   * @param {number} [userData.paymentTermsId]
    * @returns {Promise<Object>} { user, employee }
    */
   static async acceptInviteWithSignup(inviteToken, userData) {
@@ -286,7 +289,7 @@ class BusinessEmployeeService {
       throw new Error("This employee record has been terminated");
     }
 
-    const { firstName, lastName, username, password, phone, termsId, privacyPolicyId } = userData;
+    const { firstName, lastName, username, password, phone, termsId, privacyPolicyId, paymentTermsId } = userData;
 
     // Validate required fields
     if (!firstName || !lastName || !username || !password) {
@@ -316,6 +319,34 @@ class BusinessEmployeeService {
       throw new Error("An account with this email already exists");
     }
 
+    // Get terms versions if IDs provided
+    let termsVersion = null;
+    let termsRecord = null;
+    if (termsId) {
+      termsRecord = await TermsAndConditions.findByPk(termsId);
+      if (termsRecord) {
+        termsVersion = termsRecord.version;
+      }
+    }
+
+    let privacyVersion = null;
+    let privacyRecord = null;
+    if (privacyPolicyId) {
+      privacyRecord = await TermsAndConditions.findByPk(privacyPolicyId);
+      if (privacyRecord) {
+        privacyVersion = privacyRecord.version;
+      }
+    }
+
+    let paymentTermsVersion = null;
+    let paymentTermsRecord = null;
+    if (paymentTermsId) {
+      paymentTermsRecord = await TermsAndConditions.findByPk(paymentTermsId);
+      if (paymentTermsRecord) {
+        paymentTermsVersion = paymentTermsRecord.version;
+      }
+    }
+
     // Transaction to create user and update employee
     const result = await sequelize.transaction(async (t) => {
       // Create the user account
@@ -330,11 +361,51 @@ class BusinessEmployeeService {
           type: "employee",
           employeeOfBusinessId: employee.businessOwnerId,
           isMarketplaceCleaner: false,
-          termsId: termsId || null,
-          privacyPolicyId: privacyPolicyId || null,
+          termsAcceptedVersion: termsVersion,
+          privacyPolicyAcceptedVersion: privacyVersion,
+          paymentTermsAcceptedVersion: paymentTermsVersion,
         },
         { transaction: t }
       );
+
+      // Record terms acceptance
+      if (termsId && termsRecord) {
+        await UserTermsAcceptance.create(
+          {
+            userId: newUser.id,
+            termsId,
+            acceptedAt: new Date(),
+            termsContentSnapshot: termsRecord.contentType === "text" ? termsRecord.content : null,
+          },
+          { transaction: t }
+        );
+      }
+
+      // Record privacy policy acceptance
+      if (privacyPolicyId && privacyRecord) {
+        await UserTermsAcceptance.create(
+          {
+            userId: newUser.id,
+            termsId: privacyPolicyId,
+            acceptedAt: new Date(),
+            termsContentSnapshot: privacyRecord.contentType === "text" ? privacyRecord.content : null,
+          },
+          { transaction: t }
+        );
+      }
+
+      // Record payment terms acceptance
+      if (paymentTermsId && paymentTermsRecord) {
+        await UserTermsAcceptance.create(
+          {
+            userId: newUser.id,
+            termsId: paymentTermsId,
+            acceptedAt: new Date(),
+            termsContentSnapshot: paymentTermsRecord.contentType === "text" ? paymentTermsRecord.content : null,
+          },
+          { transaction: t }
+        );
+      }
 
       // Update the employee record
       await employee.update(

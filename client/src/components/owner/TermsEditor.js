@@ -218,8 +218,8 @@ const TermsEditor = ({ state }) => {
       return;
     }
 
-    const docTypeName = selectedType === "privacy_policy" ? "privacy policy" : `${selectedType} terms`;
-    const affectedUsers = selectedType === "privacy_policy" ? "all users" : `all ${selectedType}s`;
+    const docTypeName = selectedType === "privacy_policy" ? "privacy policy" : selectedType === "payment_terms" ? "payment terms" : `${selectedType} terms`;
+    const affectedUsers = selectedType === "privacy_policy" || selectedType === "payment_terms" ? "all users" : `all ${selectedType}s`;
 
     const confirmMessage = currentTerms
       ? `This will create version ${(currentTerms.version || 0) + 1} of the ${docTypeName}. ${affectedUsers.charAt(0).toUpperCase() + affectedUsers.slice(1)} will need to re-accept on their next login. Continue?`
@@ -564,7 +564,7 @@ const TermsEditor = ({ state }) => {
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
         <Text style={styles.headerTitle}>
-          {selectedType === "privacy_policy" ? "Privacy Policy" : "Terms & Conditions"}
+          {selectedType === "privacy_policy" ? "Privacy Policy" : selectedType === "payment_terms" ? "Payment Terms" : selectedType === "damage_protection" ? "Damage Protection" : "Terms & Conditions"}
         </Text>
       </View>
 
@@ -578,7 +578,7 @@ const TermsEditor = ({ state }) => {
             <Text style={styles.currentTermsVersion}>Version {currentTerms.version}</Text>
             <Text style={styles.currentTermsTitle}>{currentTerms.title}</Text>
             <Text style={styles.currentTermsMeta}>
-              {currentTerms.contentType === "pdf" ? "PDF Document" : "Text Content"} • {selectedType === "privacy_policy" ? "Privacy Policy" : selectedType}
+              {currentTerms.contentType === "pdf" ? "PDF Document" : "Text Content"} • {selectedType === "privacy_policy" ? "Privacy Policy" : selectedType === "payment_terms" ? "Payment Terms" : selectedType === "damage_protection" ? "Damage Protection" : selectedType}
             </Text>
           </View>
           <Pressable
@@ -645,6 +645,38 @@ const TermsEditor = ({ state }) => {
               Privacy Policy
             </Text>
           </Pressable>
+          <Pressable
+            style={[
+              styles.segmentButtonThree,
+              selectedType === "payment_terms" && styles.segmentButtonActive,
+            ]}
+            onPress={() => setSelectedType("payment_terms")}
+          >
+            <Text
+              style={[
+                styles.segmentButtonText,
+                selectedType === "payment_terms" && styles.segmentButtonTextActive,
+              ]}
+            >
+              Payment Terms
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.segmentButtonThree,
+              selectedType === "damage_protection" && styles.segmentButtonActive,
+            ]}
+            onPress={() => setSelectedType("damage_protection")}
+          >
+            <Text
+              style={[
+                styles.segmentButtonText,
+                selectedType === "damage_protection" && styles.segmentButtonTextActive,
+              ]}
+            >
+              Damage Protection
+            </Text>
+          </Pressable>
         </View>
       </View>
 
@@ -660,7 +692,7 @@ const TermsEditor = ({ state }) => {
         </View>
         <TextInput
           style={styles.titleInput}
-          placeholder={selectedType === "privacy_policy" ? "e.g., Privacy Policy - January 2025" : "e.g., Terms of Service - January 2025"}
+          placeholder={selectedType === "privacy_policy" ? "e.g., Privacy Policy - January 2025" : selectedType === "payment_terms" ? "e.g., Payment Terms of Service - January 2025" : selectedType === "damage_protection" ? "e.g., Damage Protection Policy - January 2025" : "e.g., Terms of Service - January 2025"}
           value={title}
           onChangeText={setTitle}
           placeholderTextColor={colors.text.tertiary}
@@ -845,7 +877,7 @@ const TermsEditor = ({ state }) => {
         ) : (
           <View style={styles.emptyHistory}>
             <Text style={styles.emptyHistoryText}>
-              No {selectedType === "privacy_policy" ? "privacy policy" : "terms"} published yet{selectedType !== "privacy_policy" ? ` for ${selectedType}s` : ""}
+              No {selectedType === "privacy_policy" ? "privacy policy" : selectedType === "payment_terms" ? "payment terms" : "terms"} published yet{selectedType !== "privacy_policy" && selectedType !== "payment_terms" ? ` for ${selectedType}s` : ""}
             </Text>
             <Text style={styles.emptyHistoryHint}>
               Create your first version above

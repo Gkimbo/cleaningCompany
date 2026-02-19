@@ -326,7 +326,44 @@ class BillingService {
             transferParams.source_transaction = chargeId;
           }
 
-          const transfer = await stripe.transfers.create(transferParams);
+          let transfer;
+          try {
+            transfer = await stripe.transfers.create(transferParams);
+          } catch (stripeError) {
+            // Handle Stripe transfer errors gracefully
+            const errorMessage = stripeError.message || "Unknown Stripe error";
+            const errorCode = stripeError.code || "unknown";
+
+            console.error(`[BillingService] Stripe transfer failed for cleaner ${cleanerId}:`, {
+              code: errorCode,
+              message: errorMessage,
+              type: stripeError.type,
+            });
+
+            // Update payout status to failed with reason
+            await payout.update({
+              status: "failed",
+              failureReason: `Stripe transfer failed: ${errorCode} - ${errorMessage}`,
+              completedAt: new Date(),
+            });
+
+            // Return graceful error response
+            const failureDetails = {
+              cleanerId,
+              success: false,
+              error: errorMessage,
+              errorCode,
+              canRetry: errorCode !== "account_invalid",
+            };
+
+            if (errorCode === "balance_insufficient") {
+              failureDetails.error = "Platform has insufficient funds in Stripe account. Please add funds and retry the payout.";
+              failureDetails.reason = "insufficient_stripe_balance";
+            }
+
+            payoutResults.push(failureDetails);
+            continue; // Skip to next cleaner
+          }
 
           await payout.update({ stripeTransferId: transfer.id, status: "completed" });
 
@@ -359,8 +396,12 @@ class BillingService {
 
           payoutResults.push({ cleanerId, success: true, amount: netAmount / 100, transferId: transfer.id });
         } catch (transferError) {
-          console.error(`Transfer failed for cleaner ${cleanerId}:`, transferError);
-          await payout.update({ status: "failed" });
+          console.error(`[BillingService] Unexpected error processing payout for cleaner ${cleanerId}:`, transferError);
+          await payout.update({
+            status: "failed",
+            failureReason: `Unexpected error: ${transferError.message}`,
+            completedAt: new Date(),
+          });
           payoutResults.push({ cleanerId, success: false, error: transferError.message });
         }
       }

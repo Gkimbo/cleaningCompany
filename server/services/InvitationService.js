@@ -174,13 +174,16 @@ class InvitationService {
    * @param {string} params.password - User's password
    * @param {string} [params.phone] - User's phone (if not in invitation)
    * @param {Object} [params.addressCorrections] - Corrected address info
+   * @param {number} [params.termsId] - Terms and conditions ID
+   * @param {number} [params.privacyPolicyId] - Privacy policy ID
+   * @param {number} [params.paymentTermsId] - Payment terms ID
    * @param {Object} models - Sequelize models object
    * @param {Function} hashPassword - Function to hash password
    * @returns {Object} Created User record
    */
   static async acceptInvitation(token, params, models, hashPassword) {
-    const { CleanerClient, User, UserHomes, UserBills } = models;
-    const { password, phone, addressCorrections } = params;
+    const { CleanerClient, User, UserHomes, UserBills, TermsAndConditions, UserTermsAcceptance } = models;
+    const { password, phone, addressCorrections, termsId, privacyPolicyId, paymentTermsId, damageProtectionId } = params;
 
     // Validate token
     const cleanerClient = await this.validateInviteToken(token, models);
@@ -213,6 +216,43 @@ class InvitationService {
     // Hash the password
     const hashedPassword = await hashPassword(password);
 
+    // Get terms versions if IDs provided
+    let termsVersion = null;
+    let termsRecord = null;
+    if (termsId && TermsAndConditions) {
+      termsRecord = await TermsAndConditions.findByPk(termsId);
+      if (termsRecord) {
+        termsVersion = termsRecord.version;
+      }
+    }
+
+    let privacyVersion = null;
+    let privacyRecord = null;
+    if (privacyPolicyId && TermsAndConditions) {
+      privacyRecord = await TermsAndConditions.findByPk(privacyPolicyId);
+      if (privacyRecord) {
+        privacyVersion = privacyRecord.version;
+      }
+    }
+
+    let paymentTermsVersion = null;
+    let paymentTermsRecord = null;
+    if (paymentTermsId && TermsAndConditions) {
+      paymentTermsRecord = await TermsAndConditions.findByPk(paymentTermsId);
+      if (paymentTermsRecord) {
+        paymentTermsVersion = paymentTermsRecord.version;
+      }
+    }
+
+    let damageProtectionVersion = null;
+    let damageProtectionRecord = null;
+    if (damageProtectionId && TermsAndConditions) {
+      damageProtectionRecord = await TermsAndConditions.findByPk(damageProtectionId);
+      if (damageProtectionRecord) {
+        damageProtectionVersion = damageProtectionRecord.version;
+      }
+    }
+
     // Create the user
     const user = await User.create({
       firstName,
@@ -222,6 +262,10 @@ class InvitationService {
       password: hashedPassword,
       type: "homeowner",
       hasPaymentMethod: false,
+      termsAcceptedVersion: termsVersion,
+      privacyPolicyAcceptedVersion: privacyVersion,
+      paymentTermsAcceptedVersion: paymentTermsVersion,
+      damageProtectionAcceptedVersion: damageProtectionVersion,
     });
 
     // Create UserBills record
@@ -231,6 +275,45 @@ class InvitationService {
       cancellationDue: 0,
       totalDue: 0,
     });
+
+    // Record terms acceptance if available
+    if (UserTermsAcceptance) {
+      if (termsId && termsRecord) {
+        await UserTermsAcceptance.create({
+          userId: user.id,
+          termsId,
+          acceptedAt: new Date(),
+          termsContentSnapshot: termsRecord.contentType === "text" ? termsRecord.content : null,
+        });
+      }
+
+      if (privacyPolicyId && privacyRecord) {
+        await UserTermsAcceptance.create({
+          userId: user.id,
+          termsId: privacyPolicyId,
+          acceptedAt: new Date(),
+          termsContentSnapshot: privacyRecord.contentType === "text" ? privacyRecord.content : null,
+        });
+      }
+
+      if (paymentTermsId && paymentTermsRecord) {
+        await UserTermsAcceptance.create({
+          userId: user.id,
+          termsId: paymentTermsId,
+          acceptedAt: new Date(),
+          termsContentSnapshot: paymentTermsRecord.contentType === "text" ? paymentTermsRecord.content : null,
+        });
+      }
+
+      if (damageProtectionId && damageProtectionRecord) {
+        await UserTermsAcceptance.create({
+          userId: user.id,
+          termsId: damageProtectionId,
+          acceptedAt: new Date(),
+          termsContentSnapshot: damageProtectionRecord.contentType === "text" ? damageProtectionRecord.content : null,
+        });
+      }
+    }
 
     // Check if invitation was cancelled by the business owner
     const isCancelled = cleanerClient.isCancelled || cleanerClient.status === "cancelled";

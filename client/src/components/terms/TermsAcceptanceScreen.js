@@ -36,9 +36,16 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
   // Track what needs to be accepted
   const [termsToAccept, setTermsToAccept] = useState(null);
   const [privacyToAccept, setPrivacyToAccept] = useState(null);
+  const [paymentTermsToAccept, setPaymentTermsToAccept] = useState(null);
+  const [damageProtectionToAccept, setDamageProtectionToAccept] = useState(null);
+
+  // Track original total for progress calculation (doesn't change as docs are accepted)
+  const [originalTotalDocs, setOriginalTotalDocs] = useState(0);
+  // Track current step number (1-indexed) for progress display
+  const [currentStepNumber, setCurrentStepNumber] = useState(1);
 
   // Track current document being viewed
-  // 'terms' or 'privacy'
+  // 'terms', 'privacy', 'paymentTerms', or 'damageProtection'
   const [currentDocument, setCurrentDocument] = useState(null);
 
   useEffect(() => {
@@ -73,12 +80,26 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
       if (data.privacyPolicy) {
         setPrivacyToAccept(data.privacyPolicy);
       }
+      if (data.paymentTerms) {
+        setPaymentTermsToAccept(data.paymentTerms);
+      }
+      if (data.damageProtection) {
+        setDamageProtectionToAccept(data.damageProtection);
+      }
 
-      // Start with terms if available, otherwise privacy policy
+      // Calculate and store original total for progress tracking
+      const total = (data.terms ? 1 : 0) + (data.privacyPolicy ? 1 : 0) + (data.paymentTerms ? 1 : 0) + (data.damageProtection ? 1 : 0);
+      setOriginalTotalDocs(total);
+
+      // Start with terms if available, then privacy policy, then payment terms, then damage protection
       if (data.terms) {
         setCurrentDocument("terms");
       } else if (data.privacyPolicy) {
         setCurrentDocument("privacy");
+      } else if (data.paymentTerms) {
+        setCurrentDocument("paymentTerms");
+      } else if (data.damageProtection) {
+        setCurrentDocument("damageProtection");
       }
     } catch (err) {
       setError("Failed to check acceptance status");
@@ -100,7 +121,13 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
   };
 
   const handleAccept = async () => {
-    const currentDoc = currentDocument === "terms" ? termsToAccept : privacyToAccept;
+    const currentDoc = currentDocument === "terms"
+      ? termsToAccept
+      : currentDocument === "privacy"
+        ? privacyToAccept
+        : currentDocument === "paymentTerms"
+          ? paymentTermsToAccept
+          : damageProtectionToAccept;
     if (!currentDoc) return;
 
     setAccepting(true);
@@ -118,18 +145,60 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
       const data = await response.json();
 
       if (response.ok) {
-        // Check if there's more to accept
-        if (currentDocument === "terms" && privacyToAccept) {
-          // Move to privacy policy
-          setCurrentDocument("privacy");
+        // Check if there's more to accept - flow: terms → privacy → paymentTerms → damageProtection
+        if (currentDocument === "terms") {
           setTermsToAccept(null); // Mark as accepted
           setHasScrolledToBottom(false); // Reset scroll state
-        } else if (currentDocument === "privacy" && termsToAccept) {
-          // Move to terms
-          setCurrentDocument("terms");
+          if (privacyToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("privacy");
+          } else if (paymentTermsToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("paymentTerms");
+          } else if (damageProtectionToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("damageProtection");
+          } else {
+            // All done
+            if (onAccepted) {
+              onAccepted();
+            } else {
+              navigate("/");
+            }
+          }
+        } else if (currentDocument === "privacy") {
           setPrivacyToAccept(null); // Mark as accepted
           setHasScrolledToBottom(false); // Reset scroll state
-        } else {
+          if (paymentTermsToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("paymentTerms");
+          } else if (damageProtectionToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("damageProtection");
+          } else {
+            // All done
+            if (onAccepted) {
+              onAccepted();
+            } else {
+              navigate("/");
+            }
+          }
+        } else if (currentDocument === "paymentTerms") {
+          setPaymentTermsToAccept(null); // Mark as accepted
+          setHasScrolledToBottom(false); // Reset scroll state
+          if (damageProtectionToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("damageProtection");
+          } else {
+            // All done
+            if (onAccepted) {
+              onAccepted();
+            } else {
+              navigate("/");
+            }
+          }
+        } else if (currentDocument === "damageProtection") {
+          setDamageProtectionToAccept(null); // Mark as accepted
           // All done
           if (onAccepted) {
             onAccepted();
@@ -163,7 +232,7 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
     );
   }
 
-  if (error && !termsToAccept && !privacyToAccept) {
+  if (error && !termsToAccept && !privacyToAccept && !paymentTermsToAccept && !damageProtectionToAccept) {
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.errorText}>{error}</Text>
@@ -178,12 +247,24 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
   }
 
   // Get current document to display
-  const currentDoc = currentDocument === "terms" ? termsToAccept : privacyToAccept;
-  const currentTitle = currentDocument === "terms" ? "Terms and Conditions" : "Privacy Policy";
+  const currentDoc = currentDocument === "terms"
+    ? termsToAccept
+    : currentDocument === "privacy"
+      ? privacyToAccept
+      : currentDocument === "paymentTerms"
+        ? paymentTermsToAccept
+        : damageProtectionToAccept;
+  const currentTitle = currentDocument === "terms"
+    ? "Terms and Conditions"
+    : currentDocument === "privacy"
+      ? "Privacy Policy"
+      : currentDocument === "paymentTerms"
+        ? "Payment Terms"
+        : "Damage Protection";
 
-  // Calculate progress
-  const totalDocs = (termsToAccept ? 1 : 0) + (privacyToAccept ? 1 : 0);
-  const currentDocNum = currentDocument === "terms" ? 1 : (termsToAccept ? 2 : 1);
+  // Calculate progress - use originalTotalDocs for consistent progress display
+  const totalDocs = originalTotalDocs;
+  const currentDocNum = currentStepNumber;
 
   const renderDocumentContent = () => {
     if (!currentDoc) return null;
@@ -245,7 +326,11 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
         <Text style={styles.headerSubtitle}>
           {currentDocument === "terms"
             ? "Our terms have been updated. Please review and accept to continue using the app."
-            : "Our privacy policy has been updated. Please review and accept to continue using the app."}
+            : currentDocument === "privacy"
+              ? "Our privacy policy has been updated. Please review and accept to continue using the app."
+              : currentDocument === "paymentTerms"
+                ? "Our payment terms have been updated. Please review and accept to continue using the app."
+                : "Our damage protection policy has been updated. Please review and accept to continue using the app."}
         </Text>
         {totalDocs > 1 && (
           <View style={styles.progressContainer}>
@@ -258,12 +343,18 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
               />
             </View>
             <Text style={styles.progressText}>
-              {currentDocNum === 1
+              {currentDocument === "terms"
                 ? "Terms and Conditions"
-                : "Privacy Policy"}
-              {privacyToAccept && termsToAccept && currentDocNum === 1
+                : currentDocument === "privacy"
+                  ? "Privacy Policy"
+                  : "Payment Terms"}
+              {currentDocument === "terms" && privacyToAccept
                 ? " → Privacy Policy next"
-                : ""}
+                : currentDocument === "terms" && paymentTermsToAccept
+                  ? " → Payment Terms next"
+                  : currentDocument === "privacy" && paymentTermsToAccept
+                    ? " → Payment Terms next"
+                    : ""}
             </Text>
           </View>
         )}

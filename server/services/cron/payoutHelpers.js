@@ -234,7 +234,48 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
       transferParams.source_transaction = chargeId;
     }
 
-    const transfer = await stripe.transfers.create(transferParams);
+    let transfer;
+    try {
+      transfer = await stripe.transfers.create(transferParams);
+    } catch (stripeError) {
+      // Handle Stripe transfer errors gracefully
+      const errorMessage = stripeError.message || "Unknown Stripe error";
+      const errorCode = stripeError.code || "unknown";
+
+      console.error(`[PayoutHelpers] Stripe transfer failed for cleaner ${cleanerId}:`, {
+        code: errorCode,
+        message: errorMessage,
+        type: stripeError.type,
+      });
+
+      // Update payout status to failed with reason
+      await payout.update({
+        status: "failed",
+        failureReason: `Stripe transfer failed: ${errorCode} - ${errorMessage}`,
+        completedAt: new Date(),
+      });
+
+      // Return graceful error response with specific handling for balance issues
+      if (errorCode === "balance_insufficient") {
+        return {
+          cleanerId,
+          status: "failed",
+          reason: "insufficient_stripe_balance",
+          error: "Platform has insufficient funds in Stripe account. Please add funds and retry the payout.",
+          canRetry: true,
+          payoutId: payout.id,
+        };
+      }
+
+      return {
+        cleanerId,
+        status: "failed",
+        reason: errorCode,
+        error: errorMessage,
+        canRetry: errorCode !== "account_invalid",
+        payoutId: payout.id,
+      };
+    }
 
     await payout.update({
       stripeTransferId: transfer.id,

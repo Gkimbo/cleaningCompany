@@ -329,7 +329,7 @@ cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
 cleanerClientsRouter.post("/invitations/:token/accept", async (req, res) => {
   try {
     const { token } = req.params;
-    const { password, phone, addressCorrections } = req.body;
+    const { password, phone, addressCorrections, termsId, privacyPolicyId, paymentTermsId, damageProtectionId } = req.body;
 
     // Validate required fields
     if (!password || password.length < 8) {
@@ -340,7 +340,7 @@ cleanerClientsRouter.post("/invitations/:token/accept", async (req, res) => {
 
     const result = await InvitationService.acceptInvitation(
       token,
-      { password, phone, addressCorrections },
+      { password, phone, addressCorrections, termsId, privacyPolicyId, paymentTermsId, damageProtectionId },
       models,
       hashPassword
     );

@@ -413,13 +413,26 @@ class EmployeeBatchPayoutService {
         formattedAmount: `$${(totalAmount / 100).toFixed(2)}`,
       };
     } catch (error) {
-      console.error(`[EmployeeBatchPayout] Stripe error for employee ${employeeId}:`, error);
+      const errorCode = error.code || "unknown";
+      const errorMessage = error.message || "Unknown Stripe error";
+
+      console.error(`[EmployeeBatchPayout] Stripe error for employee ${employeeId}:`, {
+        code: errorCode,
+        message: errorMessage,
+        type: error.type,
+      });
+
+      // Prepare failure reason with error code
+      let failureReason = `Stripe transfer failed: ${errorCode} - ${errorMessage}`;
+      if (errorCode === "balance_insufficient") {
+        failureReason = "Platform has insufficient funds in Stripe account. Please add funds and retry the payout.";
+      }
 
       // Mark all as failed
       for (const payout of payouts) {
         await payout.update({
           status: "failed",
-          failureReason: error.message,
+          failureReason,
           retryCount: payout.retryCount + 1,
         });
       }
@@ -427,7 +440,9 @@ class EmployeeBatchPayoutService {
       return {
         employeeId,
         success: false,
-        error: error.message,
+        error: failureReason,
+        errorCode,
+        canRetry: errorCode !== "account_invalid",
         payoutCount: payouts.length,
         totalAmount,
       };

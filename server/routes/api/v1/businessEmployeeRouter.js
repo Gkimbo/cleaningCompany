@@ -85,7 +85,7 @@ router.post("/invite/:token/accept", authenticateToken, async (req, res) => {
  */
 router.post("/invite/:token/accept-with-signup", async (req, res) => {
   try {
-    const { firstName, lastName, username, password, phone, termsId, privacyPolicyId } = req.body;
+    const { firstName, lastName, username, password, phone, termsId, privacyPolicyId, paymentTermsId } = req.body;
 
     // Validate password strength
     if (!password || password.length < 8) {
@@ -104,7 +104,7 @@ router.post("/invite/:token/accept-with-signup", async (req, res) => {
 
     const result = await BusinessEmployeeService.acceptInviteWithSignup(
       req.params.token,
-      { firstName, lastName, username, password, phone, termsId, privacyPolicyId }
+      { firstName, lastName, username, password, phone, termsId, privacyPolicyId, paymentTermsId }
     );
 
     // Generate JWT token for the new user

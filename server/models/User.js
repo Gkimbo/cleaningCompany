@@ -111,6 +111,10 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
+		damageProtectionAcceptedVersion: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
 		lastDeviceType: {
 			type: DataTypes.STRING,
 			allowNull: true,

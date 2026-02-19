@@ -68,7 +68,7 @@ const safeDecrypt = (value) => {
 
 usersRouter.post("/", async (req, res) => {
   try {
-    const { firstName, lastName, username, password, email, termsId, privacyPolicyId, referralCode } = req.body;
+    const { firstName, lastName, username, password, email, termsId, privacyPolicyId, paymentTermsId, damageProtectionId, referralCode } = req.body;
 
     // Validate password strength
     const passwordError = validatePassword(password);
@@ -106,6 +106,26 @@ usersRouter.post("/", async (req, res) => {
           }
         }
 
+        // Get payment terms version if paymentTermsId provided
+        let paymentTermsVersion = null;
+        let paymentTermsRecord = null;
+        if (paymentTermsId) {
+          paymentTermsRecord = await TermsAndConditions.findByPk(paymentTermsId);
+          if (paymentTermsRecord) {
+            paymentTermsVersion = paymentTermsRecord.version;
+          }
+        }
+
+        // Get damage protection version if damageProtectionId provided
+        let damageProtectionVersion = null;
+        let damageProtectionRecord = null;
+        if (damageProtectionId) {
+          damageProtectionRecord = await TermsAndConditions.findByPk(damageProtectionId);
+          if (damageProtectionRecord) {
+            damageProtectionVersion = damageProtectionRecord.version;
+          }
+        }
+
         const newUser = await User.create({
           firstName,
           lastName,
@@ -115,6 +135,8 @@ usersRouter.post("/", async (req, res) => {
           notifications: ["phone", "email"],
           termsAcceptedVersion: termsVersion,
           privacyPolicyAcceptedVersion: privacyVersion,
+          paymentTermsAcceptedVersion: paymentTermsVersion,
+          damageProtectionAcceptedVersion: damageProtectionVersion,
         });
         const newBill = await UserBills.create({
           userId: newUser.dataValues.id,
@@ -144,6 +166,28 @@ usersRouter.post("/", async (req, res) => {
             acceptedAt: new Date(),
             ipAddress,
             termsContentSnapshot: privacyRecord.contentType === "text" ? privacyRecord.content : null,
+          });
+        }
+
+        // Record payment terms acceptance if payment terms were accepted
+        if (paymentTermsId && paymentTermsRecord) {
+          await UserTermsAcceptance.create({
+            userId: newUser.dataValues.id,
+            termsId: paymentTermsId,
+            acceptedAt: new Date(),
+            ipAddress,
+            termsContentSnapshot: paymentTermsRecord.contentType === "text" ? paymentTermsRecord.content : null,
+          });
+        }
+
+        // Record damage protection acceptance if damage protection was accepted
+        if (damageProtectionId && damageProtectionRecord) {
+          await UserTermsAcceptance.create({
+            userId: newUser.dataValues.id,
+            termsId: damageProtectionId,
+            acceptedAt: new Date(),
+            ipAddress,
+            termsContentSnapshot: damageProtectionRecord.contentType === "text" ? damageProtectionRecord.content : null,
           });
         }
 
@@ -281,7 +325,7 @@ usersRouter.post("/business-owner", async (req, res) => {
 // Allows duplicate emails when one is an employee account and one is a marketplace cleaner account
 usersRouter.post("/marketplace-cleaner", async (req, res) => {
   try {
-    const { firstName, lastName, username, password, email, phone, termsId, privacyPolicyId, referralCode } = req.body;
+    const { firstName, lastName, username, password, email, phone, termsId, privacyPolicyId, paymentTermsId, referralCode } = req.body;
 
     // Validate required fields
     if (!firstName || !lastName || !email || !username || !password) {
@@ -337,6 +381,16 @@ usersRouter.post("/marketplace-cleaner", async (req, res) => {
       }
     }
 
+    // Get payment terms version if paymentTermsId provided
+    let paymentTermsVersion = null;
+    let paymentTermsRecord = null;
+    if (paymentTermsId) {
+      paymentTermsRecord = await TermsAndConditions.findByPk(paymentTermsId);
+      if (paymentTermsRecord) {
+        paymentTermsVersion = paymentTermsRecord.version;
+      }
+    }
+
     // Create the marketplace cleaner account
     const newUser = await User.create({
       firstName,
@@ -351,6 +405,7 @@ usersRouter.post("/marketplace-cleaner", async (req, res) => {
       notifications: ["phone", "email"],
       termsAcceptedVersion: termsVersion,
       privacyPolicyAcceptedVersion: privacyVersion,
+      paymentTermsAcceptedVersion: paymentTermsVersion,
     });
 
     // Create billing record
@@ -382,6 +437,17 @@ usersRouter.post("/marketplace-cleaner", async (req, res) => {
         acceptedAt: new Date(),
         ipAddress,
         termsContentSnapshot: privacyRecord.contentType === "text" ? privacyRecord.content : null,
+      });
+    }
+
+    // Record payment terms acceptance if payment terms were accepted
+    if (paymentTermsId && paymentTermsRecord) {
+      await UserTermsAcceptance.create({
+        userId: newUser.id,
+        termsId: paymentTermsId,
+        acceptedAt: new Date(),
+        ipAddress,
+        termsContentSnapshot: paymentTermsRecord.contentType === "text" ? paymentTermsRecord.content : null,
       });
     }
 

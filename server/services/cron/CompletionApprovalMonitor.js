@@ -86,10 +86,14 @@ async function processAutoApprovalsSingleCleaner(io = null) {
             : "Your cleaner";
 
           // In-app notification
-          await NotificationService.createNotification(
-            appointment.userId,
-            `Your cleaning on ${appointment.date} has been auto-approved. Payment sent to ${cleanerName}.`
-          );
+          await NotificationService.createNotification({
+            userId: appointment.userId,
+            type: "completion_auto_approved",
+            title: "Cleaning Auto-Approved",
+            body: `Your cleaning on ${appointment.date} has been auto-approved. Payment sent to ${cleanerName}.`,
+            data: { appointmentId: appointment.id, cleanerName },
+            relatedAppointmentId: appointment.id,
+          });
 
           // Email notification
           const homeownerEmail = appointment.user.email
@@ -120,10 +124,14 @@ async function processAutoApprovalsSingleCleaner(io = null) {
           const cleanerFirstName = EncryptionService.decrypt(cleaner.firstName);
 
           // In-app notification
-          await NotificationService.createNotification(
-            cleanerId,
-            `Your job completion for ${appointment.date} was approved! Payment is on the way.`
-          );
+          await NotificationService.createNotification({
+            userId: cleanerId,
+            type: "completion_approved_cleaner",
+            title: "Job Approved!",
+            body: `Your job completion for ${appointment.date} was approved! Payment is on the way.`,
+            data: { appointmentId: appointment.id, appointmentDate: appointment.date, price: appointment.price },
+            relatedAppointmentId: appointment.id,
+          });
 
           // Email notification
           const cleanerEmail = cleaner.email
@@ -179,10 +187,14 @@ async function processAutoApprovalsSingleCleaner(io = null) {
                 : "your client";
 
               // In-app notification for business owner
-              await NotificationService.createNotification(
-                businessOwner.id,
-                `${employeeName}'s job for ${clientName} on ${appointment.date} was auto-approved. Payment sent.`
-              );
+              await NotificationService.createNotification({
+                userId: businessOwner.id,
+                type: "employee_job_auto_approved",
+                title: "Employee Job Auto-Approved",
+                body: `${employeeName}'s job for ${clientName} on ${appointment.date} was auto-approved. Payment sent.`,
+                data: { appointmentId: appointment.id, employeeName, clientName },
+                relatedAppointmentId: appointment.id,
+              });
 
               // Push notification to business owner
               if (businessOwner.expoPushToken) {
@@ -288,13 +300,29 @@ async function processAutoApprovalsMultiCleaner(io = null) {
         // Process payout for this cleaner
         try {
           const { processMultiCleanerPayoutForCleaner } = require("./payoutHelpers");
-          await processMultiCleanerPayoutForCleaner(appointment, completion.cleanerId);
-          console.log(
-            `[CompletionApprovalMonitor] Payout processed for cleaner ${completion.cleanerId} on appointment ${appointment.id}`
-          );
+          const payoutResult = await processMultiCleanerPayoutForCleaner(appointment, completion.cleanerId);
+
+          if (payoutResult.status === "success") {
+            console.log(
+              `[CompletionApprovalMonitor] Payout processed for cleaner ${completion.cleanerId} on appointment ${appointment.id}`
+            );
+          } else if (payoutResult.status === "skipped") {
+            console.warn(
+              `[CompletionApprovalMonitor] Payout skipped for cleaner ${completion.cleanerId}: ${payoutResult.reason}`
+            );
+          } else if (payoutResult.status === "failed") {
+            console.error(
+              `[CompletionApprovalMonitor] Payout failed for cleaner ${completion.cleanerId}: ${payoutResult.error}`,
+              { reason: payoutResult.reason, canRetry: payoutResult.canRetry }
+            );
+          } else if (payoutResult.status === "already_paid") {
+            console.log(
+              `[CompletionApprovalMonitor] Cleaner ${completion.cleanerId} already paid for appointment ${appointment.id}`
+            );
+          }
         } catch (payoutError) {
           console.error(
-            `[CompletionApprovalMonitor] Payout error for cleaner ${completion.cleanerId}:`,
+            `[CompletionApprovalMonitor] Unexpected payout error for cleaner ${completion.cleanerId}:`,
             payoutError
           );
         }
@@ -311,10 +339,14 @@ async function processAutoApprovalsMultiCleaner(io = null) {
           const homeownerFirstName = EncryptionService.decrypt(homeowner.firstName);
 
           // In-app notification
-          await NotificationService.createNotification(
-            homeowner.id,
-            `${cleanerFirstName}'s work on ${appointment.date} has been auto-approved. Payment sent.`
-          );
+          await NotificationService.createNotification({
+            userId: homeowner.id,
+            type: "completion_auto_approved",
+            title: "Cleaning Auto-Approved",
+            body: `${cleanerFirstName}'s work on ${appointment.date} has been auto-approved. Payment sent.`,
+            data: { appointmentId: appointment.id, cleanerId: cleaner.id, cleanerName: cleanerFirstName },
+            relatedAppointmentId: appointment.id,
+          });
 
           // Email notification
           const homeownerEmail = homeowner.email
@@ -343,10 +375,14 @@ async function processAutoApprovalsMultiCleaner(io = null) {
         // Notify cleaner
         if (cleaner) {
           // In-app notification
-          await NotificationService.createNotification(
-            cleaner.id,
-            `Your work on ${appointment.date} was auto-approved! Payment is on the way.`
-          );
+          await NotificationService.createNotification({
+            userId: cleaner.id,
+            type: "completion_approved_cleaner",
+            title: "Work Approved!",
+            body: `Your work on ${appointment.date} was auto-approved! Payment is on the way.`,
+            data: { appointmentId: appointment.id, appointmentDate: appointment.date },
+            relatedAppointmentId: appointment.id,
+          });
 
           // Email notification
           const cleanerEmail = cleaner.email
