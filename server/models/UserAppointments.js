@@ -116,6 +116,23 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: false,
 		},
+		// Payment retry tracking
+		paymentRetryCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Number of payment retry attempts made",
+		},
+		paymentFirstFailedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Timestamp of first payment failure (for 2-day auto-cancel window)",
+		},
+		lastPaymentRetryAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Timestamp of last payment retry attempt",
+		},
 		// Track if customer manually pre-paid (vs auto-captured by cron)
 		manuallyPaid: {
 			type: DataTypes.BOOLEAN,

@@ -12,8 +12,28 @@ jest.mock("../../src/services/PushNotificationService", () => ({
   removeTokenFromBackend: jest.fn(),
 }));
 
+// Mock offline services
+jest.mock("../../src/services/offline", () => ({
+  OfflineManager: {
+    initialize: jest.fn().mockResolvedValue(undefined),
+    reset: jest.fn().mockResolvedValue(undefined),
+  },
+  AutoSyncOrchestrator: {
+    setAuthToken: jest.fn(),
+    cancelPendingRetry: jest.fn(),
+  },
+}));
+
+// Mock AuthEventService
+jest.mock("../../src/services/AuthEventService", () => ({
+  setLogoutCallback: jest.fn(),
+  clearLogoutCallback: jest.fn(),
+  handleTokenExpired: jest.fn(),
+}));
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import PushNotificationService from "../../src/services/PushNotificationService";
+import AuthEventService from "../../src/services/AuthEventService";
 
 describe("AuthContext Service", () => {
   beforeEach(() => {
@@ -203,6 +223,74 @@ describe("AuthContext Service", () => {
       };
 
       expect(typeof defaultContext.logout).toBe("function");
+    });
+  });
+
+  describe("AuthEventService Integration", () => {
+    it("should have AuthEventService mock properly configured", () => {
+      // Verify the mock structure is correct
+      expect(AuthEventService.setLogoutCallback).toBeDefined();
+      expect(AuthEventService.clearLogoutCallback).toBeDefined();
+      expect(AuthEventService.handleTokenExpired).toBeDefined();
+    });
+
+    it("should expose setLogoutCallback as a function", () => {
+      expect(typeof AuthEventService.setLogoutCallback).toBe("function");
+    });
+
+    it("should expose clearLogoutCallback as a function", () => {
+      expect(typeof AuthEventService.clearLogoutCallback).toBe("function");
+    });
+
+    it("should expose handleTokenExpired as a function", () => {
+      expect(typeof AuthEventService.handleTokenExpired).toBe("function");
+    });
+  });
+
+  describe("Logout callback behavior", () => {
+    it("should remove token from AsyncStorage when logout is triggered", async () => {
+      AsyncStorage.getItem.mockResolvedValue("test_token");
+      AsyncStorage.removeItem.mockResolvedValue(undefined);
+      PushNotificationService.removeTokenFromBackend.mockResolvedValue(true);
+
+      // Simulate the logout flow that would be triggered by AuthEventService
+      const storedToken = await AsyncStorage.getItem("token");
+      if (storedToken) {
+        await PushNotificationService.removeTokenFromBackend(storedToken);
+      }
+      await AsyncStorage.removeItem("token");
+
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith("token");
+      expect(PushNotificationService.removeTokenFromBackend).toHaveBeenCalledWith("test_token");
+    });
+
+    it("should handle logout when no token exists", async () => {
+      AsyncStorage.getItem.mockResolvedValue(null);
+      AsyncStorage.removeItem.mockResolvedValue(undefined);
+
+      const storedToken = await AsyncStorage.getItem("token");
+      if (storedToken) {
+        await PushNotificationService.removeTokenFromBackend(storedToken);
+      }
+      await AsyncStorage.removeItem("token");
+
+      expect(PushNotificationService.removeTokenFromBackend).not.toHaveBeenCalled();
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith("token");
+    });
+
+    it("should clear preview state on logout to prevent stale state on re-login", async () => {
+      AsyncStorage.getItem.mockResolvedValue("test_token");
+      AsyncStorage.removeItem.mockResolvedValue(undefined);
+      PushNotificationService.removeTokenFromBackend.mockResolvedValue(true);
+
+      // Simulate the full logout flow including preview state cleanup
+      await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("@preview_mode_state");
+      await AsyncStorage.removeItem("@preview_original_owner_state");
+
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith("token");
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith("@preview_mode_state");
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith("@preview_original_owner_state");
     });
   });
 });

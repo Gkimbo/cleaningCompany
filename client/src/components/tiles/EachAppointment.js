@@ -861,10 +861,13 @@ const EachAppointment = ({
         <View style={styles.paymentFailedSection}>
           <View style={styles.paymentFailedHeader}>
             <Icon name="exclamation-triangle" size={16} color={colors.error[600]} />
-            <Text style={styles.paymentFailedTitle}>Payment Failed</Text>
+            <Text style={styles.paymentFailedTitle}>Action Required: Payment Failed</Text>
           </View>
           <Text style={styles.paymentFailedText}>
-            We couldn't process payment for this appointment. Please retry to avoid cancellation.
+            We couldn't process your payment. Your cleaner has been notified. This appointment will be automatically cancelled if payment is not resolved within 48 hours.
+          </Text>
+          <Text style={styles.paymentFailedSubtext}>
+            If you've recently updated your payment method, tap "Retry Payment" below.
           </Text>
           {paymentRetryError && (
             <View style={styles.paymentRetryError}>
@@ -872,24 +875,36 @@ const EachAppointment = ({
               <Text style={styles.paymentRetryErrorText}>{paymentRetryError}</Text>
             </View>
           )}
-          <Pressable
-            onPress={handleRetryPayment}
-            disabled={retryingPayment}
-            style={({ pressed }) => [
-              styles.retryPaymentButton,
-              pressed && styles.retryPaymentButtonPressed,
-              retryingPayment && styles.retryPaymentButtonDisabled,
-            ]}
-          >
-            {retryingPayment ? (
-              <ActivityIndicator size="small" color={colors.neutral[0]} />
-            ) : (
-              <>
-                <Icon name="credit-card" size={14} color={colors.neutral[0]} />
-                <Text style={styles.retryPaymentButtonText}>Retry Payment</Text>
-              </>
-            )}
-          </Pressable>
+          <View style={styles.paymentFailedButtons}>
+            <Pressable
+              onPress={() => navigate("/client/billing")}
+              style={({ pressed }) => [
+                styles.updatePaymentButton,
+                pressed && styles.updatePaymentButtonPressed,
+              ]}
+            >
+              <Icon name="pencil" size={14} color={colors.error[600]} />
+              <Text style={styles.updatePaymentButtonText}>Update Payment Method</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleRetryPayment}
+              disabled={retryingPayment}
+              style={({ pressed }) => [
+                styles.retryPaymentButton,
+                pressed && styles.retryPaymentButtonPressed,
+                retryingPayment && styles.retryPaymentButtonDisabled,
+              ]}
+            >
+              {retryingPayment ? (
+                <ActivityIndicator size="small" color={colors.neutral[0]} />
+              ) : (
+                <>
+                  <Icon name="credit-card" size={14} color={colors.neutral[0]} />
+                  <Text style={styles.retryPaymentButtonText}>Retry Payment</Text>
+                </>
+              )}
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -2027,8 +2042,37 @@ const styles = StyleSheet.create({
   paymentFailedText: {
     fontSize: typography.fontSize.sm,
     color: colors.error[600],
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     lineHeight: 20,
+  },
+  paymentFailedSubtext: {
+    fontSize: typography.fontSize.xs,
+    color: colors.error[500],
+    marginBottom: spacing.md,
+    fontStyle: "italic",
+  },
+  paymentFailedButtons: {
+    gap: spacing.sm,
+  },
+  updatePaymentButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.neutral[0],
+    borderWidth: 1,
+    borderColor: colors.error[300],
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
+  },
+  updatePaymentButtonPressed: {
+    backgroundColor: colors.error[50],
+  },
+  updatePaymentButtonText: {
+    color: colors.error[600],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
   paymentRetryError: {
     flexDirection: "row",

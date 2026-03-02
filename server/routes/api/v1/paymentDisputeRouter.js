@@ -142,8 +142,7 @@ paymentDisputeRouter.post("/", authenticateToken, async (req, res) => {
     // Notify owners and HR about the dispute
     const ownersAndHR = await User.findAll({
       where: {
-        type: "owner",
-        role: { [Op.in]: ["owner", "hr"] },
+        type: { [Op.in]: ["owner", "humanResources"] },
       },
     });
 

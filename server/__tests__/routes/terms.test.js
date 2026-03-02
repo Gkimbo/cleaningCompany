@@ -210,6 +210,8 @@ describe("Terms Router", () => {
         type: "client",
         termsAcceptedVersion: 1,
         privacyPolicyAcceptedVersion: 1,
+        paymentTermsAcceptedVersion: null,
+        damageProtectionAcceptedVersion: null,
       });
 
       // Mock terms query and privacy policy query (null for privacy)
@@ -230,7 +232,9 @@ describe("Terms Router", () => {
           title: "Privacy",
           contentType: "text",
           effectiveDate: new Date(),
-        });
+        })
+        .mockResolvedValueOnce(null) // No payment_terms
+        .mockResolvedValueOnce(null); // No damage_protection
 
       const response = await request(app)
         .get("/api/v1/terms/check")
@@ -250,6 +254,8 @@ describe("Terms Router", () => {
         type: "client",
         termsAcceptedVersion: 2,
         privacyPolicyAcceptedVersion: 1,
+        paymentTermsAcceptedVersion: null,
+        damageProtectionAcceptedVersion: null,
       });
 
       // Mock both terms and privacy policy queries with matching versions
@@ -269,7 +275,9 @@ describe("Terms Router", () => {
           title: "Privacy",
           contentType: "text",
           effectiveDate: new Date(),
-        });
+        })
+        .mockResolvedValueOnce(null) // No payment_terms
+        .mockResolvedValueOnce(null); // No damage_protection
 
       const response = await request(app)
         .get("/api/v1/terms/check")
@@ -324,6 +332,8 @@ describe("Terms Router", () => {
         type: "client",
         termsAcceptedVersion: null,
         privacyPolicyAcceptedVersion: null,
+        paymentTermsAcceptedVersion: null,
+        damageProtectionAcceptedVersion: null,
       });
 
       // Mock both terms and privacy policy queries
@@ -345,7 +355,9 @@ describe("Terms Router", () => {
           contentType: "text",
           content: "Privacy content",
           effectiveDate: new Date(),
-        });
+        })
+        .mockResolvedValueOnce(null) // No payment_terms
+        .mockResolvedValueOnce(null); // No damage_protection
 
       const response = await request(app)
         .get("/api/v1/terms/check")
@@ -365,6 +377,8 @@ describe("Terms Router", () => {
         type: "client",
         termsAcceptedVersion: 1,
         privacyPolicyAcceptedVersion: null,
+        paymentTermsAcceptedVersion: null,
+        damageProtectionAcceptedVersion: null,
       });
 
       TermsAndConditions.findOne
@@ -384,7 +398,9 @@ describe("Terms Router", () => {
           contentType: "text",
           content: "Privacy content",
           effectiveDate: new Date(),
-        });
+        })
+        .mockResolvedValueOnce(null) // No payment_terms
+        .mockResolvedValueOnce(null); // No damage_protection
 
       const response = await request(app)
         .get("/api/v1/terms/check")
@@ -404,6 +420,8 @@ describe("Terms Router", () => {
         type: "client",
         termsAcceptedVersion: 1,
         privacyPolicyAcceptedVersion: 1,
+        paymentTermsAcceptedVersion: null, // No payment terms to check
+        damageProtectionAcceptedVersion: null,
       });
 
       TermsAndConditions.findOne
@@ -422,7 +440,9 @@ describe("Terms Router", () => {
           title: "Privacy Policy",
           contentType: "text",
           effectiveDate: new Date(),
-        });
+        })
+        .mockResolvedValueOnce(null) // No payment_terms exists
+        .mockResolvedValueOnce(null); // No damage_protection exists
 
       const response = await request(app)
         .get("/api/v1/terms/check")

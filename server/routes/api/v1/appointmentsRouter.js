@@ -43,6 +43,7 @@ const {
   calculateScheduledEndTime,
   getAutoCompleteConfig,
 } = require("../../../services/cron/AutoCompleteMonitor");
+const { notifyInitialPaymentFailure } = require("../../../services/cron/PaymentRetryMonitor");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -2319,7 +2320,17 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
 
             if (!user || !user.stripeCustomerId) {
               console.error(`[Approve Request] No Stripe customer for appointment ${appointment.id}`);
-              await appointment.update({ paymentCaptureFailed: true });
+              await appointment.update({
+                paymentCaptureFailed: true,
+                paymentFirstFailedAt: new Date(),
+                paymentRetryCount: 0,
+              });
+              // Send initial payment failure notification
+              try {
+                await notifyInitialPaymentFailure(appointment);
+              } catch (notifyErr) {
+                console.error("Failed to send payment failure notification:", notifyErr.message);
+              }
               // Continue with approval - don't return early
             } else {
               const customer = await stripe.customers.retrieve(user.stripeCustomerId);
@@ -2327,7 +2338,17 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
 
               if (!defaultPaymentMethod) {
                 console.error(`[Approve Request] No payment method for appointment ${appointment.id}`);
-                await appointment.update({ paymentCaptureFailed: true });
+                await appointment.update({
+                  paymentCaptureFailed: true,
+                  paymentFirstFailedAt: new Date(),
+                  paymentRetryCount: 0,
+                });
+                // Send initial payment failure notification
+                try {
+                  await notifyInitialPaymentFailure(appointment);
+                } catch (notifyErr) {
+                  console.error("Failed to send payment failure notification:", notifyErr.message);
+                }
                 // Continue with approval - don't return early
               } else {
                 const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
@@ -2386,8 +2407,18 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
             `[Approve Request] Payment capture failed for appointment ${appointment.id}, will retry via cron:`,
             captureError.message
           );
-          // Mark as failed so cron can notify and retry
-          await appointment.update({ paymentCaptureFailed: true });
+          // Mark as failed and initialize retry tracking
+          await appointment.update({
+            paymentCaptureFailed: true,
+            paymentFirstFailedAt: new Date(),
+            paymentRetryCount: 0,
+          });
+          // Send initial payment failure notification
+          try {
+            await notifyInitialPaymentFailure(appointment);
+          } catch (notifyErr) {
+            console.error("Failed to send payment failure notification:", notifyErr.message);
+          }
         }
       }
 

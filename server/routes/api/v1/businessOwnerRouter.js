@@ -858,6 +858,7 @@ router.get("/my-jobs", async (req, res) => {
         assignedTo,
         assignmentId: assignment?.id || null,
         assignmentStatus: assignment?.status || null,
+        paymentCaptureFailed: apt.paymentCaptureFailed || false,
         // Available actions
         actions: {
           canSelfAssign: !isAssigned,
@@ -1080,6 +1081,7 @@ router.get("/all-jobs", async (req, res) => {
         assignedTo,
         assignmentId: assignment?.id || null,
         assignmentStatus: assignment?.status || null,
+        paymentCaptureFailed: apt.paymentCaptureFailed || false,
       };
     }).filter(Boolean);
 
@@ -1334,6 +1336,7 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
         price: appointment.price,
         paid: appointment.paid,
         paymentStatus: appointment.paymentStatus,
+        paymentCaptureFailed: appointment.paymentCaptureFailed || false,
         completed: appointment.completed,
         wasCancelled: appointment.wasCancelled,
         bringTowels: appointment.bringTowels,

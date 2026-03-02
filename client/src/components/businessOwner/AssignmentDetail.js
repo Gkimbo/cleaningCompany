@@ -721,6 +721,21 @@ const AssignmentDetail = ({ state }) => {
           </View>
         </View>
 
+        {/* Payment Issue Warning */}
+        {appointment.paymentCaptureFailed && !appointment.completed && (
+          <View style={styles.paymentWarningBanner}>
+            <View style={styles.paymentWarningIcon}>
+              <Icon name="exclamation-circle" size={18} color={colors.error[500]} />
+            </View>
+            <View style={styles.paymentWarningContent}>
+              <Text style={styles.paymentWarningTitle}>Payment Issue</Text>
+              <Text style={styles.paymentWarningText}>
+                The homeowner's payment method has failed. They've been notified to update it.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Team Section */}
         <View style={styles.section}>
           <SectionHeader
@@ -1014,6 +1029,40 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.lg,
     ...shadows.sm,
+  },
+  // Payment Warning
+  paymentWarningBanner: {
+    flexDirection: "row",
+    backgroundColor: colors.error[50],
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.error[200],
+  },
+  paymentWarningIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.error[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  paymentWarningContent: {
+    flex: 1,
+  },
+  paymentWarningTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.error[700],
+    marginBottom: 2,
+  },
+  paymentWarningText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.error[600],
+    lineHeight: 16,
   },
   heroDateSection: {
     flexDirection: "row",

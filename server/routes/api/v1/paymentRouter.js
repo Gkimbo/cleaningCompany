@@ -35,6 +35,7 @@ const {
   parseTimeWindow,
   getAutoCompleteConfig,
 } = require("../../../services/cron/AutoCompleteMonitor");
+const { notifyInitialPaymentFailure } = require("../../../services/cron/PaymentRetryMonitor");
 
 const paymentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -2470,6 +2471,46 @@ paymentRouter.post("/retry-payment", async (req, res) => {
 
     console.log(`[Retry Payment] Successfully captured payment for appointment ${appointment.id}`);
 
+    // Notify assigned cleaner(s) that payment issue is resolved
+    if (appointment.employeesAssigned && appointment.employeesAssigned.length > 0) {
+      const home = await UserHomes.findByPk(appointment.homeId);
+      const homeAddress = home
+        ? `${EncryptionService.decrypt(home.address)}, ${EncryptionService.decrypt(home.city)}`
+        : "the property";
+
+      for (const cleanerId of appointment.employeesAssigned) {
+        try {
+          const cleaner = await User.findByPk(cleanerId);
+          if (cleaner) {
+            // In-app notification
+            await NotificationService.createNotification({
+              userId: cleaner.id,
+              type: "payment_retry_success",
+              title: "Payment Issue Resolved",
+              body: `Good news! The payment issue for the job on ${appointment.date} at ${homeAddress} has been resolved. The job is confirmed.`,
+              data: {
+                appointmentId: appointment.id,
+                date: appointment.date,
+              },
+              relatedAppointmentId: appointment.id,
+            });
+
+            // Push notification
+            if (cleaner.expoPushToken) {
+              await PushNotification.sendPushNotification(
+                cleaner.expoPushToken,
+                "Payment Issue Resolved",
+                `Job on ${appointment.date} is confirmed - payment resolved!`,
+                { appointmentId: appointment.id, type: "payment_retry_success" }
+              );
+            }
+          }
+        } catch (notifyErr) {
+          console.error(`[Retry Payment] Error notifying cleaner ${cleanerId}:`, notifyErr.message);
+        }
+      }
+    }
+
     return res.json({
       success: true,
       message: "Payment successful! Your appointment is confirmed.",
@@ -2918,7 +2959,17 @@ async function runDailyPaymentCheck() {
 
               if (!defaultPaymentMethod) {
                 console.error(`No payment method on file for user ${user.id}, appointment ${appointment.id}`);
-                await appointment.update({ paymentCaptureFailed: true });
+                await appointment.update({
+                  paymentCaptureFailed: true,
+                  paymentFirstFailedAt: new Date(),
+                  paymentRetryCount: 0,
+                });
+                // Send initial payment failure notification
+                try {
+                  await notifyInitialPaymentFailure(appointment);
+                } catch (notifyErr) {
+                  console.error("Failed to send payment failure notification:", notifyErr.message);
+                }
                 continue;
               }
 
@@ -3003,8 +3054,18 @@ async function runDailyPaymentCheck() {
             }
           } catch (err) {
             console.error("Stripe capture failed:", err.message);
-            // Mark as failed so we notify homeowner
-            await appointment.update({ paymentCaptureFailed: true });
+            // Mark as failed and initialize retry tracking
+            await appointment.update({
+              paymentCaptureFailed: true,
+              paymentFirstFailedAt: new Date(),
+              paymentRetryCount: 0,
+            });
+            // Send initial payment failure notification
+            try {
+              await notifyInitialPaymentFailure(appointment);
+            } catch (notifyErr) {
+              console.error("Failed to send payment failure notification:", notifyErr.message);
+            }
           }
         } else if (appointment.paymentIntentId && diffInDays <= 1) {
           // No cleaner assigned and we're 1 day out — cancel payment & notify client

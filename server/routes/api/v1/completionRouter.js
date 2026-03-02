@@ -163,6 +163,15 @@ completionRouter.post("/submit/:appointmentId", verifyToken, async (req, res) =>
       return res.status(400).json({ error: "Payment not yet captured" });
     }
 
+    // Block completion if payment capture has failed
+    if (appointment.paymentCaptureFailed) {
+      return res.status(400).json({
+        error: "Cannot complete job - client payment issue",
+        message: "The client's payment method has failed. Please contact support or wait for the client to resolve their payment issue.",
+        paymentFailed: true,
+      });
+    }
+
     // Calculate auto-approval expiration
     const autoApprovalExpiresAt = await calculateAutoApprovalExpiration();
 

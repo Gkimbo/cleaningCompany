@@ -622,8 +622,8 @@ describe("AcceptEmployeeInvitationScreen", () => {
         fireEvent.changeText(getByTestId("Phone Number"), "555-123-4567");
       });
 
-      // Accept terms (click checkbox to open modal, then accept)
-      const checkboxes = getAllByTestId("checkbox");
+      // Accept all 3 required legal documents (Terms, Privacy, Payment Terms)
+      let checkboxes = getAllByTestId("checkbox");
       await act(async () => {
         fireEvent.press(checkboxes[0]); // Terms checkbox
       });
@@ -637,8 +637,21 @@ describe("AcceptEmployeeInvitationScreen", () => {
       });
 
       // Accept privacy
+      checkboxes = getAllByTestId("checkbox");
       await act(async () => {
         fireEvent.press(checkboxes[1]); // Privacy checkbox
+      });
+      await waitFor(() => {
+        expect(getByTestId("terms-modal")).toBeTruthy();
+      });
+      await act(async () => {
+        fireEvent.press(getByTestId("accept-terms"));
+      });
+
+      // Accept payment terms
+      checkboxes = getAllByTestId("checkbox");
+      await act(async () => {
+        fireEvent.press(checkboxes[2]); // Payment Terms checkbox
       });
       await waitFor(() => {
         expect(getByTestId("terms-modal")).toBeTruthy();
@@ -684,7 +697,8 @@ describe("AcceptEmployeeInvitationScreen", () => {
       });
 
       // Accept terms and privacy
-      const checkboxes = getAllByTestId("checkbox");
+      // Accept all 3 required legal documents
+      let checkboxes = getAllByTestId("checkbox");
       await act(async () => {
         fireEvent.press(checkboxes[0]);
       });
@@ -694,8 +708,19 @@ describe("AcceptEmployeeInvitationScreen", () => {
       await act(async () => {
         fireEvent.press(getByTestId("accept-terms"));
       });
+      checkboxes = getAllByTestId("checkbox");
       await act(async () => {
         fireEvent.press(checkboxes[1]);
+      });
+      await waitFor(() => {
+        expect(getByTestId("terms-modal")).toBeTruthy();
+      });
+      await act(async () => {
+        fireEvent.press(getByTestId("accept-terms"));
+      });
+      checkboxes = getAllByTestId("checkbox");
+      await act(async () => {
+        fireEvent.press(checkboxes[2]); // Payment Terms
       });
       await waitFor(() => {
         expect(getByTestId("terms-modal")).toBeTruthy();
@@ -731,7 +756,8 @@ describe("AcceptEmployeeInvitationScreen", () => {
         fireEvent.changeText(getByTestId("Confirm Password *"), "AAbb@@33cc");
       });
 
-      const checkboxes = getAllByTestId("checkbox");
+      // Accept all 3 required legal documents
+      let checkboxes = getAllByTestId("checkbox");
       await act(async () => {
         fireEvent.press(checkboxes[0]);
       });
@@ -739,8 +765,17 @@ describe("AcceptEmployeeInvitationScreen", () => {
       await act(async () => {
         fireEvent.press(getByTestId("accept-terms"));
       });
+      checkboxes = getAllByTestId("checkbox");
       await act(async () => {
         fireEvent.press(checkboxes[1]);
+      });
+      await waitFor(() => getByTestId("terms-modal"));
+      await act(async () => {
+        fireEvent.press(getByTestId("accept-terms"));
+      });
+      checkboxes = getAllByTestId("checkbox");
+      await act(async () => {
+        fireEvent.press(checkboxes[2]); // Payment Terms
       });
       await waitFor(() => getByTestId("terms-modal"));
       await act(async () => {
@@ -779,8 +814,8 @@ describe("AcceptEmployeeInvitationScreen", () => {
         fireEvent.changeText(getByTestId("Confirm Password *"), "AAbb@@33cc");
       });
 
-      // Accept terms
-      const checkboxes = getAllByTestId("checkbox");
+      // Accept all 3 required legal documents
+      let checkboxes = getAllByTestId("checkbox");
       await act(async () => {
         fireEvent.press(checkboxes[0]);
       });
@@ -788,8 +823,17 @@ describe("AcceptEmployeeInvitationScreen", () => {
       await act(async () => {
         fireEvent.press(getByTestId("accept-terms"));
       });
+      checkboxes = getAllByTestId("checkbox");
       await act(async () => {
         fireEvent.press(checkboxes[1]);
+      });
+      await waitFor(() => getByTestId("terms-modal"));
+      await act(async () => {
+        fireEvent.press(getByTestId("accept-terms"));
+      });
+      checkboxes = getAllByTestId("checkbox");
+      await act(async () => {
+        fireEvent.press(checkboxes[2]); // Payment Terms
       });
       await waitFor(() => getByTestId("terms-modal"));
       await act(async () => {

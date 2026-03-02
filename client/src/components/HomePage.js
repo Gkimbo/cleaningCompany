@@ -2,43 +2,37 @@ import React, { useEffect, useState } from "react";
 import {
   Dimensions,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   Text,
   View,
-  Platform,
 } from "react-native";
 import { useNavigate } from "react-router-native";
+import { defaultPricing, usePricing } from "../context/PricingContext";
 import { cleaningCompany } from "../services/data/companyInfo";
-import { usePricing, defaultPricing } from "../context/PricingContext";
 import FetchData from "../services/fetchRequests/fetchData";
+import IncentivesService from "../services/fetchRequests/IncentivesService";
 import image1 from "../services/photos/Best-Cleaning-Service.jpeg";
-import image2 from "../services/photos/clean-laptop.jpg";
-import image3 from "../services/photos/cleaning-tech.png";
-import image4 from "../services/photos/cleaning_supplies_on_floor.jpg";
 import homePageStyles from "../services/styles/HomePageStyles";
 import {
   colors,
-  spacing,
   radius,
-  shadows,
-  typography,
   responsive,
+  shadows,
+  spacing,
+  typography,
 } from "../services/styles/theme";
-import NextAppointment from "./employeeAssignments/tiles/NextAppointment";
-import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
-import ReviewsOverview from "./reviews/ReviewsOverview";
-import GetHelpButton from "./messaging/GetHelpButton";
-import TaxFormsSection from "./tax/TaxFormsSection";
-import OwnerDashboard from "./owner/OwnerDashboard";
-import HRDashboard from "./hr/HRDashboard";
-import ITDashboard from "./it/ITDashboard";
-import ClientDashboard from "./client/ClientDashboard";
-import CleanerDashboard from "./cleaner/CleanerDashboard";
 import { EmployeeDashboard } from "./businessEmployee";
 import BusinessOwnerProfile from "./businessOwner/BusinessOwnerProfile";
+import CleanerDashboard from "./cleaner/CleanerDashboard";
+import ClientDashboard from "./client/ClientDashboard";
+import NextAppointment from "./employeeAssignments/tiles/NextAppointment";
+import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
+import HRDashboard from "./hr/HRDashboard";
 import IncentiveBanner from "./incentives/IncentiveBanner";
-import IncentivesService from "../services/fetchRequests/IncentivesService";
+import ITDashboard from "./it/ITDashboard";
+import OwnerDashboard from "./owner/OwnerDashboard";
 import FrozenAccountBanner from "./shared/FrozenAccountBanner";
 
 const HomePage = ({ state, dispatch }) => {
@@ -348,7 +342,19 @@ const HomePage = ({ state, dispatch }) => {
       icon: "calendar",
       title: "Smart Calendar Sync",
       description:
-        "Connect your AirBNB, VRBO, or any other app calendar. When guests check out, we automatically schedule the clean—no coordination required.",
+        "Connect your AirBNB, VRBO, or any other app calendar. When guests book their stay, we automatically schedule the cleaning for their checkout date — no coordination required.",
+    },
+    {
+      icon: "camera",
+      title: "Before & After Photos",
+      description:
+        "Every cleaning comes with photo documentation. See before and after pictures of each room so you always know your property is spotless and guest-ready.",
+    },
+    {
+      icon: "star",
+      title: "Priority Cleaners",
+      description:
+        "Found a cleaner you love? Mark them as a favorite and they'll get first dibs on all your future bookings — building consistency and trust for your property.",
     },
   ];
 
@@ -396,6 +402,7 @@ const HomePage = ({ state, dispatch }) => {
       shield: "🛡️",
       clock: "⏰",
       star: "⭐",
+      camera: "📸",
       "dollar-sign": "💰",
       "trending-up": "📈",
     };
@@ -987,6 +994,11 @@ const HomePage = ({ state, dispatch }) => {
             },
             {
               step: "3",
+              title: "Add Payment Method",
+              desc: "Add your payment method via Stripe",
+            },
+            {
+              step: "4",
               title: "Book Cleaning",
               desc: "Schedule with a few taps",
             },
@@ -1203,7 +1215,7 @@ const HomePage = ({ state, dispatch }) => {
                 fontSize: typography.fontSize.sm,
               }}
             >
-              Satisfaction guaranteed or we re-clean free
+              Satisfaction guaranteed
             </Text>
           </View>
         </View>

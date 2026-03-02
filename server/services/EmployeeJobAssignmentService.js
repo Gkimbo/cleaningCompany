@@ -961,6 +961,11 @@ class EmployeeJobAssignmentService {
       throw new Error("Assignment not found or cannot be started");
     }
 
+    // Block job start if payment capture has failed
+    if (assignment.appointment?.paymentCaptureFailed) {
+      throw new Error("Cannot start job - client payment issue. Please contact support or wait for the client to resolve their payment issue.");
+    }
+
     // Calculate distance from home if GPS data provided
     const { latitude, longitude } = locationData;
     let startDistanceFromHome = null;

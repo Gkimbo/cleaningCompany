@@ -1,4 +1,5 @@
 import { API_BASE } from "../config";
+import AuthEventService from "../AuthEventService";
 
 const baseURL = API_BASE.replace("/api/v1", "");
 
@@ -8,6 +9,13 @@ class OwnerDashboardService {
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      // Handle expired token
+      if (response.status === 401) {
+        AuthEventService.handleTokenExpired();
+        return fallback;
+      }
+
       if (!response.ok) {
         console.warn(`[OwnerDashboard] ${url} returned ${response.status}`);
         return fallback;

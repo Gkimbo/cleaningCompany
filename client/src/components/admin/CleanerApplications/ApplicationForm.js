@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,22 +13,22 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Application from "../../../services/fetchRequests/ApplicationClass";
+import { defaultPricing, usePricing } from "../../../context/PricingContext";
 import { API_BASE } from "../../../services/config";
+import Application from "../../../services/fetchRequests/ApplicationClass";
+import IncentivesService from "../../../services/fetchRequests/IncentivesService";
 import ApplicationFormStyles from "../../../services/styles/ApplicationFormStyles";
-import { TermsModal } from "../../terms";
 import {
   colors,
-  spacing,
   radius,
-  shadows,
-  typography,
   responsive,
+  shadows,
+  spacing,
+  typography,
 } from "../../../services/styles/theme";
-import { usePricing, defaultPricing } from "../../../context/PricingContext";
-import ReferralCodeInput from "../../referrals/ReferralCodeInput";
 import IncentiveBanner from "../../incentives/IncentiveBanner";
-import IncentivesService from "../../../services/fetchRequests/IncentivesService";
+import ReferralCodeInput from "../../referrals/ReferralCodeInput";
+import { TermsModal } from "../../terms";
 
 const US_STATES = [
   "AL",
@@ -1665,7 +1665,7 @@ const CleanerApplicationForm = () => {
             },
             {
               q: "How do I get paid?",
-              a: "Instantly! As soon as you finish a cleaning, payment is sent directly to your bank.",
+              a: "As soon as you finish a cleaning, payment is sent directly to your bank in 3-5 business days.",
             },
           ].map((faq, index) => (
             <View

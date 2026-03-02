@@ -197,8 +197,11 @@ describe("CompletionApprovalMonitor", () => {
       await processAutoApprovalsSingleCleaner();
 
       expect(NotificationService.createNotification).toHaveBeenCalledWith(
-        100,
-        expect.stringContaining("auto-approved")
+        expect.objectContaining({
+          userId: 100,
+          type: "completion_auto_approved",
+          body: expect.stringContaining("auto-approved"),
+        })
       );
       expect(Email.sendCompletionAutoApproved).toHaveBeenCalled();
       expect(PushNotification.sendPushCompletionAutoApproved).toHaveBeenCalled();
@@ -314,14 +317,20 @@ describe("CompletionApprovalMonitor", () => {
 
       // Should notify homeowner
       expect(NotificationService.createNotification).toHaveBeenCalledWith(
-        100,
-        expect.stringContaining("auto-approved")
+        expect.objectContaining({
+          userId: 100,
+          type: "completion_auto_approved",
+          body: expect.stringContaining("auto-approved"),
+        })
       );
 
       // Should notify cleaner
       expect(NotificationService.createNotification).toHaveBeenCalledWith(
-        200,
-        expect.stringContaining("auto-approved")
+        expect.objectContaining({
+          userId: 200,
+          type: "completion_approved_cleaner",
+          body: expect.stringContaining("auto-approved"),
+        })
       );
     });
   });

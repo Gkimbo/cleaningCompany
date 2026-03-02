@@ -82,6 +82,13 @@ module.exports = (sequelize, DataTypes) => {
             "it_dispute_assigned",
             "it_dispute_updated",
             "it_dispute_resolved",
+            // Unassigned appointment expiration
+            "appointment_expired_unassigned",
+            // Payment failure notifications
+            "payment_failed",
+            "payment_retry_failed",
+            "payment_retry_success",
+            "appointment_cancelled_payment",
           ],
         ],
       },

@@ -6581,6 +6581,350 @@ Kleanr Support Team`;
       console.error("❌ Error sending unassigned expired notification email:", error);
     }
   }
+
+  // =============================================
+  // PAYMENT FAILURE EMAILS
+  // =============================================
+
+  /**
+   * Send initial payment failure notification
+   */
+  static async sendPaymentFailed(email, userName, appointmentDate, homeAddress, hoursRemaining) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Payment Failed",
+        subtitle: "Action Required",
+        greeting: `Hi ${userName},`,
+        content: `
+          <p>We were unable to process the payment for your upcoming cleaning. Don't worry – we'll automatically retry over the next ${hoursRemaining} hours.</p>
+          <p>To avoid cancellation, please update your payment method in the app as soon as possible.</p>
+        `,
+        infoBox: {
+          icon: "🏠",
+          title: "Appointment Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Address", value: homeAddress },
+            { label: "Status", value: "Payment Required" },
+          ],
+        },
+        steps: {
+          title: "How to Fix This",
+          items: [
+            "Open the Kleanr app",
+            "Go to Settings → Payment Methods",
+            "Add a new card or update your existing payment method",
+            "Your payment will be retried automatically",
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: `Your appointment will be automatically cancelled if payment cannot be processed within ${hoursRemaining} hours.`,
+          bgColor: "#fef2f2",
+          borderColor: "#ef4444",
+          textColor: "#991b1b",
+        },
+        headerColor: "linear-gradient(135deg, #ef4444 0%, #f97316 100%)",
+      });
+
+      const textContent = `Hi ${userName},
+
+PAYMENT FAILED - ACTION REQUIRED
+
+We were unable to process the payment for your upcoming cleaning.
+
+APPOINTMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Address: ${homeAddress}
+Status: Payment Required
+
+HOW TO FIX THIS
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Go to Settings → Payment Methods
+3. Add a new card or update your existing payment method
+
+⚠️ WARNING: Your appointment will be automatically cancelled if payment cannot be processed within ${hoursRemaining} hours.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⚠️ Payment Failed - Action Required for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Payment failed email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment failed email:", error);
+    }
+  }
+
+  /**
+   * Send payment retry failed notification
+   */
+  static async sendPaymentRetryFailed(email, userName, appointmentDate, homeAddress, hoursRemaining, retryCount) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Payment Retry Failed",
+        subtitle: `Attempt ${retryCount} of 4`,
+        greeting: `Hi ${userName},`,
+        content: `
+          <p>We've attempted to process your payment again, but it was unsuccessful. We'll continue retrying automatically.</p>
+          <p>Please update your payment method to ensure your cleaning appointment isn't cancelled.</p>
+        `,
+        infoBox: {
+          icon: "🏠",
+          title: "Appointment at Risk",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Address", value: homeAddress },
+            { label: "Time Remaining", value: `${hoursRemaining} hours` },
+            { label: "Retry Attempts", value: `${retryCount} of 4` },
+          ],
+        },
+        warningBox: {
+          icon: "🚨",
+          text: `URGENT: Only ${hoursRemaining} hours remaining before automatic cancellation. Please update your payment method now.`,
+          bgColor: "#fef2f2",
+          borderColor: "#dc2626",
+          textColor: "#991b1b",
+        },
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
+      });
+
+      const textContent = `Hi ${userName},
+
+PAYMENT RETRY FAILED - Attempt ${retryCount} of 4
+
+We've attempted to process your payment again, but it was unsuccessful.
+
+APPOINTMENT AT RISK
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Address: ${homeAddress}
+Time Remaining: ${hoursRemaining} hours
+Retry Attempts: ${retryCount} of 4
+
+🚨 URGENT: Only ${hoursRemaining} hours remaining before automatic cancellation. Please update your payment method now.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🚨 Payment Failed Again - ${hoursRemaining}h Until Cancellation`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Payment retry failed email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment retry failed email:", error);
+    }
+  }
+
+  /**
+   * Send payment retry success notification
+   */
+  static async sendPaymentRetrySuccess(email, userName, appointmentDate) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Payment Successful!",
+        subtitle: "Your appointment is confirmed",
+        greeting: `Great news, ${userName}!`,
+        content: `
+          <p>Your payment has been successfully processed. Your cleaning appointment is now confirmed!</p>
+          <p>Thank you for updating your payment method. We look forward to making your home sparkle.</p>
+        `,
+        infoBox: {
+          icon: "✅",
+          title: "Confirmed Appointment",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Payment", value: "Successfully Processed" },
+            { label: "Status", value: "Confirmed" },
+          ],
+        },
+        headerColor: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+      });
+
+      const textContent = `Great news, ${userName}!
+
+PAYMENT SUCCESSFUL
+
+Your payment has been successfully processed. Your cleaning appointment is now confirmed!
+
+CONFIRMED APPOINTMENT
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Payment: Successfully Processed
+Status: Confirmed
+
+Thank you for your business!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Payment Successful - Appointment Confirmed for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Payment retry success email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment retry success email:", error);
+    }
+  }
+
+  /**
+   * Send appointment cancelled due to payment failure (to homeowner)
+   */
+  static async sendPaymentFailureCancellation(email, userName, appointmentDate, homeAddress) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Appointment Cancelled",
+        subtitle: "Payment Could Not Be Processed",
+        greeting: `Hi ${userName},`,
+        content: `
+          <p>Unfortunately, we had to cancel your cleaning appointment because we were unable to process your payment after multiple attempts.</p>
+          <p>We apologize for any inconvenience this may cause. Please update your payment method and book a new appointment when you're ready.</p>
+        `,
+        infoBox: {
+          icon: "❌",
+          title: "Cancelled Appointment",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Address", value: homeAddress },
+            { label: "Reason", value: "Payment Failed" },
+          ],
+        },
+        steps: {
+          title: "To Book Again",
+          items: [
+            "Open the Kleanr app",
+            "Update your payment method in Settings",
+            "Navigate to your home and tap 'Book Cleaning'",
+            "Select a new date that works for you",
+          ],
+        },
+        headerColor: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
+      });
+
+      const textContent = `Hi ${userName},
+
+APPOINTMENT CANCELLED
+
+Unfortunately, we had to cancel your cleaning appointment because we were unable to process your payment after multiple attempts.
+
+CANCELLED APPOINTMENT
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Address: ${homeAddress}
+Reason: Payment Failed
+
+TO BOOK AGAIN
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Update your payment method in Settings
+3. Navigate to your home and tap 'Book Cleaning'
+4. Select a new date that works for you
+
+We apologize for any inconvenience.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `❌ Appointment Cancelled - Payment Issue for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Payment failure cancellation email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment failure cancellation email:", error);
+    }
+  }
+
+  /**
+   * Send job cancelled notification to cleaner due to client payment issue
+   */
+  static async sendJobCancelledPaymentIssue(email, cleanerName, appointmentDate, homeAddress) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Job Cancelled",
+        subtitle: "Client Payment Issue",
+        greeting: `Hi ${cleanerName},`,
+        content: `
+          <p>We wanted to let you know that a job you were assigned to has been cancelled due to a payment issue with the client.</p>
+          <p>This is not a reflection on you – the client's payment could not be processed after multiple attempts. Your schedule has been updated automatically.</p>
+        `,
+        infoBox: {
+          icon: "📅",
+          title: "Cancelled Job",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Location", value: homeAddress },
+            { label: "Reason", value: "Client Payment Failed" },
+          ],
+        },
+        ctaText: "Your availability has been restored for this time slot. Check the app for other available jobs!",
+        headerColor: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+      });
+
+      const textContent = `Hi ${cleanerName},
+
+JOB CANCELLED - Client Payment Issue
+
+A job you were assigned to has been cancelled due to a payment issue with the client.
+
+CANCELLED JOB
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Location: ${homeAddress}
+Reason: Client Payment Failed
+
+This is not a reflection on you. Your availability has been restored for this time slot.
+
+Check the app for other available jobs!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Job Cancelled - ${formatDate(appointmentDate)} (Client Payment Issue)`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Job cancelled payment issue email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending job cancelled payment issue email:", error);
+    }
+  }
 }
 
 module.exports = Email;

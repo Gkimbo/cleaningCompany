@@ -357,6 +357,21 @@ const BusinessOwnerJobDetails = ({ state }) => {
         </View>
       </View>
 
+      {/* Payment Issue Warning */}
+      {job.paymentCaptureFailed && !job.completed && (
+        <View style={styles.paymentWarningBanner}>
+          <View style={styles.paymentWarningIcon}>
+            <Icon name="exclamation-circle" size={20} color="#dc2626" />
+          </View>
+          <View style={styles.paymentWarningContent}>
+            <Text style={styles.paymentWarningTitle}>Payment Issue</Text>
+            <Text style={styles.paymentWarningText}>
+              The homeowner's payment method has failed. They've been notified to update it. Job may auto-cancel if not resolved.
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Assignment Actions */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -1042,6 +1057,39 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#a7f3d0",
+  },
+  paymentWarningBanner: {
+    flexDirection: "row",
+    backgroundColor: "#fef2f2",
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  paymentWarningIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#fee2e2",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  paymentWarningContent: {
+    flex: 1,
+  },
+  paymentWarningTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#dc2626",
+    marginBottom: 2,
+  },
+  paymentWarningText: {
+    fontSize: 13,
+    color: "#7f1d1d",
+    lineHeight: 18,
   },
   priceContent: {
     gap: 2,

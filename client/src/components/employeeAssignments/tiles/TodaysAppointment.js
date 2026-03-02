@@ -397,6 +397,21 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
           </View>
         )}
 
+        {/* Payment Issue Warning for Cleaners */}
+        {appointment.paymentCaptureFailed && !appointment.completed && (
+          <View style={styles.paymentWarningBanner}>
+            <View style={styles.paymentWarningIconContainer}>
+              <Icon name="exclamation-circle" size={20} color={colors.warning[600]} />
+            </View>
+            <View style={styles.paymentWarningContent}>
+              <Text style={styles.paymentWarningTitle}>Awaiting Homeowner Payment</Text>
+              <Text style={styles.paymentWarningText}>
+                The homeowner's payment method has an issue. They've been notified to update it. This job may be cancelled if not resolved soon.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Address Card */}
         <TouchableOpacity
           style={styles.addressCard}
@@ -1493,6 +1508,36 @@ const styles = StyleSheet.create({
     color: colors.warning[600],
     fontSize: typography.fontSize.xs,
     marginTop: 2,
+  },
+
+  // Payment Warning Banner
+  paymentWarningBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.warning[50],
+    borderWidth: 1,
+    borderColor: colors.warning[300],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  paymentWarningIconContainer: {
+    paddingTop: 2,
+  },
+  paymentWarningContent: {
+    flex: 1,
+  },
+  paymentWarningTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+    marginBottom: spacing.xs,
+  },
+  paymentWarningText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[600],
+    lineHeight: 16,
   },
 
   // Review Modal

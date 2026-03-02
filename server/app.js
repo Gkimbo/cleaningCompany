@@ -27,6 +27,7 @@ const { startUnassignedReminderJob } = require("./services/cron/UnassignedRemind
 const { startExpiredRequestsJob } = require("./services/cron/ExpiredRequestsJob");
 const { startRecurringScheduleGenerationJob } = require("./services/cron/RecurringScheduleGenerationJob");
 const { startUnassignedExpiredJob } = require("./services/cron/UnassignedExpiredJob");
+const { startPaymentRetryMonitor } = require("./services/cron/PaymentRetryMonitor");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -223,5 +224,6 @@ server.listen(port, () => {
 		startExpiredRequestsJob(io); // New home request expiration (every hour)
 		startRecurringScheduleGenerationJob(); // Weekly recurring schedule appointment generation
 		startUnassignedExpiredJob(io, 24 * 60 * 60 * 1000); // Daily cleanup of past unassigned appointments
+		startPaymentRetryMonitor(io, 4 * 60 * 60 * 1000); // Payment retry processing (every 4 hours)
 	}
 });

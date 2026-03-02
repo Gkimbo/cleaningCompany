@@ -123,6 +123,53 @@ describe("Job Photos Router", () => {
       expect(response.body.error).toContain("not assigned");
     });
 
+    it("should return 400 if payment has failed when starting job", async () => {
+      // First before photo = starting the job
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        employeesAssigned: ["2"],
+        paymentCaptureFailed: true, // Payment failed
+      });
+      JobPhoto.count.mockResolvedValue(0); // No existing before photos (first photo)
+
+      const response = await request(app)
+        .post("/api/v1/job-photos/upload")
+        .set("Authorization", `Bearer ${cleanerToken}`)
+        .send(validPhotoData);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("payment issue");
+      expect(response.body.paymentFailed).toBe(true);
+    });
+
+    it("should allow uploading additional before photos when payment has failed", async () => {
+      // Already started job, uploading more before photos should be allowed
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        employeesAssigned: ["2"],
+        paymentCaptureFailed: true, // Payment failed
+      });
+      // First call: check for existing before photos (returns 1, so not first photo)
+      // Second call: check if first before photo after create (returns 2, so not first)
+      JobPhoto.count
+        .mockResolvedValueOnce(1) // Existing before photos check
+        .mockResolvedValueOnce(2); // After-create count check
+      JobPhoto.create.mockResolvedValue({
+        id: 2,
+        ...validPhotoData,
+        cleanerId: 2,
+        takenAt: new Date(),
+      });
+
+      const response = await request(app)
+        .post("/api/v1/job-photos/upload")
+        .set("Authorization", `Bearer ${cleanerToken}`)
+        .send(validPhotoData);
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+    });
+
     it("should return 400 if uploading after without before photos", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         id: 100,

@@ -680,15 +680,16 @@ describe("EachAppointment", () => {
       const { getByText } = renderWithProvider(
         <EachAppointment {...defaultProps} paymentCaptureFailed={true} />
       );
-      expect(getByText("Payment Failed")).toBeTruthy();
+      expect(getByText("Action Required: Payment Failed")).toBeTruthy();
       expect(getByText("Retry Payment")).toBeTruthy();
+      expect(getByText("Update Payment Method")).toBeTruthy();
     });
 
     it("does not show payment failed when paymentCaptureFailed is false", () => {
       const { queryByText } = renderWithProvider(
         <EachAppointment {...defaultProps} paymentCaptureFailed={false} />
       );
-      expect(queryByText("Payment Failed")).toBeNull();
+      expect(queryByText("Action Required: Payment Failed")).toBeNull();
     });
 
     it("retries payment when button is pressed", async () => {
@@ -735,7 +736,7 @@ describe("EachAppointment", () => {
 
       await waitFor(() => {
         expect(getByText("Payment successful! Your appointment is confirmed.")).toBeTruthy();
-        expect(queryByText("Payment Failed")).toBeNull();
+        expect(queryByText("Action Required: Payment Failed")).toBeNull();
       });
     });
 

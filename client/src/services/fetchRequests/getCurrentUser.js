@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE } from "../config";
+import AuthEventService from "../AuthEventService";
 
 const getCurrentUser = async (providedToken = null) => {
   const baseURL = API_BASE.replace("/api/v1", "");
@@ -20,6 +21,12 @@ const getCurrentUser = async (providedToken = null) => {
       Authorization: `Bearer ${token}`,
     },
   });
+
+  // Handle expired token - trigger logout
+  if (response.status === 401) {
+    AuthEventService.handleTokenExpired();
+    return null;
+  }
 
   if (!response.ok) {
     const errorMessage = `${response.status} (${response.statusText})`;

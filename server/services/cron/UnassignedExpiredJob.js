@@ -153,7 +153,7 @@ async function processExpiredUnassignedAppointments(io = null) {
             userId: homeowner.id,
             type: "appointment_expired_unassigned",
             title: "Appointment Auto-Cancelled",
-            message: `Your cleaning scheduled for ${appointment.date} was automatically cancelled because no cleaner was available. We apologize for the inconvenience.`,
+            body: `Your cleaning scheduled for ${appointment.date} was automatically cancelled because no cleaner was available. We apologize for the inconvenience.`,
             data: {
               appointmentId: appointment.id,
               date: appointment.date,

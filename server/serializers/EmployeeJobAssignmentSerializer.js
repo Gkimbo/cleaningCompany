@@ -103,6 +103,7 @@ class EmployeeJobAssignmentSerializer {
       scheduledDate: data.scheduledDate,
       price: data.price,
       completed: data.completed,
+      paymentCaptureFailed: data.paymentCaptureFailed || false,
     };
 
     // Include home details

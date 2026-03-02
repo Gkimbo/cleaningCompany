@@ -417,12 +417,24 @@ describe("AcceptInvitationScreen", () => {
       fireEvent.changeText(getByTestId("Confirm Password *"), "StrongPass@@11");
       fireEvent.changeText(getByTestId("Phone Number"), "555-987-6543");
 
-      const checkboxes = getAllByTestId("checkbox");
-      fireEvent.press(checkboxes[0]);
+      // Accept all 4 required legal documents
+      let checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[0]); // Terms
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
 
-      fireEvent.press(checkboxes[1]);
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[1]); // Privacy
+      await waitFor(() => getByTestId("terms-modal"));
+      fireEvent.press(getByTestId("accept-terms"));
+
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[2]); // Payment Terms
+      await waitFor(() => getByTestId("terms-modal"));
+      fireEvent.press(getByTestId("accept-terms"));
+
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[3]); // Damage Protection
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
 
@@ -436,6 +448,8 @@ describe("AcceptInvitationScreen", () => {
           addressCorrections: null,
           termsId: "terms-id-123",
           privacyPolicyId: "terms-id-123",
+          paymentTermsId: "terms-id-123",
+          damageProtectionId: "terms-id-123",
         });
       });
     });
@@ -459,11 +473,24 @@ describe("AcceptInvitationScreen", () => {
       fireEvent.changeText(getByTestId("Password *"), "StrongPass@@11");
       fireEvent.changeText(getByTestId("Confirm Password *"), "StrongPass@@11");
 
-      const checkboxes = getAllByTestId("checkbox");
-      fireEvent.press(checkboxes[0]);
+      // Accept all 4 required legal documents (Terms, Privacy, Payment Terms, Damage Protection)
+      let checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[0]); // Terms
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
-      fireEvent.press(checkboxes[1]);
+
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[1]); // Privacy
+      await waitFor(() => getByTestId("terms-modal"));
+      fireEvent.press(getByTestId("accept-terms"));
+
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[2]); // Payment Terms
+      await waitFor(() => getByTestId("terms-modal"));
+      fireEvent.press(getByTestId("accept-terms"));
+
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[3]); // Damage Protection
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
 
@@ -494,11 +521,24 @@ describe("AcceptInvitationScreen", () => {
       fireEvent.changeText(getByTestId("Password *"), "StrongPass@@11");
       fireEvent.changeText(getByTestId("Confirm Password *"), "StrongPass@@11");
 
-      const checkboxes = getAllByTestId("checkbox");
-      fireEvent.press(checkboxes[0]);
+      // Accept all 4 required legal documents
+      let checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[0]); // Terms
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
-      fireEvent.press(checkboxes[1]);
+
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[1]); // Privacy
+      await waitFor(() => getByTestId("terms-modal"));
+      fireEvent.press(getByTestId("accept-terms"));
+
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[2]); // Payment Terms
+      await waitFor(() => getByTestId("terms-modal"));
+      fireEvent.press(getByTestId("accept-terms"));
+
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[3]); // Damage Protection
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
 
@@ -529,11 +569,24 @@ describe("AcceptInvitationScreen", () => {
       fireEvent.changeText(getByTestId("Password *"), "StrongPass@@11");
       fireEvent.changeText(getByTestId("Confirm Password *"), "StrongPass@@11");
 
-      const checkboxes = getAllByTestId("checkbox");
-      fireEvent.press(checkboxes[0]);
+      // Accept all 4 required legal documents
+      let checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[0]); // Terms
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
-      fireEvent.press(checkboxes[1]);
+
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[1]); // Privacy
+      await waitFor(() => getByTestId("terms-modal"));
+      fireEvent.press(getByTestId("accept-terms"));
+
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[2]); // Payment Terms
+      await waitFor(() => getByTestId("terms-modal"));
+      fireEvent.press(getByTestId("accept-terms"));
+
+      checkboxes = getAllByTestId("checkbox");
+      fireEvent.press(checkboxes[3]); // Damage Protection
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
 

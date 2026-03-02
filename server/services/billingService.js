@@ -4,6 +4,7 @@
  */
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { notifyInitialPaymentFailure } = require("./cron/PaymentRetryMonitor");
 
 class BillingService {
   /**
@@ -126,11 +127,20 @@ class BillingService {
     } catch (error) {
       console.error("Error processing auto-payment:", error);
 
-      // Mark payment as failed
+      // Mark payment as failed and initialize retry tracking
       await appointment.update({
         paymentCaptureFailed: true,
         paymentStatus: "failed",
+        paymentFirstFailedAt: new Date(),
+        paymentRetryCount: 0,
       });
+
+      // Send initial payment failure notifications to both parties
+      try {
+        await notifyInitialPaymentFailure(appointment);
+      } catch (notifyError) {
+        console.error("Error sending payment failure notification:", notifyError);
+      }
 
       return {
         success: false,

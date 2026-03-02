@@ -1,8 +1,18 @@
 /* eslint-disable no-console */
 import { API_BASE } from "../config";
+import AuthEventService from "../AuthEventService";
 
 // Remove /api/v1 suffix since individual routes include it
 const baseURL = API_BASE.replace("/api/v1", "");
+
+// Helper to check if response is a 401 (token expired/unauthorized)
+const handleAuthError = (response) => {
+  if (response.status === 401) {
+    AuthEventService.handleTokenExpired();
+    return true;
+  }
+  return false;
+};
 
 class FetchData {
   static async get(url, user) {
@@ -12,6 +22,10 @@ class FetchData {
           Authorization: `Bearer ${user}`,
         },
       });
+
+      if (handleAuthError(response)) {
+        throw new Error("Session expired");
+      }
 
       if (!response.ok) {
         throw new Error("No data received");
@@ -33,6 +47,10 @@ class FetchData {
         },
         body: JSON.stringify(data),
       });
+
+      if (handleAuthError(response)) {
+        throw new Error("Session expired");
+      }
 
       const responseData = await response.json();
 
@@ -100,6 +118,9 @@ class FetchData {
           },
         }
       );
+      if (handleAuthError(response)) {
+        throw new Error("Session expired");
+      }
       if (!response.ok) {
         throw new Error("No data received");
       }
@@ -453,6 +474,10 @@ class FetchData {
           },
         }
       );
+
+      if (handleAuthError(response)) {
+        return { error: "Session expired" };
+      }
 
       const responseData = await response.json();
 
@@ -841,6 +866,10 @@ class FetchData {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (handleAuthError(response)) {
+        return { requestCountsByHome: {} };
+      }
 
       if (!response.ok) {
         throw new Error("Failed to fetch request counts");
