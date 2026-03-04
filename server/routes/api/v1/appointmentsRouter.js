@@ -1641,8 +1641,8 @@ appointmentRouter.get("/booking-info/:appointmentId", async (req, res) => {
       return res.status(404).json({ error: "Home not found" });
     }
 
-    const numBeds = parseInt(home.numBeds) || 0;
-    const numBaths = parseInt(home.numBaths) || 0;
+    const numBeds = parseInt(home.numBeds, 10) || 0;
+    const numBaths = parseInt(home.numBaths, 10) || 0;
     const timeToBeCompleted = home.timeToBeCompleted || "anytime";
     const cleanersNeeded = home.cleanersNeeded || 1;
 
@@ -1708,7 +1708,7 @@ appointmentRouter.get("/booking-info/:appointmentId", async (req, res) => {
     }
 
     return res.json({
-      appointmentId: parseInt(appointmentId),
+      appointmentId: parseInt(appointmentId, 10),
       homeInfo: {
         numBeds,
         numBaths,
@@ -1798,8 +1798,8 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
     // Check if home is large and requires acknowledgment
     const home = await UserHomes.findByPk(appointment.homeId);
     if (home) {
-      const numBeds = parseInt(home.numBeds) || 0;
-      const numBaths = parseInt(home.numBaths) || 0;
+      const numBeds = parseInt(home.numBeds, 10) || 0;
+      const numBaths = parseInt(home.numBaths, 10) || 0;
       const MultiCleanerService = require("../../../services/MultiCleanerService");
       const isLargeHome = await MultiCleanerService.isLargeHome(numBeds, numBaths);
 
@@ -3218,7 +3218,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
 
     // Log cancellation initiated
     await CancellationAuditService.logCancellationInitiated(
-      parseInt(id),
+      parseInt(id, 10),
       userId,
       "homeowner",
       {
@@ -3255,7 +3255,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
 
         if (defaultPaymentMethod) {
           // Log fee charge attempt
-          await CancellationAuditService.logFeeChargeAttempted(parseInt(id), cancellationFeeAmountCents, defaultPaymentMethod, req);
+          await CancellationAuditService.logFeeChargeAttempted(parseInt(id, 10), cancellationFeeAmountCents, defaultPaymentMethod, req);
 
           // Create and confirm a PaymentIntent for the cancellation fee
           console.log(`[Cancellation] Creating PaymentIntent for $${cancellationConfig.fee} (${cancellationFeeAmountCents} cents)`);
@@ -3277,7 +3277,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           console.log(`[Cancellation] PaymentIntent created: ${cancellationPaymentIntent.id}, Status: ${cancellationPaymentIntent.status}`);
 
           // Log fee charge success
-          await CancellationAuditService.logFeeChargeSucceeded(parseInt(id), cancellationFeeAmountCents, cancellationPaymentIntent.id, req);
+          await CancellationAuditService.logFeeChargeSucceeded(parseInt(id, 10), cancellationFeeAmountCents, cancellationPaymentIntent.id, req);
 
           cancellationFeeResult = {
             charged: true,
@@ -3306,7 +3306,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       } catch (stripeError) {
         console.error(`[Cancellation] Error charging cancellation fee, adding to bill:`, stripeError);
         // Log fee charge failure
-        await CancellationAuditService.logFeeChargeFailed(parseInt(id), Math.round(cancellationConfig.fee * 100), stripeError, req);
+        await CancellationAuditService.logFeeChargeFailed(parseInt(id, 10), Math.round(cancellationConfig.fee * 100), stripeError, req);
 
         // Add fee to user's bill since charge failed
         const existingBillForFee = await UserBills.findOne({ where: { userId } });
@@ -3320,7 +3320,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
         }
 
         // Log fee added to bill
-        await CancellationAuditService.logFeeAddedToBill(parseInt(id), Math.round(cancellationConfig.fee * 100), req);
+        await CancellationAuditService.logFeeAddedToBill(parseInt(id, 10), Math.round(cancellationConfig.fee * 100), req);
 
         cancellationFeeResult = {
           charged: false,
@@ -3409,7 +3409,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           });
 
           // Log refund completed
-          await CancellationAuditService.logRefundCompleted(parseInt(id), clientRefundAmount, refundResult.id, req);
+          await CancellationAuditService.logRefundCompleted(parseInt(id, 10), clientRefundAmount, refundResult.id, req);
 
           // Create payout records for cleaners (their portion minus platform fee)
           const cleanerIds = appointment.employeesAssigned || [];
@@ -3432,7 +3432,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             });
 
             // Log payout created
-            await CancellationAuditService.logPayoutCreated(parseInt(id), cleanerId, perCleanerAmount, req);
+            await CancellationAuditService.logPayoutCreated(parseInt(id, 10), cleanerId, perCleanerAmount, req);
           }
 
           cleanerPayoutResult = {
@@ -3463,7 +3463,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           });
 
           // Log full refund completed
-          await CancellationAuditService.logRefundCompleted(parseInt(id), priceInCents, refundResult.id, req);
+          await CancellationAuditService.logRefundCompleted(parseInt(id, 10), priceInCents, refundResult.id, req);
 
           await appointment.update({ paymentStatus: "refunded" });
         } else if (paymentIntent && paymentIntent.status === "requires_capture") {
@@ -3635,7 +3635,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
 
     // Create ledger entries for the cancellation
     try {
-      await JobLedgerService.recordCancellation(parseInt(id), {
+      await JobLedgerService.recordCancellation(parseInt(id, 10), {
         homeownerId: userId,
         refundAmount: refundResult?.amount || 0,
         refundPercentage,
@@ -3683,7 +3683,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     };
 
     await CancellationAuditService.logCancellationConfirmed(
-      parseInt(id),
+      parseInt(id, 10),
       userId,
       "homeowner",
       {
@@ -3878,7 +3878,7 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
           const futureAppointment = assignment.appointment;
 
           // Skip the current appointment being cancelled (already handled below)
-          if (futureAppointment.id === parseInt(id)) continue;
+          if (futureAppointment.id === parseInt(id, 10)) continue;
 
           // Remove from employeesAssigned array
           let futureEmployees = Array.isArray(futureAppointment.employeesAssigned)

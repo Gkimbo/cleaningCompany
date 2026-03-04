@@ -309,18 +309,18 @@ ownerDashboardRouter.get(
 
       res.json({
         current: {
-          todayCents: parseInt(todayEarnings?.earnings) || 0,
-          weekCents: parseInt(weekEarnings?.earnings) || 0,
-          monthCents: parseInt(monthEarnings?.earnings) || 0,
-          yearCents: parseInt(yearlyEarnings?.totalEarnings) || 0,
-          yearNetCents: parseInt(yearlyEarnings?.netEarnings) || 0,
-          pendingCents: parseInt(pendingEarnings?.pending) || 0,
-          transactionCount: parseInt(yearlyEarnings?.transactionCount) || 0,
+          todayCents: parseInt(todayEarnings?.earnings, 10) || 0,
+          weekCents: parseInt(weekEarnings?.earnings, 10) || 0,
+          monthCents: parseInt(monthEarnings?.earnings, 10) || 0,
+          yearCents: parseInt(yearlyEarnings?.totalEarnings, 10) || 0,
+          yearNetCents: parseInt(yearlyEarnings?.netEarnings, 10) || 0,
+          pendingCents: parseInt(pendingEarnings?.pending, 10) || 0,
+          transactionCount: parseInt(yearlyEarnings?.transactionCount, 10) || 0,
         },
         monthly: (monthlyEarnings || []).map((m) => ({
           month: m.month,
-          earningsCents: parseInt(m.earnings) || 0,
-          transactions: parseInt(m.transactions) || 0,
+          earningsCents: parseInt(m.earnings, 10) || 0,
+          transactions: parseInt(m.transactions, 10) || 0,
         })),
       });
     } catch (error) {
@@ -506,9 +506,9 @@ ownerDashboardRouter.get(
           };
         }
         if (row.type === "cleaner") {
-          growthByMonth[monthKey].cleaners = parseInt(row.count) || 0;
+          growthByMonth[monthKey].cleaners = parseInt(row.count, 10) || 0;
         } else {
-          growthByMonth[monthKey].homeowners = parseInt(row.count) || 0;
+          growthByMonth[monthKey].homeowners = parseInt(row.count, 10) || 0;
         }
       });
 
@@ -631,7 +631,7 @@ ownerDashboardRouter.get(
         },
         monthly: (appointmentsByMonth || []).map((m) => ({
           month: m.month,
-          count: parseInt(m.count) || 0,
+          count: parseInt(m.count, 10) || 0,
           revenueCents: Math.round(parseFloat(m.revenue || 0) * 100),
         })),
       });
@@ -697,16 +697,19 @@ ownerDashboardRouter.get(
           where: { userId: req.user.id },
         });
 
-        for (const p of participations) {
-          const count = await Message.count({
-            where: {
-              conversationId: p.conversationId,
-              createdAt: { [Op.gt]: p.lastReadAt || new Date(0) },
-              senderId: { [Op.ne]: req.user.id },
-            },
-          });
-          unreadCount += count;
-        }
+        // Parallelize unread count queries instead of sequential N+1
+        const unreadCounts = await Promise.all(
+          participations.map((p) =>
+            Message.count({
+              where: {
+                conversationId: p.conversationId,
+                createdAt: { [Op.gt]: p.lastReadAt || new Date(0) },
+                senderId: { [Op.ne]: req.user.id },
+              },
+            })
+          )
+        );
+        unreadCount = unreadCounts.reduce((sum, count) => sum + count, 0);
       } catch (unreadError) {
         console.error("[Owner Dashboard] Unread count error:", unreadError.message);
       }
@@ -992,7 +995,7 @@ ownerDashboardRouter.get(
       }).catch(() => ({ avgLogins: 0, totalLogins: 0 }));
 
       const avgLoginsPerUser = parseFloat(loginStats?.avgLogins || 0).toFixed(1);
-      const totalLogins = parseInt(loginStats?.totalLogins || 0);
+      const totalLogins = parseInt(loginStats?.totalLogins || 0, 10);
 
       // Returning user rate: % of users who logged in more than once
       const returningUserRate = usersWhoLoggedIn > 0
@@ -1020,7 +1023,7 @@ ownerDashboardRouter.get(
         raw: true,
       }).catch(() => []);
 
-      const totalDevices = deviceCounts.reduce((sum, d) => sum + parseInt(d.count || 0), 0);
+      const totalDevices = deviceCounts.reduce((sum, d) => sum + parseInt(d.count || 0, 10), 0);
 
       const deviceBreakdown = {
         mobile: 0,
@@ -1031,7 +1034,7 @@ ownerDashboardRouter.get(
       if (totalDevices > 0) {
         deviceCounts.forEach((d) => {
           const type = d.lastDeviceType;
-          const percentage = Math.round((parseInt(d.count) / totalDevices) * 100);
+          const percentage = Math.round((parseInt(d.count, 10) / totalDevices) * 100);
           if (type === "mobile") deviceBreakdown.mobile = percentage;
           else if (type === "desktop") deviceBreakdown.desktop = percentage;
           else if (type === "tablet") deviceBreakdown.tablet = percentage;
@@ -1172,8 +1175,8 @@ ownerDashboardRouter.get(
 
         costPerBooking = {
           avgFeeCents: Math.round(parseFloat(platformEarningsStats?.avgFee || 0)),
-          totalFeeCents: parseInt(platformEarningsStats?.totalFee || 0),
-          bookingCount: parseInt(platformEarningsStats?.count || 0),
+          totalFeeCents: parseInt(platformEarningsStats?.totalFee || 0, 10),
+          bookingCount: parseInt(platformEarningsStats?.count || 0, 10),
         };
       } catch (err) {
         console.error("[Business Metrics] Cost per booking error:", err.message);
@@ -1196,7 +1199,7 @@ ownerDashboardRouter.get(
         });
 
         const totalHomeowners = bookingCounts.length;
-        const repeatBookers = bookingCounts.filter((u) => parseInt(u.bookingCount) > 1).length;
+        const repeatBookers = bookingCounts.filter((u) => parseInt(u.bookingCount, 10) > 1).length;
         const singleBookers = totalHomeowners - repeatBookers;
 
         repeatBookingRate = {
@@ -1225,12 +1228,12 @@ ownerDashboardRouter.get(
         });
 
         const totalHomeowners = bookingCounts.length;
-        const frequentBookers = bookingCounts.filter((u) => parseInt(u.bookingCount) >= 5).length;
+        const frequentBookers = bookingCounts.filter((u) => parseInt(u.bookingCount, 10) >= 5).length;
         const regularBookers = bookingCounts.filter((u) => {
-          const count = parseInt(u.bookingCount);
+          const count = parseInt(u.bookingCount, 10);
           return count >= 3 && count < 5;
         }).length;
-        const occasionalBookers = bookingCounts.filter((u) => parseInt(u.bookingCount) < 3).length;
+        const occasionalBookers = bookingCounts.filter((u) => parseInt(u.bookingCount, 10) < 3).length;
 
         subscriptionRate = {
           rate: totalHomeowners > 0 ? Math.round((frequentBookers / totalHomeowners) * 100) : 0,
@@ -1282,9 +1285,10 @@ ownerDashboardRouter.get(
 
         churn = {
           homeownerCancellations: {
-            usersWithCancellations: parseInt(billsWithCancellations?.[0]?.count || 0),
+            usersWithCancellations: parseInt(billsWithCancellations?.[0]?.count || 0, 10),
             // cancellationFee is stored in dollars, convert to cents for frontend
-            totalFeeCents: parseInt(billsWithCancellations?.[0]?.totalFees || 0) * 100,
+            // Use parseFloat + Math.round to avoid truncating decimal cents
+            totalFeeCents: Math.round(parseFloat(billsWithCancellations?.[0]?.totalFees || 0) * 100),
           },
           cleanerCancellations: {
             total: cleanerCancellationReviews,
@@ -1340,39 +1344,50 @@ ownerDashboardRouter.get(
           raw: true,
         });
 
-        // Get per-cleaner stats (top performers)
-        const cleanerStatsPromises = cleaners.slice(0, 20).map(async (cleaner) => {
-          const completedByThisCleaner = await UserAppointments.count({
-            where: {
-              completed: true,
-              employeesAssigned: { [Op.contains]: [cleaner.id.toString()] },
-            },
-          }).catch(() => 0);
+        // Get per-cleaner stats using a single aggregated query (avoid N+1)
+        const cleanerIds = cleaners.map(c => c.id.toString());
+        const today = now.toISOString().split("T")[0];
 
-          const assignedToThisCleaner = await UserAppointments.count({
-            where: {
-              hasBeenAssigned: true,
-              employeesAssigned: { [Op.contains]: [cleaner.id.toString()] },
-              [Op.or]: [
-                { completed: true },
-                { date: { [Op.lt]: now.toISOString().split("T")[0] } },
-              ],
-            },
-          }).catch(() => 0);
+        // Single query to get completed and assigned counts for all cleaners
+        const cleanerStatsRaw = await sequelize.query(
+          `SELECT
+            cleaner_id,
+            COUNT(*) FILTER (WHERE completed = true) as completed_count,
+            COUNT(*) as assigned_count
+          FROM "UserAppointments", unnest("employeesAssigned") as cleaner_id
+          WHERE "hasBeenAssigned" = true
+            AND cleaner_id = ANY(:cleanerIds)
+            AND (completed = true OR date < :today)
+          GROUP BY cleaner_id`,
+          {
+            replacements: { cleanerIds, today },
+            type: sequelize.QueryTypes.SELECT,
+          }
+        ).catch(() => []);
 
+        // Build a map for quick lookup
+        const statsMap = new Map();
+        cleanerStatsRaw.forEach(row => {
+          statsMap.set(row.cleaner_id, {
+            completed: parseInt(row.completed_count, 10) || 0,
+            assigned: parseInt(row.assigned_count, 10) || 0,
+          });
+        });
+
+        // Map cleaners to their stats (limit to top 20 for response size)
+        const cleanerStats = cleaners.slice(0, 20).map(cleaner => {
+          const stats = statsMap.get(cleaner.id.toString()) || { completed: 0, assigned: 0 };
           return {
             id: cleaner.id,
             username: cleaner.username,
             rating: parseFloat(cleaner.cleanerRating) || 0,
-            completed: completedByThisCleaner,
-            assigned: assignedToThisCleaner,
-            completionRate: assignedToThisCleaner > 0
-              ? Math.round((completedByThisCleaner / assignedToThisCleaner) * 100)
+            completed: stats.completed,
+            assigned: stats.assigned,
+            completionRate: stats.assigned > 0
+              ? Math.round((stats.completed / stats.assigned) * 100)
               : 100,
           };
         });
-
-        const cleanerStats = await Promise.all(cleanerStatsPromises);
 
         cleanerReliability = {
           overallCompletionRate: completionRate,
@@ -1487,7 +1502,7 @@ ownerDashboardRouter.get("/stripe-balance", verifyOwner, async (req, res) => {
 
     const availableBalance = balance.available.reduce((sum, b) => sum + b.amount, 0);
     const pendingBalance = balance.pending.reduce((sum, b) => sum + b.amount, 0);
-    const pendingWithdrawalAmount = parseInt(pendingWithdrawals[0]?.totalPending) || 0;
+    const pendingWithdrawalAmount = parseInt(pendingWithdrawals?.[0]?.totalPending, 10) || 0;
 
     logger.info("StripeBalance", `Available: ${availableBalance} cents, Pending: ${pendingBalance} cents`);
 
@@ -1503,7 +1518,7 @@ ownerDashboardRouter.get("/stripe-balance", verifyOwner, async (req, res) => {
       pendingWithdrawals: {
         cents: pendingWithdrawalAmount,
         dollars: (pendingWithdrawalAmount / 100).toFixed(2),
-        count: parseInt(pendingWithdrawals[0]?.pendingCount) || 0,
+        count: parseInt(pendingWithdrawals?.[0]?.pendingCount, 10) || 0,
       },
       withdrawableBalance: {
         cents: availableBalance - pendingWithdrawalAmount,
@@ -1526,9 +1541,13 @@ ownerDashboardRouter.get("/withdrawals", verifyOwner, async (req, res) => {
   try {
     const { limit = 20, offset = 0, status } = req.query;
 
+    // Bounds checking for pagination
+    const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 200);
+    const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
+
     const history = await OwnerWithdrawal.getHistory({
-      limit: parseInt(limit),
-      offset: parseInt(offset),
+      limit: parsedLimit,
+      offset: parsedOffset,
       status,
     });
 
@@ -1596,7 +1615,7 @@ ownerDashboardRouter.post("/withdraw", financialLimiter, verifyOwner, async (req
       transaction,
       lock: transaction.LOCK.UPDATE, // Row-level lock
     });
-    const pendingAmount = parseInt(pendingWithdrawals[0]?.totalPending) || 0;
+    const pendingAmount = parseInt(pendingWithdrawals?.[0]?.totalPending, 10) || 0;
     const withdrawableBalance = availableBalance - pendingAmount;
 
     if (amount > withdrawableBalance) {
@@ -1889,6 +1908,10 @@ ownerDashboardRouter.get("/priority-perks/history", verifyOwner, async (req, res
 
     const { limit = 50, offset = 0 } = req.query;
 
+    // Bounds checking for pagination
+    const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+    const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
+
     const history = await PreferredPerksConfigHistory.findAll({
       include: [{
         model: User,
@@ -1896,8 +1919,8 @@ ownerDashboardRouter.get("/priority-perks/history", verifyOwner, async (req, res
         attributes: ["id", "firstName", "lastName", "username"],
       }],
       order: [["createdAt", "DESC"]],
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
+      limit: parsedLimit,
+      offset: parsedOffset,
     });
 
     const formattedHistory = history.map((entry) => ({
@@ -1998,7 +2021,8 @@ ownerDashboardRouter.get("/cleaners", verifyOwner, async (req, res) => {
 
     // Fetch metrics for all cleaners in parallel
     const cleanerIds = cleaners.map((c) => c.id);
-    const cleanerUsernames = cleaners.map((c) => c.username);
+    // employeesAssigned stores user IDs as strings, not usernames
+    const cleanerIdStrings = cleanerIds.map((id) => String(id));
 
     // Get job counts and earnings for each cleaner
     // NOTE: This query is for the PLATFORM OWNER dashboard, which should see ALL cleaners.
@@ -2010,7 +2034,7 @@ ownerDashboardRouter.get("/cleaners", verifyOwner, async (req, res) => {
     let jobMetrics = [];
     let reviewMetrics = [];
 
-    if (cleanerUsernames.length > 0) {
+    if (cleanerIdStrings.length > 0) {
       [jobMetrics, reviewMetrics] = await Promise.all([
         // Job metrics - filter to only appointments containing at least one of our cleaners
         // Uses PostgreSQL array overlap operator (&&) for efficient filtering
@@ -2023,10 +2047,10 @@ ownerDashboardRouter.get("/cleaners", verifyOwner, async (req, res) => {
             SUM(CASE WHEN ua."completed" = true AND ua."createdAt" >= :startOfMonth THEN CAST(ua."price" AS INTEGER) ELSE 0 END) as monthly_earnings
           FROM "UserAppointments" ua
           WHERE ua."hasBeenAssigned" = true
-            AND ua."employeesAssigned" && ARRAY[:cleanerUsernames]::varchar[]
+            AND ua."employeesAssigned" && ARRAY[:cleanerIdStrings]::varchar[]
           GROUP BY ua."employeesAssigned"`,
           {
-            replacements: { startOfMonth, cleanerUsernames },
+            replacements: { startOfMonth, cleanerIdStrings },
             type: sequelize.QueryTypes.SELECT,
           }
         ),
@@ -2052,14 +2076,15 @@ ownerDashboardRouter.get("/cleaners", verifyOwner, async (req, res) => {
     reviewMetrics.forEach((r) => {
       reviewMap[r.userId] = {
         avgRating: parseFloat(r.avgRating) || 0,
-        reviewCount: parseInt(r.reviewCount) || 0,
+        reviewCount: parseInt(r.reviewCount, 10) || 0,
       };
     });
 
     // Calculate job metrics per cleaner (from employeesAssigned array)
+    // employeesAssigned stores user IDs as strings, so use ID strings as keys
     const jobMap = {};
-    cleanerUsernames.forEach((username) => {
-      jobMap[username] = {
+    cleanerIdStrings.forEach((idStr) => {
+      jobMap[idStr] = {
         totalJobs: 0,
         completedJobs: 0,
         totalEarnings: 0,
@@ -2068,23 +2093,23 @@ ownerDashboardRouter.get("/cleaners", verifyOwner, async (req, res) => {
     });
     jobMetrics.forEach((row) => {
       const assigned = row.employeesAssigned || [];
-      assigned.forEach((username) => {
-        if (jobMap[username]) {
-          jobMap[username].totalJobs += parseInt(row.total_jobs) || 0;
-          jobMap[username].completedJobs += parseInt(row.completed_jobs) || 0;
+      assigned.forEach((idStr) => {
+        if (jobMap[idStr]) {
+          jobMap[idStr].totalJobs += parseInt(row.total_jobs, 10) || 0;
+          jobMap[idStr].completedJobs += parseInt(row.completed_jobs, 10) || 0;
           // Split earnings among assigned cleaners
           const share = assigned.length > 0 ? 1 / assigned.length : 1;
-          jobMap[username].totalEarnings +=
-            Math.round((parseInt(row.total_earnings) || 0) * share);
-          jobMap[username].monthlyEarnings +=
-            Math.round((parseInt(row.monthly_earnings) || 0) * share);
+          jobMap[idStr].totalEarnings +=
+            Math.round((parseInt(row.total_earnings, 10) || 0) * share);
+          jobMap[idStr].monthlyEarnings +=
+            Math.round((parseInt(row.monthly_earnings, 10) || 0) * share);
         }
       });
     });
 
     const serializedCleaners = cleaners.map((c) => {
       const reviews = reviewMap[c.id] || { avgRating: 0, reviewCount: 0 };
-      const jobs = jobMap[c.username] || {
+      const jobs = jobMap[String(c.id)] || {
         totalJobs: 0,
         completedJobs: 0,
         totalEarnings: 0,
@@ -2462,7 +2487,7 @@ ownerDashboardRouter.post(
       const io = req.app.get("io");
       try {
         await NotificationService.notifyUser({
-          userId: parseInt(cleanerId),
+          userId: parseInt(cleanerId, 10),
           type: "account_unfrozen",
           title: "Account Restored",
           message:
@@ -2525,7 +2550,7 @@ ownerDashboardRouter.post(
       }
 
       const result = await HomeownerFreezeService.issueWarning(
-        parseInt(homeownerId),
+        parseInt(homeownerId, 10),
         reason.trim(),
         req.user.id,
         io
@@ -2574,7 +2599,7 @@ ownerDashboardRouter.post(
       }
 
       const result = await HomeownerFreezeService.freezeHomeowner(
-        parseInt(homeownerId),
+        parseInt(homeownerId, 10),
         reason.trim(),
         req.user.id,
         io
@@ -2617,7 +2642,7 @@ ownerDashboardRouter.post(
       const io = req.app.get("io");
 
       const result = await HomeownerFreezeService.unfreezeHomeowner(
-        parseInt(homeownerId),
+        parseInt(homeownerId, 10),
         req.user.id,
         io
       );
@@ -2655,7 +2680,7 @@ ownerDashboardRouter.get(
       const { homeownerId } = req.params;
 
       const status = await HomeownerFreezeService.getFreezeStatus(
-        parseInt(homeownerId)
+        parseInt(homeownerId, 10)
       );
 
       return res.status(200).json(status);
@@ -2707,9 +2732,10 @@ ownerDashboardRouter.get(
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
       // Get all appointments where this cleaner was assigned
+      // employeesAssigned stores user IDs as strings, not usernames
       const appointments = await UserAppointments.findAll({
         where: {
-          employeesAssigned: { [Op.contains]: [cleaner.username] },
+          employeesAssigned: { [Op.contains]: [String(cleaner.id)] },
         },
         attributes: ["id", "completed", "price", "date", "createdAt"],
       });
@@ -2720,12 +2746,12 @@ ownerDashboardRouter.get(
       const reliabilityScore =
         totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : null;
 
-      // Calculate earnings
+      // Calculate earnings (price is stored as string dollars, e.g., "150.50")
       let totalEarnings = 0;
       let monthlyEarnings = 0;
       appointments.forEach((a) => {
         if (a.completed) {
-          const price = parseInt(a.price) || 0;
+          const price = parseFloat(a.price) || 0;
           totalEarnings += price;
           // Use appointment date (not createdAt) for monthly earnings calculation
           if (new Date(a.date) >= startOfMonth) {
@@ -2733,7 +2759,10 @@ ownerDashboardRouter.get(
           }
         }
       });
-      const avgPerJob = completedJobs > 0 ? Math.round(totalEarnings / completedJobs) : 0;
+      // Round to 2 decimal places for dollar amounts
+      totalEarnings = Math.round(totalEarnings * 100) / 100;
+      monthlyEarnings = Math.round(monthlyEarnings * 100) / 100;
+      const avgPerJob = completedJobs > 0 ? Math.round((totalEarnings / completedJobs) * 100) / 100 : 0;
 
       // Get reviews
       const reviews = await UserReviews.findAll({
@@ -2796,7 +2825,11 @@ ownerDashboardRouter.get(
     try {
       const { cleanerId } = req.params;
       const { page = 1, limit = 20, status = "all" } = req.query;
-      const offset = (parseInt(page) - 1) * parseInt(limit);
+
+      // Bounds checking for pagination
+      const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
+      const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 200);
+      const offset = (parsedPage - 1) * parsedLimit;
 
       const cleaner = await User.findByPk(cleanerId, {
         attributes: ["id", "username"],
@@ -2807,8 +2840,9 @@ ownerDashboardRouter.get(
       }
 
       // Build where clause
+      // employeesAssigned stores user IDs as strings, not usernames
       const where = {
-        employeesAssigned: { [Op.contains]: [cleaner.username] },
+        employeesAssigned: { [Op.contains]: [String(cleaner.id)] },
       };
 
       if (status === "completed") {
@@ -2830,7 +2864,7 @@ ownerDashboardRouter.get(
           },
         ],
         order: [["date", "DESC"]],
-        limit: parseInt(limit),
+        limit: parsedLimit,
         offset,
       });
 
@@ -2856,17 +2890,17 @@ ownerDashboardRouter.get(
         homeCity: a.home ? a.home.city : null,
         homeState: a.home ? a.home.state : null,
         status: a.completed ? "completed" : "incomplete",
-        price: parseInt(a.price) || 0,
+        price: parseFloat(a.price) || 0,
         rating: reviewMap[a.id] || null,
       }));
 
       return res.status(200).json({
         jobs,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
+          page: parsedPage,
+          limit: parsedLimit,
           total: count,
-          totalPages: Math.ceil(count / parseInt(limit)),
+          totalPages: Math.ceil(count / parsedLimit),
         },
       });
     } catch (error) {
@@ -2919,7 +2953,7 @@ ownerDashboardRouter.post(
       const io = req.app.get("io");
       try {
         await NotificationService.notifyUser({
-          userId: parseInt(cleanerId),
+          userId: parseInt(cleanerId, 10),
           type: "warning_issued",
           title: `${severity === "major" ? "Major" : "Minor"} Warning Issued`,
           message: `You have received a ${severity} warning: ${reason.trim()}`,

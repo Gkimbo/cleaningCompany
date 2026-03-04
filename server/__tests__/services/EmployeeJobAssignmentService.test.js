@@ -637,7 +637,7 @@ describe("EmployeeJobAssignmentService", () => {
         payType: "percentage",
         appointmentId: 100,
         startedAt: new Date(),
-        appointment: { id: 100, price: 15000 }, // $150.00 job
+        appointment: { id: 100, price: "150.00" }, // $150.00 job
         update: jest.fn(),
       };
       EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
@@ -667,7 +667,7 @@ describe("EmployeeJobAssignmentService", () => {
         payType: "percentage",
         appointmentId: 100,
         startedAt: new Date(),
-        appointment: { id: 100, price: 20000 }, // $200.00 job
+        appointment: { id: 100, price: "200.00" }, // $200.00 job
         update: jest.fn(),
       };
       EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);

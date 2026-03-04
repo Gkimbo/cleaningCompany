@@ -236,19 +236,6 @@ router.get("/employees/for-job/:appointmentId", async (req, res) => {
         totalCleaners
       );
 
-      // Debug logging for first employee
-      if (employees.indexOf(emp) === 0) {
-        console.log("[employees-for-job] Pay calculation inputs:", {
-          numBeds,
-          numBaths,
-          totalCleaners,
-          estimatedHours,
-          jobPriceInCents,
-          employeePayType: emp.payType,
-          employeeHourlyRate: emp.defaultHourlyRate,
-        });
-      }
-
       const { payAmount, payType } = EmployeeJobAssignmentService.calculateEmployeePay(
         emp,
         jobPriceInCents,
@@ -646,10 +633,23 @@ router.post("/assignments", async (req, res) => {
       return res.status(400).json({ error: "Employee ID and appointment ID are required" });
     }
 
+    // Validate payAmount if provided
+    let validatedPayAmount = 0;
+    if (payAmount !== undefined && payAmount !== null) {
+      const parsedPayAmount = parseFloat(payAmount);
+      if (isNaN(parsedPayAmount)) {
+        return res.status(400).json({ error: "Pay amount must be a valid number" });
+      }
+      if (parsedPayAmount < 0) {
+        return res.status(400).json({ error: "Pay amount cannot be negative" });
+      }
+      validatedPayAmount = Math.round(parsedPayAmount);
+    }
+
     const io = req.app.get("io");
     const assignment = await EmployeeJobAssignmentService.assignEmployeeToJob(
       req.businessOwnerId,
-      { employeeId, appointmentId, payAmount: Math.floor(payAmount || 0), payType },
+      { employeeId, appointmentId, payAmount: validatedPayAmount, payType },
       io
     );
 
@@ -667,7 +667,7 @@ router.get("/assignments/:assignmentId", async (req, res) => {
   try {
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
-        id: parseInt(req.params.assignmentId),
+        id: parseInt(req.params.assignmentId, 10),
         businessOwnerId: req.businessOwnerId,
       },
       include: [
@@ -732,23 +732,6 @@ router.get("/assignments/:assignmentId", async (req, res) => {
     const assignmentsWithCalculatedPay = allAssignments.map((a, idx) => {
       const serialized = EmployeeJobAssignmentSerializer.serializeOne(a);
 
-      // Debug logging for first assignment
-      if (idx === 0) {
-        console.log("[assignment-detail] Calculating pay for assignment:", {
-          numBeds,
-          numBaths,
-          totalCleaners,
-          estimatedHours,
-          jobPriceInCents,
-          isSelfAssignment: a.isSelfAssignment,
-          employeeId: a.employee?.id,
-          employeePayType: a.employee?.payType,
-          employeeHourlyRate: a.employee?.defaultHourlyRate,
-          storedPayAmount: a.payAmount,
-          storedPayType: a.payType,
-        });
-      }
-
       // For self-assignments or if employee data is missing, use the stored pay
       let calculatedPay = serialized.payAmount || 0;
       let calculatedPayType = serialized.payType || "flat_rate";
@@ -762,10 +745,6 @@ router.get("/assignments/:assignmentId", async (req, res) => {
         );
         calculatedPay = result.payAmount;
         calculatedPayType = result.payType;
-      }
-
-      if (idx === 0) {
-        console.log("[assignment-detail] Calculated:", { calculatedPay, calculatedPayType });
       }
 
       // Add employee rate info for display
@@ -821,7 +800,7 @@ router.delete("/assignments/:assignmentId", async (req, res) => {
   try {
     const io = req.app.get("io");
     await EmployeeJobAssignmentService.unassignFromJob(
-      parseInt(req.params.assignmentId),
+      parseInt(req.params.assignmentId, 10),
       req.businessOwnerId,
       io
     );
@@ -841,7 +820,7 @@ router.delete("/appointments/:appointmentId/assignments", async (req, res) => {
   try {
     const io = req.app.get("io");
     const result = await EmployeeJobAssignmentService.bulkUnassignFromJob(
-      parseInt(req.params.appointmentId),
+      parseInt(req.params.appointmentId, 10),
       req.businessOwnerId,
       io
     );
@@ -865,7 +844,7 @@ router.post("/assignments/:assignmentId/reassign", async (req, res) => {
     }
 
     const assignment = await EmployeeJobAssignmentService.reassignJob(
-      parseInt(req.params.assignmentId),
+      parseInt(req.params.assignmentId, 10),
       newEmployeeId,
       req.businessOwnerId
     );
@@ -885,7 +864,7 @@ router.post("/self-assign/:appointmentId", async (req, res) => {
     const io = req.app.get("io");
     const assignment = await EmployeeJobAssignmentService.assignSelfToJob(
       req.businessOwnerId,
-      parseInt(req.params.appointmentId),
+      parseInt(req.params.appointmentId, 10),
       io
     );
 
@@ -1344,7 +1323,7 @@ router.get("/all-jobs", async (req, res) => {
  */
 router.get("/my-jobs/:appointmentId", async (req, res) => {
   try {
-    const appointmentId = parseInt(req.params.appointmentId);
+    const appointmentId = parseInt(req.params.appointmentId, 10);
 
     // Get list of client IDs for this business owner
     const clientRelationships = await CleanerClient.findAll({
@@ -1639,10 +1618,23 @@ router.put("/assignments/:assignmentId/pay", async (req, res) => {
       return res.status(400).json({ error: "New pay amount is required" });
     }
 
+    // Validate pay amount is a valid positive number
+    const parsedPayAmount = parseFloat(newPayAmount);
+    if (isNaN(parsedPayAmount)) {
+      return res.status(400).json({ error: "Pay amount must be a valid number" });
+    }
+    if (parsedPayAmount < 0) {
+      return res.status(400).json({ error: "Pay amount cannot be negative" });
+    }
+    // Maximum sanity check - $10,000 per job assignment (1,000,000 cents)
+    if (parsedPayAmount > 1000000) {
+      return res.status(400).json({ error: "Pay amount exceeds maximum allowed ($10,000)" });
+    }
+
     const assignment = await EmployeeJobAssignmentService.updateJobPay(
-      parseInt(req.params.assignmentId),
+      parseInt(req.params.assignmentId, 10),
       req.businessOwnerId,
-      { newPayAmount: Math.floor(newPayAmount), reason }
+      { newPayAmount: Math.round(parsedPayAmount), reason }
     );
 
     res.json({ message: "Pay updated", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
@@ -1659,7 +1651,7 @@ router.put("/assignments/:assignmentId/pay", async (req, res) => {
 router.post("/assignments/:assignmentId/recalculate-pay", async (req, res) => {
   try {
     const assignment = await EmployeeJobAssignmentService.recalculatePay(
-      parseInt(req.params.assignmentId),
+      parseInt(req.params.assignmentId, 10),
       req.businessOwnerId
     );
 
@@ -1679,7 +1671,7 @@ router.post("/assignments/:assignmentId/recalculate-pay", async (req, res) => {
 router.get("/assignments/:assignmentId/pay-history", async (req, res) => {
   try {
     const history = await EmployeeJobAssignmentService.getPayChangeHistory(
-      parseInt(req.params.assignmentId)
+      parseInt(req.params.assignmentId, 10)
     );
 
     res.json({ history: EmployeeJobAssignmentSerializer.serializePayHistoryArray(history) });
@@ -1697,14 +1689,21 @@ router.put("/assignments/:assignmentId/hours", async (req, res) => {
   try {
     const { hoursWorked } = req.body;
 
-    if (hoursWorked === undefined || hoursWorked === null || hoursWorked < 0) {
+    const parsedHours = parseFloat(hoursWorked);
+    if (hoursWorked === undefined || hoursWorked === null || isNaN(parsedHours)) {
       return res.status(400).json({ error: "Valid hours worked value is required" });
+    }
+    if (parsedHours < 0) {
+      return res.status(400).json({ error: "Hours worked cannot be negative" });
+    }
+    if (parsedHours > 24) {
+      return res.status(400).json({ error: "Hours worked cannot exceed 24 hours per job" });
     }
 
     const assignment = await EmployeeJobAssignmentService.updateHoursWorked(
-      parseInt(req.params.assignmentId),
+      parseInt(req.params.assignmentId, 10),
       req.businessOwnerId,
-      parseFloat(hoursWorked)
+      parsedHours
     );
 
     res.json({
@@ -1900,7 +1899,7 @@ router.get("/dashboard", async (req, res) => {
               ? `${clientFirstName} ${clientLastName}`
               : "Unknown Client",
             address,
-            totalPrice: parseFloat(assignment.appointment?.price || 0) * 100,
+            totalPrice: Math.round(parseFloat(assignment.appointment?.price || 0) * 100),
           });
         } else {
           // Add additional assignee for multi-cleaner jobs
@@ -2014,7 +2013,7 @@ router.get("/dashboard", async (req, res) => {
             ? `${clientFirstName} ${clientLastName}`
             : "Unknown Client",
           address,
-          totalPrice: parseFloat(apt.price) * 100,
+          totalPrice: Math.round(parseFloat(apt.price || 0) * 100),
         };
       });
     };
@@ -2105,7 +2104,7 @@ router.get("/dashboard", async (req, res) => {
               ? `${clientFirstName} ${clientLastName}`
               : "Unknown Client",
             address,
-            totalPrice: parseFloat(apt.price) * 100,
+            totalPrice: Math.round(parseFloat(apt.price || 0) * 100),
           };
         });
     };
@@ -2252,8 +2251,8 @@ router.get("/calendar", async (req, res) => {
   try {
     const { month, year } = req.query;
     const now = new Date();
-    const targetMonth = month ? parseInt(month) - 1 : now.getMonth();
-    const targetYear = year ? parseInt(year) : now.getFullYear();
+    const targetMonth = month ? parseInt(month, 10) - 1 : now.getMonth();
+    const targetYear = year ? parseInt(year, 10) : now.getFullYear();
 
     const startDate = new Date(targetYear, targetMonth, 1).toISOString().split("T")[0];
     const endDate = new Date(targetYear, targetMonth + 1, 0).toISOString().split("T")[0];
@@ -2363,7 +2362,7 @@ router.get("/calendar", async (req, res) => {
         address,
         city: apt.home?.city || "",
         state: apt.home?.state || "",
-        totalPrice: parseFloat(apt.price) * 100,
+        totalPrice: Math.round(parseFloat(apt.price || 0) * 100),
         status: apt.status,
         duration,
         numBeds,
@@ -2448,7 +2447,7 @@ router.get("/calendar", async (req, res) => {
           appointmentId: apt.id,
           businessEmployeeId: assignedEmp.id,
           status: "assigned",
-          payAmount: parseFloat(apt.price || 0) * 100,
+          payAmount: Math.round(parseFloat(apt.price || 0) * 100),
           isSelfAssignment: assignedEmp.isSelf || false,
           isMarketplacePickup: true,
           assignedCount: 1,
@@ -2463,7 +2462,7 @@ router.get("/calendar", async (req, res) => {
             address,
             city: apt.home?.city || "",
             state: apt.home?.state || "",
-            totalPrice: parseFloat(apt.price || 0) * 100,
+            totalPrice: Math.round(parseFloat(apt.price || 0) * 100),
             status: apt.status,
           },
         };
@@ -2577,7 +2576,7 @@ router.get("/calendar", async (req, res) => {
           address,
           city: assignment.appointment?.home?.city || "",
           state: assignment.appointment?.home?.state || "",
-          totalPrice: parseFloat(assignment.appointment?.price || 0) * 100,
+          totalPrice: Math.round(parseFloat(assignment.appointment?.price || 0) * 100),
           status: assignment.appointment?.status,
         },
         // Include all assignments for this appointment (for multi-cleaner display)
@@ -2651,7 +2650,8 @@ router.get("/payroll-summary", async (req, res) => {
  */
 router.get("/payroll/history", async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 50;
+    // Bounds checking for limit parameter
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const thirtyDaysAgo = new Date(Date.now() - TIME_CONSTANTS.MS_IN_MONTH).toISOString().split("T")[0];
 
     const paidAssignments = await EmployeeJobAssignment.findAll({
@@ -2730,7 +2730,7 @@ router.post("/payroll/early-payout/:employeeId", async (req, res) => {
     const EmployeeBatchPayoutService = require("../../../services/EmployeeBatchPayoutService");
     const { BusinessEmployee } = require("../../../models");
 
-    const employeeId = parseInt(req.params.employeeId);
+    const employeeId = parseInt(req.params.employeeId, 10);
 
     // Verify the employee belongs to this business owner
     const employee = await BusinessEmployee.findOne({
@@ -2778,7 +2778,7 @@ router.post("/payroll/early-payout/:employeeId", async (req, res) => {
  */
 router.get("/tax-export/:year", async (req, res) => {
   try {
-    const year = parseInt(req.params.year);
+    const year = parseInt(req.params.year, 10);
     const currentYear = new Date().getFullYear();
 
     // Validate year (only allow current year and 2 years back)
@@ -2912,7 +2912,7 @@ router.get("/employees/:employeeId/hours", async (req, res) => {
 
     const hoursDetail = await EmployeeJobAssignmentService.getEmployeeHoursDetail(
       req.businessOwnerId,
-      parseInt(req.params.employeeId),
+      parseInt(req.params.employeeId, 10),
       start,
       end
     );
@@ -2938,13 +2938,14 @@ router.get("/employees/:employeeId/hours", async (req, res) => {
  */
 router.get("/analytics", async (req, res) => {
   try {
+    // Bounds checking for analytics parameters
+    const months = req.query.months ? Math.min(Math.max(parseInt(req.query.months, 10), 1), 60) : undefined;
+    const topClientsLimit = req.query.topClientsLimit ? Math.min(Math.max(parseInt(req.query.topClientsLimit, 10), 1), 100) : undefined;
+    const churnDays = req.query.churnDays ? Math.min(Math.max(parseInt(req.query.churnDays, 10), 1), 365) : undefined;
+
     const analytics = await BusinessAnalyticsService.getAllAnalytics(
       req.businessOwnerId,
-      {
-        months: parseInt(req.query.months) || undefined,
-        topClientsLimit: parseInt(req.query.topClientsLimit) || undefined,
-        churnDays: parseInt(req.query.churnDays) || undefined,
-      }
+      { months, topClientsLimit, churnDays }
     );
 
     res.json(analytics);
@@ -2995,12 +2996,13 @@ router.get("/analytics/employees", async (req, res) => {
       });
     }
 
+    // Bounds checking for analytics parameters
+    const months = req.query.months ? Math.min(Math.max(parseInt(req.query.months, 10), 1), 60) : undefined;
+    const limit = req.query.limit ? Math.min(Math.max(parseInt(req.query.limit, 10), 1), 100) : undefined;
+
     const employees = await BusinessAnalyticsService.getEmployeeAnalytics(
       req.businessOwnerId,
-      {
-        months: parseInt(req.query.months) || undefined,
-        limit: parseInt(req.query.limit) || undefined,
-      }
+      { months, limit }
     );
 
     res.json(employees);
@@ -3028,8 +3030,8 @@ router.get("/analytics/clients", async (req, res) => {
     const clients = await BusinessAnalyticsService.getClientAnalytics(
       req.businessOwnerId,
       {
-        topClientsLimit: parseInt(req.query.topClientsLimit) || undefined,
-        churnDays: parseInt(req.query.churnDays) || undefined,
+        topClientsLimit: parseInt(req.query.topClientsLimit, 10) || undefined,
+        churnDays: parseInt(req.query.churnDays, 10) || undefined,
       }
     );
 
@@ -3048,7 +3050,7 @@ router.get("/analytics/financials", async (req, res) => {
     const financials = await BusinessAnalyticsService.getFinancialAnalytics(
       req.businessOwnerId,
       {
-        months: parseInt(req.query.months) || undefined,
+        months: parseInt(req.query.months, 10) || undefined,
       }
     );
 
@@ -3069,7 +3071,7 @@ router.get("/analytics/trends", async (req, res) => {
     // Check if premium tier for extended history
     const access = await BusinessAnalyticsService.getAnalyticsAccess(req.businessOwnerId);
     const maxMonths = access.tier === "premium" ? 24 : 6;
-    const requestedMonths = Math.min(parseInt(months), maxMonths);
+    const requestedMonths = Math.min(parseInt(months, 10), maxMonths);
 
     const trends = await BusinessAnalyticsService.getTrends(
       req.businessOwnerId,
@@ -3210,7 +3212,7 @@ router.post("/payouts/:assignmentId/mark-paid-outside", async (req, res) => {
 
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
-        id: parseInt(req.params.assignmentId),
+        id: parseInt(req.params.assignmentId, 10),
         businessOwnerId: req.businessOwnerId,
         status: "completed",
         payoutStatus: "pending",
@@ -3253,8 +3255,8 @@ router.post("/bonuses", async (req, res) => {
 
     const bonus = await EmployeeBonusService.createBonus(
       req.businessOwnerId,
-      parseInt(employeeId),
-      parseInt(amount),
+      parseInt(employeeId, 10),
+      parseInt(amount, 10),
       reason
     );
 
@@ -3276,8 +3278,8 @@ router.get("/bonuses", async (req, res) => {
       req.businessOwnerId,
       {
         status,
-        employeeId: employeeId ? parseInt(employeeId) : undefined,
-        limit: limit ? parseInt(limit) : 50,
+        employeeId: employeeId ? parseInt(employeeId, 10) : undefined,
+        limit: limit ? parseInt(limit, 10) : 50,
       }
     );
 
@@ -3322,7 +3324,7 @@ router.put("/bonuses/:id/paid", async (req, res) => {
     const { note } = req.body;
 
     const bonus = await EmployeeBonusService.markBonusPaid(
-      parseInt(req.params.id),
+      parseInt(req.params.id, 10),
       req.businessOwnerId,
       note
     );
@@ -3340,7 +3342,7 @@ router.put("/bonuses/:id/paid", async (req, res) => {
 router.delete("/bonuses/:id", async (req, res) => {
   try {
     const result = await EmployeeBonusService.cancelBonus(
-      parseInt(req.params.id),
+      parseInt(req.params.id, 10),
       req.businessOwnerId
     );
 
@@ -3428,7 +3430,7 @@ router.get("/client-payments", async (req, res) => {
  */
 router.post("/appointments/:id/mark-paid", async (req, res) => {
   try {
-    const appointmentId = parseInt(req.params.id);
+    const appointmentId = parseInt(req.params.id, 10);
 
     const appointment = await UserAppointments.findOne({
       where: {
@@ -3458,7 +3460,7 @@ router.post("/appointments/:id/mark-paid", async (req, res) => {
  */
 router.post("/appointments/:id/send-reminder", async (req, res) => {
   try {
-    const appointmentId = parseInt(req.params.id);
+    const appointmentId = parseInt(req.params.id, 10);
 
     const appointment = await UserAppointments.findOne({
       where: {
@@ -3765,7 +3767,7 @@ router.get("/job-flows/assignments", async (req, res) => {
 router.get("/job-flows/:flowId", async (req, res) => {
   try {
     const flow = await CustomJobFlowService.getFlowById(
-      parseInt(req.params.flowId),
+      parseInt(req.params.flowId, 10),
       req.businessOwnerId
     );
 
@@ -3782,7 +3784,7 @@ router.get("/job-flows/:flowId", async (req, res) => {
 router.put("/job-flows/:flowId", async (req, res) => {
   try {
     const flow = await CustomJobFlowService.updateFlow(
-      parseInt(req.params.flowId),
+      parseInt(req.params.flowId, 10),
       req.businessOwnerId,
       req.body
     );
@@ -3803,13 +3805,13 @@ router.delete("/job-flows/:flowId", async (req, res) => {
 
     if (permanent === "true") {
       await CustomJobFlowService.deleteFlow(
-        parseInt(req.params.flowId),
+        parseInt(req.params.flowId, 10),
         req.businessOwnerId
       );
       res.json({ message: "Job flow deleted permanently" });
     } else {
       const flow = await CustomJobFlowService.archiveFlow(
-        parseInt(req.params.flowId),
+        parseInt(req.params.flowId, 10),
         req.businessOwnerId
       );
       res.json({ message: "Job flow archived", flow: CustomJobFlowSerializer.serializeOne(flow) });
@@ -3827,7 +3829,7 @@ router.post("/job-flows/:flowId/set-default", async (req, res) => {
   try {
     const flow = await CustomJobFlowService.setDefaultFlow(
       req.businessOwnerId,
-      parseInt(req.params.flowId)
+      parseInt(req.params.flowId, 10)
     );
 
     res.json({ message: "Default flow updated", flow: CustomJobFlowSerializer.serializeOne(flow) });
@@ -3860,7 +3862,7 @@ router.post("/job-flows/clear-default", async (req, res) => {
 router.get("/job-flows/:flowId/checklist", async (req, res) => {
   try {
     const flow = await CustomJobFlowService.getFlowById(
-      parseInt(req.params.flowId),
+      parseInt(req.params.flowId, 10),
       req.businessOwnerId
     );
 
@@ -3883,7 +3885,7 @@ router.post("/job-flows/:flowId/checklist", async (req, res) => {
     }
 
     const checklist = await CustomJobFlowService.createChecklistFromScratch(
-      parseInt(req.params.flowId),
+      parseInt(req.params.flowId, 10),
       req.businessOwnerId,
       { sections }
     );
@@ -3907,7 +3909,7 @@ router.put("/job-flows/:flowId/checklist", async (req, res) => {
     }
 
     const checklist = await CustomJobFlowService.updateChecklist(
-      parseInt(req.params.flowId),
+      parseInt(req.params.flowId, 10),
       req.businessOwnerId,
       { sections }
     );
@@ -3925,7 +3927,7 @@ router.put("/job-flows/:flowId/checklist", async (req, res) => {
 router.delete("/job-flows/:flowId/checklist", async (req, res) => {
   try {
     await CustomJobFlowService.deleteChecklist(
-      parseInt(req.params.flowId),
+      parseInt(req.params.flowId, 10),
       req.businessOwnerId
     );
 
@@ -3944,7 +3946,7 @@ router.post("/job-flows/:flowId/checklist/fork-platform", async (req, res) => {
     const { versionId } = req.body;
 
     const checklist = await CustomJobFlowService.forkPlatformChecklist(
-      parseInt(req.params.flowId),
+      parseInt(req.params.flowId, 10),
       req.businessOwnerId,
       versionId
     );
@@ -3964,7 +3966,7 @@ router.put("/job-flows/:flowId/checklist/items/:itemId/notes", async (req, res) 
     const { notes } = req.body;
 
     const checklist = await CustomJobFlowService.addItemNotes(
-      parseInt(req.params.flowId),
+      parseInt(req.params.flowId, 10),
       req.businessOwnerId,
       req.params.itemId,
       notes
@@ -3994,7 +3996,7 @@ router.post("/job-flows/assignments/client/:clientId", async (req, res) => {
 
     const assignment = await CustomJobFlowService.assignFlowToClient(
       req.businessOwnerId,
-      parseInt(req.params.clientId),
+      parseInt(req.params.clientId, 10),
       flowId
     );
 
@@ -4018,7 +4020,7 @@ router.post("/job-flows/assignments/home/:homeId", async (req, res) => {
 
     const assignment = await CustomJobFlowService.assignFlowToHome(
       req.businessOwnerId,
-      parseInt(req.params.homeId),
+      parseInt(req.params.homeId, 10),
       flowId
     );
 
@@ -4035,7 +4037,7 @@ router.post("/job-flows/assignments/home/:homeId", async (req, res) => {
 router.delete("/job-flows/assignments/:assignmentId", async (req, res) => {
   try {
     await CustomJobFlowService.removeFlowAssignment(
-      parseInt(req.params.assignmentId),
+      parseInt(req.params.assignmentId, 10),
       req.businessOwnerId
     );
 
@@ -4285,7 +4287,7 @@ router.get("/employees/:employeeId/stripe-eligibility", async (req, res) => {
 
     const employee = await BusinessEmployee.findOne({
       where: {
-        id: parseInt(employeeId),
+        id: parseInt(employeeId, 10),
         businessOwnerId: req.businessOwnerId,
       },
     });
@@ -4324,7 +4326,7 @@ router.post("/employees/:employeeId/invite-to-stripe", async (req, res) => {
 
     const employee = await BusinessEmployee.findOne({
       where: {
-        id: parseInt(employeeId),
+        id: parseInt(employeeId, 10),
         businessOwnerId: req.businessOwnerId,
         status: "active",
       },

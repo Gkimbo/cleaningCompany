@@ -63,7 +63,7 @@ class BusinessEmployeeSerializer {
       serialized.formattedJobRate = `$${(data.defaultJobRate / 100).toFixed(2)}/job`;
     }
     if (data.payRate) {
-      serialized.formattedPayRate = `${parseFloat(data.payRate)}%`;
+      serialized.formattedPayRate = `${parseFloat(data.payRate).toFixed(2)}%`;
     }
 
     // Serialize nested user if present and requested (check both data and employee for Sequelize associations)

@@ -58,6 +58,8 @@ jest.mock("../../models", () => ({
     fn: jest.fn((name, ...args) => ({ fn: name, args })),
     col: jest.fn((name) => ({ col: name })),
     literal: jest.fn((str) => ({ literal: str })),
+    query: jest.fn(),
+    QueryTypes: { SELECT: "SELECT" },
   },
 }));
 
@@ -87,6 +89,7 @@ const {
   Message,
   Conversation,
   ConversationParticipant,
+  sequelize,
 } = require("../../models");
 const { updateAllHomesServiceAreaStatus } = require("../../config/businessConfig");
 
@@ -748,6 +751,7 @@ describe("Owner Dashboard Router", () => {
       UserReviews.count.mockReset();
       User.findAll.mockReset();
       User.findOne.mockReset();
+      sequelize.query.mockReset();
       User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
     });
 
@@ -778,6 +782,11 @@ describe("Owner Dashboard Router", () => {
       ]);
       UserAppointments.count.mockResolvedValue(50);
       User.findOne.mockResolvedValue({ avgRating: 4.65 });
+      // Mock aggregated query for per-cleaner stats
+      sequelize.query.mockResolvedValue([
+        { cleaner_id: "10", completed_count: "50", assigned_count: "50" },
+        { cleaner_id: "11", completed_count: "48", assigned_count: "50" },
+      ]);
 
       const response = await request(app)
         .get("/api/v1/owner/business-metrics")
@@ -803,6 +812,7 @@ describe("Owner Dashboard Router", () => {
       User.findAll.mockResolvedValue([]);
       UserAppointments.count.mockResolvedValue(0);
       User.findOne.mockResolvedValue(null);
+      sequelize.query.mockResolvedValue([]);
 
       const response = await request(app)
         .get("/api/v1/owner/business-metrics")
@@ -828,6 +838,7 @@ describe("Owner Dashboard Router", () => {
       User.findAll.mockResolvedValue([]);
       UserAppointments.count.mockResolvedValue(0);
       User.findOne.mockResolvedValue(null);
+      sequelize.query.mockResolvedValue([]);
 
       const response = await request(app)
         .get("/api/v1/owner/business-metrics")
@@ -856,6 +867,7 @@ describe("Owner Dashboard Router", () => {
       User.findAll.mockResolvedValue([]);
       UserAppointments.count.mockResolvedValue(0);
       User.findOne.mockResolvedValue(null);
+      sequelize.query.mockResolvedValue([]);
 
       const response = await request(app)
         .get("/api/v1/owner/business-metrics")
@@ -881,6 +893,7 @@ describe("Owner Dashboard Router", () => {
       User.findAll.mockResolvedValue([]);
       UserAppointments.count.mockResolvedValue(0);
       User.findOne.mockResolvedValue(null);
+      sequelize.query.mockResolvedValue([]);
 
       const response = await request(app)
         .get("/api/v1/owner/business-metrics")
@@ -906,12 +919,13 @@ describe("Owner Dashboard Router", () => {
       ]);
       UserAppointments.count
         .mockResolvedValueOnce(95)  // total completed
-        .mockResolvedValueOnce(100) // total assigned
-        .mockResolvedValueOnce(50)  // cleaner 1 completed
-        .mockResolvedValueOnce(50)  // cleaner 1 assigned
-        .mockResolvedValueOnce(45)  // cleaner 2 completed
-        .mockResolvedValueOnce(50); // cleaner 2 assigned
+        .mockResolvedValueOnce(100); // total assigned
       User.findOne.mockResolvedValue({ avgRating: 4.7 });
+      // Mock the aggregated query for per-cleaner stats (replaces N+1 count queries)
+      sequelize.query.mockResolvedValue([
+        { cleaner_id: "10", completed_count: "50", assigned_count: "50" },
+        { cleaner_id: "11", completed_count: "45", assigned_count: "50" },
+      ]);
 
       const response = await request(app)
         .get("/api/v1/owner/business-metrics")
@@ -934,6 +948,7 @@ describe("Owner Dashboard Router", () => {
       User.findAll.mockResolvedValue([]);
       UserAppointments.count.mockResolvedValue(0);
       User.findOne.mockResolvedValue(null);
+      sequelize.query.mockResolvedValue([]);
 
       const response = await request(app)
         .get("/api/v1/owner/business-metrics")
@@ -965,6 +980,7 @@ describe("Owner Dashboard Router", () => {
       User.findAll.mockRejectedValue(new Error("Database error"));
       UserAppointments.count.mockRejectedValue(new Error("Database error"));
       User.findOne.mockRejectedValue(new Error("Database error"));
+      sequelize.query.mockRejectedValue(new Error("Database error"));
 
       const response = await request(app)
         .get("/api/v1/owner/business-metrics")

@@ -155,9 +155,9 @@ module.exports = (sequelize, DataTypes) => {
     });
 
     return {
-      totalWithdrawnCents: parseInt(result.totalWithdrawn) || 0,
-      totalWithdrawnDollars: ((parseInt(result.totalWithdrawn) || 0) / 100).toFixed(2),
-      withdrawalCount: parseInt(result.withdrawalCount) || 0,
+      totalWithdrawnCents: parseInt(result.totalWithdrawn, 10) || 0,
+      totalWithdrawnDollars: ((parseInt(result.totalWithdrawn, 10) || 0) / 100).toFixed(2),
+      withdrawalCount: parseInt(result.withdrawalCount, 10) || 0,
     };
   };
 

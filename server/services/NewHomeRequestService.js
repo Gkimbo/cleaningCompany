@@ -128,7 +128,7 @@ class NewHomeRequestService {
     }
 
     // Calculate price
-    const numBeds = parseInt(home.numBeds) || 1;
+    const numBeds = parseInt(home.numBeds, 10) || 1;
     const numBaths = parseFloat(home.numBaths) || 1;
     const calculatedPrice = await this.calculateHomePrice(numBeds, numBaths);
 

@@ -24,12 +24,15 @@ class PayCalculatorService {
     const config = await getPricingConfig();
     const platformFeePercent = config?.businessOwnerFeePercent || 0.10;
 
-    // Get customer payment amount (convert from string to cents if needed)
+    // Get customer payment amount - always convert to cents
+    // Price is stored as string dollars (e.g., "150.50") in the database
     let customerPays;
-    if (typeof appointment.price === "string") {
-      customerPays = Math.round(parseFloat(appointment.price) * 100);
+    if (appointment.price === null || appointment.price === undefined) {
+      customerPays = 0;
     } else {
-      customerPays = appointment.price;
+      // Always parse as float and convert to cents, regardless of input type
+      const priceValue = parseFloat(appointment.price);
+      customerPays = isNaN(priceValue) ? 0 : Math.round(priceValue * 100);
     }
 
     // Calculate platform fee
@@ -129,10 +132,9 @@ class PayCalculatorService {
     let employeeAssignmentCount = 0;
 
     for (const assignment of assignments) {
-      const price =
-        typeof assignment.appointment.price === "string"
-          ? Math.round(parseFloat(assignment.appointment.price) * 100)
-          : assignment.appointment.price;
+      // Always parse price as float and convert to cents
+      const priceValue = parseFloat(assignment.appointment.price);
+      const price = isNaN(priceValue) ? 0 : Math.round(priceValue * 100);
 
       const platformFee = Math.round(price * platformFeePercent);
 
@@ -304,15 +306,18 @@ class PayCalculatorService {
       // Decrypt employee names (BusinessEmployee has encrypted PII fields)
       const firstName = employee?.firstName ? EncryptionService.decrypt(employee.firstName) : "";
       const lastName = employee?.lastName ? EncryptionService.decrypt(employee.lastName) : "";
+      const totalPay = parseInt(r.totalPay, 10) || 0;
+      const jobCount = parseInt(r.jobCount, 10) || 0;
+      const averagePerJob = jobCount > 0 ? totalPay / jobCount : 0;
       return {
         employeeId: r.businessEmployeeId,
         employeeName: employee
           ? `${firstName} ${lastName}`.trim() || "Unknown"
           : "Unknown",
-        totalPay: parseInt(r.totalPay, 10),
-        jobCount: parseInt(r.jobCount, 10),
-        formattedTotalPay: `$${(parseInt(r.totalPay, 10) / 100).toFixed(2)}`,
-        averagePerJob: `$${(parseInt(r.totalPay, 10) / parseInt(r.jobCount, 10) / 100).toFixed(2)}`,
+        totalPay,
+        jobCount,
+        formattedTotalPay: `$${(totalPay / 100).toFixed(2)}`,
+        averagePerJob: `$${(averagePerJob / 100).toFixed(2)}`,
       };
     });
   }

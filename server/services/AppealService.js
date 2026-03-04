@@ -518,7 +518,7 @@ class AppealService {
 		});
 		const categoryCounts = {};
 		categoryResults.forEach(r => {
-			categoryCounts[r.category] = parseInt(r.dataValues.count);
+			categoryCounts[r.category] = parseInt(r.dataValues.count, 10);
 		});
 
 		await user.update({
@@ -734,8 +734,8 @@ class AppealService {
 			total,
 			pending,
 			pastSLA,
-			byStatus: byStatus.reduce((acc, r) => ({ ...acc, [r.status]: parseInt(r.dataValues.count) }), {}),
-			byPriority: byPriority.reduce((acc, r) => ({ ...acc, [r.priority]: parseInt(r.dataValues.count) }), {}),
+			byStatus: byStatus.reduce((acc, r) => ({ ...acc, [r.status]: parseInt(r.dataValues.count, 10) }), {}),
+			byPriority: byPriority.reduce((acc, r) => ({ ...acc, [r.priority]: parseInt(r.dataValues.count, 10) }), {}),
 		};
 	}
 

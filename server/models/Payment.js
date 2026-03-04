@@ -219,9 +219,9 @@ module.exports = (sequelize, DataTypes) => {
       raw: true,
     });
     return {
-      totalAmountCents: parseInt(result.totalAmount) || 0,
-      totalAmountDollars: ((parseInt(result.totalAmount) || 0) / 100).toFixed(2),
-      transactionCount: parseInt(result.transactionCount) || 0,
+      totalAmountCents: parseInt(result.totalAmount, 10) || 0,
+      totalAmountDollars: ((parseInt(result.totalAmount, 10) || 0) / 100).toFixed(2),
+      transactionCount: parseInt(result.transactionCount, 10) || 0,
     };
   };
 

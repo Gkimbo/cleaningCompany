@@ -201,15 +201,15 @@ module.exports = (sequelize, DataTypes) => {
 
     return {
       taxYear,
-      totalGrossServicesCents: parseInt(result.totalGrossServices) || 0,
-      totalGrossServicesDollars: ((parseInt(result.totalGrossServices) || 0) / 100).toFixed(2),
-      totalPlatformFeesCents: parseInt(result.totalPlatformFees) || 0,
-      totalPlatformFeesDollars: ((parseInt(result.totalPlatformFees) || 0) / 100).toFixed(2),
-      totalStripeFeesCents: parseInt(result.totalStripeFees) || 0,
-      totalStripeFeesDollars: ((parseInt(result.totalStripeFees) || 0) / 100).toFixed(2),
-      totalNetEarningsCents: parseInt(result.totalNetEarnings) || 0,
-      totalNetEarningsDollars: ((parseInt(result.totalNetEarnings) || 0) / 100).toFixed(2),
-      transactionCount: parseInt(result.transactionCount) || 0,
+      totalGrossServicesCents: parseInt(result.totalGrossServices, 10) || 0,
+      totalGrossServicesDollars: ((parseInt(result.totalGrossServices, 10) || 0) / 100).toFixed(2),
+      totalPlatformFeesCents: parseInt(result.totalPlatformFees, 10) || 0,
+      totalPlatformFeesDollars: ((parseInt(result.totalPlatformFees, 10) || 0) / 100).toFixed(2),
+      totalStripeFeesCents: parseInt(result.totalStripeFees, 10) || 0,
+      totalStripeFeesDollars: ((parseInt(result.totalStripeFees, 10) || 0) / 100).toFixed(2),
+      totalNetEarningsCents: parseInt(result.totalNetEarnings, 10) || 0,
+      totalNetEarningsDollars: ((parseInt(result.totalNetEarnings, 10) || 0) / 100).toFixed(2),
+      transactionCount: parseInt(result.transactionCount, 10) || 0,
     };
   };
 
@@ -233,10 +233,10 @@ module.exports = (sequelize, DataTypes) => {
     return {
       taxYear,
       quarter,
-      totalGrossServicesCents: parseInt(result.totalGrossServices) || 0,
-      totalPlatformFeesCents: parseInt(result.totalPlatformFees) || 0,
-      totalNetEarningsCents: parseInt(result.totalNetEarnings) || 0,
-      transactionCount: parseInt(result.transactionCount) || 0,
+      totalGrossServicesCents: parseInt(result.totalGrossServices, 10) || 0,
+      totalPlatformFeesCents: parseInt(result.totalPlatformFees, 10) || 0,
+      totalNetEarningsCents: parseInt(result.totalNetEarnings, 10) || 0,
+      transactionCount: parseInt(result.transactionCount, 10) || 0,
     };
   };
 
@@ -260,11 +260,11 @@ module.exports = (sequelize, DataTypes) => {
 
     return results.map((r) => ({
       month: r.taxMonth,
-      totalPlatformFeesCents: parseInt(r.totalPlatformFees) || 0,
-      totalPlatformFeesDollars: ((parseInt(r.totalPlatformFees) || 0) / 100).toFixed(2),
-      totalNetEarningsCents: parseInt(r.totalNetEarnings) || 0,
-      totalNetEarningsDollars: ((parseInt(r.totalNetEarnings) || 0) / 100).toFixed(2),
-      transactionCount: parseInt(r.transactionCount) || 0,
+      totalPlatformFeesCents: parseInt(r.totalPlatformFees, 10) || 0,
+      totalPlatformFeesDollars: ((parseInt(r.totalPlatformFees, 10) || 0) / 100).toFixed(2),
+      totalNetEarningsCents: parseInt(r.totalNetEarnings, 10) || 0,
+      totalNetEarningsDollars: ((parseInt(r.totalNetEarnings, 10) || 0) / 100).toFixed(2),
+      transactionCount: parseInt(r.transactionCount, 10) || 0,
     }));
   };
 

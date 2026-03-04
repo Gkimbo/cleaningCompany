@@ -397,7 +397,7 @@ class ReferralService {
       }
 
       const availableCredits = user.referralCredits || 0;
-      const appointmentPrice = parseInt(appointment.price) * 100; // Convert to cents
+      const appointmentPrice = Math.round(parseFloat(appointment.price) * 100); // Convert to cents
 
       // Calculate how much to apply (can't apply more than available or more than price)
       const maxApplicable = Math.min(availableCredits, appointmentPrice, amountCents);

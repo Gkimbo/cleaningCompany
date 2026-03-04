@@ -2230,7 +2230,7 @@ class ConflictResolutionService {
 			if (/^\d+$/.test(trimmedQuery)) {
 				// Numeric - treat as user ID
 				const user = await User.findOne({
-					where: { id: parseInt(trimmedQuery), ...demoFilter },
+					where: { id: parseInt(trimmedQuery, 10), ...demoFilter },
 					attributes: ["id", "firstName", "lastName", "email", "phone", "type"],
 				});
 				if (user) users = [user];

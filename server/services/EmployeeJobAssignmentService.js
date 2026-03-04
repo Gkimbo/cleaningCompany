@@ -84,31 +84,44 @@ class EmployeeJobAssignmentService {
    */
   static calculateEmployeePay(employee, jobPriceInCents, estimatedHours = 2) {
     if (!employee) {
-      return { payAmount: 0, payType: "flat_rate", estimatedHours: 0 };
+      return { payAmount: 0, payType: "flat_rate", estimatedHours: 0, warning: "No employee provided" };
     }
 
     const payType = employee.payType || "hourly";
+    let warning = null;
 
     switch (payType) {
       case "percentage":
         // Pay is a percentage of the job price
         const percentRate = parseFloat(employee.payRate) || 0;
+        if (!employee.payRate || percentRate === 0) {
+          warning = "Employee pay rate (percentage) not configured - defaulting to $0";
+          console.warn(`[PayCalculation] ${warning} for employee ${employee.id}`);
+        }
         const percentPay = Math.round((jobPriceInCents * percentRate) / 100);
-        return { payAmount: Math.floor(percentPay), payType: "percentage", estimatedHours };
+        return { payAmount: percentPay, payType: "percentage", estimatedHours, warning };
 
       case "flat":
       case "per_job":
       case "flat_rate":
         // Flat rate per job
-        const flatRate = Math.floor(employee.defaultJobRate || 0);
-        return { payAmount: flatRate, payType: "flat_rate", estimatedHours };
+        const flatRate = Math.round(employee.defaultJobRate || 0);
+        if (!employee.defaultJobRate || flatRate === 0) {
+          warning = "Employee job rate not configured - defaulting to $0";
+          console.warn(`[PayCalculation] ${warning} for employee ${employee.id}`);
+        }
+        return { payAmount: flatRate, payType: "flat_rate", estimatedHours, warning };
 
       case "hourly":
       default:
         // Hourly rate * estimated hours
         const hourlyRate = employee.defaultHourlyRate || 0;
+        if (!employee.defaultHourlyRate || hourlyRate === 0) {
+          warning = "Employee hourly rate not configured - defaulting to $0";
+          console.warn(`[PayCalculation] ${warning} for employee ${employee.id}`);
+        }
         const hourlyPay = Math.round(hourlyRate * estimatedHours);
-        return { payAmount: Math.floor(hourlyPay), payType: "hourly", estimatedHours };
+        return { payAmount: hourlyPay, payType: "hourly", estimatedHours, warning };
     }
   }
 
@@ -1121,11 +1134,12 @@ class EmployeeJobAssignmentService {
         updateData.hoursWorked = this.calculateHoursWorked(assignment.startedAt, completedAt);
       }
     } else if (payType === "percentage") {
-      // Percentage: pay = (percentage / 100) × job price
-      const appointmentPrice = assignment.appointment?.price || 0;
+      // Percentage: pay = (percentage / 100) × job price in cents
+      const appointmentPriceDollars = parseFloat(assignment.appointment?.price) || 0;
+      const appointmentPriceCents = Math.round(appointmentPriceDollars * 100);
       const payRate = parseFloat(employee?.payRate) || 0;
-      if (payRate > 0 && appointmentPrice > 0) {
-        updateData.payAmount = Math.round((payRate / 100) * appointmentPrice);
+      if (payRate > 0 && appointmentPriceCents > 0) {
+        updateData.payAmount = Math.round((payRate / 100) * appointmentPriceCents);
       }
       // Also track hours if available (for records, not pay calculation)
       if (hoursWorked) {

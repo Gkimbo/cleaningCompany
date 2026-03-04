@@ -71,7 +71,7 @@ class CancellationFinancialService {
 	 * Build original charges breakdown
 	 */
 	static async buildOriginalCharges(appointment) {
-		const basePrice = parseInt(appointment.price) * 100 || 0;
+		const basePrice = Math.round(parseFloat(appointment.price) * 100) || 0;
 		const addOns = [];
 
 		// Parse linens
@@ -136,7 +136,7 @@ class CancellationFinancialService {
 	 * Build refund section
 	 */
 	static buildRefundSection(appointment, refundAmount, refundPercentage, isWithinPenaltyWindow, stripeDetails) {
-		const totalCharged = appointment.amountPaid || parseInt(appointment.price) * 100;
+		const totalCharged = appointment.amountPaid || Math.round(parseFloat(appointment.price) * 100);
 
 		if (!refundAmount || refundAmount <= 0) {
 			return {

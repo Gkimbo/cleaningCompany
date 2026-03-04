@@ -148,7 +148,7 @@ multiCleanerRouter.get("/check/:appointmentId", async (req, res) => {
   try {
     const { appointmentId } = req.params;
     const checkInfo = await MultiCleanerService.getJobCheckInfo(
-      parseInt(appointmentId)
+      parseInt(appointmentId, 10)
     );
     return res.status(200).json(checkInfo);
   } catch (error) {
@@ -312,8 +312,8 @@ multiCleanerRouter.get("/offers", async (req, res) => {
       const home = appt.home;
       if (!home) continue;
 
-      const numBeds = parseInt(home.numBeds) || 0;
-      const numBaths = parseInt(home.numBaths) || 0;
+      const numBeds = parseInt(home.numBeds, 10) || 0;
+      const numBaths = parseInt(home.numBaths, 10) || 0;
       const isEdgeLargeHome = await MultiCleanerService.isEdgeLargeHome(numBeds, numBaths);
 
       if (isEdgeLargeHome) {
@@ -618,12 +618,12 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
     // Get available rooms for this slot
     const unassignedRooms = await CleanerRoomAssignment.findAll({
       where: {
-        multiCleanerJobId: parseInt(multiCleanerJobId),
+        multiCleanerJobId: parseInt(multiCleanerJobId, 10),
         cleanerId: null,
       },
       limit: Math.ceil(
         (await CleanerRoomAssignment.count({
-          where: { multiCleanerJobId: parseInt(multiCleanerJobId) },
+          where: { multiCleanerJobId: parseInt(multiCleanerJobId, 10) },
         })) / job.totalCleanersRequired
       ),
     });
@@ -632,7 +632,7 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
 
     // Use approval service - auto-approves preferred cleaners, creates request for others
     const result = await CleanerApprovalService.requestToJoin(
-      parseInt(multiCleanerJobId),
+      parseInt(multiCleanerJobId, 10),
       cleanerId,
       roomAssignmentIds
     );
@@ -657,7 +657,7 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
     // Calculate earnings for this cleaner
     const earnings = await RoomAssignmentService.calculateCleanerEarningsShare(
       cleanerId,
-      parseInt(multiCleanerJobId)
+      parseInt(multiCleanerJobId, 10)
     );
 
     // Fetch updated job with appointment/home for serialization
@@ -702,12 +702,12 @@ multiCleanerRouter.get("/assignments/:appointmentId", async (req, res) => {
     if (isAdmin) {
       // Admin sees all assignments
       assignments = await RoomAssignmentService.getAllRoomAssignments(
-        parseInt(appointmentId)
+        parseInt(appointmentId, 10)
       );
     } else {
       // Cleaner sees only their assignments
       assignments = await RoomAssignmentService.getCleanerRooms(
-        parseInt(appointmentId),
+        parseInt(appointmentId, 10),
         cleanerId
       );
     }
@@ -730,7 +730,7 @@ multiCleanerRouter.get("/checklist/:appointmentId", async (req, res) => {
 
     // Get cleaner's room assignments
     const assignments = await RoomAssignmentService.getCleanerRooms(
-      parseInt(appointmentId),
+      parseInt(appointmentId, 10),
       cleanerId
     );
 
@@ -775,7 +775,7 @@ multiCleanerRouter.post("/rooms/:roomAssignmentId/complete", async (req, res) =>
     // Validate completion (check for photos)
     const validation = await RoomAssignmentService.validateRoomCompletion(
       cleanerId,
-      parseInt(roomAssignmentId)
+      parseInt(roomAssignmentId, 10)
     );
 
     if (!validation.valid) {
@@ -962,7 +962,7 @@ multiCleanerRouter.get("/earnings/:multiCleanerJobId", async (req, res) => {
     const { multiCleanerJobId } = req.params;
 
     const breakdown = await MultiCleanerPricingService.generateEarningsBreakdown(
-      parseInt(multiCleanerJobId)
+      parseInt(multiCleanerJobId, 10)
     );
 
     return res.status(200).json(breakdown);
@@ -1063,7 +1063,7 @@ multiCleanerRouter.post("/:appointmentId/accept-solo", async (req, res) => {
 
     // Calculate solo earnings
     const soloEarnings = await MultiCleanerPricingService.calculateSoloCompletionEarnings(
-      parseInt(appointmentId)
+      parseInt(appointmentId, 10)
     );
 
     return res.status(200).json({
@@ -1120,7 +1120,7 @@ multiCleanerRouter.post("/:appointmentId/decline-solo", async (req, res) => {
 
     // Remove from cleaner-appointment assignments
     await UserCleanerAppointments.destroy({
-      where: { appointmentId: parseInt(appointmentId), employeeId: cleanerId },
+      where: { appointmentId: parseInt(appointmentId, 10), employeeId: cleanerId },
     });
 
     return res.status(200).json(result);
@@ -1212,7 +1212,7 @@ multiCleanerRouter.post("/:appointmentId/decline-extra-work", async (req, res) =
 
     // Remove from cleaner-appointment assignments
     await UserCleanerAppointments.destroy({
-      where: { appointmentId: parseInt(appointmentId), employeeId: cleanerId },
+      where: { appointmentId: parseInt(appointmentId, 10), employeeId: cleanerId },
     });
 
     return res.status(200).json(result);
@@ -1551,7 +1551,7 @@ multiCleanerRouter.post("/book-as-team", async (req, res) => {
 
     // Book the team
     const result = await MultiCleanerService.bookAsTeam(
-      parseInt(multiCleanerJobId),
+      parseInt(multiCleanerJobId, 10),
       businessOwnerId,
       teamMembers
     );
@@ -1559,7 +1559,7 @@ multiCleanerRouter.post("/book-as-team", async (req, res) => {
     // Calculate total earnings for the team
     const MultiCleanerJobSerializer = require("../../../serializers/MultiCleanerJobSerializer");
     const totalEarnings = await RoomAssignmentService.calculateTotalJobEarnings(
-      parseInt(multiCleanerJobId)
+      parseInt(multiCleanerJobId, 10)
     );
 
     return res.status(200).json({
