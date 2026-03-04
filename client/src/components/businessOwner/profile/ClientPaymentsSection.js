@@ -53,9 +53,9 @@ const PaymentCard = ({ appointment, onMarkPaid, onSendReminder }) => {
             )}
           </View>
         </View>
-        {/* Price is stored in dollars in DB, convert to cents for formatCurrency */}
+        {/* Price is already stored in cents in DB */}
         <Text style={[styles.paymentAmount, overdue && styles.paymentAmountOverdue]}>
-          {formatCurrency((appointment.price || 0) * 100)}
+          {formatCurrency(appointment.price || 0)}
         </Text>
       </View>
 
@@ -105,7 +105,7 @@ const ClientPaymentsSection = ({ state, onRefresh }) => {
   const handleMarkPaid = async (appointment) => {
     Alert.alert(
       "Mark as Paid",
-      `Mark the ${formatCurrency((appointment.price || 0) * 100)} payment from ${appointment.clientName} as paid?`,
+      `Mark the ${formatCurrency(appointment.price || 0)} payment from ${appointment.clientName} as paid?`,
       [
         { text: "Cancel", style: "cancel" },
         {

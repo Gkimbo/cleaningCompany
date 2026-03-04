@@ -182,8 +182,8 @@ describe("Payment Method Removal Protection", () => {
       });
       UserBills.findOne.mockResolvedValue({
         ...mockUserBill,
-        cancellationFee: 25,
-        totalDue: 25,
+        cancellationFee: 2500, // $25.00 in cents
+        totalDue: 2500, // $25.00 in cents
       });
 
       const res = await request(app)
@@ -192,7 +192,7 @@ describe("Payment Method Removal Protection", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.canRemove).toBe(false);
-      expect(res.body.outstandingFees.totalDue).toBe(25);
+      expect(res.body.outstandingFees.totalDue).toBe(2500);
       expect(res.body.options.mustPayOutstandingFirst).toBe(true);
     });
 
@@ -266,8 +266,8 @@ describe("Payment Method Removal Protection", () => {
       });
       UserBills.findOne.mockResolvedValue({
         ...mockUserBill,
-        cancellationFee: 25,
-        totalDue: 25,
+        cancellationFee: 2500, // $25.00 in cents
+        totalDue: 2500, // $25.00 in cents
       });
 
       const res = await request(app)
@@ -352,8 +352,8 @@ describe("Payment Method Removal Protection", () => {
     it("should pay outstanding fees before prepaying appointments", async () => {
       UserBills.findOne.mockResolvedValue({
         ...mockUserBill,
-        cancellationFee: 25,
-        totalDue: 25,
+        cancellationFee: 2500, // $25.00 in cents
+        totalDue: 2500, // $25.00 in cents
         update: jest.fn().mockResolvedValue(true),
       });
       UserAppointments.findAll.mockResolvedValue([]);
@@ -372,10 +372,10 @@ describe("Payment Method Removal Protection", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.outstandingFeesPaid).toBe(25);
+      expect(res.body.outstandingFeesPaid).toBe(2500); // Amount in cents
       expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          amount: 2500, // 25 * 100 cents
+          amount: 2500, // Already in cents from DB
           description: "Outstanding fees payment before card removal",
         })
       );

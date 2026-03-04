@@ -210,9 +210,8 @@ billingRouter.get("/summary", verifyUser, async (req, res) => {
     res.json({
       summary: {
         totalDue: bill ? parseFloat(bill.totalDue || 0) : 0,
-        totalPaid: bill ? parseFloat(bill.totalPaid || 0) : 0,
         appointmentDue: bill ? parseFloat(bill.appointmentDue || 0) : 0,
-        cancellationDue: bill ? parseFloat(bill.cancellationDue || 0) : 0,
+        cancellationFee: bill ? parseFloat(bill.cancellationFee || 0) : 0,
         upcomingAppointments,
         completedThisMonth,
       },

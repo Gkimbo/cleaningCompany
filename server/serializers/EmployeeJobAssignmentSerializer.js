@@ -9,6 +9,12 @@ class EmployeeJobAssignmentSerializer {
     return EncryptionService.decrypt(value);
   }
 
+  // Convert cents to dollars for display
+  static toDollars(cents) {
+    if (cents === null || cents === undefined) return null;
+    return (cents / 100).toFixed(2);
+  }
+
   /**
    * Serialize a single EmployeeJobAssignment
    * @param {Object} assignment - EmployeeJobAssignment instance or plain object
@@ -101,7 +107,7 @@ class EmployeeJobAssignmentSerializer {
       id: data.id,
       date: data.date,
       scheduledDate: data.scheduledDate,
-      price: data.price,
+      price: this.toDollars(data.price),
       completed: data.completed,
       paymentCaptureFailed: data.paymentCaptureFailed || false,
     };
@@ -302,7 +308,7 @@ class EmployeeJobAssignmentSerializer {
       appointment: data.appointment ? {
         id: data.appointment.id,
         date: data.appointment.date,
-        price: data.appointment.price,
+        price: this.toDollars(data.appointment.price),
         home: data.appointment.home ? {
           id: data.appointment.home.id,
           address: this.decryptUserField(data.appointment.home.address),

@@ -300,7 +300,7 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, pricing }) => {
           </View>
         )}
       </View>
-      <Text style={styles.appointmentPayout}>${payout.toFixed(2)}</Text>
+      <Text style={styles.appointmentPayout}>${(payout / 100).toFixed(2)}</Text>
     </Pressable>
   );
 };
@@ -849,7 +849,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
         <View style={styles.statsRow}>
           <StatCard
             title="Expected"
-            value={`$${expectedPayout.toFixed(0)}`}
+            value={`$${(expectedPayout / 100).toFixed(0)}`}
             subtitle="payout"
             color={colors.success[500]}
             onPress={() => navigate("/earnings")}
@@ -909,7 +909,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
                 <View style={styles.payoutPreview}>
                   <Text style={styles.payoutPreviewLabel}>Expected earnings:</Text>
                   <Text style={styles.payoutPreviewValue}>
-                    ${expectedPayout.toFixed(2)}
+                    ${(expectedPayout / 100).toFixed(2)}
                   </Text>
                   <Text style={styles.payoutPreviewSubtext}>
                     after scheduled cleanings
@@ -1004,7 +1004,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
                         </Text>
                         <View style={styles.teamRequestInfo}>
                           <Text style={styles.teamRequestEarnings}>
-                            ${(((Number(request.appointment?.price) || 0) * cleanerSharePercent) / (request.multiCleanerJob?.totalCleanersRequired || 2)).toFixed(0)}
+                            ${((((Number(request.appointment?.price) || 0) * cleanerSharePercent) / (request.multiCleanerJob?.totalCleanersRequired || 2)) / 100).toFixed(0)}
                           </Text>
                         </View>
                         {request.appointment?.timeToBeCompleted &&

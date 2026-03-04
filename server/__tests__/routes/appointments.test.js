@@ -1727,7 +1727,7 @@ describe("Appointment Routes", () => {
         dataValues: {
           id: 1,
           employeesAssigned: [],
-          price: "200",
+          price: 20000, // $200.00 in cents
           userId: 1,
           homeId: 1,
           date: "2025-01-15",
@@ -2457,7 +2457,7 @@ describe("Appointment Routes", () => {
           userId: 1,
           homeId: 1,
           date: "2025-04-15",
-          price: "200", // Price changed again during the delay
+          price: 20000, // $200.00 in cents - Price changed again during the delay
           hasBeenAssigned: true,
           bringSheets: "yes",
           bringTowels: "yes", // Towels also added during the delay

@@ -349,7 +349,7 @@ const BusinessOwnerJobDetails = ({ state }) => {
         <View style={styles.priceContent}>
           <Text style={styles.priceLabel}>Job Earnings</Text>
           <Text style={styles.priceValue}>
-            {formatCurrency((job.price || 0) * 100)}
+            {formatCurrency(job.price || 0)}
           </Text>
         </View>
         <View style={styles.priceIcon}>

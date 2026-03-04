@@ -293,7 +293,7 @@ describe("CleanerClientSerializer", () => {
       expect(result.home.numBeds).toBe(3);
     });
 
-    it("should serialize recurring schedules with parsed price", () => {
+    it("should serialize recurring schedules with price converted from cents to dollars", () => {
       const mockCleanerClient = {
         dataValues: {
           id: 1,
@@ -303,7 +303,7 @@ describe("CleanerClientSerializer", () => {
             id: 100,
             frequency: "weekly",
             dayOfWeek: 1,
-            price: "200.00",
+            price: 20000, // cents
             isActive: true,
             isPaused: false,
           },
@@ -311,7 +311,7 @@ describe("CleanerClientSerializer", () => {
             id: 101,
             frequency: "biweekly",
             dayOfWeek: 4,
-            price: "225.50",
+            price: 22550, // cents
             isActive: true,
             isPaused: false,
           },
@@ -322,10 +322,10 @@ describe("CleanerClientSerializer", () => {
 
       expect(result.recurringSchedules).toHaveLength(2);
       expect(result.recurringSchedules[0].id).toBe(100);
-      expect(result.recurringSchedules[0].price).toBe(200);
-      expect(typeof result.recurringSchedules[0].price).toBe("number");
-      expect(result.recurringSchedules[1].price).toBe(225.5);
-      expect(typeof result.recurringSchedules[1].price).toBe("number");
+      expect(result.recurringSchedules[0].price).toBe("200.00");
+      expect(typeof result.recurringSchedules[0].price).toBe("string");
+      expect(result.recurringSchedules[1].price).toBe("225.50");
+      expect(typeof result.recurringSchedules[1].price).toBe("string");
     });
 
     it("should handle null price in recurring schedules", () => {

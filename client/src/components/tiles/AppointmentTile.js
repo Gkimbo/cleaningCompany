@@ -55,7 +55,7 @@ const AppointmentTile = ({
   };
 
   const formatPrice = (priceValue) => {
-    return `$${Number(priceValue).toFixed(2)}`;
+    return `$${(Number(priceValue) / 100).toFixed(2)}`;
   };
 
   const handleAppointmentPress = () => {

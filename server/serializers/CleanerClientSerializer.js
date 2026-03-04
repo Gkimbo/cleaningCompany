@@ -100,7 +100,7 @@ class CleanerClientSerializer {
 				id: schedule.id,
 				frequency: schedule.frequency,
 				dayOfWeek: schedule.dayOfWeek,
-				price: schedule.price ? parseFloat(schedule.price) : null,
+				price: schedule.price ? (schedule.price / 100).toFixed(2) : null, // Convert cents to dollars
 				isActive: schedule.isActive,
 				isPaused: schedule.isPaused
 			}));

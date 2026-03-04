@@ -405,9 +405,9 @@ class ConflictResolutionService {
 						name: formatUserName(adj.owner),
 					} : null,
 					financialImpact: {
-						originalPrice: parseFloat(adj.originalPrice) * 100,
-						newPrice: parseFloat(adj.calculatedNewPrice) * 100,
-						priceDifference: parseFloat(adj.priceDifference) * 100,
+						originalPrice: adj.originalPrice, // Already in cents
+						newPrice: adj.calculatedNewPrice, // Already in cents
+						priceDifference: adj.priceDifference, // Already in cents
 					},
 				});
 			});
@@ -674,11 +674,11 @@ class ConflictResolutionService {
 				numBaths: adjustment.reportedNumBaths,
 			},
 
-			// Financial Impact
+			// Financial Impact (prices already in cents)
 			financialImpact: {
-				originalPrice: parseFloat(adjustment.originalPrice) * 100,
-				calculatedNewPrice: parseFloat(adjustment.calculatedNewPrice) * 100,
-				priceDifference: parseFloat(adjustment.priceDifference) * 100,
+				originalPrice: adjustment.originalPrice,
+				calculatedNewPrice: adjustment.calculatedNewPrice,
+				priceDifference: adjustment.priceDifference,
 				chargeStatus: adjustment.chargeStatus,
 				chargePaymentIntentId: adjustment.chargePaymentIntentId,
 			},
@@ -1204,7 +1204,8 @@ class ConflictResolutionService {
 			}
 
 			// Validate refund amount against current state (with lock held)
-			const originalAmount = (appointment.price || 0) * 100;
+			// appointment.price is already in cents
+			const originalAmount = appointment.price || 0;
 			const alreadyRefunded = appointment.refundAmount || 0;
 			const maxRefundable = Math.max(0, originalAmount - alreadyRefunded);
 

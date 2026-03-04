@@ -143,7 +143,7 @@ const JobCard = ({ job, onPress, isFirst, isLast }) => {
               {isClient ? "Client" : "Marketplace"}
             </Text>
           </View>
-          <Text style={styles.jobPrice}>{formatCurrency((job.price || 0) * 100)}</Text>
+          <Text style={styles.jobPrice}>{formatCurrency(job.price || 0)}</Text>
         </View>
 
         {/* Main content */}

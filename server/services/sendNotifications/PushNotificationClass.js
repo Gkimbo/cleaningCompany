@@ -212,7 +212,7 @@ class PushNotification {
   // 13. Home size adjustment request (to homeowner)
   static async sendPushHomeSizeAdjustment(expoPushToken, userName, cleanerName, priceDifference) {
     const title = "Home Size Discrepancy";
-    const priceText = priceDifference > 0 ? ` (+$${priceDifference.toFixed(2)})` : "";
+    const priceText = priceDifference > 0 ? ` (+$${(priceDifference / 100).toFixed(2)})` : "";
     const body = `Hi ${userName}, ${cleanerName} reports your home is larger than on file${priceText}. Tap to review and respond.`;
 
     return this.sendPushNotification(expoPushToken, title, body, {
@@ -374,7 +374,7 @@ class PushNotification {
   // 25. Auto-payment processed (to client)
   static async sendPushAutoPaymentProcessed(expoPushToken, clientName, amount, appointmentDate) {
     const title = "Payment Processed ✅";
-    const body = `Hi ${clientName}! $${amount.toFixed(2)} was charged for your cleaning on ${formatDate(appointmentDate)}. View receipt in app.`;
+    const body = `Hi ${clientName}! $${(amount / 100).toFixed(2)} was charged for your cleaning on ${formatDate(appointmentDate)}. View receipt in app.`;
 
     return this.sendPushNotification(expoPushToken, title, body, {
       type: "auto_payment_processed",
@@ -386,7 +386,7 @@ class PushNotification {
   // 26. Payout received (to cleaner)
   static async sendPushPayoutReceived(expoPushToken, cleanerName, amount, clientName) {
     const title = "Payout on the Way! 💰";
-    const body = `Hi ${cleanerName}! $${amount.toFixed(2)} is being sent to your bank for the ${clientName} cleaning.`;
+    const body = `Hi ${cleanerName}! $${(amount / 100).toFixed(2)} is being sent to your bank for the ${clientName} cleaning.`;
 
     return this.sendPushNotification(expoPushToken, title, body, {
       type: "payout_received",
@@ -574,7 +574,7 @@ class PushNotification {
 
   // 40. Completion approved (to cleaner)
   static async sendPushCompletionApproved(expoPushToken, appointmentDate, payoutAmount) {
-    const formattedPayout = payoutAmount ? `$${parseFloat(payoutAmount).toFixed(2)}` : "your payment";
+    const formattedPayout = payoutAmount ? `$${(parseFloat(payoutAmount) / 100).toFixed(2)}` : "your payment";
     const title = "Job Approved! 🎉";
     const body = `Your cleaning on ${appointmentDate} was approved! ${formattedPayout} is on the way.`;
 

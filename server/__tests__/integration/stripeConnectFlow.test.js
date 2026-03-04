@@ -114,7 +114,7 @@ const mockAppointment = {
   userId: 1,
   homeId: 1,
   date: "2025-02-01",
-  price: "150.00",
+  price: 15000, // $150 in cents
   paid: false,
   completed: false,
   hasBeenAssigned: false,
@@ -407,7 +407,7 @@ describe("Stripe Connect Full Payment Flow", () => {
     it("should correctly calculate 90/10 split", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         ...mockAppointment,
-        price: "200.00", // $200 job
+        price: 20000, // $200 in cents
         paid: true,
         completed: true,
         hasBeenAssigned: true,
@@ -442,7 +442,7 @@ describe("Stripe Connect Full Payment Flow", () => {
 
       UserAppointments.findByPk.mockResolvedValue({
         ...mockAppointment,
-        price: "300.00", // $300 job
+        price: 30000, // $300 in cents
         paid: true,
         completed: true,
         hasBeenAssigned: true,
@@ -500,7 +500,7 @@ describe("Stripe Connect Full Payment Flow", () => {
           appointment: {
             id: 1,
             date: "2025-02-01",
-            price: "150.00",
+            price: 15000, // $150 in cents
             homeId: 1,
             completed: true,
           },

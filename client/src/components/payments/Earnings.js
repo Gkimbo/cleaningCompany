@@ -594,7 +594,7 @@ const Earnings = ({ state, dispatch }) => {
 
                 {(numCleaners > 1 || isTeamJob) && (
                   <Text style={styles.splitInfo}>
-                    {isTeamJob ? "Team Clean: " : ""}Split between {numCleaners} cleaners (Total: ${((parseFloat(appt.price) || 0) * (1 - (isTeamJob ? multiCleanerFeePercent : regularFeePercent))).toFixed(2)})
+                    {isTeamJob ? "Team Clean: " : ""}Split between {numCleaners} cleaners (Total: ${(((parseFloat(appt.price) || 0) * (1 - (isTeamJob ? multiCleanerFeePercent : regularFeePercent))) / 100).toFixed(2)})
                   </Text>
                 )}
 

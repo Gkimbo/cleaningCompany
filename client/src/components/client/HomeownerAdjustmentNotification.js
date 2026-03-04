@@ -118,7 +118,7 @@ const HomeownerAdjustmentNotification = ({ adjustment, token, onResponse, onDism
           <Text style={styles.notificationTitle}>Home Size Report</Text>
           <Text style={styles.notificationMessage} numberOfLines={2}>
             {cleanerName} reported your home has more rooms than on file.
-            {priceDifference > 0 && ` Additional charge: $${priceDifference.toFixed(2)}`}
+            {priceDifference > 0 && ` Additional charge: $${(priceDifference / 100).toFixed(2)}`}
           </Text>
           <Text style={styles.tapToReview}>Tap to review</Text>
         </View>
@@ -180,7 +180,7 @@ const HomeownerAdjustmentNotification = ({ adjustment, token, onResponse, onDism
                   <View style={styles.priceImpactCard}>
                     <Text style={styles.priceImpactLabel}>Price Adjustment</Text>
                     <Text style={styles.priceImpactValue}>
-                      +${priceDifference.toFixed(2)}
+                      +${(priceDifference / 100).toFixed(2)}
                     </Text>
                     <Text style={styles.priceImpactNote}>
                       This amount will be charged to your payment method on file

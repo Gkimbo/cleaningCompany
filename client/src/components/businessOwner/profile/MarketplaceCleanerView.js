@@ -45,8 +45,8 @@ const JobCard = ({ job, onPress }) => {
         </View>
       </View>
       <View style={styles.jobMeta}>
-        {/* Price is stored in dollars in DB, convert to cents for formatCurrency */}
-        <Text style={styles.jobPrice}>{formatCurrency((job.price || 0) * 100)}</Text>
+        {/* Price is already stored in cents in DB */}
+        <Text style={styles.jobPrice}>{formatCurrency(job.price || 0)}</Text>
         <Icon name="chevron-right" size={12} color={colors.neutral[300]} />
       </View>
     </Pressable>
@@ -77,8 +77,8 @@ const RequestCard = ({ request, onPress, cleanerSharePercent }) => {
   const numBaths = request.numBaths || request.home?.numBaths || "?";
 
   // Calculate earnings after platform fee
-  // Price is stored in dollars in DB, convert to cents for formatCurrency
-  const priceInCents = Number(request.price || 0) * 100;
+  // Price is stored in cents in DB
+  const priceInCents = Number(request.price || 0);
   const earnings = priceInCents * cleanerSharePercent;
 
   return (

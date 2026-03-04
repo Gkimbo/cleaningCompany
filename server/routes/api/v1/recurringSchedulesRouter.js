@@ -97,11 +97,12 @@ async function deleteFutureAppointments(scheduleId) {
   // Group appointments by userId to batch UserBills updates
   const userBillAdjustments = {};
   for (const appt of appointmentsToDelete) {
-    const price = parseFloat(appt.price) || 0;
+    // appt.price is already in cents (INTEGER)
+    const priceCents = appt.price || 0;
     if (!userBillAdjustments[appt.userId]) {
       userBillAdjustments[appt.userId] = 0;
     }
-    userBillAdjustments[appt.userId] += price;
+    userBillAdjustments[appt.userId] += priceCents;
   }
 
   // Delete related records first to avoid foreign key constraint errors
@@ -254,8 +255,8 @@ async function generateAppointmentsForSchedule(schedule, daysAhead = 84) {
         userId: client.id,
         homeId: home.id,
         date: dateString,
-        price: schedule.price.toString(),
-        originalPrice: schedule.price.toString(),
+        price: schedule.price, // Already INTEGER cents
+        originalPrice: schedule.price,
         completed: false,
         paid: false,
         hasBeenAssigned: true,
@@ -283,27 +284,25 @@ async function generateAppointmentsForSchedule(schedule, daysAhead = 84) {
         where: { userId: client.id },
       });
 
-      const appointmentPrice = parseFloat(schedule.price);
+      // schedule.price is already INTEGER cents
+      const appointmentPriceCents = schedule.price;
 
       if (!userBill) {
         userBill = await UserBills.create({
           userId: client.id,
-          appointmentDue: appointmentPrice,
-          cancellationDue: 0,
-          totalDue: appointmentPrice,
-          appointmentPaid: 0,
-          cancellationPaid: 0,
-          totalPaid: 0,
+          appointmentDue: appointmentPriceCents,
+          cancellationFee: 0,
+          totalDue: appointmentPriceCents,
         });
       } else {
         await userBill.update({
-          appointmentDue: parseFloat(userBill.appointmentDue || 0) + appointmentPrice,
-          totalDue: parseFloat(userBill.totalDue || 0) + appointmentPrice,
+          appointmentDue: (userBill.appointmentDue || 0) + appointmentPriceCents,
+          totalDue: (userBill.totalDue || 0) + appointmentPriceCents,
         });
       }
 
       // Create payout record - calculate fee using IncentiveService for potential discounts
-      const appointmentPriceInCents = Math.round(appointmentPrice * 100);
+      const appointmentPriceInCents = appointmentPriceCents;
       const feeResult = await IncentiveService.calculateCleanerFee(
         schedule.cleanerId,
         appointmentPriceInCents,

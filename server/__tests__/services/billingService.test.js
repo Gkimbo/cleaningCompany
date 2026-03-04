@@ -241,9 +241,8 @@ describe("Billing Service", () => {
       });
 
       mockModels.UserBills.findOne.mockResolvedValue({
-        appointmentPaid: 0,
-        totalPaid: 0,
         appointmentDue: 100,
+        cancellationFee: 0,
         totalDue: 100,
         update: jest.fn().mockResolvedValue(true),
       });

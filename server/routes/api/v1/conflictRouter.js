@@ -554,10 +554,8 @@ router.get("/:type/:id/refund-info", async (req, res) => {
 
 		const caseData = await ConflictResolutionService.getConflictCase(parseInt(id), type);
 
-		// Calculate amounts (price is in dollars, convert to cents)
-		const originalAmount = caseData.appointment?.price
-			? Math.round(caseData.appointment.price * 100)
-			: 0;
+		// Price is already stored in cents
+		const originalAmount = caseData.appointment?.price || 0;
 		const alreadyRefunded = caseData.appointment?.refundAmount || 0;
 		const maxRefundable = Math.max(0, originalAmount - alreadyRefunded);
 
@@ -618,9 +616,8 @@ router.post("/:type/:id/refund", async (req, res) => {
 		// Get case data to validate refund amount
 		const caseData = await ConflictResolutionService.getConflictCase(parseInt(id), type);
 
-		const originalAmount = caseData.appointment?.price
-			? Math.round(caseData.appointment.price * 100)
-			: 0;
+		// Price is already stored in cents
+		const originalAmount = caseData.appointment?.price || 0;
 		const alreadyRefunded = caseData.appointment?.refundAmount || 0;
 		const maxRefundable = Math.max(0, originalAmount - alreadyRefunded);
 

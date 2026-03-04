@@ -111,11 +111,11 @@ describe("HomeSizeAdjustmentSerializer", () => {
           homeownerId: 1,
           originalNumBeds: "3",
           originalNumBaths: "2",
-          originalPrice: "150.00",
+          originalPrice: 15000,
           reportedNumBeds: "4",
           reportedNumBaths: "3",
-          calculatedNewPrice: "200.00",
-          priceDifference: "50.00",
+          calculatedNewPrice: 20000,
+          priceDifference: 5000,
           status: "pending_homeowner",
           cleanerNote: "Home is larger",
           homeownerResponse: null,
@@ -134,9 +134,9 @@ describe("HomeSizeAdjustmentSerializer", () => {
 
       expect(result.id).toBe(1);
       expect(result.appointmentId).toBe(10);
-      expect(result.originalPrice).toBe(150.0);
-      expect(result.calculatedNewPrice).toBe(200.0);
-      expect(result.priceDifference).toBe(50.0);
+      expect(result.originalPrice).toBe("150.00");
+      expect(result.calculatedNewPrice).toBe("200.00");
+      expect(result.priceDifference).toBe("50.00");
       expect(result.status).toBe("pending_homeowner");
     });
 
@@ -256,7 +256,7 @@ describe("HomeSizeAdjustmentSerializer", () => {
           originalNumBaths: "2",
           reportedNumBeds: "4",
           reportedNumBaths: "3",
-          priceDifference: "50.00",
+          priceDifference: 5000,
           status: "pending_homeowner",
           expiresAt: new Date("2025-02-15"),
           createdAt: new Date("2025-02-14"),
@@ -276,7 +276,7 @@ describe("HomeSizeAdjustmentSerializer", () => {
       const result = HomeSizeAdjustmentSerializer.serializeForList(request);
 
       expect(result.id).toBe(1);
-      expect(result.priceDifference).toBe(50.0);
+      expect(result.priceDifference).toBe("50.00");
       expect(result.cleaner.firstName).toBe("John");
       // Should not include detailed fields
       expect(result.cleanerNote).toBeUndefined();
@@ -291,11 +291,11 @@ describe("HomeSizeAdjustmentSerializer", () => {
           id: 1,
           originalNumBeds: "3",
           originalNumBaths: "2",
-          originalPrice: "150.00",
+          originalPrice: 15000,
           reportedNumBeds: "4",
           reportedNumBaths: "3",
-          calculatedNewPrice: "200.00",
-          priceDifference: "50.00",
+          calculatedNewPrice: 20000,
+          priceDifference: 5000,
           cleanerNote: "The home has 4 bedrooms",
         },
         photos: [

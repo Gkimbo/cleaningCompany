@@ -52,7 +52,7 @@ class BillingService {
       }
 
       // Calculate amount in cents
-      const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+      const priceInCents = appointment.price; // Already in cents
 
       let paymentIntent;
 
@@ -98,12 +98,11 @@ class BillingService {
       });
 
       if (userBill) {
-        const paidAmount = (paymentIntent.amount_received || paymentIntent.amount) / 100;
+        // Stripe amounts are in cents, UserBills stores in cents - no conversion needed
+        const paidAmountCents = paymentIntent.amount_received || paymentIntent.amount;
         await userBill.update({
-          appointmentPaid: parseFloat(userBill.appointmentPaid || 0) + paidAmount,
-          totalPaid: parseFloat(userBill.totalPaid || 0) + paidAmount,
-          appointmentDue: Math.max(0, parseFloat(userBill.appointmentDue || 0) - paidAmount),
-          totalDue: Math.max(0, parseFloat(userBill.totalDue || 0) - paidAmount),
+          appointmentDue: Math.max(0, parseInt(userBill.appointmentDue || 0, 10) - paidAmountCents),
+          totalDue: Math.max(0, parseInt(userBill.totalDue || 0, 10) - paidAmountCents),
         });
       }
 
@@ -223,7 +222,7 @@ class BillingService {
         return { success: false, error: "No cleaners assigned" };
       }
 
-      const priceInCents = appointment.amountPaid || Math.round(parseFloat(appointment.price) * 100);
+      const priceInCents = appointment.amountPaid || appointment.price; // Both in cents
       const perCleanerGross = Math.round(priceInCents / cleanerIds.length);
 
       const payoutResults = [];
@@ -282,8 +281,8 @@ class BillingService {
 
         if (payout) {
           await payout.update({
-            amount: netAmount / 100,
-            platformFee: platformFee / 100,
+            netAmount: netAmount, // Already in cents from PreferredCleanerPerksService
+            platformFee: platformFee, // Already in cents
             status: "processing",
             // Preferred perk fields
             isPreferredHomeJob: bonusInfo.isPreferredJob,
@@ -299,8 +298,9 @@ class BillingService {
           payout = await Payout.create({
             appointmentId: appointment.id,
             cleanerId,
-            amount: netAmount / 100,
-            platformFee: platformFee / 100,
+            grossAmount: perCleanerGross, // Original gross amount in cents
+            netAmount: netAmount, // Already in cents from PreferredCleanerPerksService
+            platformFee: platformFee, // Already in cents
             status: "processing",
             // Preferred perk fields
             isPreferredHomeJob: bonusInfo.isPreferredJob,

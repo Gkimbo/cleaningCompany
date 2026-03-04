@@ -22,6 +22,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
+import { formatCurrency } from "../../services/formatters";
 import EditClientHomeModal from "./EditClientHomeModal";
 import BookForClientModal from "./BookForClientModal";
 import SetupRecurringModal from "./SetupRecurringModal";
@@ -315,7 +316,7 @@ const AppointmentCard = ({ appointment, homes }) => {
           </Text>
         </View>
         <View style={styles.appointmentCardRight}>
-          <Text style={styles.appointmentPrice}>${appointment.price || 0}</Text>
+          <Text style={styles.appointmentPrice}>{formatCurrency(appointment.price || 0)}</Text>
           <Feather name={statusConfig.icon} size={18} color={statusConfig.color} />
           <Feather
             name={expanded ? "chevron-up" : "chevron-down"}
@@ -408,7 +409,7 @@ const AppointmentCard = ({ appointment, homes }) => {
               <View style={styles.appointmentDetailContent}>
                 <Text style={styles.appointmentDetailLabel}>Price</Text>
                 <Text style={[styles.appointmentDetailValue, styles.appointmentDetailPrice]}>
-                  ${appointment.price || 0}
+                  {formatCurrency(appointment.price || 0)}
                 </Text>
               </View>
             </View>
@@ -1432,7 +1433,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                   const appointmentDetails = dayAppointments.map((apt) => {
                     const homeIndex = homes.findIndex(h => h.id === apt.home?.id);
                     const homeLabel = apt.home?.nickName || (homeIndex >= 0 ? `Home ${homeIndex + 1}` : "Home");
-                    return `• ${homeLabel}\n  Time: ${formatTimeConstraint(apt.timeToBeCompleted)}\n  Price: $${apt.price || 0}\n  Status: ${apt.status}`;
+                    return `• ${homeLabel}\n  Time: ${formatTimeConstraint(apt.timeToBeCompleted)}\n  Price: ${formatCurrency(apt.price || 0)}\n  Status: ${apt.status}`;
                   }).join("\n\n");
 
                   Alert.alert(

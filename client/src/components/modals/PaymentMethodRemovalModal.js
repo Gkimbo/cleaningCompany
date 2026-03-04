@@ -18,6 +18,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { formatCurrency } from "../../services/formatters";
 import { API_BASE } from "../../services/config";
 
 const PaymentMethodRemovalModal = ({
@@ -190,13 +191,13 @@ const PaymentMethodRemovalModal = ({
                   <View key={apt.id} style={styles.appointmentItem}>
                     <View style={styles.appointmentInfo}>
                       <Text style={styles.appointmentDate}>{formatDate(apt.date)}</Text>
-                      <Text style={styles.appointmentPrice}>${apt.price.toFixed(2)}</Text>
+                      <Text style={styles.appointmentPrice}>{formatCurrency(apt.price)}</Text>
                     </View>
                     {apt.isWithinCancellationWindow && (
                       <View style={styles.feeTag}>
                         <Icon name="warning" size={12} color={colors.warning[700]} />
                         <Text style={styles.feeTagText}>
-                          ${apt.cancellationFee} fee if cancelled
+                          {formatCurrency(apt.cancellationFee)} fee if cancelled
                         </Text>
                       </View>
                     )}

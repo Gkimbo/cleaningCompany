@@ -1209,7 +1209,7 @@ Kleanr Support Team`;
         linensText = "\n\n✓ UPDATED: Sheets and towels will now be provided at the home - you don't need to bring any!\n";
       }
 
-      const payoutFormatted = typeof payout === 'number' ? `$${payout.toFixed(2)}` : payout;
+      const payoutFormatted = typeof payout === 'number' ? `$${(payout / 100).toFixed(2)}` : payout;
 
       const htmlContent = createEmailTemplate({
         title: "Appointment Update 📝",
@@ -1656,12 +1656,12 @@ Kleanr Support Team`;
             { label: "Address", value: homeAddress },
             { label: "On File", value: `${originalBeds} bed, ${originalBaths} bath` },
             { label: "Reported", value: `${reportedBeds} bed, ${reportedBaths} bath` },
-            { label: "Price Difference", value: priceDifference > 0 ? `+$${priceDifference.toFixed(2)}` : `$${priceDifference.toFixed(2)}` },
+            { label: "Price Difference", value: priceDifference > 0 ? `+$${(priceDifference / 100).toFixed(2)}` : `$${(priceDifference / 100).toFixed(2)}` },
           ],
         },
         warningBox: priceDifference > 0 ? {
           icon: "💳",
-          text: `If you approve this change, $${priceDifference.toFixed(2)} will be charged to your payment method on file.`,
+          text: `If you approve this change, $${(priceDifference / 100).toFixed(2)} will be charged to your payment method on file.`,
           bgColor: "#fef3c7",
           borderColor: "#f59e0b",
           textColor: "#92400e",
@@ -1679,9 +1679,9 @@ HOME SIZE COMPARISON
 Address: ${homeAddress}
 On File: ${originalBeds} bed, ${originalBaths} bath
 Reported: ${reportedBeds} bed, ${reportedBaths} bath
-Price Difference: ${priceDifference > 0 ? '+' : ''}$${priceDifference.toFixed(2)}
+Price Difference: ${priceDifference > 0 ? '+' : ''}$${(priceDifference / 100).toFixed(2)}
 
-${priceDifference > 0 ? `If you approve this change, $${priceDifference.toFixed(2)} will be charged to your payment method.\n\n` : ''}Please respond within 24 hours by opening the Kleanr app.
+${priceDifference > 0 ? `If you approve this change, $${(priceDifference / 100).toFixed(2)} will be charged to your payment method.\n\n` : ''}Please respond within 24 hours by opening the Kleanr app.
 
 Best regards,
 Kleanr Support Team`;
@@ -1726,7 +1726,7 @@ Kleanr Support Team`;
           items: [
             { label: "Address", value: homeAddress },
             { label: "Updated Size", value: `${newBeds} bed, ${newBaths} bath` },
-            ...(amountCharged > 0 ? [{ label: "Amount Charged", value: `$${amountCharged.toFixed(2)}` }] : []),
+            ...(amountCharged > 0 ? [{ label: "Amount Charged", value: `$${(amountCharged / 100).toFixed(2)}` }] : []),
           ],
         },
         footerMessage: "Thank you for keeping your home details accurate",
@@ -1740,7 +1740,7 @@ UPDATED HOME DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━
 Address: ${homeAddress}
 Updated Size: ${newBeds} bed, ${newBaths} bath
-${amountCharged > 0 ? `Amount Charged: $${amountCharged.toFixed(2)}\n` : ''}
+${amountCharged > 0 ? `Amount Charged: $${(amountCharged / 100).toFixed(2)}\n` : ''}
 Your home details have been updated for all future appointments.
 
 Best regards,
@@ -1867,7 +1867,7 @@ Kleanr System`;
           title: "Updated Home Details",
           items: [
             { label: "Final Size", value: `${finalBeds} bed, ${finalBaths} bath` },
-            ...(amountCharged > 0 ? [{ label: "Amount Charged", value: `$${amountCharged.toFixed(2)}` }] : []),
+            ...(amountCharged > 0 ? [{ label: "Amount Charged", value: `$${(amountCharged / 100).toFixed(2)}` }] : []),
           ],
         } : null,
         warningBox: ownerNote ? {
@@ -1887,7 +1887,7 @@ A owner has reviewed the home size dispute and has ${isApproved ? 'approved' : '
 ${isApproved ? `UPDATED HOME DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━
 Final Size: ${finalBeds} bed, ${finalBaths} bath
-${amountCharged > 0 ? `Amount Charged: $${amountCharged.toFixed(2)}\n` : ''}` : 'The original home details will remain unchanged.'}
+${amountCharged > 0 ? `Amount Charged: $${(amountCharged / 100).toFixed(2)}\n` : ''}` : 'The original home details will remain unchanged.'}
 
 ${ownerNote ? `Owner's Note: "${ownerNote}"\n` : ''}
 Best regards,
@@ -2303,7 +2303,7 @@ Kleanr Support Team`;
       // Create appointment list for the email
       const appointmentItems = appointments.map(appt => ({
         label: formatDate(appt.date),
-        value: `$${Number(appt.price).toFixed(2)} - ${appt.source}`,
+        value: `$${(Number(appt.price) / 100).toFixed(2)} - ${appt.source}`,
       }));
 
       const htmlContent = createEmailTemplate({
@@ -2321,7 +2321,7 @@ Kleanr Support Team`;
         },
         warningBox: {
           icon: "💳",
-          text: `<strong>Total Amount:</strong> $${totalAmount.toFixed(2)} has been added to your bill. A cleaner will be assigned shortly.`,
+          text: `<strong>Total Amount:</strong> $${(totalAmount / 100).toFixed(2)} has been added to your bill. A cleaner will be assigned shortly.`,
           bgColor: "#dbeafe",
           borderColor: "#3b82f6",
           textColor: "#1e40af",
@@ -2339,7 +2339,7 @@ Kleanr Support Team`;
       });
 
       const appointmentListText = appointments.map(appt =>
-        `  • ${formatDate(appt.date)} - $${Number(appt.price).toFixed(2)} (${appt.source})`
+        `  • ${formatDate(appt.date)} - $${(Number(appt.price) / 100).toFixed(2)} (${appt.source})`
       ).join('\n');
 
       const textContent = `Hi ${userName}!
@@ -2353,7 +2353,7 @@ APPOINTMENTS CREATED FOR ${homeAddress.toUpperCase()}
 ━━━━━━━━━━━━━━━━━━━━━━
 ${appointmentListText}
 
-Total Amount: $${totalAmount.toFixed(2)} (added to your bill)
+Total Amount: $${(totalAmount / 100).toFixed(2)} (added to your bill)
 
 WHAT'S NEXT?
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -2972,7 +2972,7 @@ The Kleanr Team`;
             { label: "Frequency", value: frequencyText },
             { label: "Day", value: `${dayName}s` },
             { label: "Starting", value: formatDate(startDate) },
-            { label: "Price", value: `$${parseFloat(price).toFixed(2)}` },
+            { label: "Price", value: `$${(parseFloat(price) / 100).toFixed(2)}` },
           ],
         },
         steps: nextDates && nextDates.length > 0 ? {
@@ -2999,7 +2999,7 @@ YOUR SCHEDULE
 Frequency: ${frequencyText}
 Day: ${dayName}s
 Starting: ${formatDate(startDate)}
-Price: $${parseFloat(price).toFixed(2)}
+Price: $${(parseFloat(price) / 100).toFixed(2)}
 
 ${nextDates && nextDates.length > 0 ? `UPCOMING CLEANINGS\n━━━━━━━━━━━━━━━━━━━━━━\n${nextDates.slice(0, 4).map(date => formatDate(date)).join('\n')}\n` : ''}
 
@@ -3062,7 +3062,7 @@ The Kleanr Team`;
             { label: "Date", value: formatDate(appointmentDate) },
             { label: "Address", value: homeAddress },
             { label: "Cleaner", value: cleanerName },
-            { label: "Amount", value: `$${parseFloat(price).toFixed(2)}` },
+            { label: "Amount", value: `$${(parseFloat(price) / 100).toFixed(2)}` },
             { label: "Status", value: isPaid ? '<span style="color: #10b981; font-weight: bold;">PAID</span>' : '<span style="color: #f59e0b; font-weight: bold;">PENDING</span>' },
             ...(paymentMethod ? [{ label: "Payment Method", value: paymentMethod }] : []),
           ],
@@ -3083,7 +3083,7 @@ Service: Home Cleaning
 Date: ${formatDate(appointmentDate)}
 Address: ${homeAddress}
 Cleaner: ${cleanerName}
-Amount: $${parseFloat(price).toFixed(2)}
+Amount: $${(parseFloat(price) / 100).toFixed(2)}
 Status: ${isPaid ? 'PAID' : 'PENDING'}
 ${paymentMethod ? `Payment Method: ${paymentMethod}` : ''}
 
@@ -3139,7 +3139,7 @@ The Kleanr Team`;
           items: [
             { label: "Date", value: formatDate(appointmentDate) },
             { label: "Address", value: homeAddress },
-            { label: "Amount Due", value: `<strong style="color: #dc2626;">$${parseFloat(price).toFixed(2)}</strong>` },
+            { label: "Amount Due", value: `<strong style="color: #dc2626;">$${(parseFloat(price) / 100).toFixed(2)}</strong>` },
             { label: "Days Overdue", value: `${daysOverdue} day${daysOverdue !== 1 ? 's' : ''}` },
           ],
         },
@@ -3157,7 +3157,7 @@ OUTSTANDING INVOICE
 ━━━━━━━━━━━━━━━━━━━━━━
 Date: ${formatDate(appointmentDate)}
 Address: ${homeAddress}
-Amount Due: $${parseFloat(price).toFixed(2)}
+Amount Due: $${(parseFloat(price) / 100).toFixed(2)}
 Days Overdue: ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''}
 
 Please log into the Kleanr app to complete payment.
@@ -3168,7 +3168,7 @@ The Kleanr Team`;
       const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
-        subject: `⚠️ Payment Reminder: $${parseFloat(price).toFixed(2)} due`,
+        subject: `⚠️ Payment Reminder: $${(parseFloat(price) / 100).toFixed(2)} due`,
         text: textContent,
         html: htmlContent,
       };
@@ -3224,9 +3224,9 @@ The Kleanr Team`;
             { label: "Client", value: clientName },
             { label: "Date", value: formatDate(appointmentDate) },
             { label: "Address", value: homeAddress },
-            { label: "Gross Amount", value: `$${parseFloat(grossAmount).toFixed(2)}` },
-            { label: feeLabel, value: `-$${parseFloat(platformFee).toFixed(2)}` },
-            { label: "Your Payout", value: `<strong style="color: #10b981;">$${parseFloat(netAmount).toFixed(2)}</strong>` },
+            { label: "Gross Amount", value: `$${(parseFloat(grossAmount) / 100).toFixed(2)}` },
+            { label: feeLabel, value: `-$${(parseFloat(platformFee) / 100).toFixed(2)}` },
+            { label: "Your Payout", value: `<strong style="color: #10b981;">$${(parseFloat(netAmount) / 100).toFixed(2)}</strong>` },
           ],
         },
         warningBox: {
@@ -3249,9 +3249,9 @@ PAYOUT DETAILS
 Client: ${clientName}
 Date: ${formatDate(appointmentDate)}
 Address: ${homeAddress}
-Gross Amount: $${parseFloat(grossAmount).toFixed(2)}
-${feeLabel}: -$${parseFloat(platformFee).toFixed(2)}
-Your Payout: $${parseFloat(netAmount).toFixed(2)}
+Gross Amount: $${(parseFloat(grossAmount) / 100).toFixed(2)}
+${feeLabel}: -$${(parseFloat(platformFee) / 100).toFixed(2)}
+Your Payout: $${(parseFloat(netAmount) / 100).toFixed(2)}
 
 🏦 Funds typically arrive in your bank account within 2-3 business days.
 
@@ -3261,7 +3261,7 @@ The Kleanr Team`;
       const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
-        subject: `💰 Payout: $${parseFloat(netAmount).toFixed(2)} for ${formatDate(appointmentDate)}`,
+        subject: `💰 Payout: $${(parseFloat(netAmount) / 100).toFixed(2)} for ${formatDate(appointmentDate)}`,
         text: textContent,
         html: htmlContent,
       };
@@ -3313,7 +3313,7 @@ The Kleanr Team`;
             { label: "Client", value: clientName },
             { label: "Date", value: formatDate(appointmentDate) },
             { label: "Address", value: homeAddress },
-            { label: "Price", value: `$${parseFloat(price).toFixed(2)}` },
+            { label: "Price", value: `$${(parseFloat(price) / 100).toFixed(2)}` },
           ],
         },
         steps: {
@@ -3343,7 +3343,7 @@ APPOINTMENT DETAILS
 Client: ${clientName}
 Date: ${formatDate(appointmentDate)}
 Address: ${homeAddress}
-Price: $${parseFloat(price).toFixed(2)}
+Price: $${(parseFloat(price) / 100).toFixed(2)}
 
 WHAT TO DO NEXT:
 1. Accept - If you can do this cleaning
@@ -5460,7 +5460,7 @@ Kleanr Support Team`;
     try {
       const transporter = createTransporter();
       const formattedPayout = payoutAmount
-        ? `$${parseFloat(payoutAmount).toFixed(2)}`
+        ? `$${(parseFloat(payoutAmount) / 100).toFixed(2)}`
         : "Your share";
 
       const htmlContent = createEmailTemplate({

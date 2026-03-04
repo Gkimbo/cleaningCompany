@@ -44,11 +44,11 @@ class HomeSizeAdjustmentSerializer {
 			homeownerId: data.homeownerId,
 			originalNumBeds: data.originalNumBeds,
 			originalNumBaths: data.originalNumBaths,
-			originalPrice: parseFloat(data.originalPrice),
+			originalPrice: (data.originalPrice / 100).toFixed(2), // Convert cents to dollars
 			reportedNumBeds: data.reportedNumBeds,
 			reportedNumBaths: data.reportedNumBaths,
-			calculatedNewPrice: parseFloat(data.calculatedNewPrice),
-			priceDifference: parseFloat(data.priceDifference),
+			calculatedNewPrice: (data.calculatedNewPrice / 100).toFixed(2), // Convert cents to dollars
+			priceDifference: (data.priceDifference / 100).toFixed(2), // Convert cents to dollars
 			status: data.status,
 			cleanerNote: data.cleanerNote,
 			homeownerResponse: data.homeownerResponse,
@@ -116,7 +116,7 @@ class HomeSizeAdjustmentSerializer {
 			originalNumBaths: data.originalNumBaths,
 			reportedNumBeds: data.reportedNumBeds,
 			reportedNumBaths: data.reportedNumBaths,
-			priceDifference: parseFloat(data.priceDifference),
+			priceDifference: (data.priceDifference / 100).toFixed(2), // Convert cents to dollars
 			status: data.status,
 			expiresAt: data.expiresAt,
 			createdAt: data.createdAt
@@ -145,11 +145,11 @@ class HomeSizeAdjustmentSerializer {
 			appointmentId: data.appointmentId,
 			originalNumBeds: data.originalNumBeds,
 			originalNumBaths: data.originalNumBaths,
-			originalPrice: parseFloat(data.originalPrice),
+			originalPrice: (data.originalPrice / 100).toFixed(2), // Convert cents to dollars
 			reportedNumBeds: data.reportedNumBeds,
 			reportedNumBaths: data.reportedNumBaths,
-			calculatedNewPrice: parseFloat(data.calculatedNewPrice),
-			priceDifference: parseFloat(data.priceDifference),
+			calculatedNewPrice: (data.calculatedNewPrice / 100).toFixed(2), // Convert cents to dollars
+			priceDifference: (data.priceDifference / 100).toFixed(2), // Convert cents to dollars
 			cleanerNote: data.cleanerNote,
 			status: data.status,
 			expiresAt: data.expiresAt,

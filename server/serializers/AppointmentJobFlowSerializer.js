@@ -4,6 +4,12 @@
  */
 
 class AppointmentJobFlowSerializer {
+  // Convert cents to dollars for display
+  static toDollars(cents) {
+    if (cents === null || cents === undefined) return null;
+    return (cents / 100).toFixed(2);
+  }
+
   /**
    * Serialize a single AppointmentJobFlow
    * @param {Object} jobFlow - AppointmentJobFlow instance or plain object
@@ -185,7 +191,7 @@ class AppointmentJobFlowSerializer {
       id: data.id,
       date: data.date,
       scheduledDate: data.scheduledDate,
-      price: data.price,
+      price: this.toDollars(data.price),
       completed: data.completed,
     };
   }

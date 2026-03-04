@@ -503,9 +503,9 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
         numBaths: request.reportedNumBaths,
       });
 
-      // Update the triggering appointment price
+      // Update the triggering appointment price (calculatedNewPrice is in cents)
       await appointment.update({
-        price: String(request.calculatedNewPrice),
+        price: request.calculatedNewPrice,
       });
 
       // Update ALL future/current appointments for this home with recalculated prices
@@ -531,7 +531,7 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
           appt.sheetConfigurations,
           appt.towelConfigurations
         );
-        await appt.update({ price: String(newApptPrice) });
+        await appt.update({ price: newApptPrice }); // calculatePrice returns cents
       }
 
       console.log(`📋 Updated ${futureAppointments.length} future appointments with new pricing for home ${request.homeId}`);
@@ -555,7 +555,7 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
               chargeStatus = "failed";
             } else {
               const chargeIntent = await stripe.paymentIntents.create({
-                amount: Math.round(request.priceDifference * 100), // cents
+                amount: request.priceDifference, // Already in cents
                 currency: "usd",
                 customer: homeowner.stripeCustomerId,
                 payment_method: paymentMethodId,
@@ -578,7 +578,7 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
                 await recordPaymentTransaction({
                   type: "charge",
                   status: "succeeded",
-                  amount: Math.round(request.priceDifference * 100),
+                  amount: request.priceDifference, // Already in cents
                   userId: homeowner.id,
                   appointmentId: request.appointmentId,
                   stripePaymentIntentId: chargeIntent.id,
@@ -755,7 +755,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
         appointment.towelConfigurations
       );
 
-      const priceDiff = finalPrice - parseFloat(appointment.price);
+      const priceDiff = finalPrice - appointment.price; // Both in cents
 
       // Update home
       await home.update({
@@ -763,9 +763,9 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
         numBaths: String(bathsToUse),
       });
 
-      // Update the triggering appointment price
+      // Update the triggering appointment price (finalPrice is in cents)
       await appointment.update({
-        price: String(finalPrice),
+        price: finalPrice,
       });
 
       // Update ALL future/current appointments for this home with recalculated prices
@@ -791,7 +791,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
           appt.sheetConfigurations,
           appt.towelConfigurations
         );
-        await appt.update({ price: String(newApptPrice) });
+        await appt.update({ price: newApptPrice }); // calculatePrice returns cents
       }
 
       console.log(`📋 Updated ${futureAppointments.length} future appointments with new pricing for home ${request.homeId}`);
@@ -827,7 +827,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
               chargeStatus = "failed";
             } else {
               const chargeIntent = await stripe.paymentIntents.create({
-                amount: Math.round(priceDiff * 100), // cents
+                amount: priceDiff, // Already in cents
                 currency: "usd",
                 customer: homeowner.stripeCustomerId,
                 payment_method: paymentMethodId,
@@ -851,7 +851,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
                 await recordPaymentTransaction({
                   type: "charge",
                   status: "succeeded",
-                  amount: Math.round(priceDiff * 100),
+                  amount: priceDiff, // Already in cents
                   userId: homeowner.id,
                   appointmentId: request.appointmentId,
                   stripePaymentIntentId: chargeIntent.id,

@@ -1123,11 +1123,10 @@ async function processPayoutAfterApproval(appointment) {
           continue;
         }
 
-        // Calculate amounts
-        const payoutPrice = appointment.discountApplied && appointment.originalPrice
-          ? parseFloat(appointment.originalPrice)
-          : parseFloat(appointment.price);
-        const priceInCents = Math.round(payoutPrice * 100);
+        // Calculate amounts - price is already stored in cents (INTEGER)
+        const priceInCents = appointment.discountApplied && appointment.originalPrice
+          ? appointment.originalPrice
+          : appointment.price;
         const perCleanerGross = Math.round(priceInCents / cleanerIds.length);
         const platformFee = Math.round(perCleanerGross * platformFeePercent);
         const netAmount = perCleanerGross - platformFee;

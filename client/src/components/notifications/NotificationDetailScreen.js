@@ -14,6 +14,7 @@ import { Feather } from "@expo/vector-icons";
 import { UserContext } from "../../context/UserContext";
 import NotificationsService from "../../services/fetchRequests/NotificationsService";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
+import { formatCurrency } from "../../services/formatters";
 
 import useSafeNavigation from "../../hooks/useSafeNavigation";
 const NotificationDetailScreen = () => {
@@ -337,7 +338,7 @@ const NotificationDetailScreen = () => {
                 <Feather name="dollar-sign" size={16} color={colors.neutral[600]} />
                 <View style={styles.detailContent}>
                   <Text style={styles.detailLabel}>Price</Text>
-                  <Text style={styles.detailValue}>${notification.data.price}</Text>
+                  <Text style={styles.detailValue}>{formatCurrency(notification.data.price)}</Text>
                 </View>
               </View>
             )}

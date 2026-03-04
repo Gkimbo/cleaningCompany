@@ -44,8 +44,9 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: "anytime",
     },
     price: {
-      type: DataTypes.DECIMAL(10, 2),
+      type: DataTypes.INTEGER,
       allowNull: false,
+      comment: "Price in cents (e.g., 15000 = $150.00)",
     },
 
     // === Date range ===

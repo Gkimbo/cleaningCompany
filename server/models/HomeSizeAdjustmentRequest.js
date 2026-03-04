@@ -48,8 +48,9 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     originalPrice: {
-      type: DataTypes.DECIMAL(10, 2),
+      type: DataTypes.INTEGER,
       allowNull: false,
+      comment: "Original price in cents (e.g., 15000 = $150.00)",
     },
     reportedNumBeds: {
       type: DataTypes.STRING,
@@ -60,12 +61,14 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     calculatedNewPrice: {
-      type: DataTypes.DECIMAL(10, 2),
+      type: DataTypes.INTEGER,
       allowNull: false,
+      comment: "Calculated new price in cents (e.g., 17500 = $175.00)",
     },
     priceDifference: {
-      type: DataTypes.DECIMAL(10, 2),
+      type: DataTypes.INTEGER,
       allowNull: false,
+      comment: "Price difference in cents (e.g., 2500 = $25.00)",
     },
     status: {
       type: DataTypes.ENUM(

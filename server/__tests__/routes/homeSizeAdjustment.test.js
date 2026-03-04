@@ -124,7 +124,7 @@ describe("HomeSizeAdjustment Router", () => {
     userId: 1,
     homeId: 1,
     date: "2025-01-15",
-    price: "150.00",
+    price: 15000,
     completed: false,
     employeesAssigned: ["2"],
     bringSheets: false,
@@ -165,11 +165,11 @@ describe("HomeSizeAdjustment Router", () => {
     homeownerId: 1,
     originalNumBeds: "3",
     originalNumBaths: "2",
-    originalPrice: 150.0,
+    originalPrice: 15000, // in cents
     reportedNumBeds: "4",
     reportedNumBaths: "3",
-    calculatedNewPrice: 200.0,
-    priceDifference: 50.0,
+    calculatedNewPrice: 20000, // in cents
+    priceDifference: 5000, // in cents
     status: "pending_homeowner",
     cleanerNote: "Home is larger than listed",
     homeownerResponse: null,
@@ -195,7 +195,7 @@ describe("HomeSizeAdjustment Router", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    calculatePrice.mockResolvedValue(200);
+    calculatePrice.mockResolvedValue(20000); // in cents
   });
 
   describe("Authentication Middleware", () => {
@@ -900,7 +900,7 @@ describe("HomeSizeAdjustment Router", () => {
         stripeCustomerId: "cus_test123",
       });
       const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
-      const mockRequest = createMockRequest({ priceDifference: 50.0 });
+      const mockRequest = createMockRequest({ priceDifference: 5000 });
       const mockHome = createMockHome();
       const mockAppointment = createMockAppointment();
 
@@ -929,7 +929,7 @@ describe("HomeSizeAdjustment Router", () => {
       expect(res.status).toBe(200);
       expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          amount: 5000, // 50.00 * 100 cents
+          amount: 5000, // already in cents
           currency: "usd",
           customer: "cus_test123",
           payment_method: "pm_test123",
@@ -948,7 +948,7 @@ describe("HomeSizeAdjustment Router", () => {
         stripeCustomerId: null, // No Stripe customer
       });
       const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
-      const mockRequest = createMockRequest({ priceDifference: 50.0 });
+      const mockRequest = createMockRequest({ priceDifference: 5000 });
       const mockHome = createMockHome();
       const mockAppointment = createMockAppointment();
 
@@ -985,7 +985,7 @@ describe("HomeSizeAdjustment Router", () => {
         stripeCustomerId: "cus_test123",
       });
       const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
-      const mockRequest = createMockRequest({ priceDifference: 50.0 });
+      const mockRequest = createMockRequest({ priceDifference: 5000 });
       const mockHome = createMockHome();
       const mockAppointment = createMockAppointment();
 
@@ -1141,8 +1141,8 @@ describe("HomeSizeAdjustment Router", () => {
         status: "pending_owner",
       });
       const mockHome = createMockHome();
-      // Set appointment price to 150, calculatePrice returns 200, so priceDiff = 50
-      const mockAppointment = createMockAppointment({ price: "150.00" });
+      // Set appointment price to 15000 cents, calculatePrice returns 20000 cents, so priceDiff = 5000 cents
+      const mockAppointment = createMockAppointment({ price: 15000 });
 
       User.findByPk.mockImplementation((id) => {
         if (id === 3) return Promise.resolve(mockOwner);
@@ -1154,8 +1154,8 @@ describe("HomeSizeAdjustment Router", () => {
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
       UserAppointments.findAll.mockResolvedValue([]);
 
-      // calculatePrice returns 200, appointment.price is 150, so priceDiff = 50
-      calculatePrice.mockResolvedValue(200);
+      // calculatePrice returns 20000 cents, appointment.price is 15000 cents, so priceDiff = 5000 cents
+      calculatePrice.mockResolvedValue(20000);
 
       mockStripe.customers.retrieve.mockResolvedValue({
         invoice_settings: { default_payment_method: "pm_owner_test" },
@@ -1171,7 +1171,7 @@ describe("HomeSizeAdjustment Router", () => {
         .send({ approve: true, ownerNote: "Photos confirm larger size" });
 
       expect(res.status).toBe(200);
-      // priceDiff = 200 - 150 = 50, amount = 50 * 100 = 5000 cents
+      // priceDiff = 20000 - 15000 = 5000 cents
       expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 5000,
@@ -1200,7 +1200,7 @@ describe("HomeSizeAdjustment Router", () => {
         status: "pending_owner",
       });
       const mockHome = createMockHome();
-      const mockAppointment = createMockAppointment({ price: "150.00" });
+      const mockAppointment = createMockAppointment({ price: 15000 });
 
       User.findByPk.mockImplementation((id) => {
         if (id === 3) return Promise.resolve(mockOwner);

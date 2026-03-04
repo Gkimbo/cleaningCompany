@@ -27,8 +27,8 @@ const FinancialSection = ({ caseData, caseType }) => {
         <View style={styles.card}>
           <View style={styles.row}>
             <Text style={styles.label}>Appointment Price</Text>
-            {/* Price is stored in dollars in DB, convert to cents for formatCurrency */}
-            <Text style={styles.value}>{formatCurrency((appointment?.price || 0) * 100)}</Text>
+            {/* Price is already stored in cents in DB */}
+            <Text style={styles.value}>{formatCurrency(appointment?.price || 0)}</Text>
           </View>
           {appointment?.paymentStatus && (
             <View style={styles.row}>

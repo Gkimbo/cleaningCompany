@@ -17,7 +17,7 @@ describe("AppointmentSerializer", () => {
         dataValues: {
           id: 1,
           date: "2026-01-15",
-          price: "250.00",
+          price: 25000, // in cents
           userId: 10,
           homeId: 5,
           paid: true,
@@ -114,7 +114,7 @@ describe("AppointmentSerializer", () => {
           id: 1,
           discountPercent: "0.15",
           discountApplied: true,
-          originalPrice: "300.00",
+          originalPrice: 30000, // cents
         },
       };
 
@@ -156,7 +156,7 @@ describe("AppointmentSerializer", () => {
         dataValues: {
           id: 1,
           isLastMinuteBooking: true,
-          lastMinuteFeeApplied: 50,
+          lastMinuteFeeApplied: 5000,
           lastMinuteNotificationsSentAt: new Date("2026-01-10T10:00:00Z"),
         },
       };
@@ -164,7 +164,7 @@ describe("AppointmentSerializer", () => {
       const result = AppointmentSerializer.serializeOne(mockAppointment);
 
       expect(result.isLastMinuteBooking).toBe(true);
-      expect(result.lastMinuteFeeApplied).toBe(50);
+      expect(result.lastMinuteFeeApplied).toBe("50.00");
       expect(result.lastMinuteNotificationsSentAt).toEqual(new Date("2026-01-10T10:00:00Z"));
     });
 
@@ -211,7 +211,7 @@ describe("AppointmentSerializer", () => {
       const mockAppointment = {
         id: 1,
         date: "2026-01-15",
-        price: "200.00",
+        price: 20000, // in cents
       };
 
       const result = AppointmentSerializer.serializeOne(mockAppointment);
@@ -229,14 +229,14 @@ describe("AppointmentSerializer", () => {
           dataValues: {
             id: 1,
             date: "2026-01-15",
-            price: "250.00",
+            price: 25000, // in cents
           },
         },
         {
           dataValues: {
             id: 2,
             date: "2026-01-16",
-            price: "300.00",
+            price: 30000, // in cents
           },
         },
       ];
@@ -309,7 +309,7 @@ describe("AppointmentSerializer", () => {
           dataValues: {
             id: 1,
             isLastMinuteBooking: true,
-            lastMinuteFeeApplied: 50,
+            lastMinuteFeeApplied: 5000,
           },
         },
         {
@@ -324,9 +324,9 @@ describe("AppointmentSerializer", () => {
       const result = AppointmentSerializer.serializeArray(mockAppointments);
 
       expect(result[0].isLastMinuteBooking).toBe(true);
-      expect(result[0].lastMinuteFeeApplied).toBe(50);
+      expect(result[0].lastMinuteFeeApplied).toBe("50.00");
       expect(result[1].isLastMinuteBooking).toBe(false);
-      expect(result[1].lastMinuteFeeApplied).toBe(0);
+      expect(result[1].lastMinuteFeeApplied).toBe("0.00");
     });
   });
 

@@ -1,6 +1,7 @@
 /**
  * Price Calculation Service
  * Uses pricing values from database via getPricingConfig()
+ * All prices are calculated and returned in CENTS (e.g., 15000 = $150.00)
  */
 const { getPricingConfig } = require("../config/businessConfig");
 
@@ -9,7 +10,7 @@ const { getPricingConfig } = require("../config/businessConfig");
  * @param {Array} sheetConfigs - Array of bed configurations with needsSheets flag
  * @param {Array} towelConfigs - Array of bathroom configurations with towel/facecloth counts
  * @param {Object} pricingConfig - Optional: pricing config (fetched if not provided)
- * @returns {Promise<number>} Total linen price
+ * @returns {Promise<number>} Total linen price in CENTS
  */
 const calculateLinenPrice = async (sheetConfigs, towelConfigs, pricingConfig = null) => {
   const pricing = pricingConfig || await getPricingConfig();
@@ -43,7 +44,7 @@ const calculateLinenPrice = async (sheetConfigs, towelConfigs, pricingConfig = n
  * @param {Array} sheetConfigs - Optional: specific bed configurations
  * @param {Array} towelConfigs - Optional: specific bathroom configurations
  * @param {Object} pricingConfig - Optional: pricing config (fetched if not provided)
- * @returns {Promise<number>} Total appointment price
+ * @returns {Promise<number>} Total appointment price in CENTS (e.g., 15000 = $150.00)
  */
 const calculatePrice = async (
   sheets,
@@ -57,13 +58,13 @@ const calculatePrice = async (
 ) => {
   const pricing = pricingConfig || await getPricingConfig();
   let price = 0;
-  // Fallbacks match database defaults in case pricing config is incomplete
-  const basePrice = pricing?.basePrice ?? 150;
-  const extraBedBathFee = pricing?.extraBedBathFee ?? 50;
-  const halfBathFee = pricing?.halfBathFee ?? 25;
-  const sheetFeePerBed = pricing?.linens?.sheetFeePerBed ?? 30;
-  const towelFee = pricing?.linens?.towelFee ?? 5;
-  const faceClothFee = pricing?.linens?.faceClothFee ?? 2;
+  // Fallbacks match database defaults in cents
+  const basePrice = pricing?.basePrice ?? 15000;
+  const extraBedBathFee = pricing?.extraBedBathFee ?? 5000;
+  const halfBathFee = pricing?.halfBathFee ?? 2500;
+  const sheetFeePerBed = pricing?.linens?.sheetFeePerBed ?? 3000;
+  const towelFee = pricing?.linens?.towelFee ?? 500;
+  const faceClothFee = pricing?.linens?.faceClothFee ?? 200;
 
   // Time window surcharge (timeWindows values can be objects with surcharge property or plain numbers)
   const timeWindowValue = pricing.timeWindows?.[timeToBeCompleted];
@@ -118,11 +119,12 @@ const calculatePrice = async (
  * @param {string} appointmentDate - The appointment date (YYYY-MM-DD format)
  * @param {Object} pricingConfig - Optional pricing config
  * @returns {Promise<{isLastMinute: boolean, fee: number, hoursUntil: number, thresholdHours: number}>}
+ * Note: fee is returned in CENTS (e.g., 5000 = $50.00)
  */
 const checkLastMinuteBooking = async (appointmentDate, pricingConfig = null) => {
   const pricing = pricingConfig || (await getPricingConfig());
   const thresholdHours = pricing?.lastMinute?.thresholdHours ?? 48;
-  const fee = pricing?.lastMinute?.fee ?? 50;
+  const fee = pricing?.lastMinute?.fee ?? 5000;
 
   const now = new Date();
   const appointmentDateTime = new Date(appointmentDate);

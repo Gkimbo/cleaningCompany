@@ -59,7 +59,7 @@ const PendingAppointmentCard = ({ appointment, onAccept, onDecline, onMessage, l
           </Pressable>
           <View style={styles.priceContainer}>
             <Text style={styles.priceLabel}>Your price</Text>
-            <Text style={styles.priceValue}>${parseFloat(appointment.price).toFixed(2)}</Text>
+            <Text style={styles.priceValue}>${(parseFloat(appointment.price) / 100).toFixed(2)}</Text>
           </View>
         </View>
       </View>

@@ -942,8 +942,9 @@ class NotificationService {
 
       const clientName = client.firstName || "there";
       const displayName = businessName || cleanerName;
-      const oldPriceDisplay = `$${parseFloat(oldPrice || 0).toFixed(0)}`;
-      const newPriceDisplay = `$${parseFloat(newPrice || 0).toFixed(0)}`;
+      // Prices are stored in cents, convert to dollars for display
+      const oldPriceDisplay = `$${(parseFloat(oldPrice || 0) / 100).toFixed(0)}`;
+      const newPriceDisplay = `$${(parseFloat(newPrice || 0) / 100).toFixed(0)}`;
 
       // 1. Create in-app notification
       const notification = await this.createNotification({

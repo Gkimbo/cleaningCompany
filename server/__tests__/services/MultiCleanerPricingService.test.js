@@ -48,7 +48,7 @@ const mockPricingConfig = {
 };
 
 getPricingConfig.mockResolvedValue(mockPricingConfig);
-calculatePrice.mockResolvedValue(150); // $150 base price
+calculatePrice.mockResolvedValue(15000); // $150.00 in cents
 
 // Import after mocks
 const MultiCleanerPricingService = require("../../services/MultiCleanerPricingService");
@@ -57,7 +57,7 @@ describe("MultiCleanerPricingService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     getPricingConfig.mockResolvedValue(mockPricingConfig);
-    calculatePrice.mockResolvedValue(150);
+    calculatePrice.mockResolvedValue(15000); // $150.00 in cents
   });
 
   // ============================================
@@ -132,7 +132,8 @@ describe("MultiCleanerPricingService", () => {
     });
 
     it("should round to nearest cent", async () => {
-      calculatePrice.mockResolvedValue(150.555);
+      // calculatePrice returns cents, so 15055.5 cents = $150.555
+      calculatePrice.mockResolvedValue(15055.5);
 
       const price = await MultiCleanerPricingService.calculateTotalJobPrice(
         mockHome,
@@ -140,7 +141,7 @@ describe("MultiCleanerPricingService", () => {
         2
       );
 
-      expect(price).toBe(15056); // Rounded from 15055.5
+      expect(price).toBe(15056); // Rounded from 15055.5 cents
     });
   });
 
@@ -369,14 +370,14 @@ describe("MultiCleanerPricingService", () => {
 
     beforeEach(() => {
       mockUserAppointments.findByPk.mockResolvedValue(mockAppointment);
-      calculatePrice.mockResolvedValue(150);
+      calculatePrice.mockResolvedValue(15000); // $150.00 in cents
     });
 
     it("should calculate solo earnings with regular platform fee", async () => {
       const earnings = await MultiCleanerPricingService.calculateSoloCompletionEarnings(100);
 
-      // $150 - 10% fee = $135 = 13500 cents
-      // Plus $5.00 bonus = 14000 cents
+      // 15000 cents - 10% fee = 13500 cents
+      // Plus 500 cent bonus = 14000 cents
       expect(earnings).toBe(14000);
     });
 
@@ -536,7 +537,7 @@ describe("MultiCleanerPricingService", () => {
 
     beforeEach(() => {
       mockMultiCleanerJob.findByPk.mockResolvedValue(mockJob);
-      calculatePrice.mockResolvedValue(150);
+      calculatePrice.mockResolvedValue(15000); // $150.00 in cents
     });
 
     it("should generate complete breakdown", async () => {
@@ -796,11 +797,11 @@ describe("MultiCleanerPricingService", () => {
           id: 100,
           home: { numBeds: 4, numBaths: 3 },
         });
-        calculatePrice.mockResolvedValue(100);
+        calculatePrice.mockResolvedValue(10000); // $100.00 in cents
 
         const earnings = await MultiCleanerPricingService.calculateSoloCompletionEarnings(100);
 
-        // $100 - 10% = $90 = 9000 cents + 0 bonus
+        // 10000 cents - 10% = 9000 cents + 0 bonus
         expect(earnings).toBe(9000);
       });
     });
@@ -851,7 +852,7 @@ describe("MultiCleanerPricingService", () => {
         { cleanerId: 100, estimatedMinutes: 50, cleaner: { firstName: "A", lastName: "B" }, getDisplayLabel: () => "Room 1" },
         { cleanerId: 101, estimatedMinutes: 50, cleaner: { firstName: "C", lastName: "D" }, getDisplayLabel: () => "Room 2" },
       ]);
-      calculatePrice.mockResolvedValue(150);
+      calculatePrice.mockResolvedValue(15000); // $150.00 in cents
 
       // Calculate job price
       const totalPrice = await MultiCleanerPricingService.calculateTotalJobPrice(
@@ -860,7 +861,7 @@ describe("MultiCleanerPricingService", () => {
         2
       );
 
-      expect(totalPrice).toBe(15000);
+      expect(totalPrice).toBe(15000); // 15000 cents = $150.00
 
       // Generate breakdown
       const breakdown = await MultiCleanerPricingService.generateEarningsBreakdown(10);

@@ -1348,8 +1348,8 @@ async function processCleanerPayout(appointment, cleanerId, totalCleaners, feePe
       };
     }
 
-    // Calculate amounts
-    const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+    // Calculate amounts (price already stored in cents)
+    const priceInCents = appointment.price;
     const perCleanerGross = Math.round(priceInCents / totalCleaners);
     const { platformFee, netAmount } = calculatePayoutSplit(perCleanerGross, feePercent);
 
@@ -1497,9 +1497,9 @@ stripeConnectRouter.post("/create-payout-record", async (req, res) => {
     // Get current platform fee from config
     const feePercent = await getPlatformFeePercent();
 
-    // Calculate amounts
+    // Calculate amounts (price already stored in cents)
     const cleanerCount = appointment.employeesAssigned?.length || 1;
-    const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+    const priceInCents = appointment.price;
     const perCleanerGross = Math.round(priceInCents / cleanerCount);
     const { platformFee, netAmount } = calculatePayoutSplit(perCleanerGross, feePercent);
 

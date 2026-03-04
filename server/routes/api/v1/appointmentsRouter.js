@@ -578,12 +578,14 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
     const isHomeowner = appointment.userId === userId;
     const isCleaner = appointment.employeesAssigned?.includes(String(userId));
     const hasCleanerAssigned = appointment.hasBeenAssigned && appointment.employeesAssigned?.length > 0;
-    const price = parseFloat(appointment.price) || 0;
+    const priceCents = appointment.price || 0;
+    const price = priceCents / 100; // Convert cents to dollars for calculations
 
     let response = {
       daysUntilAppointment,
       appointmentDate: appointment.date,
-      price,
+      price, // Price in dollars for display
+      priceCents, // Include cents for calculations
       hasCleanerAssigned,
       isHomeowner,
       isCleaner,
@@ -605,8 +607,9 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
 
       // Check if discount was applied (incentive appointment)
       const discountApplied = appointment.discountApplied === true;
+      // originalPrice is stored in cents, convert to dollars
       const originalPrice = discountApplied && appointment.originalPrice
-        ? parseFloat(appointment.originalPrice)
+        ? appointment.originalPrice / 100
         : price;
 
       // Get incentive-specific cancellation rates
@@ -1041,7 +1044,8 @@ appointmentRouter.post("/", async (req, res) => {
 
       // If this home has a preferred cleaner with custom pricing, use their price
       if (cleanerClientRelation && cleanerClientRelation.dataValues.defaultPrice) {
-        finalPrice = parseFloat(cleanerClientRelation.dataValues.defaultPrice);
+        // defaultPrice is stored as DECIMAL (dollars), convert to cents
+        finalPrice = Math.round(parseFloat(cleanerClientRelation.dataValues.defaultPrice) * 100);
         // No discounts apply to business owner pricing
         date.originalPrice = null;
         date.discountApplied = false;
@@ -1059,11 +1063,11 @@ appointmentRouter.post("/", async (req, res) => {
           towelConfigs
         );
 
-        // Apply discount if eligible
+        // Apply discount if eligible (originalPrice is already in cents)
         finalPrice = originalPrice;
         if (discountResult.eligible && discountResult.remainingCleanings > 0) {
-          const discountAmount = originalPrice * discountResult.discountPercent;
-          finalPrice = Math.round((originalPrice - discountAmount) * 100) / 100;
+          const discountAmount = Math.round(originalPrice * discountResult.discountPercent);
+          finalPrice = originalPrice - discountAmount;
           date.originalPrice = originalPrice.toString();
           date.discountApplied = true;
           date.discountPercent = discountResult.discountPercent;
@@ -1873,7 +1877,7 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
       // Create payment intent if one doesn't exist
       if (!appointment.dataValues.paymentIntentId) {
         try {
-          const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
+          const priceInCents = appointment.dataValues.price; // Already stored in cents
           const user = await User.findByPk(appointment.dataValues.userId);
 
           if (user && user.stripeCustomerId) {
@@ -1918,14 +1922,13 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
         }
       }
 
-      // Create payout record for the cleaner
+      // Create payout record for the cleaner (prices already in cents)
       const pricingConfig = await getPricingConfig();
       const { platform: platformConfig } = pricingConfig;
 
-      const payoutPrice = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
-        ? parseFloat(appointment.dataValues.originalPrice)
-        : parseFloat(appointment.dataValues.price);
-      const priceInCents = Math.round(payoutPrice * 100);
+      const priceInCents = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
+        ? appointment.dataValues.originalPrice
+        : appointment.dataValues.price;
 
       const feeResult = await IncentiveService.calculateCleanerFee(
         id,
@@ -1971,7 +1974,7 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
             const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
 
             if (defaultPaymentMethod) {
-              const priceForCapture = Math.round(parseFloat(appointment.dataValues.price) * 100);
+              const priceForCapture = appointment.dataValues.price;
               const capturedIntent = await stripe.paymentIntents.create({
                 amount: priceForCapture,
                 currency: "usd",
@@ -2204,7 +2207,7 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       // Create payment intent if one doesn't exist (for appointments booked without upfront payment)
       if (!appointment.dataValues.paymentIntentId) {
         try {
-          const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
+          const priceInCents = appointment.dataValues.price;
           const user = await User.findByPk(appointment.dataValues.userId);
 
           if (user && user.stripeCustomerId) {
@@ -2261,11 +2264,10 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       const appointmentId = request.dataValues.appointmentId;
 
       // Use original price for cleaner payout if a homeowner discount was applied
-      // This ensures cleaners get paid based on the full price, with the platform absorbing the discount
-      const payoutPrice = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
-        ? parseFloat(appointment.dataValues.originalPrice)
-        : parseFloat(appointment.dataValues.price);
-      const priceInCents = Math.round(payoutPrice * 100);
+      // This ensures cleaners get paid based on the full price, with the platform absorbing the discount (prices in cents)
+      const priceInCents = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
+        ? appointment.dataValues.originalPrice
+        : appointment.dataValues.price;
 
       // Check cleaner incentive eligibility and calculate fees
       const feeResult = await IncentiveService.calculateCleanerFee(
@@ -2374,7 +2376,7 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
                 }
                 // Continue with approval - don't return early
               } else {
-                const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
+                const priceInCents = appointment.dataValues.price;
 
                 capturedIntent = await stripe.paymentIntents.create({
                   amount: priceInCents,
@@ -2620,14 +2622,13 @@ appointmentRouter.post("/switch-cleaner", async (req, res) => {
       bookedByCleanerId: newCleaner.isBusinessOwner ? newCleanerId : null,
     }, { transaction });
 
-    // 9. Create new payout record
+    // 9. Create new payout record (prices already in cents)
     const pricingConfig = await getPricingConfig();
     const { platform: platformConfig } = pricingConfig;
 
-    const payoutPrice = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
-      ? parseFloat(appointment.dataValues.originalPrice)
-      : parseFloat(appointment.dataValues.price);
-    const priceInCents = Math.round(payoutPrice * 100);
+    const priceInCents = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
+      ? appointment.dataValues.originalPrice
+      : appointment.dataValues.price;
 
     const feeResult = await IncentiveService.calculateCleanerFee(
       newCleanerId,
@@ -3177,15 +3178,13 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     const hasCleanerAssigned = appointment.hasBeenAssigned && appointment.employeesAssigned?.length > 0;
     const isWithinPenaltyWindow = daysUntilAppointment <= cancellationConfig.homeownerPenaltyDays && hasCleanerAssigned;
     const isWithinCancellationFeeWindow = daysUntilAppointment <= cancellationConfig.windowDays;
-    const price = parseFloat(appointment.price) || 0;
-    const priceInCents = Math.round(price * 100);
+    const priceInCents = appointment.price || 0; // Already stored in cents
 
     // Use original price for cleaner payout calculations if discount was applied
     // This ensures cleaners get paid based on the full price, with the platform absorbing the discount
-    const cleanerBasePrice = appointment.discountApplied && appointment.originalPrice
-      ? parseFloat(appointment.originalPrice)
-      : price;
-    const cleanerBasePriceInCents = Math.round(cleanerBasePrice * 100);
+    const cleanerBasePriceInCents = appointment.discountApplied && appointment.originalPrice
+      ? appointment.originalPrice
+      : priceInCents;
 
     // Get user for Stripe customer info
     const user = await User.findByPk(userId);
@@ -3241,10 +3240,12 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     console.log(`[Cancellation] User hasPaymentMethod: ${user.hasPaymentMethod}`);
     console.log(`[Cancellation] Cancellation fee: $${cancellationConfig.fee}`);
 
+    // Convert cancellation fee to cents for database storage (config stores in dollars)
+    const cancellationFeeAmountCents = Math.round(cancellationConfig.fee * 100);
+
     // Charge cancellation fee if within the window, cleaner is assigned, and user has payment method
     // No fee charged if no cleaner assigned - homeowner can cancel freely
     if (isWithinCancellationFeeWindow && hasCleanerAssigned && user.stripeCustomerId && user.hasPaymentMethod) {
-      const cancellationFeeAmountCents = Math.round(cancellationConfig.fee * 100);
 
       try {
         // Get the customer's default payment method
@@ -3281,7 +3282,8 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
 
           cancellationFeeResult = {
             charged: true,
-            amount: cancellationConfig.fee,
+            amount: cancellationConfig.fee, // API response in dollars for backward compatibility
+            amountCents: cancellationFeeAmountCents, // Internal use in cents
             paymentIntentId: cancellationPaymentIntent.id,
           };
         } else {
@@ -3291,41 +3293,44 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           if (existingBillForFee) {
             const currentFee = Number(existingBillForFee.cancellationFee) || 0;
             const currentTotal = Number(existingBillForFee.totalDue) || 0;
+            // UserBills stores amounts in cents, cancellationConfig.fee is in dollars
             await existingBillForFee.update({
-              cancellationFee: currentFee + cancellationConfig.fee,
-              totalDue: currentTotal + cancellationConfig.fee,
+              cancellationFee: currentFee + cancellationFeeAmountCents,
+              totalDue: currentTotal + cancellationFeeAmountCents,
             });
           }
           cancellationFeeResult = {
             charged: false,
             addedToBill: true,
-            amount: cancellationConfig.fee,
+            amount: cancellationConfig.fee, // API response in dollars for backward compatibility
+            amountCents: cancellationFeeAmountCents, // Internal use in cents
             reason: "No default payment method - added to bill",
           };
         }
       } catch (stripeError) {
         console.error(`[Cancellation] Error charging cancellation fee, adding to bill:`, stripeError);
         // Log fee charge failure
-        await CancellationAuditService.logFeeChargeFailed(parseInt(id, 10), Math.round(cancellationConfig.fee * 100), stripeError, req);
+        await CancellationAuditService.logFeeChargeFailed(parseInt(id, 10), cancellationFeeAmountCents, stripeError, req);
 
-        // Add fee to user's bill since charge failed
+        // Add fee to user's bill since charge failed (UserBills stores in cents)
         const existingBillForFee = await UserBills.findOne({ where: { userId } });
         if (existingBillForFee) {
           const currentFee = Number(existingBillForFee.cancellationFee) || 0;
           const currentTotal = Number(existingBillForFee.totalDue) || 0;
           await existingBillForFee.update({
-            cancellationFee: currentFee + cancellationConfig.fee,
-            totalDue: currentTotal + cancellationConfig.fee,
+            cancellationFee: currentFee + cancellationFeeAmountCents,
+            totalDue: currentTotal + cancellationFeeAmountCents,
           });
         }
 
         // Log fee added to bill
-        await CancellationAuditService.logFeeAddedToBill(parseInt(id, 10), Math.round(cancellationConfig.fee * 100), req);
+        await CancellationAuditService.logFeeAddedToBill(parseInt(id, 10), cancellationFeeAmountCents, req);
 
         cancellationFeeResult = {
           charged: false,
           addedToBill: true,
-          amount: cancellationConfig.fee,
+          amount: cancellationConfig.fee, // API response in dollars for backward compatibility
+          amountCents: cancellationFeeAmountCents, // Internal use in cents
           reason: `Charge failed: ${stripeError.message} - added to bill`,
         };
       }
@@ -3336,15 +3341,17 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       if (existingBillForFee) {
         const currentFee = Number(existingBillForFee.cancellationFee) || 0;
         const currentTotal = Number(existingBillForFee.totalDue) || 0;
+        // UserBills stores amounts in cents
         await existingBillForFee.update({
-          cancellationFee: currentFee + cancellationConfig.fee,
-          totalDue: currentTotal + cancellationConfig.fee,
+          cancellationFee: currentFee + cancellationFeeAmountCents,
+          totalDue: currentTotal + cancellationFeeAmountCents,
         });
       }
       cancellationFeeResult = {
         charged: false,
         addedToBill: true,
-        amount: cancellationConfig.fee,
+        amount: cancellationConfig.fee, // API response in dollars for backward compatibility
+        amountCents: cancellationFeeAmountCents, // Internal use in cents
         reason: "No payment method configured - added to bill",
       };
     } else {
@@ -3485,10 +3492,10 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     // Update user bills
     const existingBill = await UserBills.findOne({ where: { userId } });
     if (existingBill) {
-      const appointmentTotal = appointment.paid ? 0 : price; // Only subtract if not already paid
+      const appointmentTotal = appointment.paid ? 0 : priceInCents; // Only subtract if not already paid
       const oldAppt = Number(existingBill.appointmentDue);
       const oldFee = Number(existingBill.cancellationFee);
-      const cancellationFeeAmount = isWithinPenaltyWindow ? price * cancellationConfig.refundPercentage : 0;
+      const cancellationFeeAmount = isWithinPenaltyWindow ? priceInCents * cancellationConfig.refundPercentage : 0;
 
       // Ensure values don't go negative
       const newAppointmentDue = Math.max(0, oldAppt - appointmentTotal);
@@ -3515,11 +3522,11 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       if (cleanerPayoutResult) {
         cleanerPayment = cleanerPayoutResult.perCleaner.toFixed(2);
       } else if (appointment.discountApplied) {
-        // 40% of original price to cleaner
-        cleanerPayment = (cleanerBasePrice * 0.40 / cleanerIds.length).toFixed(2);
+        // 40% of original price to cleaner (convert cents to dollars for display)
+        cleanerPayment = (cleanerBasePriceInCents * 0.40 / cleanerIds.length / 100).toFixed(2);
       } else {
-        // Standard: 50% minus platform fee
-        cleanerPayment = (cleanerBasePrice * (1 - cancellationConfig.refundPercentage) * (1 - platformConfig.feePercent) / cleanerIds.length).toFixed(2);
+        // Standard: 50% minus platform fee (convert cents to dollars for display)
+        cleanerPayment = (cleanerBasePriceInCents * (1 - cancellationConfig.refundPercentage) * (1 - platformConfig.feePercent) / cleanerIds.length / 100).toFixed(2);
       }
 
       // Only show payment amount if appointment was paid and cleaner is getting compensated
@@ -3639,7 +3646,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
         homeownerId: userId,
         refundAmount: refundResult?.amount || 0,
         refundPercentage,
-        cancellationFee: cancellationFeeResult?.charged ? Math.round(cancellationFeeResult.amount * 100) : 0,
+        cancellationFee: cancellationFeeResult?.charged ? cancellationFeeResult.amountCents : 0, // use cents for ledger
         cleanerPayouts: cleanerPayoutResult?.cleanerPayouts || [],
         stripeDetails: {
           refundId: refundResult?.id,
@@ -3689,8 +3696,8 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       {
         confirmationId,
         refundAmount: refundResult?.amount || 0,
-        cancellationFee: cancellationFeeResult?.amount || 0,
-        cleanerPayout: cleanerPayoutResult?.totalAmount || 0,
+        cancellationFee: cancellationFeeResult?.amountCents || 0, // use cents for audit
+        cleanerPayout: cleanerPayoutResult?.totalAmount ? Math.round(cleanerPayoutResult.totalAmount * 100) : 0, // convert dollars to cents
         previousState,
         newState,
       },
@@ -3707,7 +3714,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
         isWithinFeeWindow: isWithinCancellationFeeWindow,
         refundAmount: refundResult?.amount || 0,
         refundPercentage,
-        cancellationFee: cancellationFeeResult?.amount ? Math.round(cancellationFeeResult.amount * 100) : 0,
+        cancellationFee: cancellationFeeResult?.amountCents || 0, // use cents for breakdown
         cleanerPayout: cleanerPayoutResult ? {
           netAmount: Math.round(cleanerPayoutResult.totalAmount * 100),
           grossAmount: Math.round((cleanerPayoutResult.totalAmount + cleanerPayoutResult.platformFeeTotal) * 100),
@@ -3728,6 +3735,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       message = "Appointment cancelled. Cleaner will receive partial payment.";
     }
     if (cancellationFeeResult?.charged) {
+      // amount is already in dollars for API compatibility
       message += ` A $${cancellationFeeResult.amount} cancellation fee has been charged to your card.`;
     }
 
@@ -4451,7 +4459,7 @@ appointmentRouter.post("/:id/rebook", async (req, res) => {
       userId: originalAppointment.userId,
       homeId: originalAppointment.homeId,
       date,
-      price: String(appointmentPrice),
+      price: appointmentPrice, // Already in cents
       paid: false,
       completed: false,
       hasBeenAssigned: true,
@@ -4620,7 +4628,8 @@ appointmentRouter.post("/:id/decline-response", async (req, res) => {
         success: true,
         action: "confirm_marketplace",
         confirmRequired: true,
-        currentPrice: parseFloat(appointment.price),
+        currentPrice: (appointment.price || 0) / 100, // Convert cents to dollars for display
+        currentPriceCents: appointment.price || 0,
         marketplacePrice,
         homeId: home.id,
         message: "Please confirm to open this appointment to the marketplace.",
@@ -4695,7 +4704,7 @@ appointmentRouter.post("/:id/confirm-marketplace", async (req, res) => {
       openToMarket: true,
       openedToMarketAt: new Date(),
       businessOwnerPrice: appointment.price, // Save original business owner price
-      price: marketplacePrice.toString(),
+      price: marketplacePrice, // Already in cents from calculatePrice()
       bookedByCleanerId: null, // Remove business owner link
       hasBeenAssigned: false,
       employeesAssigned: [],

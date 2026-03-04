@@ -5,6 +5,7 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { useNavigate } from "react-router-native";
 import { usePricing, getTimeWindowSurcharge, getTimeWindowLabel, isLastMinuteBooking } from "../../context/PricingContext";
+import { formatCurrency } from "../../services/formatters";
 
 const CalendarComponent = ({
   onDatesSelected,
@@ -599,7 +600,7 @@ const CalendarComponent = ({
                 <View style={styles.modalAppointmentRow}>
                   <Icon name="dollar" size={14} color="#64748b" />
                   <Text style={styles.modalAppointmentPrice}>
-                    ${appointmentToCancel.price} cleaning
+                    {formatCurrency(appointmentToCancel.price)} cleaning
                   </Text>
                 </View>
               </View>

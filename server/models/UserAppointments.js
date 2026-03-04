@@ -25,8 +25,9 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 		},
 		price: {
-			type: DataTypes.STRING,
+			type: DataTypes.INTEGER,
 			allowNull: false,
+			comment: "Price in cents (e.g., 15000 = $150.00)",
 		},
 		paid: {
 			type: DataTypes.BOOLEAN,
@@ -155,8 +156,9 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 		},
 		originalPrice: {
-			type: DataTypes.STRING,
+			type: DataTypes.INTEGER,
 			allowNull: true,
+			comment: "Original price in cents before adjustments (e.g., 15000 = $150.00)",
 		},
 		// Cleaner-initiated booking fields
 		bookedByCleanerId: {
@@ -228,8 +230,9 @@ module.exports = (sequelize, DataTypes) => {
 			comment: "When backup notification window expires",
 		},
 		businessOwnerPrice: {
-			type: DataTypes.DECIMAL(10, 2),
+			type: DataTypes.INTEGER,
 			allowNull: true,
+			comment: "Business owner custom price in cents (e.g., 15000 = $150.00)",
 		},
 		// Client response fields for business owner bookings
 		clientRespondedAt: {
@@ -309,7 +312,7 @@ module.exports = (sequelize, DataTypes) => {
 		lastMinuteFeeApplied: {
 			type: DataTypes.INTEGER,
 			allowNull: true,
-			comment: "Last-minute fee amount in dollars (null if not applicable)",
+			comment: "Last-minute fee amount in cents (e.g., 5000 = $50.00, null if not applicable)",
 		},
 		lastMinuteNotificationsSentAt: {
 			type: DataTypes.DATE,

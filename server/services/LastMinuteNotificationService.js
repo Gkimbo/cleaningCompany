@@ -194,8 +194,8 @@ class LastMinuteNotificationService {
       return { notifiedCount: 0, cleanerIds: [] };
     }
 
-    // Prepare notification content
-    const priceDisplay = `$${parseFloat(appointment.price).toFixed(2)}`;
+    // Prepare notification content (price is stored in cents)
+    const priceDisplay = `$${(appointment.price / 100).toFixed(2)}`;
     const cityDisplay = home.city || "your area";
     const appointmentDate = appointment.date;
 
@@ -368,7 +368,7 @@ class LastMinuteNotificationService {
     }
 
     // Prepare notification content
-    const priceDisplay = `$${parseFloat(appointment.price).toFixed(2)}`;
+    const priceDisplay = `$${(appointment.price / 100).toFixed(2)}`;
     const cityDisplay = home.city ? EncryptionService.decrypt(home.city) : "your area";
     const appointmentDate = appointment.date;
 
@@ -399,7 +399,7 @@ class LastMinuteNotificationService {
           await PushNotification.sendPushUrgentReplacement(
             cleaner.expoPushToken,
             appointmentDate,
-            parseFloat(appointment.price).toFixed(0),
+            (appointment.price / 100).toFixed(0), // Convert cents to dollars
             cityDisplay,
             cleaner.distanceMiles
           );
@@ -536,7 +536,7 @@ class LastMinuteNotificationService {
     }
 
     // Prepare notification content
-    const priceDisplay = `$${parseFloat(appointment.price).toFixed(2)}`;
+    const priceDisplay = `$${(appointment.price / 100).toFixed(2)}`;
     const cityDisplay = home.city ? EncryptionService.decrypt(home.city) : "your area";
     const appointmentDate = appointment.date;
 

@@ -120,7 +120,8 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
                 continue;
               }
 
-              const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+              // Price is already stored in cents
+              const priceInCents = Math.round(parseFloat(appointment.price));
 
               paymentIntent = await stripe.paymentIntents.create({
                 amount: priceInCents,
@@ -190,7 +191,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: null, // No payment intent
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -239,7 +240,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_existing_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -279,7 +280,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: null,
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -309,7 +310,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -334,7 +335,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -359,7 +360,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -384,7 +385,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -407,7 +408,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -432,7 +433,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: [],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -461,7 +462,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5", "6"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -497,7 +498,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -524,7 +525,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: null, // Will try to create
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -549,7 +550,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -573,7 +574,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -605,7 +606,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
         paid: false,
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         employeesAssigned: ["5"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -619,7 +620,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
         paymentIntentId: "pi_test_456",
         paymentStatus: "pending",
         paid: false,
-        price: "200.00",
+        price: 20000, // $200.00 in cents
         employeesAssigned: ["6"],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -648,7 +649,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
           paymentIntentId: "pi_test_1",
           paymentStatus: "pending",
           paid: false,
-          price: "100.00",
+          price: 10000, // $100.00 in cents
           employeesAssigned: ["5"],
           update: jest.fn().mockResolvedValue(true),
         },
@@ -661,7 +662,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
           paymentIntentId: null, // Will create new
           paymentStatus: "pending",
           paid: false,
-          price: "150.00",
+          price: 15000, // $150.00 in cents
           employeesAssigned: ["6"],
           update: jest.fn().mockResolvedValue(true),
         },
@@ -674,7 +675,7 @@ describe("Auto-Capture Payment Intent Creation Logic", () => {
           paymentIntentId: "pi_test_3",
           paymentStatus: "pending",
           paid: false,
-          price: "200.00",
+          price: 20000, // $200.00 in cents
           employeesAssigned: ["7"],
           update: jest.fn().mockResolvedValue(true),
         },

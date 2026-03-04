@@ -251,16 +251,16 @@ paymentRouter.get("/earnings/:employeeId", async (req, res) => {
       (appt) => appt.employeesAssigned && appt.employeesAssigned.includes(employeeId)
     );
 
-    // Calculate with dynamic cleaner percentage from database
-    const totalEarnings = employeeAppointments.reduce((total, appt) => {
-      const price = parseFloat(appt.price) || 0;
+    // Calculate with dynamic cleaner percentage from database (prices in cents)
+    const totalEarningsCents = employeeAppointments.reduce((total, appt) => {
+      const priceCents = appt.price || 0;
       const employeeCount = appt.employeesAssigned ? appt.employeesAssigned.length : 1;
-      const grossPerCleaner = price / employeeCount;
+      const grossPerCleaner = priceCents / employeeCount;
       const netPerCleaner = grossPerCleaner * (1 - platformFeePercent);
       return total + netPerCleaner;
     }, 0);
 
-    const pendingEarnings = await UserAppointments.findAll({
+    const pendingEarningsCents = await UserAppointments.findAll({
       where: {
         paid: true,
         completed: false,
@@ -270,17 +270,17 @@ paymentRouter.get("/earnings/:employeeId", async (req, res) => {
       appts
         .filter((appt) => appt.employeesAssigned && appt.employeesAssigned.includes(employeeId))
         .reduce((total, appt) => {
-          const price = parseFloat(appt.price) || 0;
+          const priceCents = appt.price || 0;
           const employeeCount = appt.employeesAssigned ? appt.employeesAssigned.length : 1;
-          const grossPerCleaner = price / employeeCount;
+          const grossPerCleaner = priceCents / employeeCount;
           const netPerCleaner = grossPerCleaner * (1 - platformFeePercent);
           return total + netPerCleaner;
         }, 0)
     );
 
     return res.json({
-      totalEarnings: Math.round(totalEarnings * 100) / 100,
-      pendingEarnings: Math.round(pendingEarnings * 100) / 100,
+      totalEarnings: Math.round(totalEarningsCents) / 100, // Convert cents to dollars
+      pendingEarnings: Math.round(pendingEarningsCents) / 100, // Convert cents to dollars
       completedJobs: employeeAppointments.length,
       platformFeePercent: platformFeePercent * 100,
       cleanerPercent: (1 - platformFeePercent) * 100,
@@ -657,7 +657,8 @@ paymentRouter.get("/removal-eligibility/:paymentMethodId", async (req, res) => {
         return {
           id: apt.id,
           date: apt.date,
-          price: parseFloat(apt.price) || 0,
+          priceCents: apt.price || 0, // Price in cents
+          priceDollars: (apt.price || 0) / 100, // Price in dollars for display
           daysUntil,
           isWithinCancellationWindow,
           cancellationFee: isWithinCancellationWindow ? cancellationFeeAmount : 0,
@@ -667,8 +668,8 @@ paymentRouter.get("/removal-eligibility/:paymentMethodId", async (req, res) => {
         };
       });
 
-    // Calculate totals
-    const totalToPrepay = unpaidAppointmentDetails.reduce((sum, apt) => sum + apt.price, 0);
+    // Calculate totals (in cents)
+    const totalToPrepayCents = unpaidAppointmentDetails.reduce((sum, apt) => sum + apt.priceCents, 0);
     const totalCancellationFees = unpaidAppointmentDetails.reduce((sum, apt) => sum + apt.cancellationFee, 0);
 
     // Determine if user can remove
@@ -682,10 +683,11 @@ paymentRouter.get("/removal-eligibility/:paymentMethodId", async (req, res) => {
       isLastPaymentMethod: true,
       outstandingFees,
       unpaidAppointments: unpaidAppointmentDetails,
-      totalToPrepay,
+      totalToPrepay: totalToPrepayCents / 100, // Convert cents to dollars for display
+      totalToPrepayCents, // Also include cents for Stripe
       totalCancellationFees,
       options: canRemove ? null : {
-        canPrepayAll: hasUnpaidAppointments && totalToPrepay > 0,
+        canPrepayAll: hasUnpaidAppointments && totalToPrepayCents > 0,
         canCancelAll: hasUnpaidAppointments,
         mustPayOutstandingFirst: hasOutstandingFees,
       },
@@ -815,13 +817,14 @@ paymentRouter.post("/prepay-all-and-remove", async (req, res) => {
 
     // Step 1: Pay any outstanding fees first
     const userBill = await UserBills.findOne({ where: { userId } });
+    // totalDue is stored in cents
     const outstandingTotal = Number(userBill?.totalDue) || 0;
 
     if (outstandingTotal > 0) {
-      console.log(`[Prepay & Remove] Paying outstanding fees: $${outstandingTotal}`);
+      console.log(`[Prepay & Remove] Paying outstanding fees: $${(outstandingTotal / 100).toFixed(2)}`);
 
       const feePaymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(outstandingTotal * 100),
+        amount: outstandingTotal, // Already in cents
         currency: "usd",
         customer: user.stripeCustomerId,
         payment_method: paymentMethodId,
@@ -885,9 +888,8 @@ paymentRouter.post("/prepay-all-and-remove", async (req, res) => {
 
           console.log(`[Prepay & Remove] Captured payment for appointment ${appointment.id}`);
         } else if (!appointment.paymentIntentId) {
-          // No payment intent - create and capture a new one
-          const price = parseFloat(appointment.price) || 0;
-          const amountCents = Math.round(price * 100);
+          // No payment intent - create and capture a new one (price already in cents)
+          const amountCents = appointment.price || 0;
 
           if (amountCents > 0) {
             const newPaymentIntent = await stripe.paymentIntents.create({
@@ -1098,11 +1100,12 @@ paymentRouter.post("/cancel-all-and-remove", async (req, res) => {
     }
 
     // Step 3: Pay all outstanding fees (including new cancellation fees)
+    // newTotalDue is in cents (sum of integer cent values from DB)
     if (newTotalDue > 0) {
-      console.log(`[Cancel & Remove] Paying total fees: $${newTotalDue}`);
+      console.log(`[Cancel & Remove] Paying total fees: $${(newTotalDue / 100).toFixed(2)}`);
 
       const feePaymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(newTotalDue * 100),
+        amount: newTotalDue, // Already in cents
         currency: "usd",
         customer: user.stripeCustomerId,
         payment_method: paymentMethodId,
@@ -1920,12 +1923,11 @@ async function processCleanerPayouts(appointment) {
         continue;
       }
 
-      // Calculate amounts using database pricing
+      // Calculate amounts using database pricing (prices already stored in cents)
       // Use original price for cleaner payout if discount was applied (platform absorbs the discount)
-      const payoutPrice = appointment.discountApplied && appointment.originalPrice
-        ? parseFloat(appointment.originalPrice)
-        : parseFloat(appointment.price);
-      const priceInCents = Math.round(payoutPrice * 100);
+      const priceInCents = appointment.discountApplied && appointment.originalPrice
+        ? appointment.originalPrice
+        : appointment.price;
       const perCleanerGross = Math.round(priceInCents / cleanerIds.length);
       const platformFee = Math.round(perCleanerGross * platformFeePercent);
       const netAmount = perCleanerGross - platformFee;
@@ -2647,7 +2649,7 @@ paymentRouter.post("/pre-pay", async (req, res) => {
         return res.status(400).json({ error: "No default payment method. Please add a payment method first." });
       }
 
-      const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+      const priceInCents = appointment.price; // Already stored in cents
 
       // Create and immediately capture the payment intent
       paymentIntent = await stripe.paymentIntents.create({
@@ -3017,7 +3019,7 @@ async function runDailyPaymentCheck() {
                 continue;
               }
 
-              const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+              const priceInCents = appointment.price; // Already stored in cents
 
               paymentIntent = await stripe.paymentIntents.create({
                 amount: priceInCents,

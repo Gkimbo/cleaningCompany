@@ -136,11 +136,11 @@ const CancellationWarningModal = ({
                   <>
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>Original Price (before discount)</Text>
-                      <Text style={styles.breakdownValue}>${parseFloat(originalPrice).toFixed(2)}</Text>
+                      <Text style={styles.breakdownValue}>${(parseFloat(originalPrice) / 100).toFixed(2)}</Text>
                     </View>
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>You Paid (after discount)</Text>
-                      <Text style={styles.breakdownValue}>${parseFloat(price).toFixed(2)}</Text>
+                      <Text style={styles.breakdownValue}>${(parseFloat(price) / 100).toFixed(2)}</Text>
                     </View>
                   </>
                 )}
@@ -148,7 +148,7 @@ const CancellationWarningModal = ({
                 {!discountApplied && (
                   <View style={styles.breakdownRow}>
                     <Text style={styles.breakdownLabel}>Amount Paid</Text>
-                    <Text style={styles.breakdownValue}>${parseFloat(price).toFixed(2)}</Text>
+                    <Text style={styles.breakdownValue}>${(parseFloat(price) / 100).toFixed(2)}</Text>
                   </View>
                 )}
 

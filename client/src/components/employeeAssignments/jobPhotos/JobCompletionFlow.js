@@ -526,7 +526,7 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
       <View style={styles.payoutCard}>
         <Text style={styles.payoutTitle}>Your Payout</Text>
         <Text style={styles.payoutAmount}>
-          ${(Number(appointment.price) * cleanerSharePercent).toFixed(2)}
+          ${((Number(appointment.price) * cleanerSharePercent) / 100).toFixed(2)}
         </Text>
       </View>
 

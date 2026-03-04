@@ -69,9 +69,10 @@ class CancellationFinancialService {
 
 	/**
 	 * Build original charges breakdown
+	 * Note: All price fields are stored in cents
 	 */
 	static async buildOriginalCharges(appointment) {
-		const basePrice = Math.round(parseFloat(appointment.price) * 100) || 0;
+		const basePrice = appointment.price || 0; // Already in cents
 		const addOns = [];
 
 		// Parse linens
@@ -90,30 +91,30 @@ class CancellationFinancialService {
 			}
 		}
 
-		// Time window fee
-		if (appointment.timeWindowFee && parseFloat(appointment.timeWindowFee) > 0) {
+		// Time window fee (stored in cents)
+		if (appointment.timeWindowFee && appointment.timeWindowFee > 0) {
 			addOns.push({
 				type: "timeWindow",
 				label: `${appointment.timeWindow || "Specific"} Time Window`,
-				amount: Math.round(parseFloat(appointment.timeWindowFee) * 100),
+				amount: appointment.timeWindowFee,
 			});
 		}
 
-		// High volume fee
-		if (appointment.highVolumeFee && parseFloat(appointment.highVolumeFee) > 0) {
+		// High volume fee (stored in cents)
+		if (appointment.highVolumeFee && appointment.highVolumeFee > 0) {
 			addOns.push({
 				type: "highVolume",
 				label: "Peak Demand Period",
-				amount: Math.round(parseFloat(appointment.highVolumeFee) * 100),
+				amount: appointment.highVolumeFee,
 			});
 		}
 
-		// Last minute fee
-		if (appointment.lastMinuteFee && parseFloat(appointment.lastMinuteFee) > 0) {
+		// Last minute fee (stored in cents)
+		if (appointment.lastMinuteFeeApplied && appointment.lastMinuteFeeApplied > 0) {
 			addOns.push({
 				type: "lastMinute",
 				label: "Last-Minute Booking Fee",
-				amount: Math.round(parseFloat(appointment.lastMinuteFee) * 100),
+				amount: appointment.lastMinuteFeeApplied,
 			});
 		}
 
@@ -136,7 +137,7 @@ class CancellationFinancialService {
 	 * Build refund section
 	 */
 	static buildRefundSection(appointment, refundAmount, refundPercentage, isWithinPenaltyWindow, stripeDetails) {
-		const totalCharged = appointment.amountPaid || Math.round(parseFloat(appointment.price) * 100);
+		const totalCharged = appointment.amountPaid || appointment.price; // Already in cents
 
 		if (!refundAmount || refundAmount <= 0) {
 			return {
@@ -312,9 +313,9 @@ class CancellationFinancialService {
 	static calculateLinenFee(linens, appointment) {
 		if (!linens) return 0;
 
-		// If already calculated, use that
+		// If already calculated, use that (already in cents)
 		if (appointment.linensCharge) {
-			return Math.round(parseFloat(appointment.linensCharge) * 100);
+			return appointment.linensCharge;
 		}
 
 		// Simple estimate based on linen count

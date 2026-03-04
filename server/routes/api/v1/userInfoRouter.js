@@ -234,12 +234,15 @@ userInfoRouter.post("/sync-bill", async (req, res) => {
       console.log(`[Sync Bill] User ${userId}: appointmentDue ${oldAppointmentDue} -> ${correctAppointmentDue}, totalDue -> ${newTotalDue}`);
     }
 
+    // Convert cents to dollars for display
+    const cancellationFeeCents = Number(bill.cancellationFee) || 0;
+    const totalDueCents = correctAppointmentDue + cancellationFeeCents;
     return res.status(200).json({
       success: true,
       bill: {
-        appointmentDue: correctAppointmentDue,
-        cancellationFee: Number(bill.cancellationFee) || 0,
-        totalDue: correctAppointmentDue + (Number(bill.cancellationFee) || 0),
+        appointmentDue: (correctAppointmentDue / 100).toFixed(2),
+        cancellationFee: (cancellationFeeCents / 100).toFixed(2),
+        totalDue: (totalDueCents / 100).toFixed(2),
       },
       unpaidAppointmentsCount: unpaidAppointments.length,
     });

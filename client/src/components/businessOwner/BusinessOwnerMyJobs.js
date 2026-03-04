@@ -85,7 +85,7 @@ const JobCard = ({ job, onPress }) => {
         </View>
       </View>
       <View style={styles.jobMeta}>
-        <Text style={styles.jobPrice}>{formatCurrency((job.price || 0) * 100)}</Text>
+        <Text style={styles.jobPrice}>{formatCurrency(job.price || 0)}</Text>
         <Icon name="chevron-right" size={12} color={colors.neutral[300]} />
       </View>
     </Pressable>

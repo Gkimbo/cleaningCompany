@@ -802,7 +802,7 @@ describe("EmailClass", () => {
         "Mike",
         "John Smith",
         "2025-04-15",
-        157.50,
+        15750, // cents
         linensConfig
       );
 

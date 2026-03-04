@@ -678,7 +678,7 @@ class EmployeeJobAssignmentService {
     const estimatedHours = this.estimateJobDuration(numBeds, numBaths, totalCleaners);
 
     // Calculate pay for the new employee based on their default rates
-    const jobPriceInCents = appointment?.price ? Math.round(parseFloat(appointment.price) * 100) : 0;
+    const jobPriceInCents = appointment?.price || 0; // Already in cents
 
     const { payAmount: calculatedPay, payType: calculatedPayType } = this.calculateEmployeePay(
       newEmployee,
@@ -873,7 +873,7 @@ class EmployeeJobAssignmentService {
     const estimatedHours = this.estimateJobDuration(numBeds, numBaths, totalAssignments);
 
     // Calculate pay based on employee's default rates
-    const jobPriceInCents = appointment.price ? Math.round(parseFloat(appointment.price) * 100) : 0;
+    const jobPriceInCents = appointment.price || 0; // Already in cents
     const { payAmount: newPayAmount, payType: newPayType } = this.calculateEmployeePay(
       assignment.employee,
       jobPriceInCents,
@@ -1135,8 +1135,8 @@ class EmployeeJobAssignmentService {
       }
     } else if (payType === "percentage") {
       // Percentage: pay = (percentage / 100) × job price in cents
-      const appointmentPriceDollars = parseFloat(assignment.appointment?.price) || 0;
-      const appointmentPriceCents = Math.round(appointmentPriceDollars * 100);
+      // appointment.price is already INTEGER cents
+      const appointmentPriceCents = assignment.appointment?.price || 0;
       const payRate = parseFloat(employee?.payRate) || 0;
       if (payRate > 0 && appointmentPriceCents > 0) {
         updateData.payAmount = Math.round((payRate / 100) * appointmentPriceCents);

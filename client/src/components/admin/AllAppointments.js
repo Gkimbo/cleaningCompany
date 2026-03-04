@@ -102,7 +102,7 @@ const AllAppointments = ({ state }) => {
   };
 
   const formatPrice = (price) => {
-    return `$${Number(price).toFixed(2)}`;
+    return `$${(Number(price) / 100).toFixed(2)}`;
   };
 
   const getStatusInfo = (employeesAssigned) => {

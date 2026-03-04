@@ -632,7 +632,7 @@ ownerDashboardRouter.get(
         monthly: (appointmentsByMonth || []).map((m) => ({
           month: m.month,
           count: parseInt(m.count, 10) || 0,
-          revenueCents: Math.round(parseFloat(m.revenue || 0) * 100),
+          revenueCents: Math.round(parseFloat(m.revenue || 0)),
         })),
       });
     } catch (error) {
@@ -1286,9 +1286,8 @@ ownerDashboardRouter.get(
         churn = {
           homeownerCancellations: {
             usersWithCancellations: parseInt(billsWithCancellations?.[0]?.count || 0, 10),
-            // cancellationFee is stored in dollars, convert to cents for frontend
-            // Use parseFloat + Math.round to avoid truncating decimal cents
-            totalFeeCents: Math.round(parseFloat(billsWithCancellations?.[0]?.totalFees || 0) * 100),
+            // cancellationFee is stored in cents (INTEGER)
+            totalFeeCents: parseInt(billsWithCancellations?.[0]?.totalFees || 0, 10),
           },
           cleanerCancellations: {
             total: cleanerCancellationReviews,
@@ -2759,10 +2758,10 @@ ownerDashboardRouter.get(
           }
         }
       });
-      // Round to 2 decimal places for dollar amounts
-      totalEarnings = Math.round(totalEarnings * 100) / 100;
-      monthlyEarnings = Math.round(monthlyEarnings * 100) / 100;
-      const avgPerJob = completedJobs > 0 ? Math.round((totalEarnings / completedJobs) * 100) / 100 : 0;
+      // Values are in cents (integers), rounding is for safety with parseFloat
+      totalEarnings = Math.round(totalEarnings);
+      monthlyEarnings = Math.round(monthlyEarnings);
+      const avgPerJob = completedJobs > 0 ? Math.round(totalEarnings / completedJobs) : 0;
 
       // Get reviews
       const reviews = await UserReviews.findAll({

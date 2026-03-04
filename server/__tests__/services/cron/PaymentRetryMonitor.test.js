@@ -102,7 +102,7 @@ describe("PaymentRetryMonitor", () => {
         lastPaymentRetryAt: null,
         paymentRetryCount: 0,
         paymentIntentId: "pi_test",
-        price: "150.00",
+        price: 15000,
         user: {
           id: 100,
           firstName: "John",
@@ -220,7 +220,7 @@ describe("PaymentRetryMonitor", () => {
         lastPaymentRetryAt: lastRetry,
         paymentRetryCount: 1,
         paymentIntentId: "pi_test",
-        price: "150.00",
+        price: 15000,
         user: {
           id: 100,
           firstName: "John",
@@ -296,7 +296,7 @@ describe("PaymentRetryMonitor", () => {
         lastPaymentRetryAt: null,
         paymentRetryCount: 0,
         paymentIntentId: "pi_canceled",
-        price: "150.50",
+        price: 15050,
         user: {
           id: 100,
           firstName: "John",
@@ -366,7 +366,7 @@ describe("PaymentRetryMonitor", () => {
         lastPaymentRetryAt: null,
         paymentRetryCount: null, // NULL value
         paymentIntentId: "pi_test",
-        price: "150.00",
+        price: 15000,
         user: {
           id: 100,
           firstName: "John",
@@ -656,7 +656,7 @@ describe("PaymentRetryMonitor", () => {
         lastPaymentRetryAt: null,
         paymentRetryCount: 0,
         paymentIntentId: null, // No existing intent
-        price: "123.45", // Decimal price
+        price: 12345, // $123.45 in cents
         user: {
           id: 100,
           firstName: "John",
@@ -698,7 +698,7 @@ describe("PaymentRetryMonitor", () => {
         lastPaymentRetryAt: null,
         paymentRetryCount: 0,
         paymentIntentId: null,
-        price: "99.999", // Should round to 10000 cents
+        price: 10000, // $100.00 in cents
         user: {
           id: 100,
           firstName: "John",

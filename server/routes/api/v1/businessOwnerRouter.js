@@ -197,7 +197,7 @@ router.get("/employees/for-job/:appointmentId", async (req, res) => {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
-    const jobPriceInCents = appointment.price ? Math.round(parseFloat(appointment.price) * 100) : 0;
+    const jobPriceInCents = appointment.price || 0; // Already stored in cents
 
     // Get home size for duration estimation
     const numBeds = appointment.home?.numBeds || 2;
@@ -721,9 +721,7 @@ router.get("/assignments/:assignmentId", async (req, res) => {
     const numBeds = assignment.appointment?.home?.numBeds || 2;
     const numBaths = assignment.appointment?.home?.numBaths || 1;
     const totalCleaners = allAssignments.length;
-    const jobPriceInCents = assignment.appointment?.price
-      ? Math.round(parseFloat(assignment.appointment.price) * 100)
-      : 0;
+    const jobPriceInCents = assignment.appointment?.price || 0; // Already stored in cents
 
     // Estimate hours based on home size and number of cleaners
     const estimatedHours = EmployeeJobAssignmentService.estimateJobDuration(numBeds, numBaths, totalCleaners);
@@ -1899,7 +1897,7 @@ router.get("/dashboard", async (req, res) => {
               ? `${clientFirstName} ${clientLastName}`
               : "Unknown Client",
             address,
-            totalPrice: Math.round(parseFloat(assignment.appointment?.price || 0) * 100),
+            totalPrice: assignment.appointment?.price || 0,
           });
         } else {
           // Add additional assignee for multi-cleaner jobs
@@ -2013,7 +2011,7 @@ router.get("/dashboard", async (req, res) => {
             ? `${clientFirstName} ${clientLastName}`
             : "Unknown Client",
           address,
-          totalPrice: Math.round(parseFloat(apt.price || 0) * 100),
+          totalPrice: apt.price || 0,
         };
       });
     };
@@ -2104,7 +2102,7 @@ router.get("/dashboard", async (req, res) => {
               ? `${clientFirstName} ${clientLastName}`
               : "Unknown Client",
             address,
-            totalPrice: Math.round(parseFloat(apt.price || 0) * 100),
+            totalPrice: apt.price || 0,
           };
         });
     };
@@ -2362,7 +2360,7 @@ router.get("/calendar", async (req, res) => {
         address,
         city: apt.home?.city || "",
         state: apt.home?.state || "",
-        totalPrice: Math.round(parseFloat(apt.price || 0) * 100),
+        totalPrice: apt.price || 0,
         status: apt.status,
         duration,
         numBeds,
@@ -2447,7 +2445,7 @@ router.get("/calendar", async (req, res) => {
           appointmentId: apt.id,
           businessEmployeeId: assignedEmp.id,
           status: "assigned",
-          payAmount: Math.round(parseFloat(apt.price || 0) * 100),
+          payAmount: apt.price || 0,
           isSelfAssignment: assignedEmp.isSelf || false,
           isMarketplacePickup: true,
           assignedCount: 1,
@@ -2462,7 +2460,7 @@ router.get("/calendar", async (req, res) => {
             address,
             city: apt.home?.city || "",
             state: apt.home?.state || "",
-            totalPrice: Math.round(parseFloat(apt.price || 0) * 100),
+            totalPrice: apt.price || 0,
             status: apt.status,
           },
         };
@@ -2576,7 +2574,7 @@ router.get("/calendar", async (req, res) => {
           address,
           city: assignment.appointment?.home?.city || "",
           state: assignment.appointment?.home?.state || "",
-          totalPrice: Math.round(parseFloat(assignment.appointment?.price || 0) * 100),
+          totalPrice: assignment.appointment?.price || 0,
           status: assignment.appointment?.status,
         },
         // Include all assignments for this appointment (for multi-cleaner display)

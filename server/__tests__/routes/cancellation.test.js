@@ -139,7 +139,7 @@ describe("Cancellation Endpoints", () => {
           id: 1,
           userId: 1,
           date: getFutureDate(5), // 5 days from now
-          price: "200",
+          price: 20000, // $200.00 in cents
           hasBeenAssigned: true,
           employeesAssigned: ["2"],
         });
@@ -167,7 +167,7 @@ describe("Cancellation Endpoints", () => {
           id: 1,
           userId: 1,
           date: getFutureDate(2), // 2 days from now
-          price: "200",
+          price: 20000, // $200.00 in cents
           hasBeenAssigned: true,
           employeesAssigned: ["2"],
         });
@@ -196,7 +196,7 @@ describe("Cancellation Endpoints", () => {
           id: 1,
           userId: 1,
           date: getFutureDate(1), // 1 day from now
-          price: "200",
+          price: 20000, // $200.00 in cents
           hasBeenAssigned: false,
           employeesAssigned: [],
         });
@@ -224,7 +224,7 @@ describe("Cancellation Endpoints", () => {
           id: 1,
           userId: 1,
           date: getFutureDate(3), // 3 days from now
-          price: "200",
+          price: 20000, // $200.00 in cents
           hasBeenAssigned: true,
           employeesAssigned: ["2"],
         });
@@ -255,7 +255,7 @@ describe("Cancellation Endpoints", () => {
           id: 1,
           userId: 1,
           date: getFutureDate(2), // 2 days from now
-          price: "200",
+          price: 20000, // $200.00 in cents
           hasBeenAssigned: true,
           employeesAssigned: ["2"],
         });
@@ -283,7 +283,7 @@ describe("Cancellation Endpoints", () => {
           id: 1,
           userId: 1,
           date: getFutureDate(7), // 7 days from now
-          price: "200",
+          price: 20000, // $200.00 in cents
           hasBeenAssigned: true,
           employeesAssigned: ["2"],
         });
@@ -311,7 +311,7 @@ describe("Cancellation Endpoints", () => {
           id: 1,
           userId: 1,
           date: getFutureDate(3), // 3 days from now - within penalty window
-          price: "200",
+          price: 20000, // $200.00 in cents
           hasBeenAssigned: true,
           employeesAssigned: ["2"],
         });
@@ -341,7 +341,7 @@ describe("Cancellation Endpoints", () => {
           id: 1,
           userId: 1,
           date: getFutureDate(7), // 7 days from now - outside penalty window
-          price: "200",
+          price: 20000, // $200.00 in cents
           hasBeenAssigned: true,
           employeesAssigned: ["2"],
         });
@@ -369,7 +369,7 @@ describe("Cancellation Endpoints", () => {
           id: 1,
           userId: 1,
           date: getFutureDate(2), // 2 days from now - within penalty window
-          price: "200",
+          price: 20000, // $200.00 in cents
           hasBeenAssigned: true,
           employeesAssigned: ["2"],
         });
@@ -448,7 +448,7 @@ describe("Cancellation Endpoints", () => {
         id: 1,
         userId: 1,
         date: getFutureDate(5), // 5 days away
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: false,
         employeesAssigned: [],
         completed: false,
@@ -505,7 +505,7 @@ describe("Cancellation Endpoints", () => {
         id: 1,
         userId: 1,
         date: getFutureDate(2), // 2 days away - within penalty window
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
@@ -577,7 +577,7 @@ describe("Cancellation Endpoints", () => {
         id: 1,
         userId: 1,
         date: getFutureDate(5),
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: false,
         employeesAssigned: [],
         completed: false,
@@ -666,7 +666,7 @@ describe("Cancellation Endpoints", () => {
         id: 1,
         userId: 1,
         date: getFutureDate(7), // 7 days away
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
@@ -726,7 +726,7 @@ describe("Cancellation Endpoints", () => {
         id: 1,
         userId: 1,
         date: getFutureDate(3), // 3 days away - within penalty window
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
@@ -771,7 +771,7 @@ describe("Cancellation Endpoints", () => {
         id: 1,
         userId: 1,
         date: getFutureDate(3), // 3 days away - within penalty window
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
@@ -825,7 +825,7 @@ describe("Cancellation Endpoints", () => {
         id: 1,
         userId: 1,
         date: getFutureDate(7), // 7 days away - outside penalty window
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
@@ -873,7 +873,7 @@ describe("Cancellation Endpoints", () => {
         id: 1,
         userId: 1,
         date: getFutureDate(2), // 2 days away
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
@@ -927,7 +927,7 @@ describe("Cancellation Endpoints", () => {
         userId: 5,
         homeId: 15,
         date: getFutureDate(10),
-        price: "180",
+        price: 18000, // $180.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2", "3"], // Cleaner 2 and another cleaner
         completed: false,
@@ -939,7 +939,7 @@ describe("Cancellation Endpoints", () => {
         userId: 6,
         homeId: 16,
         date: getFutureDate(14),
-        price: "220",
+        price: 22000, // $220.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"], // Only cleaner 2
         completed: false,
@@ -985,7 +985,7 @@ describe("Cancellation Endpoints", () => {
         userId: 1,
         homeId: 1,
         date: getFutureDate(2), // 2 days away - within penalty window
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
@@ -1074,7 +1074,7 @@ describe("Cancellation Endpoints", () => {
         userId: 1,
         homeId: 1,
         date: getFutureDate(2),
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
@@ -1145,7 +1145,7 @@ describe("Cancellation Endpoints", () => {
         userId: 5,
         homeId: 15,
         date: getFutureDate(10),
-        price: "180",
+        price: 18000, // $180.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
@@ -1181,7 +1181,7 @@ describe("Cancellation Endpoints", () => {
         userId: 1,
         homeId: 1,
         date: getFutureDate(2),
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
@@ -1231,7 +1231,7 @@ describe("Cancellation Endpoints", () => {
         id: 1,
         userId: 1,
         date: getFutureDate(7),
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"], // Different cleaner
         completed: false,
@@ -1252,7 +1252,7 @@ describe("Cancellation Endpoints", () => {
         id: 1,
         userId: 1,
         date: getFutureDate(7),
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
@@ -1281,7 +1281,7 @@ describe("Cancellation Endpoints", () => {
         id: 1,
         userId: 1,
         date: getFutureDate(7),
-        price: "200",
+        price: 20000, // $200.00 in cents
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: true, // Already completed

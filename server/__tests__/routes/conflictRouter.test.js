@@ -391,7 +391,7 @@ describe("Conflict Router", () => {
 			// Mock getConflictCase to return case with appointment price for validation
 			mockGetConflictCase.mockResolvedValue({
 				id: 1,
-				appointment: { id: 100, price: 100, refundAmount: 0 }, // $100 = 10000 cents max refundable
+				appointment: { id: 100, price: 10000, refundAmount: 0 }, // 10000 cents = $100.00 max refundable
 			});
 			mockProcessRefund.mockResolvedValue({
 				success: true,
@@ -425,7 +425,7 @@ describe("Conflict Router", () => {
 			// Mock getConflictCase to return case with appointment price for validation
 			mockGetConflictCase.mockResolvedValue({
 				id: 1,
-				appointment: { id: 100, price: 100, refundAmount: 0 }, // $100 = 10000 cents max refundable
+				appointment: { id: 100, price: 10000, refundAmount: 0 }, // 10000 cents = $100.00 max refundable
 			});
 			mockProcessRefund.mockRejectedValue(new Error("No payment intent found"));
 

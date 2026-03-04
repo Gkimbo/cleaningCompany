@@ -113,7 +113,7 @@ const RecurringScheduleCard = ({ schedules, onViewAll, onPauseSchedule }) => {
               <View style={styles.detailRow}>
                 <Feather name="dollar-sign" size={14} color={colors.text.tertiary} />
                 <Text style={styles.detailText}>
-                  ${parseFloat(schedule.price).toFixed(2)} per cleaning
+                  ${(parseFloat(schedule.price) / 100).toFixed(2)} per cleaning
                 </Text>
               </View>
             </View>

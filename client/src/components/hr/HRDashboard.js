@@ -158,7 +158,7 @@ const DisputeCard = ({ dispute, onPress }) => {
         </View>
         {priceDiff > 0 && (
           <View style={styles.priceBadge}>
-            <Text style={styles.priceText}>+${priceDiff.toFixed(0)}</Text>
+            <Text style={styles.priceText}>+${(priceDiff / 100).toFixed(0)}</Text>
           </View>
         )}
       </View>
@@ -823,7 +823,7 @@ const HRDashboard = ({ state, dispatch }) => {
                     <View style={styles.priceDiffRow}>
                       <Text style={styles.priceDiffLabel}>Price Difference:</Text>
                       <Text style={styles.priceDiffValue}>
-                        ${Number(selectedDispute.priceDifference || 0).toFixed(2)}
+                        ${(Number(selectedDispute.priceDifference || 0) / 100).toFixed(2)}
                       </Text>
                     </View>
                   </View>

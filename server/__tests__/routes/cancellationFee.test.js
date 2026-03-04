@@ -73,6 +73,7 @@ jest.mock("../../models", () => ({
   },
   CalendarSync: {
     findAll: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn().mockResolvedValue(null),
   },
 }));
 
@@ -90,6 +91,55 @@ jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendEmailCancellation: jest.fn().mockResolvedValue(true),
   sendEmployeeRequest: jest.fn().mockResolvedValue(true),
   removeRequestEmail: jest.fn().mockResolvedValue(true),
+  sendHomeownerCancelledNotification: jest.fn().mockResolvedValue(true),
+}));
+
+// Mock CancellationAuditService
+jest.mock("../../services/CancellationAuditService", () => ({
+  logCancellationInitiated: jest.fn().mockResolvedValue({}),
+  logFeeChargeAttempted: jest.fn().mockResolvedValue({}),
+  logFeeChargeSucceeded: jest.fn().mockResolvedValue({}),
+  logFeeChargeFailed: jest.fn().mockResolvedValue({}),
+  logFeeAddedToBill: jest.fn().mockResolvedValue({}),
+  logRefundCompleted: jest.fn().mockResolvedValue({}),
+  logPayoutCreated: jest.fn().mockResolvedValue({}),
+  logRefundProcessed: jest.fn().mockResolvedValue({}),
+  logCleanerPayout: jest.fn().mockResolvedValue({}),
+  logCancellationCompleted: jest.fn().mockResolvedValue({}),
+  logCancellationConfirmed: jest.fn().mockResolvedValue({}),
+  log: jest.fn().mockResolvedValue({}),
+}));
+
+// Mock CancellationFinancialService
+jest.mock("../../services/CancellationFinancialService", () => ({
+  processCancellation: jest.fn().mockResolvedValue({
+    success: true,
+    refund: { amount: 200 },
+  }),
+  generateConfirmationId: jest.fn().mockReturnValue("CANCEL-TEST-123"),
+  buildFullBreakdown: jest.fn().mockResolvedValue({
+    originalAmount: 20000,
+    refundAmount: 10000,
+    cleanerPayout: 8000,
+    platformFee: 2000,
+  }),
+}));
+
+// Mock JobLedgerService
+jest.mock("../../services/JobLedgerService", () => ({
+  recordCancellation: jest.fn().mockResolvedValue({}),
+}));
+
+// Mock NotificationService
+jest.mock("../../services/NotificationService", () => ({
+  create: jest.fn().mockResolvedValue({}),
+  createNotification: jest.fn().mockResolvedValue({}),
+  sendToUser: jest.fn().mockResolvedValue({}),
+}));
+
+// Mock PushNotification
+jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
+  sendPushHomeownerCancelledAppointment: jest.fn().mockResolvedValue(true),
 }));
 
 // Mock pricing config - simulates what owner set in the database
@@ -929,9 +979,9 @@ describe("Cancellation Fee Charging", () => {
 
       const mockBillUpdate = jest.fn().mockResolvedValue(true);
       UserBills.findOne.mockResolvedValue({
-        appointmentDue: 50,
-        cancellationFee: 25, // Existing fee
-        totalDue: 75,
+        appointmentDue: 5000, // UserBills stores amounts in cents
+        cancellationFee: 2500, // Existing fee in cents ($25.00)
+        totalDue: 7500, // Total in cents ($75.00)
         update: mockBillUpdate,
       });
 
@@ -947,11 +997,13 @@ describe("Cancellation Fee Charging", () => {
       expect(res.body.cancellationFee.charged).toBe(false);
       expect(res.body.cancellationFee.addedToBill).toBe(true);
 
-      // Verify fee was added to existing bill amounts
+      // Verify fee was added to existing bill amounts (amounts in cents)
+      // cancellationConfig.fee is in dollars, so multiply by 100 for cents
+      const cancellationFeeCents = mockPricingConfig.cancellation.fee * 100;
       expect(mockBillUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
-          cancellationFee: 25 + mockPricingConfig.cancellation.fee,
-          totalDue: 75 + mockPricingConfig.cancellation.fee,
+          cancellationFee: 2500 + cancellationFeeCents,
+          totalDue: 7500 + cancellationFeeCents,
         })
       );
     });
@@ -1012,11 +1064,13 @@ describe("Cancellation Fee Charging", () => {
       expect(res.body.cancellationFee.reason).toContain("Card declined");
       expect(res.body.cancellationFee.reason).toContain("added to bill");
 
-      // Verify fee was added to bill
+      // Verify fee was added to bill (amounts in cents)
+      // cancellationConfig.fee is in dollars, so multiply by 100 for cents
+      const cancellationFeeCents = mockPricingConfig.cancellation.fee * 100;
       expect(mockBillUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
-          cancellationFee: mockPricingConfig.cancellation.fee,
-          totalDue: mockPricingConfig.cancellation.fee,
+          cancellationFee: cancellationFeeCents,
+          totalDue: cancellationFeeCents,
         })
       );
     });

@@ -44,7 +44,7 @@ const PendingClientResponseCard = ({
 
   const formatPrice = (price) => {
     if (!price) return "TBD";
-    return `$${parseFloat(price).toFixed(2)}`;
+    return `$${(parseFloat(price) / 100).toFixed(2)}`;
   };
 
   // Determine the card status

@@ -52,7 +52,7 @@ const PendingBookingModal = ({ visible, booking, onClose, onActionComplete }) =>
 
   const formatPrice = (price) => {
     if (!price) return "Price TBD";
-    return `$${parseFloat(price).toFixed(2)}`;
+    return `$${(parseFloat(price) / 100).toFixed(2)}`;
   };
 
   const handleAccept = async () => {

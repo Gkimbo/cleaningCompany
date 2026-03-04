@@ -1073,14 +1073,14 @@ cleanerClientsRouter.delete("/:id", verifyCleaner, async (req, res) => {
         if (appointmentsToDelete.length > 0) {
           const appointmentIds = appointmentsToDelete.map(a => a.id);
 
-          // Group by userId for UserBills adjustments
+          // Group by userId for UserBills adjustments (prices in cents)
           const userBillAdjustments = {};
           for (const appt of appointmentsToDelete) {
-            const price = parseFloat(appt.price) || 0;
+            const priceCents = appt.price || 0;
             if (!userBillAdjustments[appt.userId]) {
               userBillAdjustments[appt.userId] = 0;
             }
-            userBillAdjustments[appt.userId] += price;
+            userBillAdjustments[appt.userId] += priceCents;
           }
 
           // Delete related records
@@ -1283,15 +1283,17 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       });
     }
 
-    // Calculate or use provided price
-    let appointmentPrice;
+    // Calculate or use provided price (store in cents)
+    let appointmentPriceCents;
     if (price) {
-      appointmentPrice = parseFloat(price);
+      // User input is in dollars, convert to cents
+      appointmentPriceCents = Math.round(parseFloat(price) * 100);
     } else if (cleanerClient.defaultPrice) {
-      appointmentPrice = parseFloat(cleanerClient.defaultPrice);
+      // defaultPrice is stored in dollars (DECIMAL), convert to cents
+      appointmentPriceCents = Math.round(parseFloat(cleanerClient.defaultPrice) * 100);
     } else {
-      // Calculate based on home details
-      appointmentPrice = await calculatePrice(
+      // calculatePrice returns cents
+      appointmentPriceCents = await calculatePrice(
         home.bringSheets || "no",
         home.bringTowels || "no",
         home.numBeds,
@@ -1300,13 +1302,13 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       );
     }
 
-    // Create the appointment
+    // Create the appointment (price stored as INTEGER cents)
     const appointment = await UserAppointments.create({
       userId: client.id,
       homeId: home.id,
       date: date,
-      price: appointmentPrice.toString(),
-      originalPrice: appointmentPrice.toString(),
+      price: appointmentPriceCents,
+      originalPrice: appointmentPriceCents,
       completed: false,
       paid: false,
       hasBeenAssigned: true,
@@ -1328,7 +1330,7 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       employeeId: req.user.id,
     });
 
-    // Update or create user bill
+    // Update or create user bill (all values in cents)
     let userBill = await UserBills.findOne({
       where: { userId: client.id },
     });
@@ -1336,28 +1338,24 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
     if (!userBill) {
       userBill = await UserBills.create({
         userId: client.id,
-        appointmentDue: appointmentPrice,
-        cancellationDue: 0,
-        totalDue: appointmentPrice,
-        appointmentPaid: 0,
-        cancellationPaid: 0,
-        totalPaid: 0,
+        appointmentDue: appointmentPriceCents,
+        cancellationFee: 0,
+        totalDue: appointmentPriceCents,
       });
     } else {
       await userBill.update({
-        appointmentDue: parseFloat(userBill.appointmentDue || 0) + appointmentPrice,
-        totalDue: parseFloat(userBill.totalDue || 0) + appointmentPrice,
+        appointmentDue: (userBill.appointmentDue || 0) + appointmentPriceCents,
+        totalDue: (userBill.totalDue || 0) + appointmentPriceCents,
       });
     }
 
     // Calculate cleaner payout (platform takes fee) - get fee from database config
     const pricingConfig = await getPricingConfig();
     const standardFeePercent = pricingConfig?.platform?.feePercent || 0.10;
-    const appointmentPriceInCents = Math.round(appointmentPrice * 100);
 
     const feeResult = await IncentiveService.calculateCleanerFee(
       req.user.id,
-      appointmentPriceInCents,
+      appointmentPriceCents, // Already in cents
       standardFeePercent
     );
 
@@ -1365,7 +1363,7 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
     await Payout.create({
       cleanerId: req.user.id,
       appointmentId: appointment.id,
-      grossAmount: appointmentPriceInCents,
+      grossAmount: appointmentPriceCents,
       platformFee: feeResult.platformFee,
       netAmount: feeResult.netAmount,
       status: "pending",
@@ -1405,7 +1403,7 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
             cleanerName,
             appointment.date,
             homeAddress,
-            appointmentPrice
+            appointmentPriceCents
           );
         } catch (emailErr) {
           console.error("Failed to send email notification for cleaner booking:", emailErr);
@@ -1519,8 +1517,16 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
       return res.status(400).json({ error: "An appointment already exists for this date" });
     }
 
-    // Calculate price if not provided
-    const appointmentPrice = price || cleanerClient.defaultPrice || 150;
+    // Calculate price in cents
+    // price from request is in dollars, defaultPrice is DECIMAL (dollars), fallback is cents
+    let appointmentPriceCents;
+    if (price) {
+      appointmentPriceCents = Math.round(parseFloat(price) * 100);
+    } else if (cleanerClient.defaultPrice) {
+      appointmentPriceCents = Math.round(parseFloat(cleanerClient.defaultPrice) * 100);
+    } else {
+      appointmentPriceCents = 15000; // Default $150.00 in cents
+    }
 
     // Calculate expiration (48 hours from now)
     const expiresAt = new Date();
@@ -1535,7 +1541,7 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
       userId: cleanerClient.clientId,
       homeId: cleanerClient.homeId,
       date,
-      price: String(appointmentPrice),
+      price: appointmentPriceCents,
       paid: false,
       completed: false,
       hasBeenAssigned: true, // Pre-assigned to the business owner
@@ -1550,7 +1556,7 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
       clientResponsePending: true,
       expiresAt,
       autoPayEnabled: cleanerClient.autoPayEnabled,
-      businessOwnerPrice: appointmentPrice,
+      businessOwnerPrice: appointmentPriceCents,
     });
 
     // Create cleaner-appointment link
@@ -1570,7 +1576,7 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
         cleanerId,
         appointmentId: appointment.id,
         appointmentDate: date,
-        price: appointmentPrice,
+        price: appointmentPriceCents,
         cleanerName,
         io,
       });
@@ -1587,7 +1593,7 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
       appointment: {
         id: appointment.id,
         date,
-        price: appointmentPrice,
+        price: appointmentPriceCents,
         status: "pending_approval",
         expiresAt,
       },

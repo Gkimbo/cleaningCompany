@@ -24,16 +24,8 @@ class PayCalculatorService {
     const config = await getPricingConfig();
     const platformFeePercent = config?.businessOwnerFeePercent || 0.10;
 
-    // Get customer payment amount - always convert to cents
-    // Price is stored as string dollars (e.g., "150.50") in the database
-    let customerPays;
-    if (appointment.price === null || appointment.price === undefined) {
-      customerPays = 0;
-    } else {
-      // Always parse as float and convert to cents, regardless of input type
-      const priceValue = parseFloat(appointment.price);
-      customerPays = isNaN(priceValue) ? 0 : Math.round(priceValue * 100);
-    }
+    // Get customer payment amount - price is already stored in cents (INTEGER)
+    const customerPays = appointment.price || 0;
 
     // Calculate platform fee
     const platformFee = Math.round(customerPays * platformFeePercent);
@@ -132,9 +124,8 @@ class PayCalculatorService {
     let employeeAssignmentCount = 0;
 
     for (const assignment of assignments) {
-      // Always parse price as float and convert to cents
-      const priceValue = parseFloat(assignment.appointment.price);
-      const price = isNaN(priceValue) ? 0 : Math.round(priceValue * 100);
+      // Price is already stored in cents (INTEGER)
+      const price = assignment.appointment.price || 0;
 
       const platformFee = Math.round(price * platformFeePercent);
 
@@ -332,11 +323,8 @@ class PayCalculatorService {
     const config = await getPricingConfig();
     const platformFeePercent = config?.businessOwnerFeePercent || 0.10;
 
-    // Get job price
-    const jobPrice =
-      typeof appointment.price === "string"
-        ? Math.round(parseFloat(appointment.price) * 100)
-        : appointment.price;
+    // Get job price (already in cents)
+    const jobPrice = appointment.price || 0;
 
     const platformFee = Math.round(jobPrice * platformFeePercent);
     const revenueAfterFee = jobPrice - platformFee;

@@ -457,7 +457,7 @@ describe("Business Owner Decline Flow", () => {
       bookedByCleanerId: businessOwnerId,
       businessOwnerDeclined: true,
       date: getFutureDate(3),
-      price: 150,
+      price: 15000, // $150.00 in cents
       wasCancelled: false,
       home: { ...mockHome, ...homeOverrides },
       bookedByCleaner: mockBusinessOwner,
@@ -609,7 +609,7 @@ describe("Business Owner Decline Flow", () => {
       bookedByCleanerId: businessOwnerId,
       businessOwnerDeclined: true,
       date: getFutureDate(3),
-      price: 150,
+      price: 15000, // $150.00 in cents
       wasCancelled: false,
       openToMarket: false,
       home: { ...mockHome, ...homeOverrides },

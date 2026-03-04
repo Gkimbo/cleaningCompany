@@ -316,7 +316,7 @@ const Bill = ({ state, dispatch }) => {
                     {getHomeNickname(appt)}
                   </Text>
                 </View>
-                <Text style={styles.appointmentPriceError}>${Number(appt.price).toFixed(2)}</Text>
+                <Text style={styles.appointmentPriceError}>${(Number(appt.price) / 100).toFixed(2)}</Text>
               </View>
               <Pressable
                 style={[styles.retryButton, retryingPaymentId === appt.id && styles.retryButtonDisabled]}
@@ -350,7 +350,7 @@ const Bill = ({ state, dispatch }) => {
                     {getHomeNickname(appt)}
                   </Text>
                 </View>
-                <Text style={styles.appointmentPrice}>${Number(appt.price).toFixed(2)}</Text>
+                <Text style={styles.appointmentPrice}>${(Number(appt.price) / 100).toFixed(2)}</Text>
               </View>
               <Pressable
                 style={[styles.payEarlyButton, prePayingId === appt.id && styles.payEarlyButtonDisabled]}
@@ -391,7 +391,7 @@ const Bill = ({ state, dispatch }) => {
                   <Text style={styles.pendingBadgeText}>Pending</Text>
                 </View>
               </View>
-              <Text style={styles.pendingPrice}>${Number(appt.price).toFixed(2)}</Text>
+              <Text style={styles.pendingPrice}>${(Number(appt.price) / 100).toFixed(2)}</Text>
             </View>
           ))}
         </View>
@@ -415,7 +415,7 @@ const Bill = ({ state, dispatch }) => {
                   <Text style={styles.paidBadgeText}>Paid</Text>
                 </View>
               </View>
-              <Text style={styles.paidPrice}>${Number(appt.price).toFixed(2)}</Text>
+              <Text style={styles.paidPrice}>${(Number(appt.price) / 100).toFixed(2)}</Text>
             </View>
           ))}
         </View>
@@ -439,7 +439,7 @@ const Bill = ({ state, dispatch }) => {
                   </Text>
                 </View>
                 <View style={styles.historyRight}>
-                  <Text style={styles.historyAmount}>${Number(appt.price).toFixed(2)}</Text>
+                  <Text style={styles.historyAmount}>${(Number(appt.price) / 100).toFixed(2)}</Text>
                   <View style={styles.historyPaidBadge}>
                     <Icon name="check" size={10} color={colors.success[600]} />
                   </View>

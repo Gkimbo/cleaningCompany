@@ -209,14 +209,14 @@ function generateTowelConfigurations(numBaths) {
 	return configs;
 }
 
-// Pricing constants (matching server/services/CalculatePrice.js defaults)
+// Pricing constants in CENTS (matching server/services/CalculatePrice.js defaults)
 const PRICING = {
-	basePrice: 150, // Includes 1 bed, 1 bath
-	extraBedBathFee: 50, // Per extra bed or full bath
-	halfBathFee: 25,
-	sheetFeePerBed: 30,
-	towelFee: 5,
-	faceClothFee: 2,
+	basePrice: 15000, // $150.00 - Includes 1 bed, 1 bath
+	extraBedBathFee: 5000, // $50.00 - Per extra bed or full bath
+	halfBathFee: 2500, // $25.00
+	sheetFeePerBed: 3000, // $30.00
+	towelFee: 500, // $5.00
+	faceClothFee: 200, // $2.00
 	multiCleanerPlatformFeePercent: 0.13, // 13% for multi-cleaner jobs (matches DB default)
 };
 
@@ -230,7 +230,7 @@ const PRICING = {
  * @param {string} options.bringTowels - "yes" or "no"
  * @param {Array} options.sheetConfigs - Optional sheet configurations
  * @param {Array} options.towelConfigs - Optional towel configurations
- * @returns {number} Total price in dollars
+ * @returns {number} Total price in CENTS (e.g., 15000 = $150.00)
  */
 function calculateAppointmentPrice({
 	numBeds,
@@ -282,12 +282,11 @@ function calculateAppointmentPrice({
 
 /**
  * Calculate cleaner earnings for multi-cleaner job
- * @param {number} totalPrice - Total appointment price in dollars
+ * @param {number} totalPriceCents - Total appointment price in cents
  * @param {number} numCleaners - Number of cleaners splitting the job
  * @returns {number} Per-cleaner earnings in cents
  */
-function calculateCleanerEarnings(totalPrice, numCleaners = 1) {
-	const totalPriceCents = totalPrice * 100;
+function calculateCleanerEarnings(totalPriceCents, numCleaners = 1) {
 	return Math.round((totalPriceCents * (1 - PRICING.multiCleanerPlatformFeePercent)) / numCleaners);
 }
 
@@ -387,7 +386,7 @@ async function createDemoAccounts() {
 						userId: createdAccounts.homeowner.id,
 						homeId: homeownerHomes[0].id,
 						date: pastDate,
-						price: "180", // $180
+						price: 18000, // $180.00 in cents
 						paid: true,
 						bringTowels: "yes",
 						bringSheets: "no",
@@ -397,7 +396,7 @@ async function createDemoAccounts() {
 						employeesNeeded: 1,
 						timeToBeCompleted: "3",
 						paymentStatus: "paid",
-						amountPaid: 180,
+						amountPaid: 18000, // $180.00 in cents
 						completionStatus: "approved",
 						isDemoAppointment: true,
 						towelConfigurations: JSON.stringify(reviewApptTowelConfigs),
@@ -546,15 +545,15 @@ async function createDemoAccounts() {
 				towelConfigs: mansionTowelConfigs,
 			});
 
-			// Price is stored in dollars (consistent with other appointments)
-			const mansionPriceDollars = mansionPrice;
+			// Price is stored in cents (mansionPrice is already in cents from calculateAppointmentPrice)
+			const mansionPriceCents = mansionPrice;
 
 			if (!multiCleanerAppointment) {
 				multiCleanerAppointment = await UserAppointments.create({
 					userId: multiCleanerHomeowner.id,
 					homeId: largeHome.id,
 					date: multiCleanerDate,
-					price: String(mansionPriceDollars),
+					price: mansionPriceCents, // Already in cents
 					paid: false,
 					bringTowels: "yes",
 					bringSheets: "yes",
@@ -570,15 +569,15 @@ async function createDemoAccounts() {
 					towelConfigurations: JSON.stringify(mansionTowelConfigs),
 					isDemoAppointment: true,
 				});
-				console.log("  - Created multi-cleaner appointment with price: $" + mansionPriceDollars);
+				console.log("  - Created multi-cleaner appointment with price: $" + (mansionPriceCents / 100));
 			} else {
 				// Update existing appointment with configurations and correct price
 				await multiCleanerAppointment.update({
-					price: String(mansionPriceDollars),
+					price: mansionPriceCents, // Already in cents
 					sheetConfigurations: JSON.stringify(mansionSheetConfigs),
 					towelConfigurations: JSON.stringify(mansionTowelConfigs),
 				});
-				console.log("  - Updated existing multi-cleaner appointment with price: $" + mansionPriceDollars);
+				console.log("  - Updated existing multi-cleaner appointment with price: $" + (mansionPriceCents / 100));
 			}
 
 			// Create the MultiCleanerJob record
@@ -828,7 +827,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.homeowner.id,
 							homeId: createdHomes[0].id,
 							date: pastDate,
-							price: String(pastApptPrice),
+							price: pastApptPrice, // Already in cents
 							paid: true,
 							bringTowels: "yes",
 							bringSheets: "no",
@@ -899,7 +898,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.homeowner.id,
 							homeId: home.id,
 							date: futureDate,
-							price: String(price), // Price in dollars
+							price: price, // Already in cents
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -983,7 +982,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.homeowner.id,
 							homeId: home.id,
 							date: todayDate,
-							price: String(price), // Price in dollars
+							price: price, // Already in cents
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -1166,7 +1165,7 @@ async function createDemoAccounts() {
 						userId: createdAccounts.homeowner.id,
 						homeId: home.id,
 						date: jobDate,
-						price: String(price), // Price in dollars
+						price: price, // Already in cents
 						paid: false,
 						bringTowels,
 						bringSheets,
@@ -1201,10 +1200,9 @@ async function createDemoAccounts() {
 			if (!bill) {
 				await UserBills.create({
 					userId: createdAccounts.homeowner.id,
-					appointmentDue: 15000, // $150
+					appointmentDue: 15000, // $150 in cents
 					cancellationFee: 0,
-					totalDue: 15000,
-					totalPaid: 90000, // $900 total paid historically
+					totalDue: 15000, // $150 in cents
 				});
 				console.log("  - Created bill with $150 balance");
 			} else {
@@ -1501,7 +1499,7 @@ async function createDemoAccounts() {
 							userId: home.userId,
 							homeId: home.id,
 							date: jobDate,
-							price: String(price), // Price in dollars
+							price: price, // Already in cents
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -1690,7 +1688,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.businessClient.id,
 							homeId: clientHome.id,
 							date: pastDate,
-							price: "160", // $160
+							price: 16000, // $160.00 in cents
 							paid: true,
 							bringTowels: "yes",
 							bringSheets: "no",
@@ -1700,7 +1698,7 @@ async function createDemoAccounts() {
 							employeesNeeded: 1,
 							timeToBeCompleted: "2.5",
 							paymentStatus: "paid",
-							amountPaid: 160,
+							amountPaid: 16000, // $160.00 in cents
 							completionStatus: "approved",
 							bookedByCleanerId: createdAccounts.businessOwner.id,
 							isDemoAppointment: true,
@@ -1762,7 +1760,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.businessClient.id,
 							homeId: clientHome.id,
 							date: futureDate,
-							price: String(price), // Price in dollars
+							price: price, // Already in cents
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -1807,10 +1805,9 @@ async function createDemoAccounts() {
 			if (!bill) {
 				await UserBills.create({
 					userId: createdAccounts.businessClient.id,
-					appointmentDue: 10000, // $100
+					appointmentDue: 10000, // $100 in cents
 					cancellationFee: 0,
-					totalDue: 10000,
-					totalPaid: 32000, // $320 total paid historically (2 past cleanings)
+					totalDue: 10000, // $100 in cents
 				});
 				console.log("  - Created bill with $100 balance");
 			} else {
@@ -1886,7 +1883,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(3),
-					price: "180", // $180
+					price: 18000, // $180.00 in cents
 					paid: false,
 					bringTowels: "yes",
 					bringSheets: "no",
@@ -1963,7 +1960,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(5),
-					price: "180", // $180
+					price: 18000, // $180.00 in cents
 					paid: false,
 					bringTowels: "no",
 					bringSheets: "no",
@@ -2018,7 +2015,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(14),
-					price: "180", // $180
+					price: 18000, // $180.00 in cents
 					paid: false,
 					bringTowels: "yes",
 					bringSheets: "yes",
@@ -2079,7 +2076,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(7),
-					price: "200", // $200
+					price: 20000, // $200.00 in cents
 					paid: false,
 					bringTowels: "no",
 					bringSheets: "no",
@@ -2134,7 +2131,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(2),
-					price: "150", // $150 for 3 bed/2 bath
+					price: 15000, // $150.00 in cents for 3 bed/2 bath
 					paid: true,
 					bringTowels: "yes",
 					bringSheets: "no",
@@ -2144,7 +2141,7 @@ async function createDemoAccounts() {
 					employeesNeeded: 1,
 					timeToBeCompleted: "3",
 					paymentStatus: "paid",
-					amountPaid: 150,
+					amountPaid: 15000, // $150.00 in cents
 					completionStatus: "approved",
 					isDemoAppointment: true,
 				});
@@ -2156,11 +2153,11 @@ async function createDemoAccounts() {
 					homeownerId: demoHomeowner.id,
 					originalNumBeds: "3",
 					originalNumBaths: "2",
-					originalPrice: 150.00,
+					originalPrice: 15000, // $150.00 in cents
 					reportedNumBeds: "5",
 					reportedNumBaths: "3",
-					calculatedNewPrice: 220.00,
-					priceDifference: 70.00,
+					calculatedNewPrice: 22000, // $220.00 in cents
+					priceDifference: 7000, // $70.00 in cents
 					status: "pending_owner",
 					cleanerNote: "This home is much larger than listed. It has 5 bedrooms including a converted basement with 2 bedrooms, and 3 full bathrooms. The upstairs has a master suite with its own bathroom that wasn't mentioned. I took photos of each room.",
 					homeownerResponse: "I disagree - the basement rooms are storage, not bedrooms. But I acknowledge the third bathroom was added recently.",
@@ -2179,7 +2176,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(21),
-					price: "180", // $180
+					price: 18000, // $180.00 in cents
 					paid: false,
 					bringTowels: "no",
 					bringSheets: "no",
@@ -2239,7 +2236,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(3),
-					price: "220", // $220
+					price: 22000, // $220.00 in cents
 					paid: true,
 					bringTowels: "yes",
 					bringSheets: "yes",
@@ -2249,7 +2246,7 @@ async function createDemoAccounts() {
 					employeesNeeded: 1,
 					timeToBeCompleted: "4",
 					paymentStatus: "paid",
-					amountPaid: 220,
+					amountPaid: 22000, // $220.00 in cents
 					completionStatus: "approved",
 					isDemoAppointment: true,
 				});
@@ -2281,7 +2278,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(10),
-					price: "180", // $180
+					price: 18000, // $180.00 in cents
 					paid: true,
 					bringTowels: "no",
 					bringSheets: "no",
@@ -2291,7 +2288,7 @@ async function createDemoAccounts() {
 					employeesNeeded: 1,
 					timeToBeCompleted: "3",
 					paymentStatus: "paid",
-					amountPaid: 180,
+					amountPaid: 18000, // $180.00 in cents
 					completionStatus: "approved",
 					isDemoAppointment: true,
 				});
@@ -2300,7 +2297,7 @@ async function createDemoAccounts() {
 					appointmentId: missingPayoutAppt.id,
 					cleanerId: demoCleaner.id,
 					issueType: "missing_payout",
-					expectedAmount: 18000,
+					expectedAmount: 18000, // $180.00 in cents
 					receivedAmount: 0,
 					description: "I completed this job 10 days ago but never received payment. The homeowner says they paid through the app. My Stripe account is properly connected and verified.",
 					status: "resolved",
@@ -2309,7 +2306,7 @@ async function createDemoAccounts() {
 					assignedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
 					reviewedBy: demoHR.id,
 					reviewedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-					resolution: { amountPaid: 180, paidVia: "manual_transfer", stripeTransferId: "tr_demo_123" },
+					resolution: { amountPaid: 18000, paidVia: "manual_transfer", stripeTransferId: "tr_demo_123" }, // $180.00 in cents
 					resolutionNotes: "Stripe webhook failed to process. Manual transfer completed to cleaner's account.",
 					slaDeadline: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
 					submittedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
@@ -2679,7 +2676,7 @@ async function createDemoAccounts() {
 						userId: createdClients[i].id,
 						homeId: clientHome.id,
 						date: pastDate,
-						price: String(180 + (i * 10)), // Price in dollars
+						price: 18000 + (i * 1000), // Price in cents ($180 + $10 per i)
 						paid: true,
 						bringTowels: "yes",
 						bringSheets: "no",
@@ -2689,7 +2686,7 @@ async function createDemoAccounts() {
 						employeesNeeded: 1,
 						timeToBeCompleted: "3",
 						paymentStatus: "paid",
-						amountPaid: 180 + (i * 10),
+						amountPaid: 18000 + (i * 1000), // Price in cents
 						completionStatus: "approved",
 						bookedByCleanerId: largeBizOwner.id,
 						isDemoAppointment: true,
@@ -2761,13 +2758,13 @@ async function createDemoAccounts() {
 				// Spread across days 1 to today to ensure all 70 are in current month
 				const dayOfMonth = (i % 8) + 1; // Days 1-8 of current month
 				const pastDate = getCurrentMonthDate(dayOfMonth);
-				const price = 150 + (i * 5); // Price in dollars
+				const priceCents = 15000 + (i * 500); // Price in cents ($150 + $5 per i)
 
 				await UserAppointments.create({
 					userId: createdClients[i].id,
 					homeId: clientHome.id,
 					date: pastDate,
-					price: String(price),
+					price: priceCents, // Already in cents
 					paid: true,
 					bringTowels: i % 2 === 0 ? "yes" : "no",
 					bringSheets: i % 3 === 0 ? "yes" : "no",
@@ -2777,7 +2774,7 @@ async function createDemoAccounts() {
 					employeesNeeded: 1,
 					timeToBeCompleted: String(2 + (i % 3)),
 					paymentStatus: "paid",
-					amountPaid: price,
+					amountPaid: priceCents,
 					completionStatus: "approved",
 					bookedByCleanerId: largeBizOwner.id,
 					isDemoAppointment: true,
@@ -2916,7 +2913,7 @@ async function createDemoAccounts() {
 						userId: homeowner.id,
 						homeId: home.id,
 						date: pastDate,
-						price: String(160 + (i * 5)), // Price in dollars
+						price: 16000 + (i * 500), // Price in cents ($160 + $5 per i)
 						paid: true,
 						bringTowels: "yes",
 						bringSheets: "no",
@@ -2926,7 +2923,7 @@ async function createDemoAccounts() {
 						employeesNeeded: 1,
 						timeToBeCompleted: "3",
 						paymentStatus: "paid",
-						amountPaid: 160 + (i * 5),
+						amountPaid: 16000 + (i * 500), // Price in cents
 						completionStatus: "approved",
 						isDemoAppointment: true,
 					});
@@ -3032,7 +3029,7 @@ async function createDemoAccounts() {
 							userId: home.userId,
 							homeId: home.id,
 							date: pastDate,
-							price: String(160 + (i * 10)), // Price in dollars
+							price: 16000 + (i * 1000), // Price in cents ($160 + $10 per i)
 							paid: true,
 							bringTowels: "yes",
 							bringSheets: i % 2 === 0 ? "yes" : "no",
@@ -3042,7 +3039,7 @@ async function createDemoAccounts() {
 							employeesNeeded: 1,
 							timeToBeCompleted: "3",
 							paymentStatus: "paid",
-							amountPaid: 160 + (i * 10),
+							amountPaid: 16000 + (i * 1000), // Price in cents
 							completionStatus: "approved",
 							isDemoAppointment: true,
 						});
@@ -3070,7 +3067,7 @@ async function createDemoAccounts() {
 							userId: home.userId,
 							homeId: home.id,
 							date: futureDate,
-							price: String(160 + (i * 10)), // Price in dollars
+							price: 16000 + (i * 1000), // Price in cents ($160 + $10 per i)
 							paid: false,
 							bringTowels: "yes",
 							bringSheets: i === 0 ? "yes" : "no",

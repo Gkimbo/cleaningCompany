@@ -17,7 +17,7 @@ const PendingBookingCard = ({ booking, onPress, onAccept, onDecline }) => {
   // Format price for display
   const formatPrice = (price) => {
     if (!price) return "Price TBD";
-    return `$${parseFloat(price).toFixed(2)}`;
+    return `$${(parseFloat(price) / 100).toFixed(2)}`;
   };
 
   return (

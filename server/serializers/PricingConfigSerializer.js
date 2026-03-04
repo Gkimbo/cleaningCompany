@@ -1,20 +1,26 @@
 class PricingConfigSerializer {
+	// Convert cents to dollars for display
+	static toDollars(cents) {
+		if (cents === null || cents === undefined) return null;
+		return (cents / 100).toFixed(2);
+	}
+
 	static serializeOne(config) {
 		const data = config.dataValues || config;
 
 		return {
 			id: data.id,
-			basePrice: data.basePrice,
-			extraBedBathFee: data.extraBedBathFee,
-			halfBathFee: data.halfBathFee,
-			sheetFeePerBed: data.sheetFeePerBed,
-			towelFee: data.towelFee,
-			faceClothFee: data.faceClothFee,
-			timeWindowAnytime: data.timeWindowAnytime,
-			timeWindow10To3: data.timeWindow10To3,
-			timeWindow11To4: data.timeWindow11To4,
-			timeWindow12To2: data.timeWindow12To2,
-			cancellationFee: data.cancellationFee,
+			basePrice: this.toDollars(data.basePrice),
+			extraBedBathFee: this.toDollars(data.extraBedBathFee),
+			halfBathFee: this.toDollars(data.halfBathFee),
+			sheetFeePerBed: this.toDollars(data.sheetFeePerBed),
+			towelFee: this.toDollars(data.towelFee),
+			faceClothFee: this.toDollars(data.faceClothFee),
+			timeWindowAnytime: this.toDollars(data.timeWindowAnytime),
+			timeWindow10To3: this.toDollars(data.timeWindow10To3),
+			timeWindow11To4: this.toDollars(data.timeWindow11To4),
+			timeWindow12To2: this.toDollars(data.timeWindow12To2),
+			cancellationFee: this.toDollars(data.cancellationFee),
 			cancellationWindowDays: data.cancellationWindowDays,
 			homeownerPenaltyDays: data.homeownerPenaltyDays,
 			cleanerPenaltyDays: data.cleanerPenaltyDays,
@@ -23,9 +29,9 @@ class PricingConfigSerializer {
 			businessOwnerFeePercent: parseFloat(data.businessOwnerFeePercent || data.platformFeePercent),
 			incentiveRefundPercent: parseFloat(data.incentiveRefundPercent || 0.10),
 			incentiveCleanerPercent: parseFloat(data.incentiveCleanerPercent || 0.40),
-			highVolumeFee: data.highVolumeFee,
+			highVolumeFee: this.toDollars(data.highVolumeFee),
 			multiCleanerPlatformFeePercent: parseFloat(data.multiCleanerPlatformFeePercent || 0.13),
-			soloLargeHomeBonus: data.soloLargeHomeBonus || 0,
+			soloLargeHomeBonus: this.toDollars(data.soloLargeHomeBonus || 0),
 			largeHomeBedsThreshold: data.largeHomeBedsThreshold || 3,
 			largeHomeBathsThreshold: data.largeHomeBathsThreshold || 3,
 			multiCleanerOfferExpirationHours: data.multiCleanerOfferExpirationHours || 48,
@@ -36,7 +42,7 @@ class PricingConfigSerializer {
 			largeBusinessMonthlyThreshold: data.largeBusinessMonthlyThreshold || 50,
 			largeBusinessLookbackMonths: data.largeBusinessLookbackMonths || 1,
 			// Last-minute booking fields
-			lastMinuteFee: data.lastMinuteFee || 50,
+			lastMinuteFee: this.toDollars(data.lastMinuteFee || 5000),
 			lastMinuteThresholdHours: data.lastMinuteThresholdHours || 48,
 			lastMinuteNotificationRadiusMiles: parseFloat(data.lastMinuteNotificationRadiusMiles || 25),
 			// Application settings
@@ -59,40 +65,40 @@ class PricingConfigSerializer {
 		const data = config.dataValues || config;
 
 		return {
-			basePrice: data.basePrice,
-			extraBedBathFee: data.extraBedBathFee,
-			halfBathFee: data.halfBathFee,
+			basePrice: this.toDollars(data.basePrice),
+			extraBedBathFee: this.toDollars(data.extraBedBathFee),
+			halfBathFee: this.toDollars(data.halfBathFee),
 			linens: {
-				sheetFeePerBed: data.sheetFeePerBed,
-				towelFee: data.towelFee,
-				faceClothFee: data.faceClothFee
+				sheetFeePerBed: this.toDollars(data.sheetFeePerBed),
+				towelFee: this.toDollars(data.towelFee),
+				faceClothFee: this.toDollars(data.faceClothFee)
 			},
 			timeWindows: {
 				anytime: {
-					surcharge: data.timeWindowAnytime,
+					surcharge: this.toDollars(data.timeWindowAnytime),
 					label: "Anytime",
 					description: data.timeWindowAnytime > 0
-						? `+$${data.timeWindowAnytime} per cleaning`
+						? `+$${this.toDollars(data.timeWindowAnytime)} per cleaning`
 						: "Most flexible, best pricing"
 				},
 				"10-3": {
-					surcharge: data.timeWindow10To3,
+					surcharge: this.toDollars(data.timeWindow10To3),
 					label: "10am - 3pm",
-					description: `+$${data.timeWindow10To3} per cleaning`
+					description: `+$${this.toDollars(data.timeWindow10To3)} per cleaning`
 				},
 				"11-4": {
-					surcharge: data.timeWindow11To4,
+					surcharge: this.toDollars(data.timeWindow11To4),
 					label: "11am - 4pm",
-					description: `+$${data.timeWindow11To4} per cleaning`
+					description: `+$${this.toDollars(data.timeWindow11To4)} per cleaning`
 				},
 				"12-2": {
-					surcharge: data.timeWindow12To2,
+					surcharge: this.toDollars(data.timeWindow12To2),
 					label: "12pm - 2pm",
-					description: `+$${data.timeWindow12To2} per cleaning`
+					description: `+$${this.toDollars(data.timeWindow12To2)} per cleaning`
 				}
 			},
 			cancellation: {
-				fee: data.cancellationFee,
+				fee: this.toDollars(data.cancellationFee),
 				windowDays: data.cancellationWindowDays,
 				homeownerPenaltyDays: data.homeownerPenaltyDays,
 				cleanerPenaltyDays: data.cleanerPenaltyDays,
@@ -107,10 +113,10 @@ class PricingConfigSerializer {
 				largeBusinessMonthlyThreshold: data.largeBusinessMonthlyThreshold || 50,
 				largeBusinessLookbackMonths: data.largeBusinessLookbackMonths || 1
 			},
-			highVolumeFee: data.highVolumeFee,
+			highVolumeFee: this.toDollars(data.highVolumeFee),
 			multiCleaner: {
 				platformFeePercent: parseFloat(data.multiCleanerPlatformFeePercent || 0.13),
-				soloLargeHomeBonus: data.soloLargeHomeBonus || 0,
+				soloLargeHomeBonus: this.toDollars(data.soloLargeHomeBonus || 0),
 				largeHomeBedsThreshold: data.largeHomeBedsThreshold || 3,
 				largeHomeBathsThreshold: data.largeHomeBathsThreshold || 3,
 				offerExpirationHours: data.multiCleanerOfferExpirationHours || 48,
@@ -118,7 +124,7 @@ class PricingConfigSerializer {
 				finalWarningDays: data.finalWarningDays || 3
 			},
 			lastMinute: {
-				fee: data.lastMinuteFee || 50,
+				fee: this.toDollars(data.lastMinuteFee || 5000),
 				thresholdHours: data.lastMinuteThresholdHours || 48,
 				notificationRadiusMiles: parseFloat(data.lastMinuteNotificationRadiusMiles || 25)
 			},
@@ -151,19 +157,19 @@ class PricingConfigSerializer {
 		const data = config.dataValues || config;
 
 		return {
-			basePrice: data.basePrice,
-			extraBedBathFee: data.extraBedBathFee,
-			halfBathFee: data.halfBathFee,
-			sheetFeePerBed: data.sheetFeePerBed,
-			towelFee: data.towelFee,
-			faceClothFee: data.faceClothFee,
-			timeWindowAnytime: data.timeWindowAnytime,
-			timeWindow10To3: data.timeWindow10To3,
-			timeWindow11To4: data.timeWindow11To4,
-			timeWindow12To2: data.timeWindow12To2,
-			cancellationFee: data.cancellationFee,
+			basePrice: this.toDollars(data.basePrice),
+			extraBedBathFee: this.toDollars(data.extraBedBathFee),
+			halfBathFee: this.toDollars(data.halfBathFee),
+			sheetFeePerBed: this.toDollars(data.sheetFeePerBed),
+			towelFee: this.toDollars(data.towelFee),
+			faceClothFee: this.toDollars(data.faceClothFee),
+			timeWindowAnytime: this.toDollars(data.timeWindowAnytime),
+			timeWindow10To3: this.toDollars(data.timeWindow10To3),
+			timeWindow11To4: this.toDollars(data.timeWindow11To4),
+			timeWindow12To2: this.toDollars(data.timeWindow12To2),
+			cancellationFee: this.toDollars(data.cancellationFee),
 			cancellationWindowDays: data.cancellationWindowDays,
-			highVolumeFee: data.highVolumeFee
+			highVolumeFee: this.toDollars(data.highVolumeFee)
 		};
 	}
 }

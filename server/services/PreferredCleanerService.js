@@ -283,13 +283,14 @@ class PreferredCleanerService {
         message: "Appointment has been cancelled",
       };
     } else if (action === "open_to_market") {
-      // Calculate platform pricing
+      // Calculate platform pricing (returns price in cents)
       const home = appointment.home;
       const platformPrice = await calculatePrice(
+        appointment.bringSheets || "no",
+        appointment.bringTowels || "no",
         home.numBeds,
         home.numBaths,
-        appointment.bringSheets === "true",
-        appointment.bringTowels === "true",
+        home.timeToBeCompleted,
         home.bedConfigurations,
         home.bathroomConfigurations
       );
@@ -300,7 +301,7 @@ class PreferredCleanerService {
         openToMarket: true,
         openedToMarketAt: new Date(),
         businessOwnerPrice: appointment.price,
-        price: platformPrice.toString(),
+        price: platformPrice, // Already in cents from calculatePrice()
         // Clear the preferred cleaner assignment so it shows up in the market
         hasBeenAssigned: false,
         employeesAssigned: [],

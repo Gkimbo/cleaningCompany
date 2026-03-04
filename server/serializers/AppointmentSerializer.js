@@ -5,6 +5,9 @@ class AppointmentSerializer {
 	// Fields that are encrypted in the database
 	static encryptedFields = ["keyPadCode", "keyLocation", "contact"];
 
+	// Fields that are stored in cents and should be converted to dollars for display
+	static centsFields = ["price", "originalPrice", "lastMinuteFeeApplied"];
+
 	static getValue(data, attribute) {
 		const value = data[attribute];
 		// EncryptionService.decrypt() safely handles both encrypted and unencrypted data
@@ -14,6 +17,10 @@ class AppointmentSerializer {
 		// Parse DECIMAL fields to ensure they're numbers, not strings
 		if (this.decimalFields.includes(attribute) && value !== null && value !== undefined) {
 			return parseFloat(value);
+		}
+		// Convert cents to dollars for price fields
+		if (this.centsFields.includes(attribute) && value !== null && value !== undefined) {
+			return (value / 100).toFixed(2);
 		}
 		return value;
 	}

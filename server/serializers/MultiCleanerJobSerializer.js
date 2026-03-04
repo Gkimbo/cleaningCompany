@@ -3,6 +3,12 @@ const EncryptionService = require("../services/EncryptionService");
 class MultiCleanerJobSerializer {
 	static userEncryptedFields = ["firstName", "lastName", "email", "phone"];
 
+	// Convert cents to dollars for display
+	static toDollars(cents) {
+		if (cents === null || cents === undefined) return null;
+		return (cents / 100).toFixed(2);
+	}
+
 	// Home fields that are encrypted
 	static homeEncryptedFields = [
 		"address",
@@ -105,7 +111,7 @@ class MultiCleanerJobSerializer {
 		return {
 			id: data.id,
 			date: data.date,
-			price: data.price,
+			price: this.toDollars(data.price),
 			bringTowels: data.bringTowels,
 			bringSheets: data.bringSheets,
 			timeToBeCompleted: data.timeToBeCompleted,

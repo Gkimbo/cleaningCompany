@@ -64,7 +64,7 @@ const ResponseModal = ({ visible, appointment, onClose, onRespond, loading }) =>
             <View style={styles.infoRow}>
               <Icon name="dollar" size={14} color={colors.text.secondary} />
               <Text style={styles.infoText}>
-                Your price: ${parseFloat(appointment.price).toFixed(2)}
+                Your price: ${(parseFloat(appointment.price) / 100).toFixed(2)}
               </Text>
             </View>
           </View>

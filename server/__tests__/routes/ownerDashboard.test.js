@@ -884,8 +884,8 @@ describe("Owner Dashboard Router", () => {
     it("should calculate churn (cancellations) correctly", async () => {
       PlatformEarnings.findOne.mockResolvedValue(null);
       UserAppointments.findAll.mockResolvedValue([]);
-      // cancellationFee is stored in dollars in the database (e.g., 10 users × $25 = $250)
-      UserBills.findAll.mockResolvedValue([{ count: 10, totalFees: 250 }]);
+      // cancellationFee is stored in cents in the database (e.g., 10 users × 2500 cents = 25000 cents = $250)
+      UserBills.findAll.mockResolvedValue([{ count: 10, totalFees: 25000 }]);
       UserReviews.count
         .mockResolvedValueOnce(15) // total cleaner cancellations
         .mockResolvedValueOnce(3)  // last 30 days

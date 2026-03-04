@@ -274,8 +274,9 @@ class BusinessVolumeService {
 
 			const completedCleanings = assignments.length;
 			const totalRevenue = assignments.reduce((sum, a) => {
-				const price = parseFloat(a.appointment.price) * 100;
-				return sum + Math.round(price);
+				// appointment.price is already stored in cents
+				const price = a.appointment.price || 0;
+				return sum + price;
 			}, 0);
 
 			// Upsert the stats record

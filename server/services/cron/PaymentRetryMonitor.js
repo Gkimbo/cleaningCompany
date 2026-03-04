@@ -250,11 +250,11 @@ async function retryPaymentCapture(appointment, io) {
       lastPaymentRetryAt: now,
     });
 
-    // Record failure
+    // Record failure (price already in cents)
     await Payment.create({
       appointmentId: appointment.id,
       stripePaymentIntentId: appointment.paymentIntentId,
-      amount: Math.round(parseFloat(appointment.price) * 100),
+      amount: appointment.price,
       currency: "usd",
       status: "failed",
       type: "capture",
@@ -286,7 +286,8 @@ async function createNewPaymentIntent(appointment, homeowner) {
     throw new Error("No default payment method on file");
   }
 
-  const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+  // Price is already stored in cents
+  const priceInCents = appointment.price;
 
   const paymentIntent = await stripe.paymentIntents.create({
     amount: priceInCents,

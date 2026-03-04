@@ -397,7 +397,7 @@ class ReferralService {
       }
 
       const availableCredits = user.referralCredits || 0;
-      const appointmentPrice = Math.round(parseFloat(appointment.price) * 100); // Convert to cents
+      const appointmentPrice = appointment.price || 0; // Already stored in cents
 
       // Calculate how much to apply (can't apply more than available or more than price)
       const maxApplicable = Math.min(availableCredits, appointmentPrice, amountCents);
@@ -413,10 +413,10 @@ class ReferralService {
         { where: { id: userId }, transaction }
       );
 
-      // Update appointment price (store original if not already stored)
-      const newPrice = (appointmentPrice - maxApplicable) / 100; // Convert back to dollars
+      // Update appointment price (stored in cents)
+      const newPrice = appointmentPrice - maxApplicable;
       await UserAppointments.update(
-        { price: newPrice.toString() },
+        { price: newPrice },
         { where: { id: appointmentId }, transaction }
       );
 

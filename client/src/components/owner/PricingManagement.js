@@ -282,18 +282,25 @@ const PricingManagement = ({ state }) => {
     setSuccess(null);
 
     try {
+      // Helper to convert dollars to cents for storage
+      const toCents = (dollars) => Math.round(parseFloat(dollars) * 100);
+
       const pricingData = {
-        basePrice: parseInt(formData.basePrice),
-        extraBedBathFee: parseInt(formData.extraBedBathFee),
-        halfBathFee: parseInt(formData.halfBathFee),
-        sheetFeePerBed: parseInt(formData.sheetFeePerBed),
-        towelFee: parseInt(formData.towelFee),
-        faceClothFee: parseInt(formData.faceClothFee),
-        timeWindowAnytime: parseInt(formData.timeWindowAnytime),
-        timeWindow10To3: parseInt(formData.timeWindow10To3),
-        timeWindow11To4: parseInt(formData.timeWindow11To4),
-        timeWindow12To2: parseInt(formData.timeWindow12To2),
-        cancellationFee: parseInt(formData.cancellationFee),
+        // Price fields - convert dollars to cents for database storage
+        basePrice: toCents(formData.basePrice),
+        extraBedBathFee: toCents(formData.extraBedBathFee),
+        halfBathFee: toCents(formData.halfBathFee),
+        sheetFeePerBed: toCents(formData.sheetFeePerBed),
+        towelFee: toCents(formData.towelFee),
+        faceClothFee: toCents(formData.faceClothFee),
+        timeWindowAnytime: toCents(formData.timeWindowAnytime),
+        timeWindow10To3: toCents(formData.timeWindow10To3),
+        timeWindow11To4: toCents(formData.timeWindow11To4),
+        timeWindow12To2: toCents(formData.timeWindow12To2),
+        cancellationFee: toCents(formData.cancellationFee),
+        highVolumeFee: toCents(formData.highVolumeFee),
+        lastMinuteFee: toCents(formData.lastMinuteFee),
+        // Non-price fields - keep as-is
         cancellationWindowDays: parseInt(formData.cancellationWindowDays),
         homeownerPenaltyDays: parseInt(formData.homeownerPenaltyDays),
         cleanerPenaltyDays: parseInt(formData.cleanerPenaltyDays),
@@ -304,10 +311,8 @@ const PricingManagement = ({ state }) => {
         largeBusinessMonthlyThreshold: parseInt(formData.largeBusinessMonthlyThreshold),
         largeBusinessLookbackMonths: parseInt(formData.largeBusinessLookbackMonths),
         multiCleanerPlatformFeePercent: parseFloat(formData.multiCleanerPlatformFeePercent) / 100,
-        highVolumeFee: parseInt(formData.highVolumeFee),
         incentiveRefundPercent: parseFloat(formData.incentiveRefundPercent) / 100,
         incentiveCleanerPercent: parseFloat(formData.incentiveCleanerPercent) / 100,
-        lastMinuteFee: parseInt(formData.lastMinuteFee),
         lastMinuteThresholdHours: parseInt(formData.lastMinuteThresholdHours),
         lastMinuteNotificationRadiusMiles: parseFloat(formData.lastMinuteNotificationRadiusMiles),
         changeNote: formData.changeNote || null,
