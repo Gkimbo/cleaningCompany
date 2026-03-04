@@ -124,6 +124,19 @@ homeSizeAdjustmentRouter.post("/", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
+    // Check if appointment is paused (homeowner account frozen)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment was cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
+    }
+
     // Verify cleaner is assigned to this appointment
     const employeesAssigned = appointment.employeesAssigned || [];
     if (!employeesAssigned.includes(String(cleanerId))) {
@@ -502,7 +515,9 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
           homeId: request.homeId,
           completed: false,
           id: { [Op.ne]: appointment.id }, // Exclude the one we just updated
-          date: { [Op.gte]: today }
+          date: { [Op.gte]: today },
+          isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner frozen)
+          wasCancelled: { [Op.ne]: true }, // Exclude cancelled appointments
         }
       });
 
@@ -760,7 +775,9 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
           homeId: request.homeId,
           completed: false,
           id: { [Op.ne]: appointment.id }, // Exclude the one we just updated
-          date: { [Op.gte]: today }
+          date: { [Op.gte]: today },
+          isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner frozen)
+          wasCancelled: { [Op.ne]: true }, // Exclude cancelled appointments
         }
       });
 

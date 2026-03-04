@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useNavigate, useParams } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import BusinessEmployeeService from "../../services/fetchRequests/BusinessEmployeeService";
+import OfflineBusinessEmployeeService from "../../services/offline/OfflineBusinessEmployeeService";
 import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
@@ -92,7 +92,7 @@ const EmployeeJobDetail = ({ state }) => {
 
   const fetchJobFlow = async () => {
     try {
-      const flow = await BusinessEmployeeService.getJobFlow(
+      const flow = await OfflineBusinessEmployeeService.getJobFlow(
         state.currentUser.token,
         assignmentId
       );
@@ -107,7 +107,7 @@ const EmployeeJobDetail = ({ state }) => {
     setError(null);
 
     try {
-      const result = await BusinessEmployeeService.getJobDetails(
+      const result = await OfflineBusinessEmployeeService.getJobDetails(
         state.currentUser.token,
         assignmentId
       );
@@ -134,7 +134,7 @@ const EmployeeJobDetail = ({ state }) => {
     setActionLoading(true);
 
     try {
-      const result = await BusinessEmployeeService.startJob(
+      const result = await OfflineBusinessEmployeeService.startJob(
         state.currentUser.token,
         job.id
       );
@@ -164,7 +164,7 @@ const EmployeeJobDetail = ({ state }) => {
             setActionLoading(true);
 
             try {
-              const result = await BusinessEmployeeService.completeJob(
+              const result = await OfflineBusinessEmployeeService.completeJob(
                 state.currentUser.token,
                 job.id
               );

@@ -4,6 +4,7 @@
  * Provides cached access to employees, assignments, and dashboard data when offline.
  */
 
+import { Q } from "@nozbe/watermelondb";
 import BusinessOwnerService from "../fetchRequests/BusinessOwnerService";
 import NetworkMonitor from "./NetworkMonitor";
 import database, {
@@ -12,12 +13,29 @@ import database, {
   offlineDashboardCacheCollection,
 } from "./database";
 import { CACHE_KEYS } from "./database/models/OfflineDashboardCache";
+import { FIFTEEN_MINUTES_MS, DATA_FRESHNESS_THRESHOLD_MS } from "./constants";
+
+// Timeout for preload operations (30 seconds)
+const PRELOAD_TIMEOUT_MS = 30 * 1000;
+
+// Utility to add timeout to a promise
+// Properly cleans up the timer to prevent memory leaks and test warnings
+const withTimeout = (promise, timeoutMs, operationName = "Operation") => {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${operationName} timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+};
 
 // Cache duration in milliseconds
 const CACHE_DURATION = {
   employees: 30 * 60 * 1000, // 30 minutes
-  assignments: 15 * 60 * 1000, // 15 minutes
-  dashboard: 15 * 60 * 1000, // 15 minutes
+  assignments: FIFTEEN_MINUTES_MS, // 15 minutes
+  dashboard: FIFTEEN_MINUTES_MS, // 15 minutes
   calendar: 30 * 60 * 1000, // 30 minutes
 };
 
@@ -43,7 +61,7 @@ class OfflineBusinessOwnerService {
       try {
         const result = await BusinessOwnerService.getEmployees(token, status);
         // Cache the result in background
-        this._cacheEmployees(result.employees || []).catch(console.error);
+        this._cacheEmployees(result.employees || []).catch(err => console.error("[OfflineBusinessOwnerService] Background employee caching failed:", err));
         return result;
       } catch (error) {
         console.warn("Online fetch failed, falling back to offline data:", error);
@@ -71,8 +89,11 @@ class OfflineBusinessOwnerService {
       }
     }
 
-    const employees = await offlineEmployeesCollection.query().fetch();
-    const employee = employees.find((e) => e.serverId === employeeId);
+    // Query directly by serverId (more efficient than fetching all and filtering in JS)
+    const employees = await offlineEmployeesCollection
+      .query(Q.where("server_id", employeeId))
+      .fetch();
+    const employee = employees[0];
     if (!employee) return null;
 
     return {
@@ -93,7 +114,7 @@ class OfflineBusinessOwnerService {
       try {
         const result = await BusinessOwnerService.getAssignments(token, filters);
         // Cache the result in background
-        this._cacheAssignments(result.assignments || []).catch(console.error);
+        this._cacheAssignments(result.assignments || []).catch(err => console.error("[OfflineBusinessOwnerService] Background assignment caching failed:", err));
         return result;
       } catch (error) {
         console.warn("Online fetch failed, falling back to offline data:", error);
@@ -105,6 +126,7 @@ class OfflineBusinessOwnerService {
     return {
       assignments,
       isOfflineData: true,
+      dataFreshness: await this._getCacheFreshness(CACHE_KEYS.employees()), // Use employees cache as proxy for data freshness
     };
   }
 
@@ -197,13 +219,17 @@ class OfflineBusinessOwnerService {
     }
 
     try {
-      // Fetch all data in parallel
-      const [employees, assignments, dashboard] = await Promise.all([
-        BusinessOwnerService.getEmployees(token),
-        BusinessOwnerService.getAssignments(token, { upcoming: true }),
-        BusinessOwnerService.getDashboard(token),
-        this._preloadCurrentAndNextMonthCalendars(token), // Calendars cached inside method
-      ]);
+      // Fetch all data in parallel with timeout protection
+      const [employees, assignments, dashboard] = await withTimeout(
+        Promise.all([
+          BusinessOwnerService.getEmployees(token),
+          BusinessOwnerService.getAssignments(token, { upcoming: true }),
+          BusinessOwnerService.getDashboard(token),
+          this._preloadCurrentAndNextMonthCalendars(token), // Calendars cached inside method
+        ]),
+        PRELOAD_TIMEOUT_MS,
+        "Preload for offline"
+      );
 
       // Cache everything
       await Promise.all([
@@ -261,6 +287,12 @@ class OfflineBusinessOwnerService {
   // =====================
 
   async _cacheEmployees(employees) {
+    // Validate employees parameter
+    if (!employees || !Array.isArray(employees)) {
+      console.warn("[OfflineBusinessOwnerService] _cacheEmployees called with invalid employees:", typeof employees);
+      return;
+    }
+
     await database.write(async () => {
       // Clear old cache
       const existing = await offlineEmployeesCollection.query().fetch();
@@ -280,10 +312,10 @@ class OfflineBusinessOwnerService {
           e._raw.updated_at = Date.now();
         });
       }
-
-      // Update cache timestamp
-      await this._setCache(CACHE_KEYS.employees(), { count: employees.length }, CACHE_DURATION.employees);
     });
+
+    // Update cache timestamp AFTER the data write completes (avoid nested writes)
+    await this._setCache(CACHE_KEYS.employees(), { count: employees.length }, CACHE_DURATION.employees);
   }
 
   async _cacheAssignments(assignments) {
@@ -298,8 +330,9 @@ class OfflineBusinessOwnerService {
       for (const assignment of assignments) {
         await offlineOwnerAssignmentsCollection.create((a) => {
           a.serverId = assignment.id;
-          a.appointmentId = assignment.appointmentId || assignment.appointment?.id || 0;
-          a.employeeId = assignment.employeeId || assignment.employee?.id || 0;
+          // Use nullish coalescing for IDs - null/undefined should stay null, don't convert to 0
+          a.appointmentId = assignment.appointmentId ?? assignment.appointment?.id ?? null;
+          a.employeeId = assignment.employeeId ?? assignment.employee?.id ?? null;
           a.status = assignment.status || "assigned";
           a._raw.scheduled_date = assignment.appointment?.dateTime
             ? new Date(assignment.appointment.dateTime).getTime()
@@ -313,57 +346,65 @@ class OfflineBusinessOwnerService {
   }
 
   async _getLocalEmployees(status = null) {
-    const employees = await offlineEmployeesCollection.query().fetch();
-    let filtered = employees;
-
+    // Build query conditions at database level (more efficient than JS filtering)
+    const conditions = [];
     if (status) {
-      filtered = employees.filter((e) => e.status === status);
+      conditions.push(Q.where("status", status));
     }
 
-    return filtered.map((e) => this._formatLocalEmployee(e));
+    const employees = await offlineEmployeesCollection.query(...conditions).fetch();
+    return employees.map((e) => this._formatLocalEmployee(e));
   }
 
   async _getLocalAssignments(filters = {}) {
-    let assignments = await offlineOwnerAssignmentsCollection.query().fetch();
+    // Build query conditions at database level (more efficient than sequential JS filtering)
+    const conditions = [];
 
     if (filters.employeeId) {
-      assignments = assignments.filter((a) => a.employeeId === filters.employeeId);
+      conditions.push(Q.where("employee_id", filters.employeeId));
     }
 
     if (filters.status) {
-      assignments = assignments.filter((a) => a.status === filters.status);
+      conditions.push(Q.where("status", filters.status));
     }
 
     if (filters.startDate) {
       const startTime = new Date(filters.startDate).getTime();
-      assignments = assignments.filter((a) => a.scheduledDate >= startTime);
+      conditions.push(Q.where("scheduled_date", Q.gte(startTime)));
     }
 
     if (filters.endDate) {
       const endTime = new Date(filters.endDate).getTime();
-      assignments = assignments.filter((a) => a.scheduledDate <= endTime);
+      conditions.push(Q.where("scheduled_date", Q.lte(endTime)));
     }
 
+    const assignments = await offlineOwnerAssignmentsCollection.query(...conditions).fetch();
     return assignments.map((a) => this._formatLocalAssignment(a));
   }
 
   async _getCache(cacheKey) {
     try {
-      const caches = await offlineDashboardCacheCollection.query().fetch();
-      const cache = caches.find((c) => c.cacheKey === cacheKey);
+      // Query directly by cacheKey (more efficient than fetching all and filtering in JS)
+      const caches = await offlineDashboardCacheCollection
+        .query(Q.where("cache_key", cacheKey))
+        .fetch();
+      const cache = caches[0];
       if (!cache || cache.isExpired) return null;
       return cache;
-    } catch {
+    } catch (error) {
+      // Log error instead of silent failure to aid debugging
+      console.warn(`[OfflineBusinessOwnerService] Failed to get cache for key ${cacheKey}:`, error);
       return null;
     }
   }
 
   async _setCache(cacheKey, data, duration) {
     await database.write(async () => {
-      // Remove existing cache for this key
-      const existing = await offlineDashboardCacheCollection.query().fetch();
-      const old = existing.find((c) => c.cacheKey === cacheKey);
-      if (old) {
+      // Remove existing cache for this key (query directly by key instead of fetching all)
+      const existing = await offlineDashboardCacheCollection
+        .query(Q.where("cache_key", cacheKey))
+        .fetch();
+      for (const old of existing) {
         await old.markAsDeleted();
       }
 
@@ -427,7 +468,7 @@ class OfflineBusinessOwnerService {
     const result = await BusinessOwnerService.inviteEmployee(token, employeeData);
     if (result.success) {
       // Refresh cache
-      this.getEmployees(token).catch(console.error);
+      this.getEmployees(token).catch(err => console.error("[OfflineBusinessOwnerService] Cache refresh for employees failed:", err));
     }
     return result;
   }
@@ -439,7 +480,7 @@ class OfflineBusinessOwnerService {
     const result = await BusinessOwnerService.assignEmployee(token, assignmentData);
     if (result.success) {
       // Refresh cache
-      this.getAssignments(token).catch(console.error);
+      this.getAssignments(token).catch(err => console.error("[OfflineBusinessOwnerService] Cache refresh for assignments failed:", err));
     }
     return result;
   }
@@ -506,7 +547,7 @@ class OfflineBusinessOwnerService {
     }
 
     const ageMs = Date.now() - this._lastPreloadTime.getTime();
-    const isFresh = ageMs < 15 * 60 * 1000; // 15 minutes
+    const isFresh = ageMs < DATA_FRESHNESS_THRESHOLD_MS;
 
     return {
       isFresh,

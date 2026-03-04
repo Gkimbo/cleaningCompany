@@ -201,6 +201,20 @@ console.warn = (...args) => {
   originalWarn.apply(console, args);
 };
 
+// Silence React act() warnings from async effects in components that aren't being directly tested
+// These warnings occur because components fetch data on mount and update state after the test completes
+const originalError = console.error;
+console.error = (...args) => {
+  if (
+    typeof args[0] === "string" &&
+    args[0].includes("An update to") &&
+    args[0].includes("inside a test was not wrapped in act")
+  ) {
+    return;
+  }
+  originalError.apply(console, args);
+};
+
 // Mock Alert - assign directly to make it mockable/spyable
 const { Alert } = require("react-native");
 if (Alert) {

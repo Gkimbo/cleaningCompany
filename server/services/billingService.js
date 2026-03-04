@@ -435,6 +435,16 @@ class BillingService {
         return { success: false, error: "Appointment not found" };
       }
 
+      // Check if appointment is paused (homeowner account frozen)
+      if (appointment.isPaused) {
+        return { success: false, error: "This appointment is currently paused", isPaused: true };
+      }
+
+      // Check if appointment was cancelled
+      if (appointment.wasCancelled) {
+        return { success: false, error: "This appointment has been cancelled" };
+      }
+
       const cleanerAssignment = await UserCleanerAppointments.findOne({
         where: { appointmentId, employeeId: cleanerId },
       });

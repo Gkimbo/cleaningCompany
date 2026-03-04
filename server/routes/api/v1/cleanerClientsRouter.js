@@ -534,6 +534,8 @@ cleanerClientsRouter.get("/pending-client-responses", verifyCleaner, async (req,
       where: {
         bookedByCleanerId: cleanerId,
         date: { [Op.gte]: today },
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
+        wasCancelled: { [Op.ne]: true }, // Skip cancelled appointments
         // Include pending, declined, and expired (but not accepted)
         [Op.or]: [
           { clientResponse: null }, // Pending response
@@ -776,7 +778,10 @@ cleanerClientsRouter.get("/:id/full", verifyCleaner, async (req, res) => {
     if (allHomes.length > 0) {
       const homeIds = allHomes.map(h => h.id);
       const allAppointments = await UserAppointments.findAll({
-        where: { homeId: homeIds },
+        where: {
+          homeId: homeIds,
+          isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
+        },
         include: [
           {
             model: UserHomes,
@@ -1205,7 +1210,7 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
         {
           model: User,
           as: "client",
-          attributes: ["id", "firstName", "lastName", "email", "phone", "paymentMethod"],
+          attributes: ["id", "firstName", "lastName", "email", "phone", "paymentMethod", "accountFrozen", "expoPushToken", "notifications"],
         },
         {
           model: UserHomes,
@@ -1223,6 +1228,14 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
     if (!cleanerClient.client) {
       return res.status(400).json({
         error: "Client must have an account set up before booking",
+      });
+    }
+
+    // Check if the client's account is frozen
+    if (cleanerClient.client.accountFrozen) {
+      return res.status(403).json({
+        error: "This client's account has been suspended. You cannot book appointments for them.",
+        accountSuspended: true,
       });
     }
 
@@ -1298,7 +1311,7 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       paid: false,
       hasBeenAssigned: true,
       employeesAssigned: [req.user.id.toString()],
-      empoyeesNeeded: home.cleanersNeeded || 1,
+      employeesNeeded: home.cleanersNeeded || 1,
       timeToBeCompleted: timeWindow || home.timeToBeCompleted || "anytime",
       bringSheets: home.bringSheets || "no",
       bringTowels: home.bringTowels || "no",
@@ -1360,8 +1373,45 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       originalPlatformFee: feeResult.originalPlatformFee,
     });
 
-    // TODO: Send notification to client about the booking
-    // await sendBookingNotification(client, appointment, req.user);
+    // Send notification to client about the booking
+    const cleanerName = `${EncryptionService.decrypt(req.user.firstName)} ${EncryptionService.decrypt(req.user.lastName)}`;
+    const clientName = `${EncryptionService.decrypt(client.firstName)} ${EncryptionService.decrypt(client.lastName)}`;
+    const homeAddress = `${EncryptionService.decrypt(home.address)}, ${EncryptionService.decrypt(home.city)}`;
+
+    // Check if client has notifications enabled
+    if (client.notifications !== false) {
+      // Send push notification
+      if (client.expoPushToken) {
+        try {
+          await PushNotification.sendPushCleanerBookedAppointment(
+            client.expoPushToken,
+            clientName,
+            cleanerName,
+            appointment.date,
+            homeAddress
+          );
+        } catch (pushErr) {
+          console.error("Failed to send push notification for cleaner booking:", pushErr);
+        }
+      }
+
+      // Send email notification
+      const decryptedEmail = EncryptionService.decrypt(client.email);
+      if (decryptedEmail) {
+        try {
+          await Email.sendNewClientAppointmentEmail(
+            decryptedEmail,
+            clientName,
+            cleanerName,
+            appointment.date,
+            homeAddress,
+            appointmentPrice
+          );
+        } catch (emailErr) {
+          console.error("Failed to send email notification for cleaner booking:", emailErr);
+        }
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -1412,7 +1462,7 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
         {
           model: User,
           as: "client",
-          attributes: ["id", "firstName", "lastName", "email", "expoPushToken", "notifications"],
+          attributes: ["id", "firstName", "lastName", "email", "expoPushToken", "notifications", "accountFrozen"],
         },
         {
           model: UserHomes,
@@ -1432,6 +1482,14 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
 
     if (!cleanerClient.home.isSetupComplete) {
       return res.status(400).json({ error: "Client has not completed home setup" });
+    }
+
+    // Check if the client's account is frozen
+    if (cleanerClient.client && cleanerClient.client.accountFrozen) {
+      return res.status(403).json({
+        error: "This client's account has been suspended. You cannot book appointments for them.",
+        accountSuspended: true,
+      });
     }
 
     // Check if there's already a pending booking for this date
@@ -1482,7 +1540,7 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
       completed: false,
       hasBeenAssigned: true, // Pre-assigned to the business owner
       employeesAssigned: [String(cleanerId)],
-      empoyeesNeeded: cleanerClient.home.cleanersNeeded || 1,
+      employeesNeeded: cleanerClient.home.cleanersNeeded || 1,
       timeToBeCompleted: timeWindow || cleanerClient.home.timeToBeCompleted || "anytime",
       bringTowels: cleanerClient.home.towelsProvided ? "no" : "yes",
       bringSheets: cleanerClient.home.sheetsProvided ? "no" : "yes",
@@ -1562,6 +1620,7 @@ cleanerClientsRouter.get("/:id/pending-bookings", verifyCleaner, async (req, res
         homeId: cleanerClient.homeId,
         bookedByCleanerId: cleanerId,
         clientResponsePending: true,
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
       },
       order: [["date", "ASC"]],
     });

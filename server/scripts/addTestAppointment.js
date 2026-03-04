@@ -181,7 +181,7 @@ async function addTestAppointment() {
       completed: false,
       hasBeenAssigned: true,
       employeesAssigned: [String(karin.id)],
-      empoyeesNeeded: raceLaneHome.cleanersNeeded || 1,
+      employeesNeeded: raceLaneHome.cleanersNeeded || 1,
       timeToBeCompleted: raceLaneHome.timeToBeCompleted || "10am-3pm",
       paymentStatus: "captured",
       amountPaid: Math.round(parseFloat(price) * 100),

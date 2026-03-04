@@ -193,6 +193,87 @@ class BusinessEmployeeService {
   }
 
   /**
+   * Get checklist for a job assignment
+   * @param {string} token - Auth token
+   * @param {number} assignmentId - Assignment ID
+   * @returns {Object} { checklist, progress, checklistCompleted, jobNotes, hasChecklist, itemCount, completedCount, completionPercentage }
+   */
+  static async getChecklist(token, assignmentId) {
+    try {
+      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}/checklist`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        return null;
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessEmployee] Error fetching checklist:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Update checklist item progress
+   * @param {string} token - Auth token
+   * @param {number} assignmentId - Assignment ID
+   * @param {string} sectionId - Section ID
+   * @param {string} itemId - Item ID
+   * @param {string} status - Status: "completed", "na", or null
+   * @returns {Object} { success, progress, checklistProgress, checklistCompleted }
+   */
+  static async updateChecklistItem(token, assignmentId, sectionId, itemId, status) {
+    try {
+      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}/checklist`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ sectionId, itemId, status }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        return { success: false, error: result.error || "Failed to update checklist" };
+      }
+      return { success: true, ...result };
+    } catch (error) {
+      console.error("[BusinessEmployee] Error updating checklist:", error);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
+
+  /**
+   * Bulk update checklist progress (for offline sync)
+   * @param {string} token - Auth token
+   * @param {number} assignmentId - Assignment ID
+   * @param {Array} updates - Array of { sectionId, itemId, status }
+   * @returns {Object} { success, progress, checklistProgress, checklistCompleted }
+   */
+  static async bulkUpdateChecklist(token, assignmentId, updates) {
+    try {
+      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}/checklist/bulk`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ updates }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        return { success: false, error: result.error || "Failed to update checklist" };
+      }
+      return { success: true, ...result };
+    } catch (error) {
+      console.error("[BusinessEmployee] Error bulk updating checklist:", error);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
+
+  /**
    * Start a job
    * @param {string} token - Auth token
    * @param {number} assignmentId - Assignment ID

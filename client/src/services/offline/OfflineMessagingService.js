@@ -10,9 +10,15 @@
 
 import database, { offlineMessagesCollection, syncQueueCollection } from "./database";
 import { MESSAGE_TYPES, MESSAGE_STATUS } from "./database/models/OfflineMessage";
-import { SYNC_OPERATION_TYPES, OPERATION_SEQUENCE } from "./database/models/SyncQueue";
+import { SYNC_OPERATION_TYPES, OPERATION_SEQUENCE, SYNC_STATUS as OP_STATUS } from "./database/models/SyncQueue";
 import NetworkMonitor from "./NetworkMonitor";
 import { API_BASE } from "../config";
+import { ONE_DAY_MS } from "./constants";
+
+// Message retention constants
+const SYNCED_MESSAGE_RETENTION_MS = ONE_DAY_MS; // 24 hours
+const DEFAULT_FAILED_MESSAGE_RETENTION_DAYS = 7;
+const MAX_MESSAGE_CONTENT_LENGTH = 5000;
 
 class OfflineMessagingService {
   constructor() {
@@ -23,6 +29,50 @@ class OfflineMessagingService {
     this._authToken = token;
   }
 
+  /**
+   * Validate message content
+   * @returns {object} { valid: boolean, error?: string }
+   */
+  _validateContent(content, fieldName = "Content") {
+    if (!content || typeof content !== "string") {
+      return { valid: false, error: `${fieldName} must be a non-empty string` };
+    }
+    const trimmed = content.trim();
+    if (trimmed.length === 0) {
+      return { valid: false, error: `${fieldName} cannot be empty or whitespace only` };
+    }
+    if (trimmed.length > MAX_MESSAGE_CONTENT_LENGTH) {
+      return { valid: false, error: `${fieldName} exceeds maximum length of ${MAX_MESSAGE_CONTENT_LENGTH} characters` };
+    }
+    return { valid: true };
+  }
+
+  /**
+   * Safely parse operation payload
+   * Handles both JSON strings and already-parsed objects
+   * @returns {object|null} Parsed payload or null if invalid
+   */
+  _parsePayload(payload) {
+    if (!payload) return null;
+
+    // Already an object
+    if (typeof payload === "object") {
+      return payload;
+    }
+
+    // Try to parse JSON string
+    if (typeof payload === "string") {
+      try {
+        return JSON.parse(payload);
+      } catch (e) {
+        console.warn("[OfflineMessagingService] Failed to parse payload JSON:", e.message);
+        return null;
+      }
+    }
+
+    return null;
+  }
+
   // =====================
   // JOB NOTES
   // =====================
@@ -31,6 +81,12 @@ class OfflineMessagingService {
    * Add a note to a job (works offline)
    */
   async addJobNote(jobId, appointmentId, content) {
+    // Validate content
+    const validation = this._validateContent(content, "Note content");
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
     const message = await database.write(async () => {
       const msg = await offlineMessagesCollection.create((m) => {
         m.jobId = jobId;
@@ -53,7 +109,7 @@ class OfflineMessagingService {
           appointmentId,
           content,
         });
-        op.status = "pending";
+        op.status = OP_STATUS.PENDING;
         op.attempts = 0;
         op._raw.created_at = Date.now();
         op._raw.updated_at = Date.now();
@@ -114,6 +170,17 @@ class OfflineMessagingService {
       }
 
       await database.write(async () => {
+        // Also clean up any pending sync queue entries for this message
+        const allSyncOps = await syncQueueCollection.query().fetch();
+        const relatedOps = allSyncOps.filter((op) => {
+          const payload = this._parsePayload(op.payload);
+          return payload && payload.messageId === messageId;
+        });
+
+        for (const op of relatedOps) {
+          await op.markAsDeleted();
+        }
+
         await message.markAsDeleted();
       });
 
@@ -131,6 +198,12 @@ class OfflineMessagingService {
    * Save a draft message (to send when online)
    */
   async saveDraftMessage(jobId, appointmentId, recipientId, content) {
+    // Validate content
+    const validation = this._validateContent(content, "Draft content");
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
     const message = await database.write(async () => {
       return await offlineMessagesCollection.create((m) => {
         m.jobId = jobId;
@@ -197,7 +270,7 @@ class OfflineMessagingService {
             appointmentId: message.appointmentId,
             content: message.content,
           });
-          op.status = "pending";
+          op.status = OP_STATUS.PENDING;
           op.attempts = 0;
           op._raw.created_at = Date.now();
           op._raw.updated_at = Date.now();
@@ -232,6 +305,17 @@ class OfflineMessagingService {
       }
 
       await database.write(async () => {
+        // Also clean up any pending sync queue entries for this message
+        const allSyncOps = await syncQueueCollection.query().fetch();
+        const relatedOps = allSyncOps.filter((op) => {
+          const payload = this._parsePayload(op.payload);
+          return payload && payload.messageId === messageId;
+        });
+
+        for (const op of relatedOps) {
+          await op.markAsDeleted();
+        }
+
         await message.markAsDeleted();
       });
 
@@ -249,6 +333,12 @@ class OfflineMessagingService {
    * Send a message to a coworker on the same job
    */
   async sendCoworkerMessage(jobId, appointmentId, recipientId, content) {
+    // Validate content
+    const validation = this._validateContent(content, "Message content");
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
     const message = await database.write(async () => {
       const msg = await offlineMessagesCollection.create((m) => {
         m.jobId = jobId;
@@ -272,7 +362,7 @@ class OfflineMessagingService {
           appointmentId,
           content,
         });
-        op.status = "pending";
+        op.status = OP_STATUS.PENDING;
         op.attempts = 0;
         op._raw.created_at = Date.now();
         op._raw.updated_at = Date.now();
@@ -369,11 +459,11 @@ class OfflineMessagingService {
   }
 
   /**
-   * Clean up synced messages older than 24 hours
+   * Clean up synced messages older than retention period
    */
   async cleanupSyncedMessages() {
     const messages = await offlineMessagesCollection.query().fetch();
-    const threshold = Date.now() - 24 * 60 * 60 * 1000;
+    const threshold = Date.now() - SYNCED_MESSAGE_RETENTION_MS;
     let cleaned = 0;
 
     await database.write(async () => {
@@ -386,6 +476,129 @@ class OfflineMessagingService {
     });
 
     return cleaned;
+  }
+
+  /**
+   * Clean up permanently failed messages older than specified threshold
+   * Failed messages are kept for default retention period to allow user review, then cleaned up
+   */
+  async cleanupFailedMessages(maxAgeDays = DEFAULT_FAILED_MESSAGE_RETENTION_DAYS) {
+    const messages = await offlineMessagesCollection.query().fetch();
+    const threshold = Date.now() - maxAgeDays * ONE_DAY_MS;
+    let cleaned = 0;
+
+    // Filter failed messages that exceed the age threshold
+    const messagesToCleanup = messages.filter(
+      (message) =>
+        message.status === MESSAGE_STATUS.FAILED &&
+        message.createdAt?.getTime() < threshold
+    );
+
+    if (messagesToCleanup.length === 0) {
+      return 0;
+    }
+
+    // Fetch ALL sync ops ONCE (not inside loop) to avoid N+1 queries
+    const allSyncOps = await syncQueueCollection.query().fetch();
+
+    // Build a map of messageId -> sync operations for O(1) lookup
+    const syncOpsByMessageId = new Map();
+    for (const op of allSyncOps) {
+      const payload = this._parsePayload(op.payload);
+      if (payload?.messageId) {
+        if (!syncOpsByMessageId.has(payload.messageId)) {
+          syncOpsByMessageId.set(payload.messageId, []);
+        }
+        syncOpsByMessageId.get(payload.messageId).push(op);
+      }
+    }
+
+    // Delete messages and their sync ops atomically
+    await database.write(async () => {
+      for (const message of messagesToCleanup) {
+        try {
+          // Delete related sync queue entries first
+          const relatedOps = syncOpsByMessageId.get(message.id) || [];
+          for (const op of relatedOps) {
+            await op.markAsDeleted();
+          }
+
+          // Then delete the message
+          await message.markAsDeleted();
+          cleaned++;
+        } catch (cleanupError) {
+          // Log but continue with other messages
+          console.error(`[OfflineMessagingService] Failed to cleanup message ${message.id}:`, cleanupError);
+        }
+      }
+    });
+
+    return cleaned;
+  }
+
+  /**
+   * Get all failed messages (for user review before deletion)
+   */
+  async getFailedMessages() {
+    const messages = await offlineMessagesCollection.query().fetch();
+    return messages
+      .filter((m) => m.status === MESSAGE_STATUS.FAILED)
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  /**
+   * Retry a failed message (requeue for sync)
+   */
+  async retryFailedMessage(messageId) {
+    try {
+      const message = await offlineMessagesCollection.find(messageId);
+
+      if (message.status !== MESSAGE_STATUS.FAILED) {
+        return { success: false, error: "Message is not in failed state" };
+      }
+
+      await database.write(async () => {
+        // Reset message status to pending
+        await message.update((m) => {
+          m.status = MESSAGE_STATUS.PENDING_SYNC;
+        });
+
+        // Create new sync queue entry
+        await syncQueueCollection.create((op) => {
+          op.jobId = message.jobId;
+          op.operationType = SYNC_OPERATION_TYPES.MESSAGE;
+          op.sequenceNumber = OPERATION_SEQUENCE[SYNC_OPERATION_TYPES.MESSAGE];
+          op._raw.payload = JSON.stringify({
+            messageId: message.id,
+            messageType: message.messageType,
+            recipientId: message.recipientId,
+            appointmentId: message.appointmentId,
+            content: message.content,
+          });
+          op.status = OP_STATUS.PENDING;
+          op.attempts = 0;
+          op._raw.created_at = Date.now();
+          op._raw.updated_at = Date.now();
+        });
+      });
+
+      return { success: true, message };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Comprehensive cleanup - runs all cleanup operations
+   */
+  async runCleanup() {
+    const syncedCleaned = await this.cleanupSyncedMessages();
+    const failedCleaned = await this.cleanupFailedMessages();
+    return {
+      syncedCleaned,
+      failedCleaned,
+      total: syncedCleaned + failedCleaned,
+    };
   }
 }
 

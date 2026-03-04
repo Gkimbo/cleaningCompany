@@ -24,7 +24,7 @@ async function syncMultiCleanerJobs() {
         completed: false,
         wasCancelled: { [Op.or]: [false, null] },
         date: { [Op.gte]: today },
-        empoyeesNeeded: { [Op.gt]: 1 }
+        employeesNeeded: { [Op.gt]: 1 }
       }
     });
 
@@ -43,18 +43,18 @@ async function syncMultiCleanerJobs() {
         // Create new multi-cleaner job
         multiCleanerJob = await MultiCleanerJob.create({
           appointmentId: apt.id,
-          totalCleanersRequired: apt.empoyeesNeeded,
+          totalCleanersRequired: apt.employeesNeeded,
           cleanersConfirmed: apt.employeesAssigned || 0,
           status: 'open'
         });
-        console.log(`Created MultiCleanerJob ${multiCleanerJob.id} for appointment ${apt.id} (${apt.empoyeesNeeded} cleaners needed)`);
+        console.log(`Created MultiCleanerJob ${multiCleanerJob.id} for appointment ${apt.id} (${apt.employeesNeeded} cleaners needed)`);
         createdCount++;
-      } else if (multiCleanerJob.totalCleanersRequired !== apt.empoyeesNeeded) {
+      } else if (multiCleanerJob.totalCleanersRequired !== apt.employeesNeeded) {
         // Update existing multi-cleaner job
         await multiCleanerJob.update({
-          totalCleanersRequired: apt.empoyeesNeeded
+          totalCleanersRequired: apt.employeesNeeded
         });
-        console.log(`Updated MultiCleanerJob ${multiCleanerJob.id} for appointment ${apt.id}: totalCleanersRequired ${multiCleanerJob.totalCleanersRequired} -> ${apt.empoyeesNeeded}`);
+        console.log(`Updated MultiCleanerJob ${multiCleanerJob.id} for appointment ${apt.id}: totalCleanersRequired ${multiCleanerJob.totalCleanersRequired} -> ${apt.employeesNeeded}`);
         updatedCount++;
       }
 

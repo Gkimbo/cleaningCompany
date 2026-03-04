@@ -1173,6 +1173,18 @@ paymentRouter.post("/create-payment-intent", async (req, res) => {
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
 
+    // Check if user account is frozen
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "accountFrozen", "accountFrozenReason"],
+    });
+    if (user && user.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot book new appointments.",
+        reason: user.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
+
     const home = await UserHomes.findByPk(homeId);
     if (!home) return res.status(404).json({ error: "Home not found" });
 
@@ -2044,6 +2056,14 @@ paymentRouter.post("/capture-payment", async (req, res) => {
     if (!appointment)
       return res.status(404).json({ error: "Appointment not found" });
 
+    // Check if appointment is paused or cancelled
+    if (appointment.isPaused) {
+      return res.status(403).json({ error: "This appointment is currently paused", isPaused: true });
+    }
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
+    }
+
     if (!appointment.hasBeenAssigned)
       return res.status(400).json({ error: "Cannot charge without a cleaner assigned" });
 
@@ -2106,6 +2126,14 @@ paymentRouter.post("/complete-job", async (req, res) => {
     const appointment = await UserAppointments.findByPk(appointmentId);
     if (!appointment)
       return res.status(404).json({ error: "Appointment not found" });
+
+    // Check if appointment is paused or cancelled
+    if (appointment.isPaused) {
+      return res.status(403).json({ error: "This appointment is currently paused", isPaused: true });
+    }
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
+    }
 
     if (!appointment.paid)
       return res.status(400).json({ error: "Payment not yet captured" });
@@ -2343,6 +2371,14 @@ paymentRouter.post("/capture", async (req, res) => {
     if (!appointment)
       return res.status(404).json({ error: "Appointment not found" });
 
+    // Check if appointment is paused or cancelled
+    if (appointment.isPaused) {
+      return res.status(403).json({ error: "This appointment is currently paused", isPaused: true });
+    }
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
+    }
+
     if (!appointment.hasBeenAssigned)
       return res.status(400).json({ error: "Cannot charge without a cleaner assigned" });
 
@@ -2418,6 +2454,14 @@ paymentRouter.post("/retry-payment", async (req, res) => {
     const appointment = await UserAppointments.findByPk(appointmentId);
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Check if appointment is paused or cancelled
+    if (appointment.isPaused) {
+      return res.status(403).json({ error: "This appointment is currently paused", isPaused: true });
+    }
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
     }
 
     // Verify user is the homeowner for this appointment

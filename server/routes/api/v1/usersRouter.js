@@ -1460,7 +1460,11 @@ usersRouter.get("/appointments/employee", async (req, res) => {
     const isCleanerDemo = cleaner.isDemoAccount === true;
 
     // Get all appointments with home data (needed for edge large home detection)
+    // Exclude paused appointments (homeowner account frozen)
     const userAppointments = await UserAppointments.findAll({
+      where: {
+        isPaused: { [Op.ne]: true },
+      },
       include: [{ model: UserHomes, as: "home" }],
     });
 
@@ -1765,8 +1769,38 @@ usersRouter.patch("/update-password", async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    await user.update({ password: hashedPassword });
+    // Update password and clear the password reset flags
+    await user.update({
+      password: hashedPassword,
+      requirePasswordChange: false,
+      passwordResetAt: null,
+    });
+
     console.log(`✅ Password updated for user ${userId}`);
+
+    // Log to security audit log
+    if (models.SecurityAuditLog) {
+      models.SecurityAuditLog.logEvent("PASSWORD_CHANGED", {
+        userId: userId,
+        username: user.username,
+        ipAddress: req.headers["x-forwarded-for"] || req.ip,
+        userAgent: req.headers["user-agent"],
+        eventData: { wasTemporaryPassword: !!user.requirePasswordChange },
+      }).catch(err => {
+        console.error("[SECURITY] Failed to log PASSWORD_CHANGED:", err.message);
+      });
+    }
+
+    // Send password change confirmation email
+    try {
+      const userEmail = user.getNotificationEmail ? user.getNotificationEmail() : user.email;
+      if (userEmail) {
+        await Email.sendPasswordChangeConfirmation(userEmail, user.username);
+      }
+    } catch (emailError) {
+      console.warn(`[Email] Failed to send password change confirmation to user ${userId}:`, emailError.message);
+      // Don't fail the request if email fails
+    }
 
     return res.status(200).json({ message: "Password updated successfully" });
   } catch (error) {

@@ -53,14 +53,31 @@ class PushNotification {
   }
 
   // 1. Cancellation notification (to homeowner)
-  static async sendPushCancellation(expoPushToken, userName, appointmentDate, address) {
+  static async sendPushCancellation(expoPushToken, userName, appointmentDate, address, reason = "cancelled") {
     const fullAddress = `${address.street}, ${address.city}`;
-    const title = "Appointment Cancelled";
-    const body = `Hi ${userName}, your cleaning on ${formatDate(appointmentDate)} at ${fullAddress} has been cancelled. The appointment is still open for other cleaners.`;
+    const isAccountIssue = reason === "account_issues" || reason === "urgent_fill";
+    const isUrgentFill = reason === "urgent_fill";
+
+    let title, body, type;
+
+    if (isUrgentFill) {
+      title = "🚨 Priority Fill in Progress";
+      body = `Hi ${userName}, the cleaner for your ${formatDate(appointmentDate)} cleaning at ${fullAddress} was removed. Kleanr is pushing your appointment to priority cleaners within 10 miles now!`;
+      type = "urgent_fill_priority";
+    } else if (isAccountIssue) {
+      title = "Cleaner Removed";
+      body = `Hi ${userName}, the cleaner for your ${formatDate(appointmentDate)} cleaning at ${fullAddress} has been removed due to account issues. The appointment is still open for other cleaners.`;
+      type = "cleaner_removed";
+    } else {
+      title = "Appointment Cancelled";
+      body = `Hi ${userName}, your cleaning on ${formatDate(appointmentDate)} at ${fullAddress} has been cancelled. The appointment is still open for other cleaners.`;
+      type = "appointment_cancelled";
+    }
 
     return this.sendPushNotification(expoPushToken, title, body, {
-      type: "appointment_cancelled",
+      type,
       appointmentDate,
+      isPriority: isUrgentFill,
     });
   }
 
@@ -840,6 +857,18 @@ class PushNotification {
       type: "it_dispute_resolved",
       caseNumber,
       actionRequired: false,
+    });
+  }
+
+  // 56. Stripe Connect setup invitation (to employee)
+  static async sendPushStripeSetupInvitation(expoPushToken, businessOwnerName) {
+    const title = "Set Up Direct Payments 💰";
+    const body = `${businessOwnerName} has enabled direct payments for you. Tap to set up Stripe Connect and get paid faster!`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "stripe_setup_invitation",
+      screen: "PaymentSettings",
+      actionRequired: true,
     });
   }
 }

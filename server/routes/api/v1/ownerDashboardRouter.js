@@ -19,6 +19,10 @@ const {
   Message,
   Conversation,
   ConversationParticipant,
+  SecurityAuditLog,
+  UserCleanerAppointments,
+  Payout,
+  UserPendingRequests,
   sequelize,
 } = require("../../../models");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
@@ -28,10 +32,101 @@ const {
   updateAllHomesServiceAreaStatus,
 } = require("../../../config/businessConfig");
 const EmailClass = require("../../../services/sendNotifications/EmailClass");
+const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const NotificationService = require("../../../services/NotificationService");
+const LastMinuteNotificationService = require("../../../services/LastMinuteNotificationService");
+const HomeownerFreezeService = require("../../../services/HomeownerFreezeService");
+const rateLimit = require("express-rate-limit");
+
+// Stricter rate limiter for financial endpoints (withdrawals)
+const financialLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // Only 20 financial operations per 15 minutes
+  message: { error: "Too many financial requests, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const ownerDashboardRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
+
+// ============================================
+// Constants - extracted magic numbers
+// ============================================
+const TIME_CONSTANTS = {
+  HOURS_IN_DAY: 24,
+  MINUTES_IN_HOUR: 60,
+  SECONDS_IN_MINUTE: 60,
+  MS_IN_SECOND: 1000,
+  MS_IN_MINUTE: 60 * 1000,
+  MS_IN_HOUR: 60 * 60 * 1000,
+  MS_IN_DAY: 24 * 60 * 60 * 1000,
+  MS_IN_WEEK: 7 * 24 * 60 * 60 * 1000,
+  MS_IN_MONTH: 30 * 24 * 60 * 60 * 1000,
+  MS_IN_90_DAYS: 90 * 24 * 60 * 60 * 1000,
+  MS_IN_YEAR: 365 * 24 * 60 * 60 * 1000,
+};
+
+const FINANCIAL_CONSTANTS = {
+  MINIMUM_WITHDRAWAL_CENTS: 100, // $1.00 minimum withdrawal
+  CENTS_PER_DOLLAR: 100,
+  AUDIT_LOG_MIN_RETENTION_DAYS: 30,
+};
+
+const UI_CONSTANTS = {
+  MAX_MESSAGE_PREVIEW_LENGTH: 100,
+  DEFAULT_PAGE_SIZE: 50,
+};
+
+// Helper function for date formatting (YYYY-MM-DD)
+const formatDateYMD = (date) => {
+  const d = date instanceof Date ? date : new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+// Helper function to get date offsets
+const getDateOffset = (offsetMs) => new Date(Date.now() - offsetMs);
+
+/**
+ * Standardized error response helper
+ * @param {object} res - Express response object
+ * @param {number} statusCode - HTTP status code
+ * @param {string} message - Error message
+ * @param {object} details - Optional additional details
+ */
+const sendErrorResponse = (res, statusCode, message, details = null) => {
+  const response = { error: message };
+  if (details) {
+    response.details = details;
+  }
+  return res.status(statusCode).json(response);
+};
+
+/**
+ * Standardized logger for owner dashboard operations
+ * Consistent format: [OwnerDashboard:{operation}] message
+ */
+const logger = {
+  info: (operation, message, data = null) => {
+    const logMsg = `[OwnerDashboard:${operation}] ${message}`;
+    if (data) {
+      console.log(logMsg, JSON.stringify(data));
+    } else {
+      console.log(logMsg);
+    }
+  },
+  error: (operation, message, error = null) => {
+    const logMsg = `[OwnerDashboard:${operation}] ERROR: ${message}`;
+    if (error) {
+      console.error(logMsg, error.message || error);
+    } else {
+      console.error(logMsg);
+    }
+  },
+  warn: (operation, message) => {
+    console.warn(`[OwnerDashboard:${operation}] WARN: ${message}`);
+  },
+};
 
 // Helper to safely decrypt a field with error handling
 const safeDecrypt = (value) => {
@@ -246,11 +341,11 @@ ownerDashboardRouter.get(
     try {
       const now = new Date();
 
-      // Time periods
-      const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
-      const oneWeekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-      const oneMonthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-      const oneYearAgo = new Date(now - 365 * 24 * 60 * 60 * 1000);
+      // Time periods using constants
+      const oneDayAgo = new Date(now - TIME_CONSTANTS.MS_IN_DAY);
+      const oneWeekAgo = new Date(now - TIME_CONSTANTS.MS_IN_WEEK);
+      const oneMonthAgo = new Date(now - TIME_CONSTANTS.MS_IN_MONTH);
+      const oneYearAgo = new Date(now - TIME_CONSTANTS.MS_IN_YEAR);
 
       // Total counts - exclude demo accounts
       const demoFilter = { isDemoAccount: { [Op.ne]: true } };
@@ -481,7 +576,7 @@ ownerDashboardRouter.get(
   async (req, res) => {
     try {
       const now = new Date();
-      const oneYearAgo = new Date(now - 365 * 24 * 60 * 60 * 1000);
+      const oneYearAgo = new Date(now - TIME_CONSTANTS.MS_IN_YEAR);
 
       // Total appointments - exclude demo appointments
       const demoApptFilter = { isDemoAppointment: { [Op.ne]: true } };
@@ -625,7 +720,7 @@ ownerDashboardRouter.get(
           title: c.title,
           type: c.conversationType,
           updatedAt: c.updatedAt,
-          lastMessage: c.messages?.[0]?.content?.substring(0, 100),
+          lastMessage: c.messages?.[0]?.content?.substring(0, UI_CONSTANTS.MAX_MESSAGE_PREVIEW_LENGTH),
         })),
       });
     } catch (error) {
@@ -650,7 +745,7 @@ ownerDashboardRouter.get("/quick-stats", verifyOwner, async (req, res) => {
       where: {
         date: {
           [Op.gte]: todayStart,
-          [Op.lt]: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000),
+          [Op.lt]: new Date(todayStart.getTime() + TIME_CONSTANTS.MS_IN_DAY),
         },
         isDemoAppointment: { [Op.ne]: true },
       },
@@ -662,7 +757,7 @@ ownerDashboardRouter.get("/quick-stats", verifyOwner, async (req, res) => {
     }).catch(() => 0);
 
     // New users this week - exclude demo accounts
-    const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+    const weekAgo = new Date(now - TIME_CONSTANTS.MS_IN_WEEK);
     const newUsersThisWeek = await User.count({
       where: {
         createdAt: { [Op.gte]: weekAgo },
@@ -1057,8 +1152,8 @@ ownerDashboardRouter.get(
   async (req, res) => {
     try {
       const now = new Date();
-      const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-      const ninetyDaysAgo = new Date(now - 90 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(now - TIME_CONSTANTS.MS_IN_MONTH);
+      const ninetyDaysAgo = new Date(now - TIME_CONSTANTS.MS_IN_90_DAYS);
 
       // ==========================================
       // 1. COST PER BOOKING (Platform fee per appointment)
@@ -1368,12 +1463,11 @@ ownerDashboardRouter.put(
  * Get current Stripe account balance
  */
 ownerDashboardRouter.get("/stripe-balance", verifyOwner, async (req, res) => {
-  console.log("[Stripe Balance] Request received");
+  logger.info("StripeBalance", "Request received");
   try {
     // Get Stripe balance
-    console.log("[Stripe Balance] Fetching from Stripe...");
+    logger.info("StripeBalance", "Fetching from Stripe...");
     const balance = await stripe.balance.retrieve();
-    console.log("[Stripe Balance] Stripe response:", JSON.stringify(balance));
 
     // Get total withdrawn this year
     const currentYear = new Date().getFullYear();
@@ -1395,7 +1489,7 @@ ownerDashboardRouter.get("/stripe-balance", verifyOwner, async (req, res) => {
     const pendingBalance = balance.pending.reduce((sum, b) => sum + b.amount, 0);
     const pendingWithdrawalAmount = parseInt(pendingWithdrawals[0]?.totalPending) || 0;
 
-    console.log("[Stripe Balance] Available:", availableBalance, "cents, Pending:", pendingBalance, "cents");
+    logger.info("StripeBalance", `Available: ${availableBalance} cents, Pending: ${pendingBalance} cents`);
 
     res.json({
       available: {
@@ -1472,32 +1566,41 @@ ownerDashboardRouter.get("/withdrawals", verifyOwner, async (req, res) => {
 /**
  * POST /withdraw
  * Initiate a withdrawal to bank account
+ * Uses database transaction with row-level locking to prevent race conditions
+ * Rate limited to prevent abuse
  */
-ownerDashboardRouter.post("/withdraw", verifyOwner, async (req, res) => {
+ownerDashboardRouter.post("/withdraw", financialLimiter, verifyOwner, async (req, res) => {
+  const transaction = await sequelize.transaction();
+
   try {
     const { amount, description } = req.body;
 
     // Validate amount
-    if (!amount || amount < 100) {
-      return res.status(400).json({ error: "Minimum withdrawal amount is $1.00" });
+    if (!amount || !Number.isInteger(amount) || amount < FINANCIAL_CONSTANTS.MINIMUM_WITHDRAWAL_CENTS) {
+      await transaction.rollback();
+      return sendErrorResponse(res, 400, `Minimum withdrawal amount is $${FINANCIAL_CONSTANTS.MINIMUM_WITHDRAWAL_CENTS / 100} (amount must be integer cents)`);
     }
 
-    // Get current balance
+    // Get current Stripe balance
     const balance = await stripe.balance.retrieve();
     const availableBalance = balance.available.reduce((sum, b) => sum + b.amount, 0);
 
-    // Check for pending withdrawals
+    // Check for pending withdrawals WITH ROW-LEVEL LOCK to prevent race conditions
+    // Using FOR UPDATE ensures no other transaction can read these rows until we commit
     const pendingWithdrawals = await OwnerWithdrawal.findAll({
       where: {
-        status: ["pending", "processing"],
+        status: { [Op.in]: ["pending", "processing"] },
       },
       attributes: [[sequelize.fn("SUM", sequelize.col("amount")), "totalPending"]],
       raw: true,
+      transaction,
+      lock: transaction.LOCK.UPDATE, // Row-level lock
     });
     const pendingAmount = parseInt(pendingWithdrawals[0]?.totalPending) || 0;
     const withdrawableBalance = availableBalance - pendingAmount;
 
     if (amount > withdrawableBalance) {
+      await transaction.rollback();
       return res.status(400).json({
         error: "Insufficient balance",
         available: {
@@ -1511,71 +1614,74 @@ ownerDashboardRouter.post("/withdraw", verifyOwner, async (req, res) => {
       });
     }
 
-    // Create withdrawal record
+    // Create withdrawal record within transaction
     const withdrawal = await OwnerWithdrawal.create({
       transactionId: OwnerWithdrawal.generateTransactionId(),
       amount,
       status: "pending",
       description: description || `Withdrawal of $${(amount / 100).toFixed(2)}`,
       requestedAt: new Date(),
-    });
+      requestedById: req.user.id,
+    }, { transaction });
 
     // Create Stripe payout
+    let payout;
     try {
-      const payout = await stripe.payouts.create({
+      payout = await stripe.payouts.create({
         amount,
         currency: "usd",
         description: `Platform withdrawal - ${withdrawal.transactionId}`,
         metadata: {
-          withdrawalId: withdrawal.id,
+          withdrawalId: withdrawal.id.toString(),
           transactionId: withdrawal.transactionId,
         },
-      });
-
-      // Update withdrawal with Stripe payout info
-      await withdrawal.update({
-        stripePayoutId: payout.id,
-        status: "processing",
-        processedAt: new Date(),
-        estimatedArrival: payout.arrival_date
-          ? new Date(payout.arrival_date * 1000)
-          : null,
-        bankAccountLast4: payout.destination
-          ? String(payout.destination).slice(-4)
-          : null,
-      });
-
-      res.json({
-        success: true,
-        withdrawal: {
-          id: withdrawal.id,
-          transactionId: withdrawal.transactionId,
-          amount: {
-            cents: amount,
-            dollars: (amount / 100).toFixed(2),
-          },
-          status: "processing",
-          stripePayoutId: payout.id,
-          estimatedArrival: payout.arrival_date
-            ? new Date(payout.arrival_date * 1000)
-            : null,
-        },
-        message: `Withdrawal of $${(amount / 100).toFixed(2)} initiated successfully`,
       });
     } catch (stripeError) {
-      // If Stripe payout fails, update withdrawal record
-      await withdrawal.update({
-        status: "failed",
-        failureReason: stripeError.message,
-      });
-
+      // Stripe payout failed - rollback the entire transaction
+      await transaction.rollback();
       console.error("[Owner Dashboard] Stripe payout error:", stripeError);
-      res.status(400).json({
+      return res.status(400).json({
         error: "Failed to create payout",
         details: stripeError.message,
       });
     }
+
+    // Update withdrawal with Stripe payout info
+    await withdrawal.update({
+      stripePayoutId: payout.id,
+      status: "processing",
+      processedAt: new Date(),
+      estimatedArrival: payout.arrival_date
+        ? new Date(payout.arrival_date * 1000)
+        : null,
+      bankAccountLast4: payout.destination
+        ? String(payout.destination).slice(-4)
+        : null,
+    }, { transaction });
+
+    // Commit the transaction - all changes are now permanent
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      withdrawal: {
+        id: withdrawal.id,
+        transactionId: withdrawal.transactionId,
+        amount: {
+          cents: amount,
+          dollars: (amount / 100).toFixed(2),
+        },
+        status: "processing",
+        stripePayoutId: payout.id,
+        estimatedArrival: payout.arrival_date
+          ? new Date(payout.arrival_date * 1000)
+          : null,
+      },
+      message: `Withdrawal of $${(amount / 100).toFixed(2)} initiated successfully`,
+    });
   } catch (error) {
+    // Rollback on any unexpected error
+    await transaction.rollback();
     console.error("[Owner Dashboard] Withdraw error:", error);
     res.status(500).json({ error: "Failed to process withdrawal" });
   }
@@ -1895,41 +2001,51 @@ ownerDashboardRouter.get("/cleaners", verifyOwner, async (req, res) => {
     const cleanerUsernames = cleaners.map((c) => c.username);
 
     // Get job counts and earnings for each cleaner
+    // NOTE: This query is for the PLATFORM OWNER dashboard, which should see ALL cleaners.
+    // The query is filtered to only include appointments with cleaners we're displaying.
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [jobMetrics, reviewMetrics] = await Promise.all([
-      // Job metrics - completed jobs
-      sequelize.query(
-        `SELECT
-          ua."employeesAssigned",
-          COUNT(*) as total_jobs,
-          SUM(CASE WHEN ua."completed" = true THEN 1 ELSE 0 END) as completed_jobs,
-          SUM(CASE WHEN ua."completed" = true THEN CAST(ua."price" AS INTEGER) ELSE 0 END) as total_earnings,
-          SUM(CASE WHEN ua."completed" = true AND ua."createdAt" >= :startOfMonth THEN CAST(ua."price" AS INTEGER) ELSE 0 END) as monthly_earnings
-        FROM "UserAppointments" ua
-        WHERE ua."hasBeenAssigned" = true
-        GROUP BY ua."employeesAssigned"`,
-        {
-          replacements: { startOfMonth },
-          type: sequelize.QueryTypes.SELECT,
-        }
-      ),
-      // Review metrics - average rating per cleaner
-      UserReviews.findAll({
-        where: {
-          userId: { [Op.in]: cleanerIds },
-          reviewType: "homeowner_to_cleaner",
-        },
-        attributes: [
-          "userId",
-          [sequelize.fn("AVG", sequelize.col("review")), "avgRating"],
-          [sequelize.fn("COUNT", sequelize.col("id")), "reviewCount"],
-        ],
-        group: ["userId"],
-        raw: true,
-      }),
-    ]);
+    // Skip job metrics query if no cleaners to display
+    let jobMetrics = [];
+    let reviewMetrics = [];
+
+    if (cleanerUsernames.length > 0) {
+      [jobMetrics, reviewMetrics] = await Promise.all([
+        // Job metrics - filter to only appointments containing at least one of our cleaners
+        // Uses PostgreSQL array overlap operator (&&) for efficient filtering
+        sequelize.query(
+          `SELECT
+            ua."employeesAssigned",
+            COUNT(*) as total_jobs,
+            SUM(CASE WHEN ua."completed" = true THEN 1 ELSE 0 END) as completed_jobs,
+            SUM(CASE WHEN ua."completed" = true THEN CAST(ua."price" AS INTEGER) ELSE 0 END) as total_earnings,
+            SUM(CASE WHEN ua."completed" = true AND ua."createdAt" >= :startOfMonth THEN CAST(ua."price" AS INTEGER) ELSE 0 END) as monthly_earnings
+          FROM "UserAppointments" ua
+          WHERE ua."hasBeenAssigned" = true
+            AND ua."employeesAssigned" && ARRAY[:cleanerUsernames]::varchar[]
+          GROUP BY ua."employeesAssigned"`,
+          {
+            replacements: { startOfMonth, cleanerUsernames },
+            type: sequelize.QueryTypes.SELECT,
+          }
+        ),
+        // Review metrics - average rating per cleaner
+        UserReviews.findAll({
+          where: {
+            userId: { [Op.in]: cleanerIds },
+            reviewType: "homeowner_to_cleaner",
+          },
+          attributes: [
+            "userId",
+            [sequelize.fn("AVG", sequelize.col("review")), "avgRating"],
+            [sequelize.fn("COUNT", sequelize.col("id")), "reviewCount"],
+          ],
+          group: ["userId"],
+          raw: true,
+        }),
+      ]);
+    }
 
     // Build lookup maps
     const reviewMap = {};
@@ -2014,31 +2130,48 @@ ownerDashboardRouter.get("/cleaners", verifyOwner, async (req, res) => {
 /**
  * POST /cleaners/:cleanerId/freeze
  * Freeze a cleaner account (owner only)
+ *
+ * Uses database transaction to ensure all changes are atomic:
+ * - If any operation fails, the entire freeze is rolled back
+ * - Notifications are sent only after successful commit
  */
 ownerDashboardRouter.post(
   "/cleaners/:cleanerId/freeze",
   verifyOwner,
   async (req, res) => {
+    const transaction = await sequelize.transaction();
+
     try {
       const { cleanerId } = req.params;
       const { reason } = req.body;
 
+      // Validate cleanerId
+      const parsedCleanerId = parseInt(cleanerId, 10);
+      if (isNaN(parsedCleanerId)) {
+        await transaction.rollback();
+        return res.status(400).json({ error: "Invalid cleaner ID" });
+      }
+
       if (!reason || reason.trim().length < 5) {
+        await transaction.rollback();
         return res
           .status(400)
           .json({ error: "A reason is required (at least 5 characters)" });
       }
 
-      const cleaner = await User.findByPk(cleanerId);
+      const cleaner = await User.findByPk(parsedCleanerId, { transaction });
       if (!cleaner) {
+        await transaction.rollback();
         return res.status(404).json({ error: "Cleaner not found" });
       }
 
       if (cleaner.type !== "cleaner") {
+        await transaction.rollback();
         return res.status(400).json({ error: "User is not a cleaner" });
       }
 
       if (cleaner.accountFrozen) {
+        await transaction.rollback();
         return res.status(400).json({ error: "Account is already frozen" });
       }
 
@@ -2047,13 +2180,197 @@ ownerDashboardRouter.post(
         accountFrozenAt: new Date(),
         accountFrozenReason: reason.trim(),
         accountStatusUpdatedById: req.user.id,
+      }, { transaction });
+
+      // Remove cleaner from all future appointments
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const futureAssignments = await UserCleanerAppointments.findAll({
+        where: { employeeId: parsedCleanerId },
+        include: [{
+          model: UserAppointments,
+          as: "appointment",
+          where: {
+            date: { [Op.gte]: today.toISOString().split('T')[0] },
+            completed: false,
+          },
+        }],
+        transaction,
       });
+
+      let removedAppointmentsCount = 0;
+      // Store notification data to send AFTER transaction commits
+      const notificationsToSend = [];
+
+      for (const assignment of futureAssignments) {
+        const futureAppointment = assignment.appointment;
+
+        // Null check - skip if appointment wasn't included properly
+        if (!futureAppointment) {
+          console.warn(`[Owner Dashboard] Assignment ${assignment.id} has no appointment, skipping`);
+          continue;
+        }
+
+        // Remove from employeesAssigned array
+        let futureEmployees = Array.isArray(futureAppointment.employeesAssigned)
+          ? [...futureAppointment.employeesAssigned]
+          : [];
+        const updatedFutureEmployees = futureEmployees.filter(
+          (empId) => empId !== String(parsedCleanerId)
+        );
+
+        await futureAppointment.update({
+          employeesAssigned: updatedFutureEmployees,
+          hasBeenAssigned: updatedFutureEmployees.length > 0,
+        }, { transaction });
+
+        // Delete the assignment record
+        await assignment.destroy({ transaction });
+
+        // Delete pending payout for this cleaner
+        await Payout.destroy({
+          where: {
+            appointmentId: futureAppointment.id,
+            cleanerId: parsedCleanerId,
+            status: "pending",
+          },
+          transaction,
+        });
+
+        // Reactivate pending request if no cleaners left
+        if (updatedFutureEmployees.length === 0) {
+          await UserPendingRequests.update(
+            { status: "pending" },
+            {
+              where: {
+                appointmentId: futureAppointment.id,
+                status: { [Op.in]: ["approved", "assigned"] },
+              },
+              transaction,
+            }
+          );
+        }
+
+        removedAppointmentsCount++;
+
+        // Calculate days until appointment
+        const apptDate = new Date(futureAppointment.date);
+        const daysUntil = Math.ceil((apptDate - today) / (1000 * 60 * 60 * 24));
+        const isUrgentFill = daysUntil <= 7;
+
+        // Queue notification data (will be sent after transaction commits)
+        notificationsToSend.push({
+          appointmentId: futureAppointment.id,
+          userId: futureAppointment.userId,
+          homeId: futureAppointment.homeId,
+          date: futureAppointment.date,
+          isUrgentFill,
+          daysUntil,
+        });
+      }
+
+      // Commit all database changes
+      await transaction.commit();
+
+      // === NOTIFICATIONS (sent after successful commit) ===
+      // These are side effects that shouldn't cause the operation to fail
+
+      for (const notifData of notificationsToSend) {
+        try {
+          const futureHomeowner = await User.findByPk(notifData.userId);
+          const futureHome = await UserHomes.findByPk(notifData.homeId);
+
+          if (futureHomeowner && futureHome) {
+            const notifications = futureHomeowner.notifications || [];
+            const formattedDate = new Date(notifData.date).toLocaleDateString(undefined, {
+              weekday: "long",
+              month: "short",
+              day: "numeric",
+            });
+
+            // Different in-app notification based on urgency
+            const inAppMessage = notifData.isUrgentFill
+              ? `🚨 PRIORITY: A cleaner has been removed from the ${formattedDate} cleaning at ${futureHome?.address ? safeDecrypt(futureHome.address) : "your property"}. Kleanr is pushing your appointment to priority cleaners within 10 miles now!`
+              : `A cleaner has been removed from the ${formattedDate} cleaning at ${futureHome?.address ? safeDecrypt(futureHome.address) : "your property"} due to account issues. A new cleaner will need to be assigned.`;
+
+            notifications.unshift(inAppMessage);
+            await futureHomeowner.update({ notifications: notifications.slice(0, 50) });
+
+            // Send email and push notifications
+            const futureAddress = {
+              street: safeDecrypt(futureHome.address),
+              city: safeDecrypt(futureHome.city),
+              state: safeDecrypt(futureHome.state),
+              zipcode: safeDecrypt(futureHome.zipcode),
+            };
+
+            const notificationReason = notifData.isUrgentFill ? "urgent_fill" : "account_issues";
+
+            try {
+              await EmailClass.sendEmailCancellation(
+                safeDecrypt(futureHomeowner.email),
+                futureAddress,
+                futureHomeowner.username,
+                notifData.date,
+                notificationReason
+              );
+            } catch (emailErr) {
+              console.error("[Owner Dashboard] Error sending homeowner email:", emailErr);
+            }
+
+            if (futureHomeowner.expoPushToken) {
+              try {
+                await PushNotification.sendPushCancellation(
+                  futureHomeowner.expoPushToken,
+                  futureHomeowner.username,
+                  notifData.date,
+                  futureAddress,
+                  notificationReason
+                );
+              } catch (pushErr) {
+                console.error("[Owner Dashboard] Error sending push notification:", pushErr);
+              }
+            }
+
+            // For urgent fills (within 7 days), notify nearby cleaners
+            if (notifData.isUrgentFill) {
+              try {
+                const io = req.app.get("io");
+                // Need to fetch appointment for urgent fill service
+                const apptForUrgent = await UserAppointments.findByPk(notifData.appointmentId);
+                if (apptForUrgent) {
+                  const urgentResult = await LastMinuteNotificationService.notifyCleanersForUrgentFill(
+                    apptForUrgent,
+                    futureHome,
+                    io,
+                    parsedCleanerId
+                  );
+                  console.log(
+                    `[Owner Dashboard] Urgent fill: Notified ${urgentResult.notifiedCount} cleaners for appointment ${notifData.appointmentId} (${notifData.daysUntil} days out)`
+                  );
+                }
+              } catch (urgentErr) {
+                console.error("[Owner Dashboard] Error sending urgent fill notifications:", urgentErr);
+              }
+            }
+          }
+        } catch (notifyErr) {
+          console.error("[Owner Dashboard] Error processing notification:", notifyErr);
+        }
+      }
+
+      if (removedAppointmentsCount > 0) {
+        console.log(
+          `[Owner Dashboard] Removed cleaner ${parsedCleanerId} from ${removedAppointmentsCount} future appointments`
+        );
+      }
 
       // Send notification to cleaner
       const io = req.app.get("io");
       try {
         await NotificationService.notifyUser({
-          userId: parseInt(cleanerId),
+          userId: parsedCleanerId,
           type: "account_frozen",
           title: "Account Frozen",
           message:
@@ -2072,20 +2389,32 @@ ownerDashboardRouter.post(
       }
 
       console.log(
-        `[Owner Dashboard] Cleaner ${cleanerId} frozen by owner ${req.user.id}. Reason: ${reason}`
+        `[Owner Dashboard] Cleaner ${parsedCleanerId} frozen by owner ${req.user.id}. Reason: ${reason}`
       );
 
       return res.status(200).json({
         success: true,
-        message: "Cleaner account frozen successfully",
+        message: removedAppointmentsCount > 0
+          ? `Cleaner account frozen successfully. Removed from ${removedAppointmentsCount} future appointment(s).`
+          : "Cleaner account frozen successfully",
         cleaner: {
           id: cleaner.id,
           accountFrozen: true,
           accountFrozenAt: cleaner.accountFrozenAt,
           accountFrozenReason: cleaner.accountFrozenReason,
         },
+        removedAppointments: removedAppointmentsCount,
       });
     } catch (error) {
+      // Rollback transaction if it hasn't been committed yet
+      // Check if transaction is still active before rolling back
+      if (transaction && !transaction.finished) {
+        try {
+          await transaction.rollback();
+        } catch (rollbackErr) {
+          console.error("[Owner Dashboard] Error rolling back transaction:", rollbackErr);
+        }
+      }
       console.error("[Owner Dashboard] Error freezing cleaner:", error);
       return res.status(500).json({ error: "Failed to freeze cleaner account" });
     }
@@ -2103,7 +2432,13 @@ ownerDashboardRouter.post(
     try {
       const { cleanerId } = req.params;
 
-      const cleaner = await User.findByPk(cleanerId);
+      // Validate cleanerId (consistent with freeze endpoint)
+      const parsedCleanerId = parseInt(cleanerId, 10);
+      if (isNaN(parsedCleanerId)) {
+        return res.status(400).json({ error: "Invalid cleaner ID" });
+      }
+
+      const cleaner = await User.findByPk(parsedCleanerId);
       if (!cleaner) {
         return res.status(404).json({ error: "Cleaner not found" });
       }
@@ -2165,6 +2500,172 @@ ownerDashboardRouter.post(
   }
 );
 
+// ============================================
+// Homeowner Account Management Endpoints
+// ============================================
+
+/**
+ * POST /homeowners/:homeownerId/warn
+ * Issue a warning to a homeowner account (owner only)
+ * After 3 warnings, the account is automatically frozen
+ */
+ownerDashboardRouter.post(
+  "/homeowners/:homeownerId/warn",
+  verifyOwner,
+  async (req, res) => {
+    try {
+      const { homeownerId } = req.params;
+      const { reason } = req.body;
+      const io = req.app.get("io");
+
+      if (!reason || reason.trim().length < 5) {
+        return res
+          .status(400)
+          .json({ error: "A reason is required (at least 5 characters)" });
+      }
+
+      const result = await HomeownerFreezeService.issueWarning(
+        parseInt(homeownerId),
+        reason.trim(),
+        req.user.id,
+        io
+      );
+
+      console.log(
+        `[Owner Dashboard] Homeowner ${homeownerId} warned by owner ${req.user.id}. ` +
+        `Warning count: ${result.warningCount}, Frozen: ${result.frozen}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: result.frozen
+          ? "Homeowner account has been frozen after reaching 3 warnings"
+          : `Warning ${result.warningCount}/3 issued successfully`,
+        ...result,
+      });
+    } catch (error) {
+      console.error("[Owner Dashboard] Error warning homeowner:", error);
+      return res.status(500).json({ error: error.message || "Failed to issue warning" });
+    }
+  }
+);
+
+/**
+ * POST /homeowners/:homeownerId/freeze
+ * Freeze a homeowner account (owner only)
+ * - Cancels appointments within 7 days
+ * - Pauses appointments beyond 7 days
+ * - Pauses recurring schedules
+ * - Disables marketplace visibility on homes
+ */
+ownerDashboardRouter.post(
+  "/homeowners/:homeownerId/freeze",
+  verifyOwner,
+  async (req, res) => {
+    try {
+      const { homeownerId } = req.params;
+      const { reason } = req.body;
+      const io = req.app.get("io");
+
+      if (!reason || reason.trim().length < 5) {
+        return res
+          .status(400)
+          .json({ error: "A reason is required (at least 5 characters)" });
+      }
+
+      const result = await HomeownerFreezeService.freezeHomeowner(
+        parseInt(homeownerId),
+        reason.trim(),
+        req.user.id,
+        io
+      );
+
+      if (result.alreadyFrozen) {
+        return res.status(400).json({ error: "Account is already frozen" });
+      }
+
+      console.log(
+        `[Owner Dashboard] Homeowner ${homeownerId} frozen by owner ${req.user.id}. ` +
+        `Cancelled: ${result.appointmentsCancelled}, Paused: ${result.appointmentsPaused}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Homeowner account frozen successfully",
+        ...result,
+      });
+    } catch (error) {
+      console.error("[Owner Dashboard] Error freezing homeowner:", error);
+      return res.status(500).json({ error: error.message || "Failed to freeze homeowner account" });
+    }
+  }
+);
+
+/**
+ * POST /homeowners/:homeownerId/unfreeze
+ * Unfreeze a homeowner account (owner only)
+ * - Resumes paused appointments
+ * - Resumes recurring schedules
+ * - Resets warning count to 0
+ */
+ownerDashboardRouter.post(
+  "/homeowners/:homeownerId/unfreeze",
+  verifyOwner,
+  async (req, res) => {
+    try {
+      const { homeownerId } = req.params;
+      const io = req.app.get("io");
+
+      const result = await HomeownerFreezeService.unfreezeHomeowner(
+        parseInt(homeownerId),
+        req.user.id,
+        io
+      );
+
+      if (result.wasNotFrozen) {
+        return res.status(400).json({ error: "Account is not frozen" });
+      }
+
+      console.log(
+        `[Owner Dashboard] Homeowner ${homeownerId} unfrozen by owner ${req.user.id}. ` +
+        `Appointments resumed: ${result.appointmentsResumed}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Homeowner account unfrozen successfully",
+        ...result,
+      });
+    } catch (error) {
+      console.error("[Owner Dashboard] Error unfreezing homeowner:", error);
+      return res.status(500).json({ error: error.message || "Failed to unfreeze homeowner account" });
+    }
+  }
+);
+
+/**
+ * GET /homeowners/:homeownerId/freeze-status
+ * Get freeze status for a homeowner account (owner only)
+ */
+ownerDashboardRouter.get(
+  "/homeowners/:homeownerId/freeze-status",
+  verifyOwner,
+  async (req, res) => {
+    try {
+      const { homeownerId } = req.params;
+
+      const status = await HomeownerFreezeService.getFreezeStatus(
+        parseInt(homeownerId)
+      );
+
+      return res.status(200).json(status);
+    } catch (error) {
+      console.error("[Owner Dashboard] Error getting homeowner freeze status:", error);
+      return res.status(500).json({ error: error.message || "Failed to get freeze status" });
+    }
+  }
+);
+
 /**
  * GET /cleaners/:cleanerId/details
  * Get detailed cleaner profile with metrics and earnings (owner only)
@@ -2198,7 +2699,7 @@ ownerDashboardRouter.get(
         return res.status(404).json({ error: "Cleaner not found" });
       }
 
-      if (cleaner.type && cleaner.type !== "cleaner") {
+      if (cleaner.type !== "cleaner") {
         return res.status(400).json({ error: "User is not a cleaner" });
       }
 
@@ -2226,7 +2727,8 @@ ownerDashboardRouter.get(
         if (a.completed) {
           const price = parseInt(a.price) || 0;
           totalEarnings += price;
-          if (new Date(a.createdAt) >= startOfMonth) {
+          // Use appointment date (not createdAt) for monthly earnings calculation
+          if (new Date(a.date) >= startOfMonth) {
             monthlyEarnings += price;
           }
         }
@@ -2312,7 +2814,10 @@ ownerDashboardRouter.get(
       if (status === "completed") {
         where.completed = true;
       } else if (status === "cancelled") {
+        where.wasCancelled = true;
+      } else if (status === "upcoming") {
         where.completed = false;
+        where.wasCancelled = { [Op.ne]: true };
       }
 
       const { count, rows: appointments } = await UserAppointments.findAndCountAll({
@@ -2448,5 +2953,307 @@ ownerDashboardRouter.post(
     }
   }
 );
+
+// ==================== Security Audit Logs ====================
+
+/**
+ * GET /security-audit-logs
+ * Get recent security audit logs (owner only)
+ */
+ownerDashboardRouter.get("/security-audit-logs", verifyOwner, async (req, res) => {
+  try {
+    const {
+      limit = 50,
+      severity,
+      eventType,
+      success,
+      startDate,
+      endDate,
+      userId,
+    } = req.query;
+
+    if (!SecurityAuditLog) {
+      return res.status(501).json({ error: "Security audit logging not available" });
+    }
+
+    const options = {
+      limit: Math.min(parseInt(limit, 10) || 50, 200),
+      severity: severity || null,
+      eventType: eventType || null,
+      success: success !== undefined ? success === "true" : null,
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+    };
+
+    let logs;
+    if (userId) {
+      logs = await SecurityAuditLog.getByUser(parseInt(userId, 10), options);
+    } else {
+      logs = await SecurityAuditLog.getRecent(options);
+    }
+
+    return res.status(200).json({
+      logs: logs.map(log => ({
+        id: log.id,
+        eventType: log.eventType,
+        userId: log.userId,
+        username: log.username,
+        severity: log.severity,
+        success: log.success,
+        ipAddress: log.ipAddress,
+        userAgent: log.userAgent,
+        eventData: log.eventData,
+        errorMessage: log.errorMessage,
+        occurredAt: log.occurredAt,
+        user: log.user ? {
+          id: log.user.id,
+          firstName: log.user.firstName,
+          lastName: log.user.lastName,
+          username: log.user.username,
+          type: log.user.type,
+        } : null,
+      })),
+      count: logs.length,
+    });
+  } catch (error) {
+    console.error("[Owner Dashboard] Error fetching security audit logs:", error);
+    return res.status(500).json({ error: "Failed to fetch security audit logs" });
+  }
+});
+
+/**
+ * GET /security-audit-logs/summary
+ * Get security audit log summary statistics (owner only)
+ */
+ownerDashboardRouter.get("/security-audit-logs/summary", verifyOwner, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!SecurityAuditLog) {
+      return res.status(501).json({ error: "Security audit logging not available" });
+    }
+
+    const summary = await SecurityAuditLog.getSummary(
+      startDate ? new Date(startDate) : null,
+      endDate ? new Date(endDate) : null
+    );
+
+    // Get recent failed attempts
+    const recentFailedLogins = await SecurityAuditLog.getFailedAttempts({
+      since: new Date(Date.now() - TIME_CONSTANTS.MS_IN_DAY), // Last 24 hours
+    });
+
+    return res.status(200).json({
+      summary,
+      recentFailedLogins,
+      period: {
+        startDate: startDate || "all time",
+        endDate: endDate || "now",
+      },
+    });
+  } catch (error) {
+    console.error("[Owner Dashboard] Error fetching security audit summary:", error);
+    return res.status(500).json({ error: "Failed to fetch security audit summary" });
+  }
+});
+
+/**
+ * GET /security-audit-logs/user/:userId
+ * Get security audit logs for a specific user (owner only)
+ */
+ownerDashboardRouter.get("/security-audit-logs/user/:userId", verifyOwner, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 50, startDate, endDate, eventTypes } = req.query;
+
+    if (!SecurityAuditLog) {
+      return res.status(501).json({ error: "Security audit logging not available" });
+    }
+
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "firstName", "lastName", "username", "type", "email"],
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const logs = await SecurityAuditLog.getByUser(parseInt(userId, 10), {
+      limit: Math.min(parseInt(limit, 10) || 50, 200),
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+      eventTypes: eventTypes ? eventTypes.split(",") : null,
+    });
+
+    // Helper to mask IP address for privacy (show only network prefix)
+    const maskIpAddress = (ip) => {
+      if (!ip) return null;
+      // For IPv4: show first two octets only (e.g., "192.168.x.x")
+      const ipv4Match = ip.match(/^(\d+\.\d+)\.\d+\.\d+$/);
+      if (ipv4Match) return `${ipv4Match[1]}.x.x`;
+      // For IPv6: show first 4 groups
+      if (ip.includes(":")) return ip.split(":").slice(0, 4).join(":") + ":xxxx";
+      return "masked";
+    };
+
+    // Helper to sanitize user agent (keep only browser/OS info)
+    const sanitizeUserAgent = (ua) => {
+      if (!ua) return null;
+      // Truncate to 100 chars and remove version specifics
+      return ua.substring(0, 100);
+    };
+
+    // Helper to sanitize error messages (remove stack traces and paths)
+    const sanitizeErrorMessage = (msg) => {
+      if (!msg) return null;
+      // Remove file paths and stack traces
+      let sanitized = msg.split("\n")[0]; // Keep only first line
+      sanitized = sanitized.replace(/\/[^\s]+/g, "[path]"); // Remove file paths
+      sanitized = sanitized.replace(/at\s+.+/g, ""); // Remove stack trace lines
+      return sanitized.substring(0, 200); // Limit length
+    };
+
+    // Helper to filter sensitive fields from eventData
+    const sanitizeEventData = (data) => {
+      if (!data || typeof data !== "object") return data;
+      const sensitiveFields = ["password", "token", "secret", "key", "authorization", "cookie", "session"];
+      const sanitized = { ...data };
+      for (const field of sensitiveFields) {
+        if (sanitized[field]) sanitized[field] = "[redacted]";
+      }
+      return sanitized;
+    };
+
+    return res.status(200).json({
+      user: {
+        id: user.id,
+        firstName: safeDecrypt(user.firstName),
+        lastName: safeDecrypt(user.lastName),
+        username: user.username,
+        type: user.type,
+      },
+      logs: logs.map(log => ({
+        id: log.id,
+        eventType: log.eventType,
+        severity: log.severity,
+        success: log.success,
+        ipAddress: maskIpAddress(log.ipAddress),
+        userAgent: sanitizeUserAgent(log.userAgent),
+        eventData: sanitizeEventData(log.eventData),
+        errorMessage: sanitizeErrorMessage(log.errorMessage),
+        occurredAt: log.occurredAt,
+      })),
+      count: logs.length,
+    });
+  } catch (error) {
+    console.error("[Owner Dashboard] Error fetching user security audit logs:", error);
+    return res.status(500).json({ error: "Failed to fetch user security audit logs" });
+  }
+});
+
+/**
+ * DELETE /security-audit-logs/cleanup
+ * Cleanup old security audit logs (owner only)
+ *
+ * SECURITY: This is a destructive operation that affects system-wide logs.
+ * Safeguards:
+ * 1. Minimum retention period of 30 days enforced
+ * 2. Maximum of 365 days retention configurable
+ * 3. Requires explicit confirmation parameter
+ * 4. Action is logged for audit trail
+ */
+ownerDashboardRouter.delete("/security-audit-logs/cleanup", verifyOwner, async (req, res) => {
+  try {
+    const { retentionDays = 90, confirm } = req.query;
+
+    if (!SecurityAuditLog) {
+      return res.status(501).json({ error: "Security audit logging not available" });
+    }
+
+    // Parse and validate retention days
+    const parsedRetentionDays = parseInt(retentionDays, 10);
+    if (isNaN(parsedRetentionDays)) {
+      return res.status(400).json({ error: "Invalid retentionDays value" });
+    }
+
+    // Enforce minimum retention period of 30 days for compliance
+    const MIN_RETENTION_DAYS = 30;
+    const MAX_RETENTION_DAYS = 365;
+
+    if (parsedRetentionDays < MIN_RETENTION_DAYS) {
+      return res.status(400).json({
+        error: `Minimum retention period is ${MIN_RETENTION_DAYS} days for compliance purposes`,
+        minRetentionDays: MIN_RETENTION_DAYS,
+      });
+    }
+
+    if (parsedRetentionDays > MAX_RETENTION_DAYS) {
+      return res.status(400).json({
+        error: `Maximum retention period is ${MAX_RETENTION_DAYS} days`,
+        maxRetentionDays: MAX_RETENTION_DAYS,
+      });
+    }
+
+    // Require explicit confirmation for destructive operation
+    if (confirm !== "true") {
+      // Get count of logs that would be deleted (for preview)
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - parsedRetentionDays);
+
+      const countToDelete = await SecurityAuditLog.count({
+        where: {
+          occurredAt: { [Op.lt]: cutoffDate },
+        },
+      });
+
+      return res.status(400).json({
+        error: "Confirmation required for destructive operation",
+        message: `This will permanently delete ${countToDelete} audit log(s) older than ${parsedRetentionDays} days. Add ?confirm=true to proceed.`,
+        logsToDelete: countToDelete,
+        retentionDays: parsedRetentionDays,
+        cutoffDate: cutoffDate.toISOString(),
+      });
+    }
+
+    // Perform the cleanup
+    const deleted = await SecurityAuditLog.cleanup(parsedRetentionDays);
+
+    // Log this destructive action for audit trail
+    console.log(
+      `[Owner Dashboard] AUDIT LOG CLEANUP: User ${req.user.id} deleted ${deleted} logs older than ${parsedRetentionDays} days`
+    );
+
+    // Create an audit log entry for this cleanup action (so there's a record)
+    try {
+      await SecurityAuditLog.create({
+        userId: req.user.id,
+        eventType: "audit_log_cleanup",
+        severity: "high",
+        success: true,
+        ipAddress: req.ip || req.headers["x-forwarded-for"] || "unknown",
+        userAgent: req.headers["user-agent"] || "unknown",
+        eventData: {
+          retentionDays: parsedRetentionDays,
+          deletedCount: deleted,
+          performedBy: req.user.id,
+        },
+        occurredAt: new Date(),
+      });
+    } catch (logError) {
+      // Don't fail the request if we can't log it
+      console.error("[Owner Dashboard] Failed to log cleanup action:", logError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Cleaned up ${deleted} audit logs older than ${parsedRetentionDays} days`,
+      deletedCount: deleted,
+      retentionDays: parsedRetentionDays,
+    });
+  } catch (error) {
+    console.error("[Owner Dashboard] Error cleaning up security audit logs:", error);
+    return res.status(500).json({ error: "Failed to cleanup security audit logs" });
+  }
+});
 
 module.exports = ownerDashboardRouter;

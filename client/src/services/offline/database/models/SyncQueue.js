@@ -4,7 +4,9 @@ import { field, date, relation, json } from "@nozbe/watermelondb/decorators";
 const sanitizeJSON = (raw) => {
   try {
     return raw ? JSON.parse(raw) : null;
-  } catch {
+  } catch (error) {
+    // Log parsing errors to help diagnose data corruption
+    console.warn("[SyncQueue] JSON parse error:", error.message, "Raw value:", typeof raw === "string" ? raw.substring(0, 100) : typeof raw);
     return null;
   }
 };
@@ -12,6 +14,7 @@ const sanitizeJSON = (raw) => {
 // Operation types in strict order
 export const SYNC_OPERATION_TYPES = {
   START: "start",
+  HOME_SIZE_MISMATCH: "home_size_mismatch", // Must sync before starting job
   ACCURACY: "accuracy",
   BEFORE_PHOTO: "before_photo",
   CHECKLIST: "checklist",
@@ -24,13 +27,14 @@ export const SYNC_OPERATION_TYPES = {
 // Sequence order for strict sync ordering
 export const OPERATION_SEQUENCE = {
   [SYNC_OPERATION_TYPES.START]: 1,
-  [SYNC_OPERATION_TYPES.ACCURACY]: 2,
-  [SYNC_OPERATION_TYPES.BEFORE_PHOTO]: 3,
-  [SYNC_OPERATION_TYPES.CHECKLIST]: 4,
-  [SYNC_OPERATION_TYPES.AFTER_PHOTO]: 5,
-  [SYNC_OPERATION_TYPES.PASSES_PHOTO]: 6,
-  [SYNC_OPERATION_TYPES.COMPLETE]: 7,
-  [SYNC_OPERATION_TYPES.MESSAGE]: 8,
+  [SYNC_OPERATION_TYPES.HOME_SIZE_MISMATCH]: 2, // Before accuracy, sync ASAP
+  [SYNC_OPERATION_TYPES.ACCURACY]: 3,
+  [SYNC_OPERATION_TYPES.BEFORE_PHOTO]: 4,
+  [SYNC_OPERATION_TYPES.CHECKLIST]: 5,
+  [SYNC_OPERATION_TYPES.AFTER_PHOTO]: 6,
+  [SYNC_OPERATION_TYPES.PASSES_PHOTO]: 7,
+  [SYNC_OPERATION_TYPES.COMPLETE]: 8,
+  [SYNC_OPERATION_TYPES.MESSAGE]: 9,
 };
 
 export const SYNC_STATUS = {
@@ -39,6 +43,23 @@ export const SYNC_STATUS = {
   COMPLETED: "completed",
   FAILED: "failed",
 };
+
+// Valid operation types as a Set for O(1) lookup
+const VALID_OPERATION_TYPES = new Set(Object.values(SYNC_OPERATION_TYPES));
+
+// Validate that an operation type is valid
+export function isValidOperationType(operationType) {
+  return VALID_OPERATION_TYPES.has(operationType);
+}
+
+// Get sequence number for an operation type, with validation
+export function getSequenceNumber(operationType) {
+  if (!isValidOperationType(operationType)) {
+    console.error(`[SyncQueue] Invalid operation type: ${operationType}`);
+    return null;
+  }
+  return OPERATION_SEQUENCE[operationType];
+}
 
 export default class SyncQueue extends Model {
   static table = "sync_queue";

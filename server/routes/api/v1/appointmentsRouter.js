@@ -99,6 +99,7 @@ appointmentRouter.get("/unassigned", async (req, res) => {
       userId: { [Op.in]: matchingUserIds }, // Filter by demo status match
       wasCancelled: false, // Exclude cancelled appointments
       isDemoAppointment: isCleanerDemo, // Demo cleaners see demo appointments, real cleaners see real appointments
+      isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner account frozen)
     };
 
     // If cleaner doesn't have early access, filter out jobs in early access period
@@ -970,6 +971,15 @@ appointmentRouter.post("/", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // Check if homeowner account is frozen
+    if (user.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot book new appointments.",
+        reason: user.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
+
     // Check if this is a demo account
     isDemoUser = user.isDemoAccount === true;
 
@@ -1147,7 +1157,7 @@ appointmentRouter.post("/", async (req, res) => {
           keyLocation,
           completed: false,
           hasBeenAssigned: false,
-          empoyeesNeeded: cleanersNeeded,
+          employeesNeeded: cleanersNeeded,
           timeToBeCompleted: timeWindow,
           sheetConfigurations: date.sheetConfigurations || null,
           towelConfigurations: date.towelConfigurations || null,
@@ -2091,6 +2101,19 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
 
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Check if appointment is paused (due to homeowner freeze)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused and cannot be modified",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment is cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
     }
 
     if (approve) {
@@ -3126,6 +3149,19 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       return res.status(400).json({ error: "Cannot cancel a completed appointment" });
     }
 
+    // Check if appointment is paused (homeowner account frozen)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused and cannot be cancelled",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment is already cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has already been cancelled" });
+    }
+
     // Calculate days until appointment
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -3744,6 +3780,19 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
       return res.status(400).json({ error: "Cannot cancel a completed appointment" });
     }
 
+    // Check if appointment is paused (homeowner account frozen)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment is already cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has already been cancelled" });
+    }
+
     const cleaner = await User.findByPk(userId);
     if (!cleaner) {
       return res.status(404).json({ error: "Cleaner not found" });
@@ -3856,48 +3905,112 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
             },
           });
 
+          // Reactivate pending request if no cleaners left
+          if (updatedFutureEmployees.length === 0) {
+            await UserPendingRequests.update(
+              { status: "pending" },
+              {
+                where: {
+                  appointmentId: futureAppointment.id,
+                  status: { [Op.in]: ["approved", "assigned"] },
+                },
+              }
+            );
+          }
+
+          // Calculate days until appointment for urgency check
+          const apptDate = new Date(futureAppointment.date);
+          const daysUntil = Math.ceil((apptDate - today) / (1000 * 60 * 60 * 24));
+          const isUrgentFill = daysUntil <= 7;
+
           // Notify homeowner about the removed assignment
           const futureHomeowner = await User.findByPk(futureAppointment.userId);
           const futureHome = await UserHomes.findByPk(futureAppointment.homeId);
 
-          if (futureHomeowner) {
+          if (futureHomeowner && futureHome) {
             const notifications = futureHomeowner.notifications || [];
             const formattedDate = new Date(futureAppointment.date).toLocaleDateString(undefined, {
               weekday: "long",
               month: "short",
               day: "numeric",
             });
-            notifications.unshift(
-              `A cleaner has been removed from the ${formattedDate} cleaning at ${futureHome?.address || "your property"} due to account issues. A new cleaner will need to be assigned.`
-            );
+
+            // Different in-app notification based on urgency
+            const inAppMessage = isUrgentFill
+              ? `🚨 PRIORITY: A cleaner has been removed from the ${formattedDate} cleaning at ${EncryptionService.decrypt(futureHome.address) || "your property"}. Kleanr is pushing your appointment to priority cleaners within 10 miles now!`
+              : `A cleaner has been removed from the ${formattedDate} cleaning at ${EncryptionService.decrypt(futureHome.address) || "your property"} due to account issues. A new cleaner will need to be assigned.`;
+
+            notifications.unshift(inAppMessage);
             await futureHomeowner.update({ notifications: notifications.slice(0, 50) });
 
-            // Send email notification
-            if (futureHome) {
+            // Send email and push notifications
+            try {
               const futureAddress = {
                 street: EncryptionService.decrypt(futureHome.address),
                 city: EncryptionService.decrypt(futureHome.city),
                 state: EncryptionService.decrypt(futureHome.state),
                 zipcode: EncryptionService.decrypt(futureHome.zipcode),
               };
+
+              const notificationReason = isUrgentFill ? "urgent_fill" : "account_issues";
+
               await Email.sendEmailCancellation(
                 EncryptionService.decrypt(futureHomeowner.email),
                 futureAddress,
                 futureHomeowner.username,
-                futureAppointment.date
+                futureAppointment.date,
+                notificationReason
               );
 
-              // Send push notification
               if (futureHomeowner.expoPushToken) {
                 await PushNotification.sendPushCancellation(
                   futureHomeowner.expoPushToken,
                   futureHomeowner.username,
                   futureAppointment.date,
-                  futureAddress
+                  futureAddress,
+                  notificationReason
                 );
+              }
+            } catch (notifyErr) {
+              console.error("[Cancellation] Error sending homeowner notification:", notifyErr);
+            }
+
+            // For urgent fills (within 7 days), notify nearby cleaners
+            if (isUrgentFill) {
+              try {
+                const io = req.app.get("io");
+                const urgentResult = await LastMinuteNotificationService.notifyCleanersForUrgentFill(
+                  futureAppointment,
+                  futureHome,
+                  io,
+                  userId
+                );
+                console.log(
+                  `[Cancellation] Urgent fill: Notified ${urgentResult.notifiedCount} cleaners for appointment ${futureAppointment.id} (${daysUntil} days out)`
+                );
+              } catch (urgentErr) {
+                console.error("[Cancellation] Error sending urgent fill notifications:", urgentErr);
               }
             }
           }
+        }
+
+        // Notify cleaner that their account has been frozen
+        try {
+          const io = req.app.get("io");
+          await NotificationService.notifyUser({
+            userId: userId,
+            type: "account_frozen",
+            title: "Account Frozen",
+            message: "Your account has been frozen due to 3 or more last-minute cancellations within 3 months. Please contact support for assistance.",
+            data: {
+              frozenAt: new Date().toISOString(),
+              reason: "3 or more last-minute cancellations within 3 months",
+            },
+            io,
+          });
+        } catch (notifyErr) {
+          console.error("[Cancellation] Error sending freeze notification to cleaner:", notifyErr);
         }
       }
     }
@@ -4070,7 +4183,7 @@ appointmentRouter.patch("/:id", async (req, res) => {
       });
     }
 
-    // Map empoyeesNeeded to cleanersNeeded for client compatibility
+    // Map employeesNeeded to cleanersNeeded for client compatibility
     const responseData = userInfo.dataValues || userInfo;
 
     // Get cleanersConfirmed from MultiCleanerJob if it exists
@@ -4084,7 +4197,7 @@ appointmentRouter.patch("/:id", async (req, res) => {
 
     const mappedResponse = {
       ...responseData,
-      cleanersNeeded: responseData.empoyeesNeeded,
+      cleanersNeeded: responseData.employeesNeeded,
       cleanersConfirmed,
     };
 
@@ -4117,6 +4230,18 @@ appointmentRouter.post("/:id/respond", async (req, res) => {
     const userId = decoded.userId;
     const { id } = req.params;
     const { action, declineReason, suggestedDates } = req.body;
+
+    // Check if user account is frozen
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "accountFrozen", "accountFrozenReason"],
+    });
+    if (user && user.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot respond to booking requests.",
+        reason: user.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
 
     if (!action || !["accept", "decline"].includes(action)) {
       return res.status(400).json({ error: "Invalid action. Must be 'accept' or 'decline'" });
@@ -4288,13 +4413,21 @@ appointmentRouter.post("/:id/rebook", async (req, res) => {
         {
           model: User,
           as: "user",
-          attributes: ["id", "firstName", "lastName"],
+          attributes: ["id", "firstName", "lastName", "accountFrozen"],
         },
       ],
     });
 
     if (!originalAppointment) {
       return res.status(404).json({ error: "Original declined appointment not found" });
+    }
+
+    // Check if homeowner account is frozen
+    if (originalAppointment.user && originalAppointment.user.accountFrozen) {
+      return res.status(403).json({
+        error: "Cannot rebook - homeowner account is suspended",
+        accountSuspended: true,
+      });
     }
 
     // Check rebooking limit
@@ -4323,7 +4456,7 @@ appointmentRouter.post("/:id/rebook", async (req, res) => {
       completed: false,
       hasBeenAssigned: true,
       employeesAssigned: [String(cleanerId)],
-      empoyeesNeeded: originalAppointment.empoyeesNeeded,
+      employeesNeeded: originalAppointment.employeesNeeded,
       timeToBeCompleted: timeWindow || originalAppointment.timeToBeCompleted,
       bringTowels: originalAppointment.bringTowels,
       bringSheets: originalAppointment.bringSheets,

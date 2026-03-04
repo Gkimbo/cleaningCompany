@@ -29,6 +29,8 @@ async function processExpiredBookings(io = null) {
           [Op.lt]: now,
         },
         clientResponse: null, // Not yet responded
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
+        wasCancelled: { [Op.ne]: true }, // Skip cancelled appointments
       },
       include: [
         {

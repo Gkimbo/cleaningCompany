@@ -159,10 +159,19 @@ class CleanerApprovalService {
       throw new Error(`Request is no longer pending (status: ${request.status})`);
     }
 
-    // Check if job is still open
-    if (request.multiCleanerJob && request.multiCleanerJob.isFilled()) {
-      await request.cancel();
-      throw new Error("This job has already been filled");
+    // Check if job is still open and not paused/cancelled
+    if (request.multiCleanerJob) {
+      if (request.multiCleanerJob.status === "paused") {
+        throw new Error("This job is currently paused");
+      }
+      if (request.multiCleanerJob.status === "cancelled") {
+        await request.cancel();
+        throw new Error("This job has been cancelled");
+      }
+      if (request.multiCleanerJob.isFilled()) {
+        await request.cancel();
+        throw new Error("This job has already been filled");
+      }
     }
 
     // Fill the slot
@@ -332,8 +341,8 @@ class CleanerApprovalService {
         // Check if job is still open
         const job = await MultiCleanerJob.findByPk(request.multiCleanerJobId);
 
-        if (!job || job.isFilled()) {
-          // Job is filled or gone, cancel this request
+        if (!job || job.isFilled() || job.status === "paused" || job.status === "cancelled") {
+          // Job is filled, paused, cancelled, or gone - cancel this request
           await request.cancel();
           cancelled++;
           continue;

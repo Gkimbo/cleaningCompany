@@ -22,6 +22,9 @@ jest.mock("../../../src/services/offline/database", () => ({
   },
   syncQueueCollection: {
     create: jest.fn(),
+    query: jest.fn(() => ({
+      fetch: jest.fn().mockResolvedValue([]),
+    })),
   },
 }));
 

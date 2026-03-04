@@ -28,6 +28,7 @@ import * as Location from "expo-location";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import RequestedTile from "../tiles/RequestedTile";
+import { useOffline } from "../../../services/offline/OfflineContext";
 import {
   colors,
   spacing,
@@ -99,6 +100,20 @@ const MyRequestsCalendar = ({ state }) => {
   const [expandedLinens, setExpandedLinens] = useState({});
 
   const { goBack, navigate } = useSafeNavigation();
+  const { isOffline } = useOffline();
+
+  // Helper to check offline and show alert
+  const requiresOnline = (action = "This action") => {
+    if (isOffline) {
+      Alert.alert(
+        "Internet Required",
+        `${action} requires an internet connection. Please connect to the internet and try again.`,
+        [{ text: "OK" }]
+      );
+      return true;
+    }
+    return false;
+  };
 
   const toggleLinens = useCallback((requestId) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -235,6 +250,7 @@ const MyRequestsCalendar = ({ state }) => {
   // Handle cancelling a team request
   const handleCancelTeamRequest = useCallback(
     (request) => {
+      if (requiresOnline("Cancelling a team request")) return;
       Alert.alert(
         "Cancel Request",
         "Are you sure you want to cancel this team cleaning request?",
@@ -277,7 +293,7 @@ const MyRequestsCalendar = ({ state }) => {
         ]
       );
     },
-    [state.currentUser.token]
+    [state.currentUser.token, requiresOnline]
   );
 
   // Sort helper

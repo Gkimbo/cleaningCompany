@@ -28,10 +28,12 @@ import {
   calculateLinensFromRoomCounts,
 } from "../../../utils/linensUtils";
 import TenantPresentModal from "../modals/TenantPresentModal";
+import { useOffline } from "../../../services/offline/OfflineContext";
 
 const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token }) => {
   const { state } = useContext(UserContext);
   const { pricing } = usePricing();
+  const { isOffline } = useOffline();
   const [jobStarted, setJobStarted] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(appointment.hasCleanerReview || false);
@@ -159,6 +161,14 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
   };
 
   const handleUndoStart = () => {
+    if (isOffline) {
+      Alert.alert(
+        "Internet Required",
+        "Undoing a job start requires an internet connection. Please connect to the internet and try again.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
     Alert.alert(
       "Undo Start Job",
       "Are you sure you want to undo starting this job? This will delete any photos taken.",
@@ -705,12 +715,22 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
         {!appointment.completed && !jobStarted && appointment.completionStatus !== "submitted" && (
           <View style={styles.actionContainer}>
             <TouchableOpacity
-              style={styles.reportButton}
-              onPress={() => setShowTenantPresentModal(true)}
+              style={[styles.reportButton, isOffline && styles.reportButtonDisabled]}
+              onPress={() => {
+                if (isOffline) {
+                  Alert.alert(
+                    "Internet Required",
+                    "Reporting a tenant issue requires an internet connection so we can notify the homeowner in real-time. Please connect to the internet to use this feature.",
+                    [{ text: "OK" }]
+                  );
+                } else {
+                  setShowTenantPresentModal(true);
+                }
+              }}
               activeOpacity={0.7}
             >
-              <Icon name="exclamation-circle" size={14} color={colors.neutral[500]} />
-              <Text style={styles.reportButtonText}>Report Issue</Text>
+              <Icon name="exclamation-circle" size={14} color={isOffline ? colors.neutral[300] : colors.neutral[500]} />
+              <Text style={[styles.reportButtonText, isOffline && styles.reportButtonTextDisabled]}>Report Issue</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.primaryButton}
@@ -1464,6 +1484,14 @@ const styles = StyleSheet.create({
     color: colors.neutral[600],
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
+  },
+  reportButtonDisabled: {
+    backgroundColor: colors.neutral[50],
+    borderColor: colors.neutral[200],
+    borderWidth: 1,
+  },
+  reportButtonTextDisabled: {
+    color: colors.neutral[300],
   },
 
   // Completed Badge

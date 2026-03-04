@@ -755,6 +755,17 @@ class GuestNotLeftService {
       include: [{ model: UserHomes, as: "home" }],
     });
 
+    // Skip if appointment is already paused or cancelled
+    if (!appointment || appointment.isPaused || appointment.wasCancelled) {
+      // Just resolve the report without further action
+      await report.update({
+        resolved: true,
+        resolvedAt: new Date(),
+        resolution: "appointment_cancelled",
+      });
+      return report;
+    }
+
     // Mark as cleaner no return
     await report.update({
       resolved: true,

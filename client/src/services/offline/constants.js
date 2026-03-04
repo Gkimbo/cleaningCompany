@@ -1,10 +1,17 @@
 // Offline mode configuration constants
 
+// Common time durations (in milliseconds)
+export const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const FIFTEEN_MINUTES_MS = 15 * 60 * 1000; // 15 minutes
+
 // Maximum time allowed offline before forcing sync prompt (in milliseconds)
 export const MAX_OFFLINE_DURATION_MS = 48 * 60 * 60 * 1000; // 48 hours
 
 // Background fetch interval (minimum allowed by OS)
-export const BACKGROUND_FETCH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+export const BACKGROUND_FETCH_INTERVAL_MS = FIFTEEN_MINUTES_MS; // 15 minutes
+
+// Data freshness threshold
+export const DATA_FRESHNESS_THRESHOLD_MS = FIFTEEN_MINUTES_MS; // 15 minutes
 
 // Sync retry configuration
 export const SYNC_MAX_ATTEMPTS = 5;
@@ -15,6 +22,14 @@ export const SYNC_MAX_DELAY_MS = 16000; // 16 seconds
 export const PHOTO_COMPRESSION_QUALITY = 0.7;
 export const PHOTO_MAX_WIDTH = 1920;
 export const PHOTO_MAX_HEIGHT = 1080;
+
+// Storage limits (in bytes)
+export const MIN_FREE_SPACE_BYTES = 50 * 1024 * 1024; // 50MB minimum free space required
+export const STORAGE_WARNING_THRESHOLD = 100 * 1024 * 1024; // Warn when under 100MB free
+export const ESTIMATED_PHOTO_SIZE = 2 * 1024 * 1024; // Assume ~2MB per compressed photo
+
+// Orphan detection thresholds
+export const MISSING_FILE_CHECK_THRESHOLD = 3; // Delete record after file missing this many times
 
 // Preload configuration
 export const PRELOAD_DAYS_AHEAD = 2; // Today + tomorrow

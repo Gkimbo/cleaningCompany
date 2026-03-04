@@ -961,6 +961,16 @@ class EmployeeJobAssignmentService {
       throw new Error("Assignment not found or cannot be started");
     }
 
+    // Block job start if appointment is paused (homeowner account frozen)
+    if (assignment.appointment?.isPaused) {
+      throw new Error("Cannot start job - this appointment is currently paused");
+    }
+
+    // Block job start if appointment was cancelled
+    if (assignment.appointment?.wasCancelled) {
+      throw new Error("Cannot start job - this appointment has been cancelled");
+    }
+
     // Block job start if payment capture has failed
     if (assignment.appointment?.paymentCaptureFailed) {
       throw new Error("Cannot start job - client payment issue. Please contact support or wait for the client to resolve their payment issue.");
@@ -1050,13 +1060,23 @@ class EmployeeJobAssignmentService {
         {
           model: UserAppointments,
           as: "appointment",
-          attributes: ["id", "price"],
+          attributes: ["id", "price", "isPaused", "wasCancelled"],
         },
       ],
     });
 
     if (!assignment) {
       throw new Error("Assignment not found or cannot be completed");
+    }
+
+    // Block job completion if appointment is paused (homeowner account frozen)
+    if (assignment.appointment?.isPaused) {
+      throw new Error("Cannot complete job - this appointment is currently paused");
+    }
+
+    // Block job completion if appointment was cancelled
+    if (assignment.appointment?.wasCancelled) {
+      throw new Error("Cannot complete job - this appointment has been cancelled");
     }
 
     // Validate completion requirements using AppointmentJobFlow
@@ -1408,6 +1428,10 @@ class EmployeeJobAssignmentService {
     const appointmentWhere = {
       // Exclude completed appointments
       completed: false,
+      // Exclude paused appointments (homeowner account frozen)
+      isPaused: { [Op.ne]: true },
+      // Exclude cancelled appointments
+      wasCancelled: { [Op.ne]: true },
     };
     if (upcoming) {
       appointmentWhere.date = { [Op.gte]: new Date().toISOString().split("T")[0] };

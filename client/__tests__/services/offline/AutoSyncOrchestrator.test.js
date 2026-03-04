@@ -26,6 +26,7 @@ jest.mock("../../../src/services/offline/OfflineManager", () => ({
     _preloadInProgress: false,
     setAuthToken: jest.fn(),
     preloadJobs: jest.fn(),
+    getPendingSyncCount: jest.fn().mockResolvedValue(3),
   },
 }));
 
@@ -286,7 +287,7 @@ describe("AutoSyncOrchestrator", () => {
         await Promise.resolve();
       }
 
-      expect(listener).toHaveBeenCalledWith({ type: "sync_gave_up" });
+      expect(listener).toHaveBeenCalledWith({ type: "sync_gave_up", pendingCount: 3 });
     }, 10000);
   });
 

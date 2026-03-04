@@ -16,6 +16,7 @@ const NotificationService = require("../NotificationService");
 const Email = require("../sendNotifications/EmailClass");
 const PushNotification = require("../sendNotifications/PushNotificationClass");
 const EncryptionService = require("../EncryptionService");
+const HomeownerFreezeService = require("../HomeownerFreezeService");
 
 // Configuration
 const AUTO_CANCEL_HOURS = 48; // 2 days
@@ -34,11 +35,12 @@ async function processFailedPayments(io = null) {
   try {
     console.log("[PaymentRetryMonitor] Starting payment retry check...");
 
-    // Find all appointments with failed payments that haven't been cancelled
+    // Find all appointments with failed payments that haven't been cancelled or paused
     const failedPaymentAppointments = await UserAppointments.findAll({
       where: {
         paymentCaptureFailed: true,
         wasCancelled: { [Op.ne]: true },
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
         completed: false,
       },
       include: [
@@ -440,6 +442,49 @@ async function autoCancelAppointment(appointment, io) {
         appointmentId: appointment.id,
         reason: "payment_failed",
       });
+    }
+
+    // Check for repeated payment failures (3+ in 3 months) - issue warning
+    if (homeowner) {
+      try {
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+        // Count payment failure cancellations for this homeowner in the last 3 months
+        const paymentFailureCancellations = await UserAppointments.count({
+          where: {
+            userId: homeowner.id,
+            wasCancelled: true,
+            cancellationReason: "payment_failed",
+            cancelledAt: { [Op.gte]: threeMonthsAgo },
+          },
+        });
+
+        // If 3 or more payment failures, issue warning (auto-freeze after 3 warnings)
+        if (paymentFailureCancellations >= 3) {
+          const result = await HomeownerFreezeService.checkAndWarnHomeowner(
+            homeowner.id,
+            "payment_failure",
+            0, // System-triggered
+            io
+          );
+
+          if (result.frozen) {
+            console.log(
+              `[PaymentRetryMonitor] Homeowner ${homeowner.id} auto-frozen after ${paymentFailureCancellations} payment failures`
+            );
+          } else if (result.warned) {
+            console.log(
+              `[PaymentRetryMonitor] Warning issued to homeowner ${homeowner.id} for repeated payment failures (${paymentFailureCancellations} failures, warning ${result.warningCount}/3)`
+            );
+          }
+        }
+      } catch (warnError) {
+        console.error(
+          `[PaymentRetryMonitor] Error checking payment failure warnings for homeowner ${homeowner.id}:`,
+          warnError.message
+        );
+      }
     }
   } catch (error) {
     console.error(

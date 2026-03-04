@@ -13,6 +13,9 @@ import OfflineManager from "./OfflineManager";
 import NetworkMonitor from "./NetworkMonitor";
 import { AUTO_SYNC_COOLDOWN_MS, MAX_AUTO_RETRY_ATTEMPTS, getRetryDelay } from "./constants";
 
+// Maximum listeners to prevent memory leaks from runaway subscriptions
+const MAX_LISTENERS = 50;
+
 class AutoSyncOrchestrator {
   constructor() {
     this._authToken = null;
@@ -21,6 +24,8 @@ class AutoSyncOrchestrator {
     this._retryTimeout = null;
     this._listeners = new Set();
     this._isAutoSyncing = false;
+    this._destroyed = false; // Flag to prevent operations after destroy
+    this._generation = 0; // Incremented on destroy to invalidate pending callbacks
   }
 
   /**
@@ -37,6 +42,12 @@ class AutoSyncOrchestrator {
    * Events: sync_started, sync_completed, sync_error, sync_retry_scheduled, sync_gave_up
    */
   subscribe(listener) {
+    // Guard against too many listeners (memory leak protection)
+    if (this._listeners.size >= MAX_LISTENERS) {
+      console.warn(`[AutoSyncOrchestrator] Max listeners (${MAX_LISTENERS}) reached. Subscription rejected.`);
+      // Return a no-op unsubscribe function
+      return () => {};
+    }
     this._listeners.add(listener);
     return () => this._listeners.delete(listener);
   }
@@ -45,13 +56,26 @@ class AutoSyncOrchestrator {
    * Notify all listeners of an event
    */
   _notify(event) {
+    // Don't notify if destroyed
+    if (this._destroyed) return;
+
+    // Collect failed listeners to remove AFTER iteration (avoid mutation during iteration)
+    const listenersToRemove = [];
+
     this._listeners.forEach((listener) => {
       try {
         listener(event);
       } catch (error) {
         console.error("[AutoSyncOrchestrator] Listener error:", error);
+        // If listener throws, it's likely from an unmounted component - mark for removal
+        listenersToRemove.push(listener);
       }
     });
+
+    // Remove failed listeners after iteration completes
+    for (const listener of listenersToRemove) {
+      this._listeners.delete(listener);
+    }
   }
 
   /**
@@ -67,6 +91,12 @@ class AutoSyncOrchestrator {
    */
   async onConnectivityRestored() {
     console.log("[AutoSyncOrchestrator] Connectivity restored");
+
+    // Check if destroyed
+    if (this._destroyed) {
+      console.log("[AutoSyncOrchestrator] Orchestrator destroyed, skipping");
+      return { skipped: true, reason: "destroyed" };
+    }
 
     // Check cooldown
     if (!this._canSync()) {
@@ -96,6 +126,12 @@ class AutoSyncOrchestrator {
    * Perform the auto-sync sequence
    */
   async _performAutoSync() {
+    // Don't sync if destroyed
+    if (this._destroyed) {
+      console.log("[AutoSyncOrchestrator] Sync cancelled - orchestrator destroyed");
+      return { skipped: true, reason: "destroyed" };
+    }
+
     this._isAutoSyncing = true;
     this._lastSyncAttempt = Date.now();
 
@@ -138,7 +174,14 @@ class AutoSyncOrchestrator {
       if (this._autoRetryCount < MAX_AUTO_RETRY_ATTEMPTS) {
         this._scheduleRetry();
       } else {
-        this._notify({ type: "sync_gave_up" });
+        // Get pending count for the notification
+        let pendingCount = 0;
+        try {
+          pendingCount = await OfflineManager.getPendingSyncCount();
+        } catch (e) {
+          console.error("[AutoSyncOrchestrator] Failed to get pending count:", e);
+        }
+        this._notify({ type: "sync_gave_up", pendingCount });
       }
 
       return { success: false, error: error.message };
@@ -167,10 +210,24 @@ class AutoSyncOrchestrator {
       clearTimeout(this._retryTimeout);
     }
 
+    // Capture current generation to detect if destroyed during timeout
+    const scheduledGeneration = this._generation;
+
     this._retryTimeout = setTimeout(async () => {
-      // Only retry if still online
+      // Don't retry if destroyed or generation changed (more robust than just checking _destroyed)
+      if (this._destroyed || this._generation !== scheduledGeneration) {
+        console.log("[AutoSyncOrchestrator] Retry cancelled - orchestrator destroyed or reset");
+        return;
+      }
       if (NetworkMonitor.isOnline) {
-        await this._performAutoSync();
+        try {
+          await this._performAutoSync();
+        } catch (error) {
+          // Catch any unhandled errors to prevent unhandled promise rejection
+          // The error is already logged inside _performAutoSync, but we catch here
+          // in case _performAutoSync itself throws unexpectedly (e.g., if destroyed mid-sync)
+          console.error("[AutoSyncOrchestrator] Scheduled retry failed unexpectedly:", error);
+        }
       }
     }, delay);
   }
@@ -209,11 +266,33 @@ class AutoSyncOrchestrator {
   }
 
   /**
-   * Cleanup
+   * Cleanup - cancels pending retries and signals any in-progress sync to stop
    */
   destroy() {
+    this._destroyed = true; // Set flag first to prevent any new operations
+    this._generation++; // Invalidate any pending callbacks
     this.cancelPendingRetry();
+
+    // If sync is in progress, signal it to stop gracefully
+    if (this._isAutoSyncing && SyncEngine._abortController) {
+      console.log("[AutoSyncOrchestrator] Aborting in-progress sync during destroy");
+      SyncEngine._abortController.abort();
+    }
+
     this._listeners.clear();
+    this._isAutoSyncing = false;
+  }
+
+  /**
+   * Reset destroyed state (for re-initialization)
+   */
+  reset() {
+    this._destroyed = false;
+    this._generation++; // Invalidate any stale callbacks from before reset
+    this._authToken = null;
+    this._lastSyncAttempt = 0;
+    this._autoRetryCount = 0;
+    this._isAutoSyncing = false;
   }
 }
 

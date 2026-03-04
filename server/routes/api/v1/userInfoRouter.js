@@ -144,9 +144,9 @@ userInfoRouter.get("/", async (req, res) => {
     const appointmentsWithReviewStatus = user.appointments.map((apt) => {
       const mcJob = multiCleanerJobsByAppointment[apt.id];
       const employeesCount = apt.employeesAssigned ? apt.employeesAssigned.length : 0;
-      // Use appointment's empoyeesNeeded (calculated at booking with time window factored in)
+      // Use appointment's employeesNeeded (calculated at booking with time window factored in)
       // Fall back to 1 if not set
-      const appointmentNeeds = apt.empoyeesNeeded || 1;
+      const appointmentNeeds = apt.employeesNeeded || 1;
 
       // Get multi-cleaner completion status
       const completions = completionsByAppointment[apt.id] || [];
@@ -163,7 +163,7 @@ userInfoRouter.get("/", async (req, res) => {
         hasClientReview: reviewedAppointmentIds.has(apt.id),
         pendingRequestCount: pendingRequestCounts[apt.id] || 0,
         pendingApprovalCount: pendingApprovalCounts[apt.id] || 0,
-        // If there's a MultiCleanerJob record, use that data; otherwise use appointment's empoyeesNeeded
+        // If there's a MultiCleanerJob record, use that data; otherwise use appointment's employeesNeeded
         cleanersNeeded: mcJob ? mcJob.cleanersNeeded : appointmentNeeds,
         cleanersConfirmed: mcJob ? mcJob.cleanersConfirmed : employeesCount,
         multiCleanerJobId: mcJob ? mcJob.multiCleanerJobId : null,
@@ -283,6 +283,16 @@ userInfoRouter.post("/home", async (req, res) => {
     const user = await User.findOne({
       where: { id: userId },
     });
+
+    // Check if user account is frozen
+    if (user && user.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot add new homes.",
+        reason: user.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
+
     const checkZipCode = await HomeClass.checkZipCodeExists(zipcode);
     if (!checkZipCode) {
       return res.status(400).json("Cannot find zipcode");

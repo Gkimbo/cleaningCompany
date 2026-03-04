@@ -18,6 +18,8 @@ import CleaningChecklist, { clearChecklistProgress } from "./CleaningChecklist";
 import styles from "./JobCompletionFlowStyles";
 import { API_BASE } from "../../../services/config";
 import AnalyticsService from "../../../services/AnalyticsService";
+import { useOffline } from "../../../services/offline/OfflineContext";
+import OfflineManager from "../../../services/offline/OfflineManager";
 
 const baseURL = API_BASE.replace("/api/v1", "");
 
@@ -43,6 +45,7 @@ const TOTAL_STEPS = 5;
 const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   const { currentUser } = useContext(UserContext);
   const { pricing } = usePricing();
+  const { isOffline } = useOffline();
   const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   const [currentStep, setCurrentStep] = useState(STEPS.BEFORE_PHOTOS);
   const [photoStatus, setPhotoStatus] = useState({
@@ -224,6 +227,37 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
     setCompleting(true);
 
     try {
+      // If offline, queue the job completion for later sync
+      if (isOffline) {
+        const result = await OfflineManager.submitCompletedJob(appointment.id, {
+          cleanerId: currentUser.id,
+          completedAt: new Date().toISOString(),
+        });
+
+        if (result.success) {
+          // Track flow completion
+          isCompletedRef.current = true;
+          AnalyticsService.trackFlowComplete("job_completion");
+
+          // Clear the saved checklist progress since job is complete
+          await clearChecklistProgress(appointment.id);
+
+          Alert.alert(
+            "Job Saved Offline",
+            "Your job completion has been saved and will sync when you're back online. Your photos and data are safely stored.",
+            [
+              {
+                text: "OK",
+                onPress: () => onJobCompleted && onJobCompleted({ offline: true, queued: true }),
+              },
+            ]
+          );
+        } else {
+          Alert.alert("Error", result.error || "Failed to save job completion offline.");
+        }
+        return;
+      }
+
       const response = await fetch(`${baseURL}/api/v1/payments/complete-job`, {
         method: "POST",
         headers: {

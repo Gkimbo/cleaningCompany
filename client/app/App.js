@@ -138,6 +138,10 @@ import { PricingProvider } from "../src/context/PricingContext";
 import { PreviewProvider } from "../src/context/PreviewContext";
 import { ExitPreviewButton } from "../src/components/preview";
 
+// Offline Mode
+import { OfflineProvider } from "../src/services/offline/OfflineContext";
+import { OfflineBanner } from "../src/components/offline";
+
 // Terms and Conditions
 import { TermsAcceptanceScreen } from "../src/components/terms";
 
@@ -304,8 +308,10 @@ export default function App() {
           <UserContext.Provider value={{ state, dispatch, currentUser: state.currentUser }}>
           <PreviewProvider dispatch={dispatch} state={state}>
           <NativeRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <OfflineProvider>
             <SafeAreaView style={appStyles.container}>
               <TopBar dispatch={dispatch} state={state} />
+              <OfflineBanner />
               <FrozenAccountWrapper state={state}>
               <Routes>
               <Route
@@ -824,6 +830,7 @@ export default function App() {
               </FrozenAccountWrapper>
               <ExitPreviewButton />
             </SafeAreaView>
+            </OfflineProvider>
           </NativeRouter>
           </PreviewProvider>
           </UserContext.Provider>

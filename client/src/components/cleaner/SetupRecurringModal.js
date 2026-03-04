@@ -19,6 +19,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
+import { useOffline } from "../../services/offline/OfflineContext";
 
 const FREQUENCY_OPTIONS = [
   { value: "weekly", label: "Weekly", icon: "repeat" },
@@ -46,6 +47,21 @@ const TIME_WINDOWS = [
 ];
 
 const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token, selectedHome = null }) => {
+  const { isOffline } = useOffline();
+
+  // Helper to check offline and show alert
+  const requiresOnline = (action = "This action") => {
+    if (isOffline) {
+      Alert.alert(
+        "Internet Required",
+        `${action} requires an internet connection. Please connect to the internet and try again.`,
+        [{ text: "OK" }]
+      );
+      return true;
+    }
+    return false;
+  };
+
   const [isLoading, setIsLoading] = useState(false);
   const [frequency, setFrequency] = useState("weekly");
   const [dayOfWeek, setDayOfWeek] = useState(1);
@@ -106,6 +122,7 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token, selec
 
   // Handle cancel schedule
   const handleCancelSchedule = async (scheduleId, cancelAppointments = false) => {
+    if (requiresOnline("Cancelling a schedule")) return;
     Alert.alert(
       "Cancel Recurring Schedule",
       cancelAppointments
@@ -143,6 +160,7 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token, selec
 
   // Handle pause/resume
   const handleTogglePause = async (schedule) => {
+    if (requiresOnline(schedule.isPaused ? "Resuming a schedule" : "Pausing a schedule")) return;
     setActionLoading(schedule.id);
     try {
       if (schedule.isPaused) {
@@ -298,6 +316,7 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token, selec
   };
 
   const handleSubmit = async () => {
+    if (requiresOnline("Creating a recurring schedule")) return;
     if (!startDate) {
       Alert.alert("Error", "Please select a start date");
       return;

@@ -60,7 +60,7 @@ module.exports = (sequelize, DataTypes) => {
 			type:  DataTypes.ARRAY(DataTypes.STRING),
 			allowNull: true,
 		},
-		empoyeesNeeded: {
+		employeesNeeded: {
 			type: DataTypes.INTEGER,
 			allowNull: false,
 		},
@@ -321,6 +321,18 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "When replacement notifications were sent after cleaner cancellation",
 		},
+		// Urgent fill tracking (when cleaner removed within 7 days)
+		isUrgentFill: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if appointment was flagged for urgent fill due to cleaner removal within 7 days",
+		},
+		urgentFillNotificationsSentAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When urgent fill notifications were sent to cleaners within 10 miles",
+		},
 		// Early access for platinum tier cleaners
 		earlyAccessUntil: {
 			type: DataTypes.DATE,
@@ -478,6 +490,23 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: false,
 			comment: "True if created by demo account - excluded from marketplace",
+		},
+		// Homeowner account freeze - paused appointment tracking
+		isPaused: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if appointment is paused due to homeowner account freeze",
+		},
+		pausedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When the appointment was paused",
+		},
+		pauseReason: {
+			type: DataTypes.STRING(100),
+			allowNull: true,
+			comment: "Reason for pausing (e.g., homeowner_account_frozen)",
 		},
 	});
 

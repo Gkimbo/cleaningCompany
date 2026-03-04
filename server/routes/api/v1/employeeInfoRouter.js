@@ -51,6 +51,7 @@ employeeInfoRouter.get("/", async (req, res) => {
       where: {
         id: appointmentIds,
         wasCancelled: false, // Exclude cancelled appointments
+        isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner frozen)
       },
       include: [
         {

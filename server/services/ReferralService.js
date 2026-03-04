@@ -384,6 +384,18 @@ class ReferralService {
         return { success: false, error: "User or appointment not found" };
       }
 
+      // Check if appointment is paused (homeowner account frozen)
+      if (appointment.isPaused) {
+        await transaction.rollback();
+        return { success: false, error: "This appointment is currently paused", isPaused: true };
+      }
+
+      // Check if appointment was cancelled
+      if (appointment.wasCancelled) {
+        await transaction.rollback();
+        return { success: false, error: "This appointment has been cancelled" };
+      }
+
       const availableCredits = user.referralCredits || 0;
       const appointmentPrice = parseInt(appointment.price) * 100; // Convert to cents
 

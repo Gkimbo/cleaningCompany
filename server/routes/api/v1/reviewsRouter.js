@@ -166,6 +166,18 @@ reviewsRouter.get("/stats", verifyToken, async (req, res) => {
 // Submit a new review (multi-aspect)
 reviewsRouter.post("/submit", verifyToken, async (req, res) => {
   try {
+    // Check if user account is frozen
+    const reviewer = await User.findByPk(req.userId, {
+      attributes: ["id", "accountFrozen", "accountFrozenReason"],
+    });
+    if (reviewer && reviewer.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot submit reviews.",
+        reason: reviewer.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
+
     const reviewData = {
       ...req.body,
       reviewerId: req.userId,
@@ -301,6 +313,18 @@ reviewsRouter.post("/submit-legacy", verifyToken, async (req, res) => {
   // SECURITY: Always use authenticated user as reviewer, ignore any client-provided reviewerId
   const reviewerId = req.userId;
   try {
+    // Check if user account is frozen
+    const reviewer = await User.findByPk(reviewerId, {
+      attributes: ["id", "accountFrozen", "accountFrozenReason"],
+    });
+    if (reviewer && reviewer.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot submit reviews.",
+        reason: reviewer.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
+
     const newReview = await ReviewsClass.addReviewToDB({
       userId,
       reviewerId,

@@ -28,6 +28,7 @@ import InviteClientModal from "./InviteClientModal";
 import BookForClientModal from "./BookForClientModal";
 import SetupRecurringModal from "./SetupRecurringModal";
 import { usePricing } from "../../context/PricingContext";
+import { useOffline } from "../../services/offline/OfflineContext";
 
 import useSafeNavigation from "../../hooks/useSafeNavigation";
 // Home Picker Modal Component
@@ -216,6 +217,21 @@ const PaymentSetupBanner = ({ onPress }) => (
 const MyClientsPage = ({ state }) => {
   const { goBack, navigate } = useSafeNavigation();
   const { pricing } = usePricing();
+  const { isOffline } = useOffline();
+
+  // Helper to check offline and show alert
+  const requiresOnline = (action = "This action") => {
+    if (isOffline) {
+      Alert.alert(
+        "Internet Required",
+        `${action} requires an internet connection. Please connect to the internet and try again.`,
+        [{ text: "OK" }]
+      );
+      return true;
+    }
+    return false;
+  };
+
   const [clients, setClients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -360,6 +376,7 @@ const MyClientsPage = ({ state }) => {
   };
 
   const handleResendInvite = async (client) => {
+    if (requiresOnline("Resending an invitation")) return;
     try {
       const result = await CleanerClientService.resendInvite(
         state.currentUser.token,
@@ -376,6 +393,7 @@ const MyClientsPage = ({ state }) => {
   };
 
   const handleDeleteInvitation = (client) => {
+    if (requiresOnline("Cancelling an invitation")) return;
     Alert.alert(
       "Cancel Invitation?",
       `Are you sure you want to cancel the invitation for ${client.invitedName}?\n\nThey can still create a Kleanr account using the invitation link, but they won't be connected to your business.`,
@@ -410,6 +428,7 @@ const MyClientsPage = ({ state }) => {
   };
 
   const handleMessageClient = async (client) => {
+    if (requiresOnline("Messaging a client")) return;
     if (!client.clientId) {
       Alert.alert("Cannot Message", "This client hasn't accepted their invitation yet.");
       return;
@@ -510,6 +529,7 @@ const MyClientsPage = ({ state }) => {
   };
 
   const handlePriceUpdate = async (clientId, newPrice) => {
+    if (requiresOnline("Updating a price")) return false;
     try {
       const result = await CleanerClientService.updateDefaultPrice(
         state.currentUser.token,

@@ -26,7 +26,7 @@ describe("AppointmentSerializer", () => {
           completed: false,
           hasBeenAssigned: true,
           employeesAssigned: ["1", "2"],
-          empoyeesNeeded: 2,
+          employeesNeeded: 2,
           timeToBeCompleted: "10-3",
         },
       };
@@ -44,7 +44,7 @@ describe("AppointmentSerializer", () => {
       expect(result.completed).toBe(false);
       expect(result.hasBeenAssigned).toBe(true);
       expect(result.employeesAssigned).toEqual(["1", "2"]);
-      expect(result.empoyeesNeeded).toBe(2);
+      expect(result.employeesNeeded).toBe(2);
       expect(result.timeToBeCompleted).toBe("10-3");
     });
 

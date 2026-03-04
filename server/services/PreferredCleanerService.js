@@ -351,6 +351,8 @@ class PreferredCleanerService {
         homeId: { [Op.in]: homeIds },
         date: { [Op.gte]: today },
         openToMarket: false, // Only show appointments not yet on open market
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
+        wasCancelled: { [Op.ne]: true }, // Skip cancelled appointments
       },
       include: [
         { model: UserHomes, as: "home" },

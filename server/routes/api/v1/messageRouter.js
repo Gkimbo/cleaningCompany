@@ -255,6 +255,18 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
     const senderId = req.userId;
     const io = req.app.get("io");
 
+    // Check if sender account is frozen
+    const senderUser = await User.findByPk(senderId, {
+      attributes: ["id", "accountFrozen", "accountFrozenReason"],
+    });
+    if (senderUser && senderUser.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot send messages.",
+        reason: senderUser.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
+
     // Validate conversationId
     if (!isValidId(conversationId)) {
       return res.status(400).json({ error: "Invalid conversation ID" });
@@ -395,6 +407,18 @@ messageRouter.post("/conversation/appointment", authenticateToken, async (req, r
   try {
     const { appointmentId } = req.body;
     const userId = req.userId;
+
+    // Check if user account is frozen
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "accountFrozen", "accountFrozenReason"],
+    });
+    if (user && user.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot create new conversations.",
+        reason: user.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
 
     // Validate appointmentId
     if (!isValidId(appointmentId)) {
@@ -926,6 +950,15 @@ messageRouter.post("/conversation/cleaner-client", authenticateToken, async (req
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
+    }
+
+    // Check if user account is frozen
+    if (user.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot create new conversations.",
+        reason: user.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
     }
 
     let cleanerId, clientId, cleanerUser, clientUser;

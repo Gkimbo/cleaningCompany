@@ -59,6 +59,19 @@ jobPhotosRouter.post("/upload", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
+    // Check if appointment is paused (homeowner account frozen)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment was cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
+    }
+
     const cleanerIdStr = cleanerId.toString();
     if (
       !appointment.employeesAssigned ||

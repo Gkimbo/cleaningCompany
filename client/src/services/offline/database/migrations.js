@@ -75,5 +75,17 @@ export default schemaMigrations({
         }),
       ],
     },
+    // Version 5: Add missing_file_checks column for retry mechanism
+    {
+      toVersion: 5,
+      steps: [
+        addColumns({
+          table: "offline_photos",
+          columns: [
+            { name: "missing_file_checks", type: "number", isOptional: true },
+          ],
+        }),
+      ],
+    },
   ],
 });

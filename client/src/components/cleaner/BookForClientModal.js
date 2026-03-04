@@ -20,6 +20,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
+import { useOffline } from "../../services/offline/OfflineContext";
 
 const TIME_WINDOWS = [
   { value: "anytime", label: "Anytime" },
@@ -29,6 +30,21 @@ const TIME_WINDOWS = [
 ];
 
 const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes = [], selectedHome = null }) => {
+  const { isOffline } = useOffline();
+
+  // Helper to check offline and show alert
+  const requiresOnline = (action = "This action") => {
+    if (isOffline) {
+      Alert.alert(
+        "Internet Required",
+        `${action} requires an internet connection. Please connect to the internet and try again.`,
+        [{ text: "OK" }]
+      );
+      return true;
+    }
+    return false;
+  };
+
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [customPrice, setCustomPrice] = useState("");
@@ -156,6 +172,7 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
   };
 
   const handleSubmit = async () => {
+    if (requiresOnline("Booking an appointment")) return;
     if (!selectedDate) {
       Alert.alert("Error", "Please select a date for the appointment");
       return;

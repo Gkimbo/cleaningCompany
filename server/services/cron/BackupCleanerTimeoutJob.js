@@ -36,6 +36,8 @@ async function processBackupCleanerTimeouts(io = null) {
 				clientResponsePending: false,
 				hasBeenAssigned: false,
 				openToMarket: false,
+				isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
+				wasCancelled: { [Op.ne]: true }, // Skip cancelled appointments
 			},
 			include: [
 				{

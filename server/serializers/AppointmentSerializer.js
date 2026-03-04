@@ -36,7 +36,7 @@ class AppointmentSerializer {
 			"completed",
 			"hasBeenAssigned",
 			"employeesAssigned",
-			"empoyeesNeeded",
+			"employeesNeeded",
 			"timeToBeCompleted",
 			"paymentCaptureFailed",
 			"contact",
@@ -66,7 +66,15 @@ class AppointmentSerializer {
 			// Completion status fields
 			"completionStatus",
 			"completionSubmittedAt",
-			"autoApprovalExpiresAt"
+			"autoApprovalExpiresAt",
+			// Paused state fields (homeowner account frozen)
+			"isPaused",
+			"pausedAt",
+			"pauseReason",
+			// Cancellation fields
+			"wasCancelled",
+			"cancellationType",
+			"cancellationReason"
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};
@@ -95,7 +103,7 @@ class AppointmentSerializer {
 			"completed",
 			"hasBeenAssigned",
 			"employeesAssigned",
-			"empoyeesNeeded",
+			"employeesNeeded",
 			"timeToBeCompleted",
 			"paymentCaptureFailed",
 			"contact",
@@ -125,7 +133,15 @@ class AppointmentSerializer {
 			// Completion status fields
 			"completionStatus",
 			"completionSubmittedAt",
-			"autoApprovalExpiresAt"
+			"autoApprovalExpiresAt",
+			// Paused state fields (homeowner account frozen)
+			"isPaused",
+			"pausedAt",
+			"pauseReason",
+			// Cancellation fields
+			"wasCancelled",
+			"cancellationType",
+			"cancellationReason"
 		];
 		const newAppointment = {};
 		// Handle both Sequelize instances and plain objects

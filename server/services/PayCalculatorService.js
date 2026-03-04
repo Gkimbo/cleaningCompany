@@ -11,6 +11,7 @@ const {
   sequelize,
 } = require("../models");
 const { getPricingConfig } = require("../config/businessConfig");
+const EncryptionService = require("./EncryptionService");
 
 class PayCalculatorService {
   /**
@@ -300,10 +301,13 @@ class PayCalculatorService {
 
     return results.map((r) => {
       const employee = employeeMap.get(r.businessEmployeeId);
+      // Decrypt employee names (BusinessEmployee has encrypted PII fields)
+      const firstName = employee?.firstName ? EncryptionService.decrypt(employee.firstName) : "";
+      const lastName = employee?.lastName ? EncryptionService.decrypt(employee.lastName) : "";
       return {
         employeeId: r.businessEmployeeId,
         employeeName: employee
-          ? `${employee.firstName} ${employee.lastName}`
+          ? `${firstName} ${lastName}`.trim() || "Unknown"
           : "Unknown",
         totalPay: parseInt(r.totalPay, 10),
         jobCount: parseInt(r.jobCount, 10),

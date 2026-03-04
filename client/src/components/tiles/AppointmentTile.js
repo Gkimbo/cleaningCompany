@@ -11,7 +11,7 @@ const AppointmentTile = ({
   date,
   price,
   homeId,
-  empoyeesNeeded,
+  employeesNeeded,
   employeesAssigned,
   handleDeletePress,
   deleteConfirmation,

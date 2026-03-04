@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import BusinessEmployeeService from "../../services/fetchRequests/BusinessEmployeeService";
+import OfflineBusinessEmployeeService from "../../services/offline/OfflineBusinessEmployeeService";
 import {
   colors,
   spacing,
@@ -268,7 +268,7 @@ const EmployeeJobList = ({ state }) => {
         filters.status = "completed";
       }
 
-      const result = await BusinessEmployeeService.getMyJobs(state.currentUser.token, filters);
+      const result = await OfflineBusinessEmployeeService.getMyJobs(state.currentUser.token, filters);
       setJobs(result.jobs || []);
     } catch (err) {
       console.error("Error fetching jobs:", err);
@@ -293,7 +293,7 @@ const EmployeeJobList = ({ state }) => {
     setSuccess(null);
 
     try {
-      const result = await BusinessEmployeeService.startJob(state.currentUser.token, job.id);
+      const result = await OfflineBusinessEmployeeService.startJob(state.currentUser.token, job.id);
 
       if (result.success) {
         setSuccess("Job started! Good luck!");
@@ -322,7 +322,7 @@ const EmployeeJobList = ({ state }) => {
             setSuccess(null);
 
             try {
-              const result = await BusinessEmployeeService.completeJob(
+              const result = await OfflineBusinessEmployeeService.completeJob(
                 state.currentUser.token,
                 job.id
               );

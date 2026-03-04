@@ -179,6 +179,17 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.DATE,
 			allowNull: true,
 		},
+		passwordResetAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Timestamp when password was last reset via forgot-password flow",
+		},
+		requirePasswordChange: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "If true, user must change password on next login",
+		},
 		supplyReminderSnoozedUntil: {
 			type: DataTypes.DATE,
 			allowNull: true,

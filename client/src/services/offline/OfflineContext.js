@@ -13,11 +13,14 @@ export function OfflineProvider({ children }) {
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [offlineSince, setOfflineSince] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [initializationFailed, setInitializationFailed] = useState(false); // Distinct from isInitialized
   const [error, setError] = useState(null);
   const [autoSyncEvent, setAutoSyncEvent] = useState(null);
+  const [offlineDurationExceeded, setOfflineDurationExceeded] = useState(false); // Tracks if max offline duration exceeded
 
   const offlineTimerRef = useRef(null);
   const autoSyncEventTimerRef = useRef(null);
+  const isMountedRef = useRef(true);
 
   // Initialize the offline system
   useEffect(() => {
@@ -29,13 +32,23 @@ export function OfflineProvider({ children }) {
         const status = await NetworkMonitor.initialize();
         if (!mounted) return;
 
-        setNetworkStatus(status.status);
-        setIsOnline(status.isOnline);
+        // Validate status object before using (defensive against null/undefined)
+        if (status && typeof status === "object") {
+          setNetworkStatus(status.status || NETWORK_STATUS.UNKNOWN);
+          setIsOnline(status.isOnline !== false); // Default to online if undefined
+        } else {
+          console.warn("[OfflineContext] NetworkMonitor returned invalid status, using defaults");
+          setNetworkStatus(NETWORK_STATUS.UNKNOWN);
+          setIsOnline(true); // Assume online if we can't determine
+        }
         setIsInitialized(true);
       } catch (err) {
         console.error("Failed to initialize offline system:", err);
         if (mounted) {
           setError(err);
+          setInitializationFailed(true);
+          // Still set isInitialized to true to unblock waiting components
+          // but initializationFailed indicates the error state
           setIsInitialized(true);
         }
       }
@@ -45,11 +58,22 @@ export function OfflineProvider({ children }) {
 
     return () => {
       mounted = false;
+      isMountedRef.current = false;
       NetworkMonitor.destroy();
       if (offlineTimerRef.current) {
         clearInterval(offlineTimerRef.current);
       }
     };
+  }, []);
+
+  // Refresh pending sync count - defined before useEffects that depend on it
+  const refreshPendingCount = useCallback(async () => {
+    try {
+      const count = await getPendingSyncCount();
+      setPendingSyncCount(count);
+    } catch (err) {
+      console.error("Failed to get pending sync count:", err);
+    }
   }, []);
 
   // Subscribe to network changes
@@ -64,9 +88,23 @@ export function OfflineProvider({ children }) {
         // Cancel any pending retries when going offline
         AutoSyncOrchestrator.cancelPendingRetry();
       } else if (state.isOnline && !state.wasOnline) {
-        setOfflineSince(null);
+        // Don't clear offlineSince here - wait until sync completes successfully
+        // This prevents incorrect offline duration if sync fails or retries
         // Trigger automatic sync when coming back online
-        AutoSyncOrchestrator.onConnectivityRestored();
+        // Handle promise rejection to prevent unhandled rejection errors
+        AutoSyncOrchestrator.onConnectivityRestored().catch((error) => {
+          console.error("[OfflineContext] Auto-sync failed on connectivity restored:", error);
+          // Propagate error to UI state so components can display the failure
+          // This handles cases where the orchestrator couldn't emit an event
+          if (isMountedRef.current) {
+            setSyncStatus(SYNC_STATUS.ERROR);
+            setAutoSyncEvent({
+              type: "sync_error",
+              error: error.message || "Auto-sync failed unexpectedly",
+              isInitialSyncError: true, // Flag to indicate this was during initial trigger
+            });
+          }
+        });
       }
     });
 
@@ -86,13 +124,18 @@ export function OfflineProvider({ children }) {
         case "sync_completed":
           setSyncStatus(SYNC_STATUS.COMPLETED);
           refreshPendingCount();
+          // Clear offlineSince now that sync has completed successfully
+          setOfflineSince(null);
           // Auto-clear completed status after 3 seconds
           if (autoSyncEventTimerRef.current) {
             clearTimeout(autoSyncEventTimerRef.current);
           }
           autoSyncEventTimerRef.current = setTimeout(() => {
-            setSyncStatus(SYNC_STATUS.IDLE);
-            setAutoSyncEvent(null);
+            // Check if still mounted to prevent state updates on unmounted component
+            if (isMountedRef.current) {
+              setSyncStatus(SYNC_STATUS.IDLE);
+              setAutoSyncEvent(null);
+            }
           }, 3000);
           break;
         case "sync_error":
@@ -113,34 +156,36 @@ export function OfflineProvider({ children }) {
     };
   }, [refreshPendingCount]);
 
-  // Track offline duration
+  // Track offline duration and notify UI when exceeded
   useEffect(() => {
     if (offlineSince) {
-      offlineTimerRef.current = setInterval(() => {
+      // Check immediately
+      const checkDuration = () => {
         const duration = Date.now() - offlineSince.getTime();
-        if (duration >= MAX_OFFLINE_DURATION_MS) {
-          // Exceeded max offline duration - will be handled by UI
-          console.warn("Exceeded maximum offline duration");
+        if (duration >= MAX_OFFLINE_DURATION_MS && !offlineDurationExceeded) {
+          console.warn("[OfflineContext] Exceeded maximum offline duration");
+          setOfflineDurationExceeded(true);
         }
-      }, 60000); // Check every minute
+      };
+
+      // Check immediately on mount
+      checkDuration();
+
+      // Then check every minute
+      offlineTimerRef.current = setInterval(checkDuration, 60000);
 
       return () => {
         if (offlineTimerRef.current) {
           clearInterval(offlineTimerRef.current);
         }
       };
+    } else {
+      // Reset exceeded flag when no longer offline
+      if (offlineDurationExceeded) {
+        setOfflineDurationExceeded(false);
+      }
     }
-  }, [offlineSince]);
-
-  // Refresh pending sync count
-  const refreshPendingCount = useCallback(async () => {
-    try {
-      const count = await getPendingSyncCount();
-      setPendingSyncCount(count);
-    } catch (err) {
-      console.error("Failed to get pending sync count:", err);
-    }
-  }, []);
+  }, [offlineSince, offlineDurationExceeded]);
 
   // Update sync status
   const updateSyncStatus = useCallback((status) => {
@@ -175,8 +220,10 @@ export function OfflineProvider({ children }) {
     pendingSyncCount,
     offlineSince,
     isInitialized,
+    initializationFailed, // True if initialization was attempted but failed
     error,
     autoSyncEvent,
+    offlineDurationExceeded, // True if offline for longer than MAX_OFFLINE_DURATION_MS
 
     // Actions
     refreshPendingCount,
@@ -193,15 +240,34 @@ export function OfflineProvider({ children }) {
 }
 
 // Default values when provider is not available (assumes online)
+// These defaults allow components to render without crashing when OfflineProvider is missing
 const DEFAULT_OFFLINE_CONTEXT = {
   isOnline: true,
   isOffline: false,
   networkStatus: "online",
   syncStatus: "idle",
   pendingSyncCount: 0,
-  updateSyncStatus: () => {},
-  queueOperation: async () => {},
-  processQueue: async () => {},
+  isInitialized: true,
+  initializationFailed: false,
+  error: null,
+  offlineSince: null,
+  autoSyncEvent: null,
+  offlineDurationExceeded: false,
+  // Methods that log warnings when called without provider
+  updateSyncStatus: (status) => {
+    console.warn("[OfflineContext] updateSyncStatus called without OfflineProvider:", status);
+  },
+  refreshPendingCount: async () => {
+    console.warn("[OfflineContext] refreshPendingCount called without OfflineProvider");
+    return 0;
+  },
+  getOfflineDuration: () => 0,
+  isOfflineDurationExceeded: () => false,
+  triggerManualSync: async () => {
+    console.warn("[OfflineContext] triggerManualSync called without OfflineProvider");
+    return { success: false, error: "OfflineProvider not available" };
+  },
+  database: null,
 };
 
 // Hook to use offline context

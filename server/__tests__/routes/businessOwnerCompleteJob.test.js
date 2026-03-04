@@ -82,6 +82,12 @@ jest.mock("../../models", () => ({
   CleanerJobCompletion: {
     findOne: jest.fn().mockResolvedValue(null),
   },
+  EmployeeJobAssignment: {
+    findOne: jest.fn().mockResolvedValue(null),
+  },
+  BusinessEmployee: {
+    findOne: jest.fn().mockResolvedValue(null),
+  },
 }));
 
 // Mock Email service (including new 2-step completion methods)

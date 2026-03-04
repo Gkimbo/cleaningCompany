@@ -48,6 +48,7 @@ async function processExpiredUnassignedAppointments(io = null) {
         wasCancelled: { [Op.ne]: true },
         completed: false,
         isDemoAppointment: { [Op.ne]: true },
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
         // Exclude appointments waiting for client response
         clientResponsePending: { [Op.ne]: true },
         // Exclude appointments assigned to business employees

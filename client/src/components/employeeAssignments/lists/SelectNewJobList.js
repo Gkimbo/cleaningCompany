@@ -44,6 +44,7 @@ import {
 } from "../../../services/styles/theme";
 import { usePricing } from "../../../context/PricingContext";
 import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
+import { useOffline } from "../../../services/offline/OfflineContext";
 
 // Format time constraint for display: "10-3" → "10am - 3pm"
 const formatTimeConstraint = (time) => {
@@ -88,7 +89,21 @@ const sortOptions = [
 
 const SelectNewJobList = ({ state }) => {
   const { pricing } = usePricing();
+  const { isOffline } = useOffline();
   const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
+
+  // Helper to check offline and show alert
+  const requiresOnline = (action = "This action") => {
+    if (isOffline) {
+      Alert.alert(
+        "Internet Required",
+        `${action} requires an internet connection. Please connect to the internet and try again.`,
+        [{ text: "OK" }]
+      );
+      return true;
+    }
+    return false;
+  };
   const [allAppointments, setAllAppointments] = useState([]);
   const [allRequests, setAllRequests] = useState([]);
   const [userId, setUserId] = useState(null);
@@ -438,6 +453,8 @@ const SelectNewJobList = ({ state }) => {
   // Handle booking request with large home check
   const handleBookingRequest = useCallback(
     async (employeeId, appointmentId) => {
+      if (requiresOnline("Requesting a job")) return;
+
       setRequestingJobId(appointmentId);
       try {
         // First, check if this is a large home that requires acknowledgment
@@ -537,6 +554,7 @@ const SelectNewJobList = ({ state }) => {
   // Confirm booking after acknowledging large home warning
   const handleConfirmLargeHomeBooking = useCallback(async () => {
     if (!pendingBooking) return;
+    if (requiresOnline("Confirming a job booking")) return;
 
     setBookingLoading(true);
     try {
@@ -738,6 +756,8 @@ const SelectNewJobList = ({ state }) => {
   // Handle accepting a multi-cleaner offer
   const handleAcceptOffer = useCallback(
     async (offer) => {
+      if (requiresOnline("Accepting a team job offer")) return;
+
       setMultiCleanerLoading(true);
       try {
         const result = await FetchData.acceptMultiCleanerOffer(
@@ -766,6 +786,8 @@ const SelectNewJobList = ({ state }) => {
   // Handle declining a multi-cleaner offer
   const handleDeclineOffer = useCallback(
     async (offer) => {
+      if (requiresOnline("Declining a team job offer")) return;
+
       Alert.alert(
         "Decline Offer",
         "Are you sure you want to decline this team cleaning job?",
@@ -809,6 +831,8 @@ const SelectNewJobList = ({ state }) => {
   // Handle directly joining a multi-cleaner job (no modal, for edge large homes in team section)
   const handleDirectJoinMultiCleanerJob = useCallback(
     async (job) => {
+      if (requiresOnline("Joining a team job")) return;
+
       setMultiCleanerLoading(true);
       try {
         const result = await FetchData.joinMultiCleanerJob(
@@ -866,6 +890,7 @@ const SelectNewJobList = ({ state }) => {
   // Handle joining an open multi-cleaner job
   const handleJoinMultiCleanerJob = useCallback(async () => {
     if (!selectedMultiCleanerJob) return;
+    if (requiresOnline("Joining a team job")) return;
 
     setMultiCleanerLoading(true);
     try {
@@ -912,6 +937,8 @@ const SelectNewJobList = ({ state }) => {
   // Handle cancelling a multi-cleaner request
   const handleCancelMultiCleanerRequest = useCallback(
     (request) => {
+      if (requiresOnline("Cancelling a team request")) return;
+
       Alert.alert(
         "Cancel Request",
         "Are you sure you want to cancel this team cleaning request?",
@@ -1301,6 +1328,7 @@ const SelectNewJobList = ({ state }) => {
                           {...appointment}
                           cleanerId={userId}
                           removeRequest={async (employeeId, appointmentId) => {
+                            if (requiresOnline("Cancelling a job request")) return;
                             try {
                               await FetchData.removeRequest(
                                 employeeId,
@@ -1752,6 +1780,7 @@ const SelectNewJobList = ({ state }) => {
                           isRequesting={requestingJobId === appointment.id}
                           addEmployee={handleBookingRequest}
                           removeEmployee={async (employeeId, appointmentId) => {
+                            if (requiresOnline("Cancelling a job assignment")) return;
                             try {
                               await FetchData.removeEmployee(
                                 employeeId,

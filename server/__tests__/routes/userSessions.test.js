@@ -3,6 +3,11 @@ const request = require("supertest");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
+// Mock express-rate-limit to disable rate limiting in tests
+jest.mock("express-rate-limit", () => {
+  return jest.fn(() => (req, res, next) => next());
+});
+
 // Mock models
 jest.mock("../../models", () => ({
   User: {
@@ -372,6 +377,141 @@ describe("User Sessions Router", () => {
       expect(response.status).toBe(200);
       expect(cleanerUser.update).toHaveBeenCalled();
       expect(homeownerUser.update).not.toHaveBeenCalled();
+    });
+
+    it("should set passwordResetAt and requirePasswordChange flags", async () => {
+      const mockUser = {
+        id: 1,
+        username: "testuser",
+        email: "test@test.com",
+        type: null,
+        update: jest.fn(),
+      };
+
+      User.findAll.mockResolvedValue([mockUser]);
+      bcrypt.genSalt.mockResolvedValue("salt");
+      bcrypt.hash.mockResolvedValue("hashedpassword");
+
+      const response = await request(app)
+        .post("/api/v1/sessions/forgot-password")
+        .send({ email: "test@test.com" });
+
+      expect(response.status).toBe(200);
+      expect(mockUser.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          password: "hashedpassword",
+          passwordResetAt: expect.any(Date),
+          requirePasswordChange: true,
+        })
+      );
+    });
+  });
+
+  describe("POST /login - Password Reset Expiration", () => {
+    it("should reject login with expired temporary password", async () => {
+      const expiredResetDate = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
+      const mockUser = {
+        id: 1,
+        username: "testuser",
+        email: "test@test.com",
+        password: "hashedpassword",
+        type: null,
+        requirePasswordChange: true,
+        passwordResetAt: expiredResetDate,
+        lockedUntil: null,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      User.findOne.mockResolvedValue(mockUser);
+      bcrypt.compare.mockResolvedValue(true);
+
+      const response = await request(app)
+        .post("/api/v1/sessions/login")
+        .send({ username: "testuser", password: "temppassword" });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toContain("expired");
+      expect(response.body.code).toBe("TEMP_PASSWORD_EXPIRED");
+    });
+
+    it("should allow login with valid (non-expired) temporary password", async () => {
+      const recentResetDate = new Date(Date.now() - 30 * 60 * 1000); // 30 minutes ago
+      const mockUser = {
+        id: 1,
+        username: "testuser",
+        email: "test@test.com",
+        password: "hashedpassword",
+        type: null,
+        requirePasswordChange: true,
+        passwordResetAt: recentResetDate,
+        lockedUntil: null,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      User.findOne.mockResolvedValue(mockUser);
+      User.findAll.mockResolvedValue([]);
+      bcrypt.compare.mockResolvedValue(true);
+      TermsAndConditions.findOne.mockResolvedValue(null);
+
+      const response = await request(app)
+        .post("/api/v1/sessions/login")
+        .send({ username: "testuser", password: "temppassword" });
+
+      expect(response.status).toBe(201);
+      expect(response.body.requiresPasswordChange).toBe(true);
+    });
+
+    it("should include requiresPasswordChange in login response", async () => {
+      const mockUser = {
+        id: 1,
+        username: "testuser",
+        email: "test@test.com",
+        password: "hashedpassword",
+        type: null,
+        requirePasswordChange: true,
+        passwordResetAt: new Date(),
+        lockedUntil: null,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      User.findOne.mockResolvedValue(mockUser);
+      User.findAll.mockResolvedValue([]);
+      bcrypt.compare.mockResolvedValue(true);
+      TermsAndConditions.findOne.mockResolvedValue(null);
+
+      const response = await request(app)
+        .post("/api/v1/sessions/login")
+        .send({ username: "testuser", password: "temppassword" });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty("requiresPasswordChange");
+      expect(response.body.requiresPasswordChange).toBe(true);
+    });
+
+    it("should return requiresPasswordChange=false for normal login", async () => {
+      const mockUser = {
+        id: 1,
+        username: "testuser",
+        email: "test@test.com",
+        password: "hashedpassword",
+        type: null,
+        requirePasswordChange: false,
+        passwordResetAt: null,
+        lockedUntil: null,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      User.findOne.mockResolvedValue(mockUser);
+      User.findAll.mockResolvedValue([]);
+      bcrypt.compare.mockResolvedValue(true);
+      TermsAndConditions.findOne.mockResolvedValue(null);
+
+      const response = await request(app)
+        .post("/api/v1/sessions/login")
+        .send({ username: "testuser", password: "password123" });
+
+      expect(response.status).toBe(201);
+      expect(response.body.requiresPasswordChange).toBe(false);
     });
   });
 });

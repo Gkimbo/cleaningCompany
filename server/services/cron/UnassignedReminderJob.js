@@ -48,6 +48,7 @@ async function processUnassignedReminders(io = null) {
         },
         completed: false,
         wasCancelled: { [Op.ne]: true },
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
         assignedToBusinessEmployee: false, // No one currently assigned
         bookedByCleanerId: { [Op.ne]: null }, // Only appointments booked by a business owner
         [Op.or]: [

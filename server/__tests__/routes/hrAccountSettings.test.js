@@ -498,7 +498,11 @@ describe("HR Account Settings", () => {
         expect(res.body.message).toBe("Password updated successfully");
         expect(bcrypt.genSalt).toHaveBeenCalledWith(10);
         expect(bcrypt.hash).toHaveBeenCalledWith("NewPass456!", "mock-salt");
-        expect(mockHRUser.update).toHaveBeenCalledWith({ password: "new-hashed-password" });
+        expect(mockHRUser.update).toHaveBeenCalledWith({
+          password: "new-hashed-password",
+          requirePasswordChange: false,
+          passwordResetAt: null,
+        });
       });
 
       it("should accept various special characters", async () => {
@@ -516,7 +520,7 @@ describe("HR Account Settings", () => {
 
           expect(res.status).toBe(200);
         }
-      });
+      }, 60000); // Increase timeout for testing 19 special characters
 
       it("should accept exactly 8 character password meeting all requirements", async () => {
         const token = generateToken(10);

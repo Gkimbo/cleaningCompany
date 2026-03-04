@@ -87,6 +87,10 @@ jest.mock("../../services/sendNotifications/EmailClass", () => ({
   removeRequestEmail: jest.fn().mockResolvedValue(true),
 }));
 
+jest.mock("../../services/NotificationService", () => ({
+  notifyUser: jest.fn().mockResolvedValue(true),
+}));
+
 const {
   User,
   UserAppointments,

@@ -529,7 +529,7 @@ class DemoAccountService {
 						completed: false,
 						hasBeenAssigned: true,
 						employeesAssigned: [String(demoCleaner.id)],
-						empoyeesNeeded: 1,
+						employeesNeeded: 1,
 						timeToBeCompleted: demoHome.timeToBeCompleted || "3_hour",
 						isDemoAppointment: true,
 					});

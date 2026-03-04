@@ -41,6 +41,8 @@ async function processAutoApprovalsSingleCleaner(io = null) {
         autoApprovalExpiresAt: { [Op.lt]: now },
         completed: false,
         isMultiCleanerJob: false,
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
+        wasCancelled: { [Op.ne]: true }, // Skip cancelled appointments
       },
       include: [
         {
@@ -287,6 +289,14 @@ async function processAutoApprovalsMultiCleaner(io = null) {
         const appointment = completion.appointment;
         const cleaner = completion.cleaner;
         const homeowner = appointment?.user;
+
+        // Skip if appointment is paused or cancelled
+        if (appointment?.isPaused || appointment?.wasCancelled) {
+          console.log(
+            `[CompletionApprovalMonitor] Skipping auto-approval for completion ${completion.id} - appointment ${appointment.id} is paused or cancelled`
+          );
+          continue;
+        }
 
         // Auto-approve this cleaner's completion
         await completion.update({

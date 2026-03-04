@@ -162,6 +162,12 @@ async function generateAppointmentsForSchedule(schedule, daysAhead = 84) {
     throw new Error("Client or home not found");
   }
 
+  // Don't generate appointments for frozen homeowners
+  if (cleanerClient.client.accountFrozen) {
+    console.log(`[RecurringSchedules] Skipping appointment generation for schedule ${schedule.id} - client account frozen`);
+    return [];
+  }
+
   const client = cleanerClient.client;
   const home = cleanerClient.home;
   const createdAppointments = [];
@@ -254,7 +260,7 @@ async function generateAppointmentsForSchedule(schedule, daysAhead = 84) {
         paid: false,
         hasBeenAssigned: true,
         employeesAssigned: [schedule.cleanerId.toString()],
-        empoyeesNeeded: home.cleanersNeeded || 1,
+        employeesNeeded: home.cleanersNeeded || 1,
         timeToBeCompleted: schedule.timeWindow || "anytime",
         bringSheets: home.bringSheets || "no",
         bringTowels: home.bringTowels || "no",
@@ -422,6 +428,14 @@ recurringSchedulesRouter.post("/", verifyCleaner, async (req, res) => {
 
     if (!cleanerClient.client || !cleanerClient.home) {
       return res.status(400).json({ error: "Client must have account and home set up" });
+    }
+
+    // Check if the client's account is frozen
+    if (cleanerClient.client.accountFrozen) {
+      return res.status(403).json({
+        error: "This client's account has been suspended. You cannot create recurring schedules for them.",
+        accountSuspended: true,
+      });
     }
 
     // Calculate price if not provided

@@ -81,6 +81,7 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
               as: "appointment",
               where: {
                 completed: false,
+                isPaused: { [Op.ne]: true }, // Hide paused appointments (homeowner account frozen)
               },
               include: [
                 {
@@ -264,6 +265,10 @@ multiCleanerRouter.get("/offers", async (req, res) => {
         {
           model: UserAppointments,
           as: "appointment",
+          where: {
+            isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner account frozen)
+            wasCancelled: { [Op.ne]: true }, // Exclude cancelled appointments
+          },
           include: [
             { model: UserHomes, as: "home" },
             { model: User, as: "user" },
@@ -290,6 +295,7 @@ multiCleanerRouter.get("/offers", async (req, res) => {
         isMultiCleanerJob: { [Op.or]: [false, null] },
         date: { [Op.gte]: now },
         isDemoAppointment: isCleanerDemo, // Demo cleaners see demo appointments only
+        isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner account frozen)
       },
       include: [
         { model: UserHomes, as: "home" },

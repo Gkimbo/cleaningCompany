@@ -135,6 +135,19 @@ completionRouter.post("/submit/:appointmentId", verifyToken, async (req, res) =>
       return res.status(404).json({ error: "Appointment not found" });
     }
 
+    // Check if appointment is paused (homeowner account frozen)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment was cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
+    }
+
     // Verify the requesting user is assigned to this job
     const userIdStr = String(req.userId);
     const assignedCleaners = (appointment.employeesAssigned || []).map(String);
@@ -423,6 +436,19 @@ completionRouter.post("/approve/:appointmentId", verifyToken, async (req, res) =
       return res.status(404).json({ error: "Appointment not found" });
     }
 
+    // Check if appointment is paused (homeowner account frozen)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment was cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
+    }
+
     // Verify the requesting user is the homeowner
     if (appointment.userId !== req.userId) {
       return res.status(403).json({ error: "Only the homeowner can approve completion" });
@@ -689,6 +715,19 @@ completionRouter.post("/request-review/:appointmentId", verifyToken, async (req,
 
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Check if appointment is paused (homeowner account frozen)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment was cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
     }
 
     // Verify the requesting user is the homeowner

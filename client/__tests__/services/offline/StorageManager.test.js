@@ -6,6 +6,12 @@
 
 import { OFFLINE_JOB_STATUS } from "../../../src/services/offline/constants";
 
+// Helper to create a mock query result with both fetch and fetchCount
+const createMockQuery = (data = [], count = null) => ({
+  fetch: jest.fn().mockResolvedValue(data),
+  fetchCount: jest.fn().mockResolvedValue(count !== null ? count : data.length),
+});
+
 // Mock dependencies
 jest.mock("../../../src/services/offline/database", () => ({
   __esModule: true,
@@ -13,29 +19,19 @@ jest.mock("../../../src/services/offline/database", () => ({
     write: jest.fn((fn) => fn()),
   },
   offlineJobsCollection: {
-    query: jest.fn(() => ({
-      fetch: jest.fn().mockResolvedValue([]),
-    })),
+    query: jest.fn(() => createMockQuery()),
   },
   offlinePhotosCollection: {
-    query: jest.fn(() => ({
-      fetch: jest.fn().mockResolvedValue([]),
-    })),
+    query: jest.fn(() => createMockQuery()),
   },
   offlineChecklistItemsCollection: {
-    query: jest.fn(() => ({
-      fetch: jest.fn().mockResolvedValue([]),
-    })),
+    query: jest.fn(() => createMockQuery()),
   },
   syncQueueCollection: {
-    query: jest.fn(() => ({
-      fetch: jest.fn().mockResolvedValue([]),
-    })),
+    query: jest.fn(() => createMockQuery()),
   },
   syncConflictsCollection: {
-    query: jest.fn(() => ({
-      fetch: jest.fn().mockResolvedValue([]),
-    })),
+    query: jest.fn(() => createMockQuery()),
   },
 }));
 
@@ -130,24 +126,32 @@ describe("StorageManager", () => {
         formattedSize: "5 MB",
       });
 
-      offlineJobsCollection.query.mockReturnValue({
-        fetch: jest.fn().mockResolvedValue([{}, {}]),
+      // Mock with proper counts for all collection queries
+      offlineJobsCollection.query.mockReturnValue(createMockQuery([{}, {}], 2));
+
+      // Photos: 3 total, 2 pending (uploaded=false)
+      // The code makes multiple queries - one for total, one filtered for pending
+      let photosCallCount = 0;
+      offlinePhotosCollection.query.mockImplementation(() => {
+        photosCallCount++;
+        // First call is for total count, subsequent calls are filtered
+        return createMockQuery(photos, photosCallCount === 1 ? 3 : 2);
       });
 
-      offlinePhotosCollection.query.mockReturnValue({
-        fetch: jest.fn().mockResolvedValue(photos),
+      offlineChecklistItemsCollection.query.mockReturnValue(createMockQuery([{}, {}, {}], 3));
+
+      // Sync ops: 3 total, 2 pending/failed
+      let syncCallCount = 0;
+      syncQueueCollection.query.mockImplementation(() => {
+        syncCallCount++;
+        return createMockQuery(syncOps, syncCallCount === 1 ? 3 : 2);
       });
 
-      offlineChecklistItemsCollection.query.mockReturnValue({
-        fetch: jest.fn().mockResolvedValue([{}, {}, {}]),
-      });
-
-      syncQueueCollection.query.mockReturnValue({
-        fetch: jest.fn().mockResolvedValue(syncOps),
-      });
-
-      syncConflictsCollection.query.mockReturnValue({
-        fetch: jest.fn().mockResolvedValue(conflicts),
+      // Conflicts: 2 total, 1 unresolved
+      let conflictsCallCount = 0;
+      syncConflictsCollection.query.mockImplementation(() => {
+        conflictsCallCount++;
+        return createMockQuery(conflicts, conflictsCallCount === 1 ? 2 : 1);
       });
 
       const stats = await StorageManager.getStorageStats();
@@ -377,11 +381,11 @@ describe("StorageManager", () => {
         formattedSize: "10 MB",
       });
 
-      offlinePhotosCollection.query.mockReturnValue({
-        fetch: jest.fn().mockResolvedValue([
-          { uploaded: true },
-          { uploaded: true },
-        ]),
+      // Mock photos: 10 total, 0 pending (all uploaded)
+      let photosCallCount = 0;
+      offlinePhotosCollection.query.mockImplementation(() => {
+        photosCallCount++;
+        return createMockQuery([{ uploaded: true }, { uploaded: true }], photosCallCount === 1 ? 10 : 0);
       });
 
       const recommendations = await StorageManager.getCleanupRecommendations();
@@ -399,12 +403,15 @@ describe("StorageManager", () => {
         formattedSize: "0 B",
       });
 
-      syncQueueCollection.query.mockReturnValue({
-        fetch: jest.fn().mockResolvedValue([
+      // Mock sync queue: 3 total, 3 pending/failed
+      let syncCallCount = 0;
+      syncQueueCollection.query.mockImplementation(() => {
+        syncCallCount++;
+        return createMockQuery([
           { status: "pending" },
           { status: "pending" },
           { status: "failed" },
-        ]),
+        ], syncCallCount === 1 ? 3 : 3);
       });
 
       const recommendations = await StorageManager.getCleanupRecommendations();
@@ -421,10 +428,11 @@ describe("StorageManager", () => {
         formattedSize: "0 B",
       });
 
-      syncConflictsCollection.query.mockReturnValue({
-        fetch: jest.fn().mockResolvedValue([
-          { resolved: false },
-        ]),
+      // Mock conflicts: 1 total, 1 unresolved
+      let conflictsCallCount = 0;
+      syncConflictsCollection.query.mockImplementation(() => {
+        conflictsCallCount++;
+        return createMockQuery([{ resolved: false }], 1);
       });
 
       const recommendations = await StorageManager.getCleanupRecommendations();

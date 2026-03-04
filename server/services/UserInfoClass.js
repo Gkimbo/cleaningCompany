@@ -248,7 +248,7 @@ class UserInfoClass {
     const home = existingAppointment.home;
     const numBeds = home?.numBeds || 1;
     const numBaths = home?.numBaths || 1;
-    const oldCleanersNeeded = existingAppointment.empoyeesNeeded || 1;
+    const oldCleanersNeeded = existingAppointment.employeesNeeded || 1;
     const newCleanersNeeded = getCleanersNeeded(numBeds, numBaths, timeToBeCompleted);
 
     try {
@@ -267,7 +267,7 @@ class UserInfoClass {
 
       // Update cleaners needed if it changed
       if (newCleanersNeeded !== oldCleanersNeeded) {
-        updateData.empoyeesNeeded = newCleanersNeeded;
+        updateData.employeesNeeded = newCleanersNeeded;
         console.log(`[TimeWindow Update] Appointment ${id}: cleaners needed changed from ${oldCleanersNeeded} to ${newCleanersNeeded}`);
 
         // Handle MultiCleanerJob updates

@@ -2,11 +2,12 @@
 /* eslint-disable no-unused-vars */
 const express = require("express");
 const passport = require("passport");
-const { User, TermsAndConditions } = require("../../../models");
+const { User, TermsAndConditions, SecurityAuditLog } = require("../../../models");
 const { Op } = require("sequelize");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const rateLimit = require("express-rate-limit");
 const UserSerializer = require("../../../serializers/userSerializer");
 const authenticateToken = require("../../../middleware/authenticatedToken");
 const Email = require("../../../services/sendNotifications/EmailClass");
@@ -15,6 +16,55 @@ const EncryptionService = require("../../../services/EncryptionService");
 
 const sessionRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
+
+// Password reset expiration time (1 hour in milliseconds)
+const PASSWORD_RESET_EXPIRATION_MS = 60 * 60 * 1000;
+
+// Rate limiter for password reset - max 3 requests per email per hour
+const passwordResetLimiter = rateLimit({
+	windowMs: 60 * 60 * 1000, // 1 hour
+	max: 3,
+	keyGenerator: (req) => req.body.email || req.ip,
+	message: { error: "Too many password reset requests. Please try again later." },
+	standardHeaders: true,
+	legacyHeaders: false,
+});
+
+// Rate limiter for username recovery - max 5 requests per email per hour
+const usernameRecoveryLimiter = rateLimit({
+	windowMs: 60 * 60 * 1000, // 1 hour
+	max: 5,
+	keyGenerator: (req) => req.body.email || req.ip,
+	message: { error: "Too many username recovery requests. Please try again later." },
+	standardHeaders: true,
+	legacyHeaders: false,
+});
+
+// Audit logging helper - logs to database and console
+const logSecurityEvent = async (eventType, data = {}, req = null) => {
+	const logData = {
+		userId: data.userId || null,
+		username: data.username || null,
+		targetUserId: data.targetUserId || null,
+		ipAddress: req ? (req.headers["x-forwarded-for"] || req.ip) : data.ip || null,
+		userAgent: req ? req.headers["user-agent"] : null,
+		emailHash: data.emailHash || null,
+		eventData: data,
+		severity: data.severity || "info",
+		success: data.success !== undefined ? data.success : true,
+		errorMessage: data.errorMessage || null,
+	};
+
+	// Log to database (non-blocking)
+	if (SecurityAuditLog) {
+		SecurityAuditLog.logEvent(eventType, logData).catch(err => {
+			console.error("[SECURITY] Failed to log to database:", err.message);
+		});
+	} else {
+		// Fallback to console if model not available
+		console.log(`[SECURITY] ${new Date().toISOString()} | ${eventType} | ${JSON.stringify(data)}`);
+	}
+};
 
 sessionRouter.post("/", passport.authenticate("local"), async (req, res) => {
 	try {
@@ -182,6 +232,23 @@ sessionRouter.post("/login", async (req, res) => {
 
 			const passwordMatch = await bcrypt.compare(password, user.password);
 			if (passwordMatch) {
+				// Check if user is using an expired temporary password
+				if (user.requirePasswordChange && user.passwordResetAt) {
+					const resetAge = Date.now() - new Date(user.passwordResetAt).getTime();
+					if (resetAge > PASSWORD_RESET_EXPIRATION_MS) {
+						logSecurityEvent("EXPIRED_TEMP_PASSWORD_LOGIN", {
+							userId: user.id,
+							username: user.username,
+							resetAge: Math.round(resetAge / 1000 / 60) + " minutes",
+							success: false,
+						}, req);
+						return res.status(401).json({
+							error: "Temporary password has expired. Please request a new password reset.",
+							code: "TEMP_PASSWORD_EXPIRED"
+						});
+					}
+				}
+
 				req.login(user, async (err) => {
 					if (err) {
 						console.error(err);
@@ -243,12 +310,21 @@ sessionRouter.post("/login", async (req, res) => {
 							}));
 						}
 
+						// Log successful login
+						logSecurityEvent("LOGIN_SUCCESS", {
+							userId: user.id,
+							username: user.username,
+							deviceType,
+							requiresPasswordChange: user.requirePasswordChange || false,
+						}, req);
+
 						return res.status(201).json({
 							user: serializedUser,
 							token: token,
 							requiresTermsAcceptance,
 							terms: termsData,
 							linkedAccounts,
+							requiresPasswordChange: user.requirePasswordChange || false,
 						});
 					}
 				});
@@ -307,12 +383,17 @@ sessionRouter.post("/logout", (req, res) => {
 
 // POST: Forgot Username - sends username(s) to email
 // If multiple accounts share the same email, sends all usernames
-sessionRouter.post("/forgot-username", async (req, res) => {
+sessionRouter.post("/forgot-username", usernameRecoveryLimiter, async (req, res) => {
 	const { email } = req.body;
 
 	if (!email) {
 		return res.status(400).json({ error: "Email is required" });
 	}
+
+	// Log the request (without revealing if email exists)
+	logSecurityEvent("USERNAME_RECOVERY_REQUESTED", {
+		emailHash: EncryptionService.hash(email).substring(0, 8) + "...",
+	}, req);
 
 	try {
 		// Hash the email to search by emailHash (email is encrypted in DB)
@@ -336,12 +417,22 @@ sessionRouter.post("/forgot-username", async (req, res) => {
 		await Email.sendUsernameRecovery(email, usernames.map((u) => `${u.username} (${u.accountType})`).join(", "));
 		console.log(`✅ Username recovery email sent with ${usernames.length} username(s)`);
 
-		// Send push notification to each user that has a token
+		// Send push notification to each user that has a token (with error handling)
 		for (const user of usersWithEmail) {
 			if (user.expoPushToken) {
-				await PushNotification.sendPushUsernameRecovery(user.expoPushToken, user.username);
+				try {
+					await PushNotification.sendPushUsernameRecovery(user.expoPushToken, user.username);
+				} catch (pushError) {
+					console.warn(`[Push] Failed to send username recovery push to user ${user.id}:`, pushError.message);
+					// Continue - don't fail the request if push fails
+				}
 			}
 		}
+
+		logSecurityEvent("USERNAME_RECOVERY_SENT", {
+			accountCount: usersWithEmail.length,
+			userIds: usersWithEmail.map(u => u.id),
+		}, req);
 
 		return res.status(200).json({
 			message: "If an account with that email exists, we've sent the username to it."
@@ -353,12 +444,18 @@ sessionRouter.post("/forgot-username", async (req, res) => {
 });
 
 // POST: Forgot Password - generates temporary password and sends to email
-sessionRouter.post("/forgot-password", async (req, res) => {
+sessionRouter.post("/forgot-password", passwordResetLimiter, async (req, res) => {
 	const { email, accountType } = req.body;
 
 	if (!email) {
 		return res.status(400).json({ error: "Email is required" });
 	}
+
+	// Log the request (without revealing if email exists)
+	logSecurityEvent("PASSWORD_RESET_REQUESTED", {
+		emailHash: EncryptionService.hash(email).substring(0, 8) + "...",
+		accountType: accountType || "not specified",
+	}, req);
 
 	try {
 		// Hash the email to search by emailHash (email is encrypted in DB)
@@ -397,23 +494,38 @@ sessionRouter.post("/forgot-password", async (req, res) => {
 			}
 		}
 
-		// Generate a temporary password (12 characters)
-		const temporaryPassword = crypto.randomBytes(6).toString("hex");
+		// Generate a stronger temporary password (16 characters, 64-bit entropy)
+		const temporaryPassword = crypto.randomBytes(8).toString("hex");
 
 		// Hash the temporary password
 		const salt = await bcrypt.genSalt(10);
 		const hashedPassword = await bcrypt.hash(temporaryPassword, salt);
 
-		// Update user's password
-		await user.update({ password: hashedPassword });
+		// Update user's password with reset tracking
+		await user.update({
+			password: hashedPassword,
+			passwordResetAt: new Date(),
+			requirePasswordChange: true,
+		});
 
 		// Send password reset email (use the plain email from request, not encrypted)
 		await Email.sendPasswordReset(email, user.username, temporaryPassword);
 		console.log(`✅ Password reset email sent for ${user.username}`);
 
-		// Send push notification if user has a stored token
+		logSecurityEvent("PASSWORD_RESET_COMPLETED", {
+			userId: user.id,
+			username: user.username,
+			expiresIn: "1 hour",
+		}, req);
+
+		// Send push notification if user has a stored token (with error handling)
 		if (user.expoPushToken) {
-			await PushNotification.sendPushPasswordReset(user.expoPushToken, user.username);
+			try {
+				await PushNotification.sendPushPasswordReset(user.expoPushToken, user.username);
+			} catch (pushError) {
+				console.warn(`[Push] Failed to send password reset push to user ${user.id}:`, pushError.message);
+				// Continue - don't fail the request if push fails
+			}
 		}
 
 		return res.status(200).json({

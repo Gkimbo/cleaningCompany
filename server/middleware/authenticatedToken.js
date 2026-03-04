@@ -12,6 +12,7 @@ const FROZEN_ALLOWED_ROUTES = [
 	"/api/v1/notifications",
 	"/api/v1/account-settings",
 	"/api/v1/employee-info",
+	"/api/v1/appeals", // Allow frozen users to submit/view appeals
 ];
 
 // Check if the current path is allowed for frozen users

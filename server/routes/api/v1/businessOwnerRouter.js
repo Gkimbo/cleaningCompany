@@ -18,8 +18,131 @@ const ClientJobFlowAssignmentSerializer = require("../../../serializers/ClientJo
 const CustomJobFlowChecklistSerializer = require("../../../serializers/CustomJobFlowChecklistSerializer");
 const TimesheetSerializer = require("../../../serializers/TimesheetSerializer");
 const EncryptionService = require("../../../services/EncryptionService");
+const Email = require("../../../services/sendNotifications/EmailClass");
+const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { UserAppointments, UserHomes, User, Payout, CleanerClient, sequelize, EmployeeJobAssignment, BusinessEmployee, RecurringSchedule, PricingConfig, UserCleanerAppointments } = require("../../../models");
 const { Op } = require("sequelize");
+
+// ============================================
+// Constants - extracted magic numbers
+// ============================================
+const TIME_CONSTANTS = {
+  MS_IN_DAY: 24 * 60 * 60 * 1000,
+  MS_IN_MONTH: 30 * 24 * 60 * 60 * 1000,
+  DAYS_IN_MONTH: 30,
+};
+
+const FINANCIAL_CONSTANTS = {
+  CENTS_PER_DOLLAR: 100,
+  DEFAULT_BUSINESS_OWNER_FEE_PERCENT: 0.10, // 10%
+  DEFAULT_CLEANER_PAYOUT_PERCENT: 0.80, // 80%
+};
+
+// Helper function for date formatting (YYYY-MM-DD)
+const formatDateYMD = (date) => {
+  const d = date instanceof Date ? date : new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+// Helper function to convert dollars to cents
+const dollarsToCents = (dollars) => Math.round(parseFloat(dollars) * FINANCIAL_CONSTANTS.CENTS_PER_DOLLAR);
+
+// Helper function to convert cents to dollars
+const centsToDollars = (cents) => (cents / FINANCIAL_CONSTANTS.CENTS_PER_DOLLAR).toFixed(2);
+
+/**
+ * Standardized error response helper
+ * @param {object} res - Express response object
+ * @param {number} statusCode - HTTP status code
+ * @param {string} message - Error message
+ * @param {object} details - Optional additional details
+ */
+const sendErrorResponse = (res, statusCode, message, details = null) => {
+  const response = { error: message };
+  if (details) {
+    response.details = details;
+  }
+  return res.status(statusCode).json(response);
+};
+
+/**
+ * Helper to safely decrypt employee name
+ * @param {object} employee - Employee object with firstName/lastName
+ * @returns {string} Decrypted full name or "Unknown"
+ */
+const decryptEmployeeName = (employee) => {
+  if (!employee) return "Unknown";
+  const firstName = employee.firstName || "";
+  const lastName = employee.lastName || "";
+  return `${firstName} ${lastName}`.trim() || "Unknown";
+};
+
+/**
+ * Standardized logger for business owner operations
+ * Consistent format: [BusinessOwner:{operation}] message
+ */
+const logger = {
+  info: (operation, message, data = null) => {
+    const logMsg = `[BusinessOwner:${operation}] ${message}`;
+    if (data) {
+      console.log(logMsg, JSON.stringify(data));
+    } else {
+      console.log(logMsg);
+    }
+  },
+  error: (operation, message, error = null) => {
+    const logMsg = `[BusinessOwner:${operation}] ERROR: ${message}`;
+    if (error) {
+      console.error(logMsg, error.message || error);
+    } else {
+      console.error(logMsg);
+    }
+  },
+  debug: (operation, message, data = null) => {
+    if (process.env.NODE_ENV !== "production") {
+      const logMsg = `[BusinessOwner:${operation}] DEBUG: ${message}`;
+      if (data) {
+        console.log(logMsg, JSON.stringify(data));
+      } else {
+        console.log(logMsg);
+      }
+    }
+  },
+};
+
+/**
+ * Helper to fetch client IDs for a business owner
+ * @param {number} businessOwnerId - The business owner's user ID
+ * @returns {Promise<number[]>} Array of client IDs
+ */
+const getClientIdsForBusinessOwner = async (businessOwnerId) => {
+  const clientRelationships = await CleanerClient.findAll({
+    where: { cleanerId: businessOwnerId },
+    attributes: ["clientId"],
+  });
+  return clientRelationships.map((c) => c.clientId);
+};
+
+/**
+ * Helper to safely parse integer parameters with validation
+ * Returns null if the value is not a valid positive integer
+ * @param {string|number} value - The value to parse
+ * @param {string} paramName - Name of the parameter (for error messages)
+ * @returns {{ value: number, error: string|null }}
+ */
+const parseIntParam = (value, paramName = "parameter") => {
+  if (value === undefined || value === null || value === "") {
+    return { value: null, error: `${paramName} is required` };
+  }
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed)) {
+    return { value: null, error: `Invalid ${paramName}: must be a number` };
+  }
+  if (parsed < 0) {
+    return { value: null, error: `Invalid ${paramName}: must be non-negative` };
+  }
+  return { value: parsed, error: null };
+};
 
 // All routes require business owner authentication
 router.use(verifyBusinessOwner);
@@ -56,7 +179,14 @@ router.get("/employees", async (req, res) => {
  */
 router.get("/employees/for-job/:appointmentId", async (req, res) => {
   try {
-    const appointmentId = parseInt(req.params.appointmentId);
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.appointmentId,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
+
     const mode = req.query.mode || "add"; // "add" or "reassign"
 
     // Get the appointment with home details
@@ -206,7 +336,27 @@ router.post("/employees/invite", async (req, res) => {
       notes,
     });
 
-    // TODO: Send invitation email
+    // Get business owner info for the email
+    const businessOwner = await User.findByPk(req.businessOwnerId, {
+      attributes: ["firstName", "lastName", "businessName"],
+    });
+    const businessOwnerName = businessOwner
+      ? `${EncryptionService.decrypt(businessOwner.firstName) || ""} ${EncryptionService.decrypt(businessOwner.lastName) || ""}`.trim()
+      : "Your employer";
+    const businessName = businessOwner?.businessName || null;
+
+    // Send invitation email (don't fail the request if email fails)
+    try {
+      await Email.sendEmployeeInviteEmail(
+        email,
+        firstName,
+        businessOwnerName,
+        businessName
+      );
+    } catch (emailError) {
+      console.error("Failed to send employee invite email:", emailError);
+      // Continue - don't fail the invite just because email failed
+    }
 
     res.status(201).json({
       message: "Invitation sent successfully",
@@ -249,8 +399,16 @@ router.get("/employees/available", async (req, res) => {
  */
 router.get("/employees/:employeeId", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const employee = await BusinessEmployeeService.getEmployeeById(
-      parseInt(req.params.employeeId),
+      employeeId,
       req.businessOwnerId
     );
 
@@ -270,8 +428,16 @@ router.get("/employees/:employeeId", async (req, res) => {
  */
 router.put("/employees/:employeeId", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const employee = await BusinessEmployeeService.updateEmployee(
-      parseInt(req.params.employeeId),
+      employeeId,
       req.businessOwnerId,
       req.body
     );
@@ -288,10 +454,18 @@ router.put("/employees/:employeeId", async (req, res) => {
  */
 router.delete("/employees/:employeeId", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const { reason } = req.body;
 
     const employee = await BusinessEmployeeService.terminateEmployee(
-      parseInt(req.params.employeeId),
+      employeeId,
       req.businessOwnerId,
       reason
     );
@@ -308,8 +482,16 @@ router.delete("/employees/:employeeId", async (req, res) => {
  */
 router.post("/employees/:employeeId/reactivate", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const employee = await BusinessEmployeeService.reactivateEmployee(
-      parseInt(req.params.employeeId),
+      employeeId,
       req.businessOwnerId
     );
 
@@ -325,12 +507,46 @@ router.post("/employees/:employeeId/reactivate", async (req, res) => {
  */
 router.post("/employees/:employeeId/resend-invite", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const employee = await BusinessEmployeeService.resendInvite(
-      parseInt(req.params.employeeId),
+      employeeId,
       req.businessOwnerId
     );
 
-    // TODO: Send invitation email
+    // Get business owner info for the email
+    const businessOwner = await User.findByPk(req.businessOwnerId, {
+      attributes: ["firstName", "lastName", "businessName"],
+    });
+    const businessOwnerName = businessOwner
+      ? `${EncryptionService.decrypt(businessOwner.firstName) || ""} ${EncryptionService.decrypt(businessOwner.lastName) || ""}`.trim()
+      : "Your employer";
+    const businessName = businessOwner?.businessName || null;
+
+    // Decrypt employee email for sending
+    const employeeEmail = employee.email ? EncryptionService.decrypt(employee.email) : null;
+    const employeeFirstName = employee.firstName ? EncryptionService.decrypt(employee.firstName) : "Team Member";
+
+    // Send invitation email (don't fail the request if email fails)
+    if (employeeEmail) {
+      try {
+        await Email.sendEmployeeInviteEmail(
+          employeeEmail,
+          employeeFirstName,
+          businessOwnerName,
+          businessName
+        );
+      } catch (emailError) {
+        console.error("Failed to send employee invite email:", emailError);
+        // Continue - don't fail the resend just because email failed
+      }
+    }
 
     res.json({ message: "Invitation resent", employee: BusinessEmployeeSerializer.serializeOne(employee) });
   } catch (error) {
@@ -344,8 +560,15 @@ router.post("/employees/:employeeId/resend-invite", async (req, res) => {
  */
 router.put("/employees/:employeeId/availability", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const { schedule, defaultJobTypes, maxJobsPerDay } = req.body;
-    const employeeId = parseInt(req.params.employeeId);
 
     // Update availability schedule if provided
     if (schedule) {
@@ -397,7 +620,7 @@ router.get("/assignments", async (req, res) => {
     const { startDate, endDate, status } = req.query;
 
     const start = startDate || new Date().toISOString().split("T")[0];
-    const end = endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const end = endDate || new Date(Date.now() + TIME_CONSTANTS.MS_IN_MONTH).toISOString().split("T")[0];
 
     const assignments = await EmployeeJobAssignmentService.getUpcomingAssignments(
       req.businessOwnerId,
@@ -2429,7 +2652,7 @@ router.get("/payroll-summary", async (req, res) => {
 router.get("/payroll/history", async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const thirtyDaysAgo = new Date(Date.now() - TIME_CONSTANTS.MS_IN_MONTH).toISOString().split("T")[0];
 
     const paidAssignments = await EmployeeJobAssignment.findAll({
       where: {
@@ -2533,9 +2756,14 @@ router.post("/payroll/early-payout/:employeeId", async (req, res) => {
       });
     }
 
+    // Decrypt employee names (BusinessEmployee has encrypted PII fields)
+    const employeeFirstName = employee.firstName ? EncryptionService.decrypt(employee.firstName) : "";
+    const employeeLastName = employee.lastName ? EncryptionService.decrypt(employee.lastName) : "";
+    const employeeFullName = `${employeeFirstName} ${employeeLastName}`.trim() || "Employee";
+
     res.json({
       success: true,
-      message: `Paid ${result.formattedAmount || `$${(result.totalAmount / 100).toFixed(2)}`} to ${employee.firstName} ${employee.lastName}`,
+      message: `Paid ${result.formattedAmount || `$${(result.totalAmount / 100).toFixed(2)}`} to ${employeeFullName}`,
       ...result,
     });
   } catch (error) {
@@ -3186,7 +3414,7 @@ router.get("/client-payments", async (req, res) => {
       };
     });
 
-    const totalUnpaid = unpaidAppointments.reduce((sum, a) => sum + (a.price || 0), 0);
+    const totalUnpaid = unpaidAppointments.reduce((sum, a) => sum + parseFloat(a.price || 0), 0);
 
     res.json({ unpaidAppointments, totalUnpaid });
   } catch (error) {
@@ -4070,9 +4298,13 @@ router.get("/employees/:employeeId/stripe-eligibility", async (req, res) => {
       employee.id
     );
 
+    // Decrypt employee names (BusinessEmployee has encrypted PII fields)
+    const empFirstName = employee.firstName ? EncryptionService.decrypt(employee.firstName) : "";
+    const empLastName = employee.lastName ? EncryptionService.decrypt(employee.lastName) : "";
+
     res.json({
       employeeId: employee.id,
-      employeeName: `${employee.firstName} ${employee.lastName}`,
+      employeeName: `${empFirstName} ${empLastName}`.trim() || "Unknown",
       ...status,
       canReceiveDirectPayouts: status.hasAccount && status.payoutsEnabled,
     });
@@ -4111,7 +4343,49 @@ router.post("/employees/:employeeId/invite-to-stripe", async (req, res) => {
     // Update payment method to stripe_connect
     await employee.update({ paymentMethod: "stripe_connect" });
 
-    // TODO: Send notification to employee about setting up Stripe
+    // Fetch the employee's user record for notifications
+    const employeeUser = await User.findByPk(employee.userId, {
+      attributes: ["id", "firstName", "lastName", "email", "expoPushToken", "notifications"],
+    });
+
+    // Fetch the business owner's name
+    const businessOwner = await User.findByPk(req.businessOwnerId, {
+      attributes: ["firstName", "lastName"],
+    });
+    const businessOwnerName = businessOwner
+      ? `${EncryptionService.decrypt(businessOwner.firstName)} ${EncryptionService.decrypt(businessOwner.lastName)}`
+      : "Your employer";
+
+    // Send notifications to the employee
+    if (employeeUser && employeeUser.notifications !== false) {
+      const employeeName = employee.firstName || "there";
+      const employeeEmail = employeeUser.email ? EncryptionService.decrypt(employeeUser.email) : null;
+
+      // Send push notification
+      if (employeeUser.expoPushToken) {
+        try {
+          await PushNotification.sendPushStripeSetupInvitation(
+            employeeUser.expoPushToken,
+            businessOwnerName
+          );
+        } catch (pushErr) {
+          console.error("Failed to send Stripe setup push notification:", pushErr);
+        }
+      }
+
+      // Send email notification
+      if (employeeEmail) {
+        try {
+          await Email.sendStripeSetupInvitation(
+            employeeEmail,
+            employeeName,
+            businessOwnerName
+          );
+        } catch (emailErr) {
+          console.error("Failed to send Stripe setup email:", emailErr);
+        }
+      }
+    }
 
     res.json({
       success: true,
