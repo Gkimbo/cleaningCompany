@@ -368,7 +368,7 @@ const DetailsComponent = ({ state, dispatch }) => {
               Fresh Sheets
             </Text>
             <Text style={styles.servicePrice}>
-              {homeDetails.sheetsProvided === "yes" ? "Included" : `$${pricing.linens.sheetFeePerBed}/bed`}
+              {homeDetails.sheetsProvided === "yes" ? "Included" : `$${(pricing.linens.sheetFeePerBed / 100).toFixed(0)}/bed`}
             </Text>
           </View>
 
@@ -382,7 +382,7 @@ const DetailsComponent = ({ state, dispatch }) => {
               Fresh Towels
             </Text>
             <Text style={styles.servicePrice}>
-              {homeDetails.towelsProvided === "yes" ? "Included" : `$${pricing.linens.towelFee}/towel`}
+              {homeDetails.towelsProvided === "yes" ? "Included" : `$${(pricing.linens.towelFee / 100).toFixed(0)}/towel`}
             </Text>
           </View>
         </View>

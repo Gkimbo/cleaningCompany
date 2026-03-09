@@ -67,7 +67,7 @@ class CleanerClientSerializer {
 			acceptedAt: data.acceptedAt,
 			lastInviteReminderAt: data.lastInviteReminderAt,
 			defaultFrequency: data.defaultFrequency,
-			defaultPrice: data.defaultPrice ? parseFloat(data.defaultPrice) : null,
+			defaultPrice: data.defaultPrice || null, // Return cents, frontend handles conversion to dollars
 			defaultDayOfWeek: data.defaultDayOfWeek,
 			defaultTimeWindow: data.defaultTimeWindow,
 			autoPayEnabled: data.autoPayEnabled,
@@ -100,7 +100,7 @@ class CleanerClientSerializer {
 				id: schedule.id,
 				frequency: schedule.frequency,
 				dayOfWeek: schedule.dayOfWeek,
-				price: schedule.price ? (schedule.price / 100).toFixed(2) : null, // Convert cents to dollars
+				price: schedule.price || null, // Return cents, frontend handles conversion
 				isActive: schedule.isActive,
 				isPaused: schedule.isPaused
 			}));
@@ -122,7 +122,7 @@ class CleanerClientSerializer {
 			invitedEmail: this.decryptField(data.invitedEmail),
 			status: data.status,
 			defaultFrequency: data.defaultFrequency,
-			defaultPrice: data.defaultPrice ? parseFloat(data.defaultPrice) : null,
+			defaultPrice: data.defaultPrice || null, // Return cents, frontend handles conversion
 			invitedAt: data.invitedAt,
 			acceptedAt: data.acceptedAt
 		};
@@ -156,7 +156,7 @@ class CleanerClientSerializer {
 			invitedBaths: data.invitedBaths ? parseFloat(data.invitedBaths) : null,
 			invitedNotes: data.invitedNotes,
 			defaultFrequency: data.defaultFrequency,
-			defaultPrice: data.defaultPrice ? parseFloat(data.defaultPrice) : null,
+			defaultPrice: data.defaultPrice || null, // Return cents, frontend handles conversion
 			status: data.status,
 			invitedAt: data.invitedAt
 		};

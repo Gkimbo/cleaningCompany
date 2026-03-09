@@ -24,20 +24,22 @@ const PASSWORD_RESET_EXPIRATION_MS = 60 * 60 * 1000;
 const passwordResetLimiter = rateLimit({
 	windowMs: 60 * 60 * 1000, // 1 hour
 	max: 3,
-	keyGenerator: (req) => req.body.email || req.ip,
+	keyGenerator: (req) => req.body.email || req.ip || "unknown",
 	message: { error: "Too many password reset requests. Please try again later." },
 	standardHeaders: true,
 	legacyHeaders: false,
+	validate: false, // Disable strict IP validation for IPv6 compatibility
 });
 
 // Rate limiter for username recovery - max 5 requests per email per hour
 const usernameRecoveryLimiter = rateLimit({
 	windowMs: 60 * 60 * 1000, // 1 hour
 	max: 5,
-	keyGenerator: (req) => req.body.email || req.ip,
+	keyGenerator: (req) => req.body.email || req.ip || "unknown",
 	message: { error: "Too many username recovery requests. Please try again later." },
 	standardHeaders: true,
 	legacyHeaders: false,
+	validate: false, // Disable strict IP validation for IPv6 compatibility
 });
 
 // Audit logging helper - logs to database and console

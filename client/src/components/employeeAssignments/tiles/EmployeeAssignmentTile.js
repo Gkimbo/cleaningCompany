@@ -18,6 +18,7 @@ import {
   getEffectiveTowelConfigs,
   getTowelTotals,
 } from "../../../utils/linensUtils";
+import { formatCurrency } from "../../../services/formatters";
 
 const EmployeeAssignmentTile = ({
   id,
@@ -389,7 +390,7 @@ const EmployeeAssignmentTile = ({
             {completed ? "You Earned" : "You'll Earn"}
           </Text>
           <Text style={[styles.earningsAmount, completed && styles.earningsAmountCompleted]}>
-            ${amount.toFixed(2)}
+            {formatCurrency(amount)}
           </Text>
         </View>
 

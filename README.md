@@ -307,10 +307,18 @@ cd server
 npm install
 createdb cleaning_company_development
 npx sequelize-cli db:migrate
+
+# Required seeders
 npx sequelize-cli db:seed --seed ownerSeeder.js
 npx sequelize-cli db:seed --seed termsAndConditionsSeeder.js
 npx sequelize-cli db:seed --seed privacyPolicySeeder.js
+npx sequelize-cli db:seed --seed paymentTermsSeeder.js
+npx sequelize-cli db:seed --seed damageProtectionSeeder.js
 npx sequelize-cli db:seed --seed cleanerChecklistSeeder.js
+node seeders/serviceAreaConfigSeeder.js
+
+# Optional: Demo accounts for "Preview as Role" feature
+node seeders/demo-accounts.js
 
 # Setup Client
 cd ../client

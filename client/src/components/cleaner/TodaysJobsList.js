@@ -35,18 +35,20 @@ const TodaysJobsList = ({
     return `${STORAGE_KEY_PREFIX}${today.toISOString().split("T")[0]}`;
   };
 
-  // Calculate payout for an appointment
+  // Calculate payout for an appointment (returns cents for use with formatCurrency)
   const calculatePayout = useCallback((appointment) => {
     const isMultiCleanerJob = appointment.isMultiCleanerJob;
     const platformFeePercent = isMultiCleanerJob
       ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
       : (pricing?.platform?.feePercent || 0.1);
     const cleanerSharePercent = 1 - platformFeePercent;
-    const totalPrice = Number(appointment.price);
+    const totalPriceCents = Number(appointment.price) || 0;
+    // Note: totalCleanersRequired can be directly on appointment (from confirmedMultiCleanerJobs) or nested under multiCleanerJob
     const numCleaners = isMultiCleanerJob
-      ? (appointment.multiCleanerJob?.totalCleanersRequired || appointment.employeesAssigned?.length || 1)
+      ? (appointment.multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired || appointment.employeesAssigned?.length || 1)
       : 1;
-    return (totalPrice / numCleaners) * cleanerSharePercent;
+    // Return cents (formatCurrency will convert to dollars)
+    return (totalPriceCents / numCleaners) * cleanerSharePercent;
   }, [pricing]);
 
   // Load saved order or use default

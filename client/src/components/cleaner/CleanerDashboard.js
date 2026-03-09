@@ -250,10 +250,13 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, pricing }) => {
     : (pricing?.platform?.feePercent || 0.1);
   const cleanerSharePercent = 1 - platformFeePercent;
 
-  const totalPrice = Number(appointment.price);
-  // For multi-cleaner jobs, calculate payout based on number of cleaners
-  const numCleaners = multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired || appointment.employeesAssigned?.length || 1;
-  const payout = (totalPrice / numCleaners) * cleanerSharePercent;
+  const totalPriceCents = Number(appointment.price) || 0;
+  // For multi-cleaner/team jobs, divide by number of cleaners; for solo jobs, use 1
+  const numCleaners = (isMultiCleaner || isTeamJob)
+    ? (multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired || appointment.employeesAssigned?.length || 1)
+    : 1;
+  // Convert cents to dollars
+  const payout = ((totalPriceCents / numCleaners) * cleanerSharePercent) / 100;
 
   return (
     <Pressable
@@ -300,7 +303,7 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, pricing }) => {
           </View>
         )}
       </View>
-      <Text style={styles.appointmentPayout}>${(payout / 100).toFixed(2)}</Text>
+      <Text style={styles.appointmentPayout}>${payout.toFixed(2)}</Text>
     </Pressable>
   );
 };
@@ -662,15 +665,16 @@ const CleanerDashboard = ({ state, dispatch }) => {
   };
 
   // Get appointment IDs that are multi-cleaner jobs to avoid duplicates
+  // Convert to strings to ensure consistent comparison
   const multiCleanerAppointmentIds = new Set(
-    confirmedMultiCleanerJobs.map((job) => job.appointmentId)
+    confirmedMultiCleanerJobs.map((job) => String(job.appointmentId))
   );
 
   // Combine solo appointments with confirmed multi-cleaner jobs
   // Filter out appointments that are already in confirmedMultiCleanerJobs to avoid duplicates
   const allJobs = [
     ...appointments
-      .filter((apt) => !multiCleanerAppointmentIds.has(apt.id))
+      .filter((apt) => !multiCleanerAppointmentIds.has(String(apt.id)))
       .map((apt) => ({ ...apt, jobType: "solo" })),
     ...confirmedMultiCleanerJobs.map((job) => ({ ...job, jobType: "team" })),
   ];
@@ -680,22 +684,23 @@ const CleanerDashboard = ({ state, dispatch }) => {
     (a, b) => parseLocalDate(a.date) - parseLocalDate(b.date)
   );
 
-  // Get today's appointments (multiple) sorted by end time
+  // Get today's appointments (multiple) sorted by end time - exclude completed
   const today = new Date();
+  today.setHours(0, 0, 0, 0);  // Normalize to midnight for consistent date comparisons
   const todaysAppointments = sortByEndTime(
     sortedAppointments.filter(
-      (apt) => parseLocalDate(apt.date).toDateString() === today.toDateString()
+      (apt) => parseLocalDate(apt.date).toDateString() === today.toDateString() && !apt.completed
     )
   );
 
-  // Get next appointment (first one after today)
+  // Get next appointment (first one after today, not completed)
   const nextAppointment = sortedAppointments.find(
-    (apt) => parseLocalDate(apt.date) > today
+    (apt) => parseLocalDate(apt.date) > today && !apt.completed
   );
 
-  // Get all upcoming appointments (excluding today)
+  // Get all upcoming appointments (excluding today, not completed)
   const allUpcomingAppointments = sortedAppointments
-    .filter((apt) => parseLocalDate(apt.date) > today);
+    .filter((apt) => parseLocalDate(apt.date) > today && !apt.completed);
 
   // Get first 3 for display in the list
   const upcomingAppointments = allUpcomingAppointments.slice(0, 3);
@@ -707,16 +712,19 @@ const CleanerDashboard = ({ state, dispatch }) => {
   const expectedPayout = sortedAppointments
     .filter((apt) => !apt.completed && parseLocalDate(apt.date) >= today)
     .reduce((sum, apt) => {
-      // For multi-cleaner jobs, use totalCleanersRequired from multiCleanerJob or appointment
-      // Otherwise fall back to employeesAssigned length
+      // Check if this is a team/multi-cleaner job
       const isTeamJob = apt.jobType === "team" || apt.isMultiCleanerJob;
-      const numCleaners = apt.multiCleanerJob?.totalCleanersRequired || apt.totalCleanersRequired || apt.employeesAssigned?.length || 1;
+      // For multi-cleaner/team jobs, divide by number of cleaners; for solo jobs, use 1
+      const numCleaners = isTeamJob
+        ? (apt.multiCleanerJob?.totalCleanersRequired || apt.totalCleanersRequired || apt.employeesAssigned?.length || 1)
+        : 1;
       // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
       const feePercent = isTeamJob
         ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
         : (pricing?.platform?.feePercent || 0.1);
       const sharePercent = 1 - feePercent;
-      const perCleanerShare = (Number(apt.price) / numCleaners) * sharePercent;
+      // Convert cents to dollars
+      const perCleanerShare = ((Number(apt.price) || 0) / numCleaners) * sharePercent / 100;
       return sum + perCleanerShare;
     }, 0);
 
@@ -849,7 +857,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
         <View style={styles.statsRow}>
           <StatCard
             title="Expected"
-            value={`$${(expectedPayout / 100).toFixed(0)}`}
+            value={`$${expectedPayout.toFixed(0)}`}
             subtitle="payout"
             color={colors.success[500]}
             onPress={() => navigate("/earnings")}
@@ -909,7 +917,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
                 <View style={styles.payoutPreview}>
                   <Text style={styles.payoutPreviewLabel}>Expected earnings:</Text>
                   <Text style={styles.payoutPreviewValue}>
-                    ${(expectedPayout / 100).toFixed(2)}
+                    ${expectedPayout.toFixed(2)}
                   </Text>
                   <Text style={styles.payoutPreviewSubtext}>
                     after scheduled cleanings
@@ -1004,7 +1012,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
                         </Text>
                         <View style={styles.teamRequestInfo}>
                           <Text style={styles.teamRequestEarnings}>
-                            ${((((Number(request.appointment?.price) || 0) * cleanerSharePercent) / (request.multiCleanerJob?.totalCleanersRequired || 2)) / 100).toFixed(0)}
+                            ${((((Number(request.appointment?.price) || 0) * (1 - (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13))) / (request.multiCleanerJob?.totalCleanersRequired || 2)) / 100).toFixed(0)}
                           </Text>
                         </View>
                         {request.appointment?.timeToBeCompleted &&

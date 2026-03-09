@@ -18,9 +18,9 @@ class AppointmentSerializer {
 		if (this.decimalFields.includes(attribute) && value !== null && value !== undefined) {
 			return parseFloat(value);
 		}
-		// Convert cents to dollars for price fields
+		// Return cents fields as-is (frontend handles conversion to dollars for display)
 		if (this.centsFields.includes(attribute) && value !== null && value !== undefined) {
-			return (value / 100).toFixed(2);
+			return value;
 		}
 		return value;
 	}

@@ -437,12 +437,16 @@ recurringSchedulesRouter.post("/", verifyCleaner, async (req, res) => {
       });
     }
 
-    // Calculate price if not provided
-    let schedulePrice = price;
-    if (!schedulePrice && cleanerClient.defaultPrice) {
+    // Calculate price if not provided (all prices in cents)
+    let schedulePrice;
+    if (price) {
+      // User input is in dollars, convert to cents
+      schedulePrice = Math.round(parseFloat(price) * 100);
+    } else if (cleanerClient.defaultPrice) {
+      // defaultPrice is already in cents
       schedulePrice = cleanerClient.defaultPrice;
-    }
-    if (!schedulePrice) {
+    } else {
+      // calculatePrice returns cents
       schedulePrice = await calculatePrice(
         cleanerClient.home.bringSheets || "no",
         cleanerClient.home.bringTowels || "no",
@@ -479,7 +483,7 @@ recurringSchedulesRouter.post("/", verifyCleaner, async (req, res) => {
         frequency: schedule.frequency,
         dayOfWeek: schedule.dayOfWeek,
         timeWindow: schedule.timeWindow,
-        price: schedule.price,
+        price: schedule.price, // Return cents, frontend handles conversion
         startDate: schedule.startDate,
         endDate: schedule.endDate,
         nextScheduledDate: schedule.nextScheduledDate,
@@ -753,7 +757,10 @@ recurringSchedulesRouter.patch("/:id", verifyCleaner, async (req, res) => {
     if (frequency !== undefined) updates.frequency = frequency;
     if (dayOfWeek !== undefined) updates.dayOfWeek = dayOfWeek;
     if (timeWindow !== undefined) updates.timeWindow = timeWindow;
-    if (price !== undefined) updates.price = price;
+    if (price !== undefined) {
+      // User input is in dollars, convert to cents
+      updates.price = Math.round(parseFloat(price) * 100);
+    }
     if (endDate !== undefined) updates.endDate = endDate;
 
     // Reset lastGeneratedDate so appointments regenerate from today

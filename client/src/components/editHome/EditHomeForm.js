@@ -1025,8 +1025,8 @@ const EditHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Sheets</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.sheetsProvided === "yes" && homeData.bedConfigurations.length > 0
-              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * pricing.linens.sheetFeePerBed} ($${pricing.linens.sheetFeePerBed} x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
-              : homeData.numBeds ? `$${pricing.linens.sheetFeePerBed} x ${homeData.numBeds} beds = $${parseInt(homeData.numBeds) * pricing.linens.sheetFeePerBed}` : "Select to configure sheets for each bed"}
+              ? `$${(homeData.bedConfigurations.filter(b => b.needsSheets).length * pricing.linens.sheetFeePerBed / 100).toFixed(0)} ($${(pricing.linens.sheetFeePerBed / 100).toFixed(0)} x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
+              : homeData.numBeds ? `$${(pricing.linens.sheetFeePerBed / 100).toFixed(0)} x ${homeData.numBeds} beds = $${(parseInt(homeData.numBeds) * pricing.linens.sheetFeePerBed / 100).toFixed(0)}` : "Select to configure sheets for each bed"}
           </Text>
         </View>
         <View
@@ -1126,8 +1126,8 @@ const EditHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Towels</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.towelsProvided === "yes" && homeData.bathroomConfigurations.length > 0
-              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * pricing.linens.towelFee + (b.faceCloths || 0) * pricing.linens.faceClothFee, 0)} - $${pricing.linens.towelFee}/towel, $${pricing.linens.faceClothFee}/face cloth`
-              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $${pricing.linens.towelFee}/towel, $${pricing.linens.faceClothFee}/face cloth` : "Select to configure towels for each bathroom"}
+              ? `$${(homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * pricing.linens.towelFee + (b.faceCloths || 0) * pricing.linens.faceClothFee, 0) / 100).toFixed(0)} - $${(pricing.linens.towelFee / 100).toFixed(0)}/towel, $${(pricing.linens.faceClothFee / 100).toFixed(0)}/face cloth`
+              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $${(pricing.linens.towelFee / 100).toFixed(0)}/towel, $${(pricing.linens.faceClothFee / 100).toFixed(0)}/face cloth` : "Select to configure towels for each bathroom"}
           </Text>
         </View>
         <View
@@ -1163,7 +1163,7 @@ const EditHomeForm = ({ state, dispatch }) => {
                 Bathroom {bath.bathroomNumber}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                <Text style={{ flex: 1, color: "#555" }}>Towels (${pricing.linens.towelFee} each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Towels (${(pricing.linens.towelFee / 100).toFixed(0)} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{
@@ -1201,7 +1201,7 @@ const EditHomeForm = ({ state, dispatch }) => {
                 </View>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={{ flex: 1, color: "#555" }}>Face cloths (${pricing.linens.faceClothFee} each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Face cloths (${(pricing.linens.faceClothFee / 100).toFixed(0)} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{
@@ -1390,7 +1390,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 
                 {request.calculatedPrice && (
                   <Text style={localStyles.requestPrice}>
-                    Quoted Price: ${request.calculatedPrice}
+                    Quoted Price: ${(request.calculatedPrice / 100).toFixed(2)}
                   </Text>
                 )}
 
@@ -1606,7 +1606,7 @@ const EditHomeForm = ({ state, dispatch }) => {
               }}
             >
               {deleteFee > 0
-                ? `This will cancel all appointments. A $${deleteFee} cancellation fee will be charged for appointments within the next 7 days.`
+                ? `This will cancel all appointments. A $${(deleteFee / 100).toFixed(0)} cancellation fee will be charged for appointments within the next 7 days.`
                 : "This will permanently delete this home and all associated data."}
             </Text>
             <View style={{ flexDirection: "row", gap: spacing.md }}>

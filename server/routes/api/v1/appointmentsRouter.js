@@ -1044,8 +1044,8 @@ appointmentRouter.post("/", async (req, res) => {
 
       // If this home has a preferred cleaner with custom pricing, use their price
       if (cleanerClientRelation && cleanerClientRelation.dataValues.defaultPrice) {
-        // defaultPrice is stored as DECIMAL (dollars), convert to cents
-        finalPrice = Math.round(parseFloat(cleanerClientRelation.dataValues.defaultPrice) * 100);
+        // defaultPrice is stored as INTEGER (cents)
+        finalPrice = cleanerClientRelation.dataValues.defaultPrice;
         // No discounts apply to business owner pricing
         date.originalPrice = null;
         date.discountApplied = false;
@@ -4443,8 +4443,10 @@ appointmentRouter.post("/:id/rebook", async (req, res) => {
       return res.status(400).json({ error: "Maximum rebooking attempts reached" });
     }
 
-    // Calculate price
-    const appointmentPrice = price || originalAppointment.price;
+    // Calculate price (convert user input from dollars to cents if provided)
+    const appointmentPrice = price
+      ? Math.round(parseFloat(price) * 100) // User input is in dollars
+      : originalAppointment.price; // Already in cents
 
     // Calculate expiration
     const expiresAt = new Date();
@@ -4459,7 +4461,7 @@ appointmentRouter.post("/:id/rebook", async (req, res) => {
       userId: originalAppointment.userId,
       homeId: originalAppointment.homeId,
       date,
-      price: appointmentPrice, // Already in cents
+      price: appointmentPrice, // Price in cents
       paid: false,
       completed: false,
       hasBeenAssigned: true,

@@ -35,7 +35,7 @@ describe("AppointmentSerializer", () => {
 
       expect(result.id).toBe(1);
       expect(result.date).toBe("2026-01-15");
-      expect(result.price).toBe("250.00");
+      expect(result.price).toBe(25000); // Returns cents
       expect(result.userId).toBe(10);
       expect(result.homeId).toBe(5);
       expect(result.paid).toBe(true);
@@ -123,7 +123,7 @@ describe("AppointmentSerializer", () => {
       expect(result.discountPercent).toBe(0.15);
       expect(typeof result.discountPercent).toBe("number");
       expect(result.discountApplied).toBe(true);
-      expect(result.originalPrice).toBe("300.00");
+      expect(result.originalPrice).toBe(30000); // Returns cents
     });
 
     it("should handle null discountPercent field", () => {
@@ -164,7 +164,7 @@ describe("AppointmentSerializer", () => {
       const result = AppointmentSerializer.serializeOne(mockAppointment);
 
       expect(result.isLastMinuteBooking).toBe(true);
-      expect(result.lastMinuteFeeApplied).toBe("50.00");
+      expect(result.lastMinuteFeeApplied).toBe(5000); // Returns cents
       expect(result.lastMinuteNotificationsSentAt).toEqual(new Date("2026-01-10T10:00:00Z"));
     });
 
@@ -218,7 +218,7 @@ describe("AppointmentSerializer", () => {
 
       expect(result.id).toBe(1);
       expect(result.date).toBe("2026-01-15");
-      expect(result.price).toBe("200.00");
+      expect(result.price).toBe(20000); // Returns cents
     });
   });
 
@@ -324,9 +324,9 @@ describe("AppointmentSerializer", () => {
       const result = AppointmentSerializer.serializeArray(mockAppointments);
 
       expect(result[0].isLastMinuteBooking).toBe(true);
-      expect(result[0].lastMinuteFeeApplied).toBe("50.00");
+      expect(result[0].lastMinuteFeeApplied).toBe(5000); // Returns cents
       expect(result[1].isLastMinuteBooking).toBe(false);
-      expect(result[1].lastMinuteFeeApplied).toBe("0.00");
+      expect(result[1].lastMinuteFeeApplied).toBe(0); // Returns cents
     });
   });
 

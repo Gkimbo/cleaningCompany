@@ -1132,7 +1132,9 @@ class NotificationService {
     expiresAt.setHours(expiresAt.getHours() + 48);
 
     const title = isReRequest ? "New Home Request (Again)" : "New Home Request";
-    const body = `${clientName} added a new home and is asking if you can clean it. ${numBeds} bed, ${numBaths} bath at $${calculatedPrice}.`;
+    // Convert cents to dollars for display
+    const priceDisplay = (calculatedPrice / 100).toFixed(2);
+    const body = `${clientName} added a new home and is asking if you can clean it. ${numBeds} bed, ${numBaths} bath at $${priceDisplay}.`;
 
     return this.notifyUser({
       userId: businessOwnerId,
@@ -1145,7 +1147,8 @@ class NotificationService {
         clientName,
         homeId,
         homeAddress,
-        calculatedPrice,
+        calculatedPrice, // Store cents in data for programmatic use
+        calculatedPriceDollars: priceDisplay, // Also store dollars for display
         numBeds,
         numBaths,
         isReRequest,
@@ -1156,7 +1159,7 @@ class NotificationService {
       sendEmail: true,
       emailOptions: {
         sendFunction: Email.sendNewHomeRequestEmail,
-        args: [clientName, homeAddress, calculatedPrice, numBeds, numBaths],
+        args: [clientName, homeAddress, priceDisplay, numBeds, numBaths], // Pass dollars for email display
       },
       io,
     });

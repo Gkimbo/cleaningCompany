@@ -12,6 +12,7 @@ import { Feather } from "@expo/vector-icons";
 import { API_BASE } from "../../services/config";
 import { usePricing } from "../../context/PricingContext";
 import FetchData from "../../services/fetchRequests/fetchData";
+import { parseLocalDate } from "../../utils/dateUtils";
 import PaymentTimelineDisplay from "./PaymentTimelineDisplay";
 import PaymentDisputeModal from "./PaymentDisputeModal";
 import {
@@ -29,6 +30,7 @@ const PayoutHistory = ({ state, dispatch }) => {
   const cleanerSharePercent = 1 - regularFeePercent;
   const [payouts, setPayouts] = useState([]);
   const [confirmedMultiCleanerJobs, setConfirmedMultiCleanerJobs] = useState([]);
+  const [assignedAppointments, setAssignedAppointments] = useState([]);
   const [totals, setTotals] = useState({
     totalPaidDollars: "0.00",
     pendingAmountDollars: "0.00",
@@ -41,58 +43,59 @@ const PayoutHistory = ({ state, dispatch }) => {
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [selectedPayout, setSelectedPayout] = useState(null);
 
-  const calculateCleanerShare = (price, numCleaners = 1, isMultiCleanerJob = false) => {
-    const gross = parseFloat(price) || 0;
-    const perCleaner = gross / numCleaners;
+  // Exact same logic as Earnings.js
+  const calculateCleanerShare = (priceInCents, numCleaners = 1, isMultiCleanerJob = false) => {
+    const grossCents = parseFloat(priceInCents) || 0;
+    const perCleanerCents = grossCents / numCleaners;
+    // Use multi-cleaner fee (13%) for multi-cleaner jobs, regular fee (10%) otherwise
     const feePercent = isMultiCleanerJob ? multiCleanerFeePercent : regularFeePercent;
-    const sharePercent = 1 - feePercent;
-    return perCleaner * sharePercent;
+    const cleanerSharePercent = 1 - feePercent;
+    const cleanerShareCents = perCleanerCents * cleanerSharePercent;
+    // Convert cents to dollars for display
+    return (cleanerShareCents / 100).toFixed(2);
   };
 
-  const calculatePotentialEarnings = (multiCleanerJobs = []) => {
-    const userId = String(state?.currentUser?.id);
-    const appointments = state?.appointments || [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
+  const calculatePotentialEarnings = (soloAppointments = [], multiCleanerJobs = []) => {
     // Get appointment IDs that are multi-cleaner jobs to avoid duplicates
+    // Convert to strings to ensure consistent comparison
     const multiCleanerAppointmentIds = new Set(
-      multiCleanerJobs.map((job) => job.appointmentId)
+      multiCleanerJobs.map((job) => String(job.appointmentId))
     );
 
-    // Solo appointments where cleaner is assigned (excluding multi-cleaner jobs)
-    const upcomingSoloAssigned = appointments.filter((appt) => {
-      const appointmentDate = new Date(appt.date + "T00:00:00");
-      return (
-        appointmentDate > today &&
-        !appt.completed &&
-        appt.employeesAssigned &&
-        appt.employeesAssigned.includes(userId) &&
-        !multiCleanerAppointmentIds.has(appt.id)
-      );
-    });
+    // Combine solo appointments and multi-cleaner jobs (same logic as Earnings.js)
+    const allAssignments = [
+      ...soloAppointments
+        .filter((appt) => !multiCleanerAppointmentIds.has(String(appt.id)))
+        .map((appt) => ({ ...appt, jobType: "solo" })),
+      ...multiCleanerJobs.map((job) => ({ ...job, jobType: "team" })),
+    ];
 
-    // Multi-cleaner jobs (already filtered to this cleaner's confirmed jobs)
-    const upcomingMultiCleaner = multiCleanerJobs.filter((job) => {
-      const jobDate = new Date(job.date + "T00:00:00");
-      return jobDate > today && !job.completed;
-    });
+    // Calculate total using exact same logic as Earnings.js and CleanerDashboard
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const upcomingAssignments = allAssignments.filter(
+      (appt) => !appt.completed && parseLocalDate(appt.date) >= today
+    );
 
-    // Calculate solo earnings
-    const soloTotal = upcomingSoloAssigned.reduce((sum, appt) => {
-      const numCleaners = appt.employeesAssigned?.length || 1;
-      return sum + calculateCleanerShare(appt.price, numCleaners, false);
-    }, 0);
+    const total = upcomingAssignments
+      .reduce((sum, appt) => {
+        // For multi-cleaner jobs, use totalCleanersRequired; for solo jobs, use 1
+        const isTeamJob = appt.jobType === "team" || appt.isMultiCleanerJob;
+        const numCleaners = isTeamJob
+          ? (appt.multiCleanerJob?.totalCleanersRequired || appt.totalCleanersRequired || appt.employeesAssigned?.length || 1)
+          : 1;
+        // Calculate share with full precision (same as CleanerDashboard.js)
+        const feePercent = isTeamJob ? multiCleanerFeePercent : regularFeePercent;
+        const sharePercent = 1 - feePercent;
+        const share = ((Number(appt.price) || 0) / numCleaners) * sharePercent / 100;
+        return sum + share;
+      }, 0);
 
-    // Calculate multi-cleaner earnings
-    const multiCleanerTotal = upcomingMultiCleaner.reduce((sum, job) => {
-      const numCleaners = job.totalCleanersRequired || 2;
-      return sum + calculateCleanerShare(job.price, numCleaners, true);
-    }, 0);
+    const count = upcomingAssignments.length;
 
     return {
-      amount: (soloTotal + multiCleanerTotal).toFixed(2),
-      count: upcomingSoloAssigned.length + upcomingMultiCleaner.length,
+      amount: total.toFixed(2),
+      count,
     };
   };
 
@@ -109,15 +112,32 @@ const PayoutHistory = ({ state, dispatch }) => {
     return [];
   };
 
+  const fetchAssignedAppointments = async () => {
+    if (!state?.currentUser?.token) return [];
+    try {
+      const response = await FetchData.get(
+        "/api/v1/employee-info",
+        state.currentUser.token
+      );
+      const allAppointments = response?.employee?.cleanerAppointments || [];
+      return allAppointments.filter((appt) => !appt.completed);
+    } catch (err) {
+      console.error("Error fetching assigned appointments:", err);
+    }
+    return [];
+  };
+
   const fetchPayouts = async () => {
     if (!state?.currentUser?.id) return;
     try {
-      // Fetch both payouts and confirmed multi-cleaner jobs
-      const [payoutRes, multiCleanerJobs] = await Promise.all([
+      // Fetch payouts, assigned appointments, and confirmed multi-cleaner jobs
+      const [payoutRes, soloAppointments, multiCleanerJobs] = await Promise.all([
         fetch(`${API_BASE}/stripe-connect/payouts/${state.currentUser.id}`),
+        fetchAssignedAppointments(),
         fetchConfirmedMultiCleanerJobs(),
       ]);
 
+      setAssignedAppointments(soloAppointments);
       setConfirmedMultiCleanerJobs(multiCleanerJobs);
 
       const data = await payoutRes.json();
@@ -146,7 +166,7 @@ const PayoutHistory = ({ state, dispatch }) => {
           (sum, p) => sum + (p.preferredBonusApplied ? (p.preferredBonusAmount || 0) : 0),
           0
         );
-        const potentialEarnings = calculatePotentialEarnings(multiCleanerJobs);
+        const potentialEarnings = calculatePotentialEarnings(soloAppointments, multiCleanerJobs);
 
         setPayouts(pastPayouts);
         setTotals({
@@ -172,7 +192,7 @@ const PayoutHistory = ({ state, dispatch }) => {
 
   useEffect(() => {
     fetchPayouts();
-  }, [state?.currentUser?.id, state?.appointments, pricing]);
+  }, [state?.currentUser?.id, state?.currentUser?.token, pricing]);
 
   const getStatusStyle = (status) => {
     const statusConfig = {

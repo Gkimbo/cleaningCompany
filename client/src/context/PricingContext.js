@@ -6,25 +6,27 @@ import React, {
   useContext,
 } from "react";
 import PricingService from "../services/fetchRequests/PricingService";
+import { formatCurrency } from "../services/formatters";
 
 /**
  * Default pricing configuration (fallback when API is unavailable)
  * These values match the database schema defaults in server/models/PricingConfig.js
+ * ALL PRICES ARE IN CENTS (e.g., 15000 = $150.00)
  */
 const defaultPricing = {
-  // Base cleaning rate
-  basePrice: 150,
-  extraBedBathFee: 50,
-  halfBathFee: 25,
+  // Base cleaning rate (in cents)
+  basePrice: 15000, // $150.00
+  extraBedBathFee: 5000, // $50.00
+  halfBathFee: 2500, // $25.00
 
-  // Linen services
+  // Linen services (in cents)
   linens: {
-    sheetFeePerBed: 30,
-    towelFee: 5,
-    faceClothFee: 2,
+    sheetFeePerBed: 3000, // $30.00
+    towelFee: 500, // $5.00
+    faceClothFee: 200, // $2.00
   },
 
-  // Time window surcharges
+  // Time window surcharges (in cents)
   timeWindows: {
     anytime: {
       surcharge: 0,
@@ -32,17 +34,17 @@ const defaultPricing = {
       description: "Most flexible, best pricing",
     },
     "10-3": {
-      surcharge: 25,
+      surcharge: 2500, // $25.00
       label: "10am - 3pm",
       description: "+$25 per cleaning",
     },
     "11-4": {
-      surcharge: 25,
+      surcharge: 2500, // $25.00
       label: "11am - 4pm",
       description: "+$25 per cleaning",
     },
     "12-2": {
-      surcharge: 30,
+      surcharge: 3000, // $30.00
       label: "12pm - 2pm",
       description: "+$30 per cleaning",
     },
@@ -50,26 +52,26 @@ const defaultPricing = {
 
   // Cancellation policy
   cancellation: {
-    fee: 25,
+    fee: 2500, // $25.00 (in cents)
     windowDays: 7,
     homeownerPenaltyDays: 3,
     cleanerPenaltyDays: 4,
     refundPercentage: 0.5,
   },
 
-  // Platform fees
+  // Platform fees (percentages, not cents)
   platform: {
     feePercent: 0.1,
     businessOwnerFeePercent: 0.1,
   },
 
-  // High volume
-  highVolumeFee: 50,
+  // High volume (in cents)
+  highVolumeFee: 5000, // $50.00
   highVolumeDays: ["holiday", "holiday weekend"],
 
-  // Last-minute booking
+  // Last-minute booking (fee in cents)
   lastMinute: {
-    fee: 50,
+    fee: 5000, // $50.00
     thresholdHours: 48,
     notificationRadiusMiles: 25,
   },
@@ -185,7 +187,7 @@ export const getTimeWindowOptions = (pricing) => {
         isObject && config.description
           ? config.description
           : surcharge > 0
-          ? `+$${surcharge} per cleaning`
+          ? `+${formatCurrency(surcharge)} per cleaning`
           : labels.description,
       surcharge,
     };
@@ -259,7 +261,7 @@ export const getTimeWindowLabel = (pricing, timeWindow) => {
 export const isLastMinuteBooking = (appointmentDate, pricing) => {
   const lastMinute = pricing?.lastMinute || defaultPricing.lastMinute;
   const thresholdHours = lastMinute?.thresholdHours ?? 48;
-  const fee = lastMinute?.fee ?? 50;
+  const fee = lastMinute?.fee ?? 5000; // $50.00 in cents
 
   const now = new Date();
   const appointmentTime = new Date(appointmentDate);
@@ -287,7 +289,7 @@ export const isLastMinuteBooking = (appointmentDate, pricing) => {
 export const getLastMinuteInfo = (pricing) => {
   const lastMinute = pricing?.lastMinute || defaultPricing.lastMinute;
   return {
-    fee: lastMinute?.fee ?? 50,
+    fee: lastMinute?.fee ?? 5000, // $50.00 in cents
     thresholdHours: lastMinute?.thresholdHours ?? 48,
     notificationRadiusMiles: lastMinute?.notificationRadiusMiles ?? 25,
   };

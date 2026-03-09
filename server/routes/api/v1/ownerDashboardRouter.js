@@ -2745,12 +2745,12 @@ ownerDashboardRouter.get(
       const reliabilityScore =
         totalJobs > 0 ? Math.round((completedJobs / totalJobs) * 100) : null;
 
-      // Calculate earnings (price is stored as string dollars, e.g., "150.50")
+      // Calculate earnings (price is stored as INTEGER cents, e.g., 15000 = $150.00)
       let totalEarnings = 0;
       let monthlyEarnings = 0;
       appointments.forEach((a) => {
         if (a.completed) {
-          const price = parseFloat(a.price) || 0;
+          const price = a.price || 0;
           totalEarnings += price;
           // Use appointment date (not createdAt) for monthly earnings calculation
           if (new Date(a.date) >= startOfMonth) {
@@ -2801,9 +2801,9 @@ ownerDashboardRouter.get(
           totalReviews: reviews.length,
         },
         earnings: {
-          totalEarnings,
-          earningsThisMonth: monthlyEarnings,
-          averagePerJob: avgPerJob,
+          totalEarnings, // Return cents, frontend handles conversion
+          earningsThisMonth: monthlyEarnings, // Return cents
+          averagePerJob: avgPerJob, // Return cents
         },
       });
     } catch (error) {
@@ -2889,7 +2889,7 @@ ownerDashboardRouter.get(
         homeCity: a.home ? a.home.city : null,
         homeState: a.home ? a.home.state : null,
         status: a.completed ? "completed" : "incomplete",
-        price: parseFloat(a.price) || 0,
+        price: a.price || 0, // Return cents, frontend handles conversion
         rating: reviewMap[a.id] || null,
       }));
 

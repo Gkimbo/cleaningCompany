@@ -67,10 +67,11 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
     : "No address set";
 
   // Use the selected home's defaultPrice if available, otherwise fall back to client-level price
+  // Prices are stored in cents, convert to dollars for display
   const defaultPrice = activeHome?.defaultPrice
-    ? parseFloat(activeHome.defaultPrice).toFixed(0)
+    ? (parseFloat(activeHome.defaultPrice) / 100).toFixed(0)
     : client?.defaultPrice
-    ? parseFloat(client.defaultPrice).toFixed(0)
+    ? (parseFloat(client.defaultPrice) / 100).toFixed(0)
     : null;
 
   // Determine the correct cleanerClientId - use selected home's cleanerClientId if available

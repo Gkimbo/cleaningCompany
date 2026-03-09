@@ -32,7 +32,7 @@ router.get("/pending", async (req, res) => {
       homeId: request.homeId,
       clientId: request.clientId,
       status: request.status,
-      calculatedPrice: request.calculatedPrice,
+      calculatedPrice: request.calculatedPrice || null, // Return cents, frontend handles conversion
       numBeds: request.numBeds,
       numBaths: request.numBaths,
       expiresAt: request.expiresAt,
@@ -80,7 +80,7 @@ router.get("/", async (req, res) => {
       homeId: request.homeId,
       businessOwnerId: request.businessOwnerId,
       status: request.status,
-      calculatedPrice: request.calculatedPrice,
+      calculatedPrice: request.calculatedPrice || null, // Return cents, frontend handles conversion
       numBeds: request.numBeds,
       numBaths: request.numBaths,
       declineReason: request.declineReason,
@@ -129,7 +129,7 @@ router.get("/:homeId/status", async (req, res) => {
       id: request.id,
       businessOwnerId: request.businessOwnerId,
       status: request.status,
-      calculatedPrice: request.calculatedPrice,
+      calculatedPrice: request.calculatedPrice || null, // Return cents, frontend handles conversion
       declineReason: request.declineReason,
       requestCount: request.requestCount,
       canRequestAgain: request.canRequestAgain(),

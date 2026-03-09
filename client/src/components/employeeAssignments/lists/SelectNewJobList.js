@@ -623,10 +623,8 @@ const SelectNewJobList = ({ state }) => {
   };
 
   const transformOfferToJobData = (offer) => {
-    // Server stores earningsOffered in cents, convert to dollars for display
-    const earningsInDollars = offer.earningsOffered
-      ? offer.earningsOffered / 100
-      : null;
+    // Server stores earningsOffered in cents - keep as cents, formatPrice will convert
+    const earningsInCents = offer.earningsOffered || null;
 
     // Calculate distance for this offer
     // Use inline coordinates from API response, fallback to fetched locations
@@ -657,8 +655,8 @@ const SelectNewJobList = ({ state }) => {
       totalCleanersRequired: offer.multiCleanerJob?.totalCleanersRequired || 2,
       cleanersConfirmed: offer.multiCleanerJob?.cleanersConfirmed || 0,
       status: offer.multiCleanerJob?.status,
-      earningsOffered: earningsInDollars,
-      perCleanerEarnings: earningsInDollars,
+      earningsOffered: earningsInCents,
+      perCleanerEarnings: earningsInCents,
       timeToBeCompleted: offer.multiCleanerJob?.appointment?.timeToBeCompleted,
       distance,
       numBeds: offer.multiCleanerJob?.appointment?.home?.numBeds,

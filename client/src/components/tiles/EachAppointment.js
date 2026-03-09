@@ -11,6 +11,7 @@ import { colors, spacing, radius, typography, shadows } from "../../services/sty
 import { API_BASE } from "../../services/config";
 import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
 import DiscountedPrice from "../pricing/DiscountedPrice";
+import { formatCurrency } from "../../services/formatters";
 
 const BED_SIZE_OPTIONS = [
   { value: "long_twin", label: "Long Twin" },
@@ -121,17 +122,17 @@ const EachAppointment = ({
     return configs;
   };
 
-  // State for configurations
+  // State for configurations (ensure arrays)
   const [bedConfigurations, setBedConfigurations] = useState(
-    initialSheetConfigs || initializeBedConfigurations(numBeds)
+    Array.isArray(initialSheetConfigs) ? initialSheetConfigs : initializeBedConfigurations(numBeds)
   );
   const [bathroomConfigurations, setBathroomConfigurations] = useState(
-    initialTowelConfigs || initializeBathroomConfigurations(numBaths)
+    Array.isArray(initialTowelConfigs) ? initialTowelConfigs : initializeBathroomConfigurations(numBaths)
   );
 
-  // Update configurations when props change
+  // Update configurations when props change (ensure arrays)
   useEffect(() => {
-    if (initialSheetConfigs) {
+    if (Array.isArray(initialSheetConfigs)) {
       setBedConfigurations(initialSheetConfigs);
     } else if (numBeds) {
       setBedConfigurations(initializeBedConfigurations(numBeds));
@@ -139,7 +140,7 @@ const EachAppointment = ({
   }, [initialSheetConfigs, numBeds]);
 
   useEffect(() => {
-    if (initialTowelConfigs) {
+    if (Array.isArray(initialTowelConfigs)) {
       setBathroomConfigurations(initialTowelConfigs);
     } else if (numBaths) {
       setBathroomConfigurations(initializeBathroomConfigurations(numBaths));
@@ -148,16 +149,16 @@ const EachAppointment = ({
 
   // Initialize configurations when user toggles addons to "yes" and configs are empty
   useEffect(() => {
-    if (normalizedBringSheets === "yes" && bedConfigurations.length === 0 && numBeds) {
+    if (normalizedBringSheets === "yes" && (!Array.isArray(bedConfigurations) || bedConfigurations.length === 0) && numBeds) {
       setBedConfigurations(initializeBedConfigurations(numBeds));
     }
-  }, [normalizedBringSheets, bedConfigurations.length, numBeds]);
+  }, [normalizedBringSheets, bedConfigurations, numBeds]);
 
   useEffect(() => {
-    if (normalizedBringTowels === "yes" && bathroomConfigurations.length === 0 && numBaths) {
+    if (normalizedBringTowels === "yes" && (!Array.isArray(bathroomConfigurations) || bathroomConfigurations.length === 0) && numBaths) {
       setBathroomConfigurations(initializeBathroomConfigurations(numBaths));
     }
-  }, [normalizedBringTowels, bathroomConfigurations.length, numBaths]);
+  }, [normalizedBringTowels, bathroomConfigurations, numBaths]);
 
   // Update a specific bed configuration
   const updateBedConfig = async (bedNumber, field, value) => {
@@ -537,7 +538,7 @@ const EachAppointment = ({
             {discountApplied && originalPrice ? (
               <DiscountedPrice originalPrice={originalPrice} discountedPrice={price} size="md" />
             ) : (
-              <Text style={[styles.priceText, styles.priceWarning]}>${price}</Text>
+              <Text style={[styles.priceText, styles.priceWarning]}>{formatCurrency(price)}</Text>
             )}
           </View>
         </View>
@@ -575,7 +576,7 @@ const EachAppointment = ({
             {discountApplied && originalPrice ? (
               <DiscountedPrice originalPrice={originalPrice} discountedPrice={price} size="md" />
             ) : (
-              <Text style={[styles.priceText, styles.priceComplete]}>${price}</Text>
+              <Text style={[styles.priceText, styles.priceComplete]}>{formatCurrency(price)}</Text>
             )}
             <Icon name="check-circle" size={16} color={colors.success[500]} />
           </View>
@@ -719,7 +720,7 @@ const EachAppointment = ({
           {discountApplied && originalPrice ? (
             <DiscountedPrice originalPrice={originalPrice} discountedPrice={price} size="md" />
           ) : (
-            <Text style={styles.priceText}>${price}</Text>
+            <Text style={styles.priceText}>{formatCurrency(price)}</Text>
           )}
         </View>
       </View>
@@ -943,9 +944,9 @@ const EachAppointment = ({
               <View>
                 <Text style={styles.toggleLabel}>Fresh Sheets</Text>
                 <Text style={styles.togglePrice}>
-                  {normalizedBringSheets === "yes" && bedConfigurations.length > 0
-                    ? `$${bedConfigurations.filter(b => b.needsSheets).length * sheetFeePerBed} ($${sheetFeePerBed} x ${bedConfigurations.filter(b => b.needsSheets).length} beds)`
-                    : `$${sheetFeePerBed} per bed`}
+                  {normalizedBringSheets === "yes" && Array.isArray(bedConfigurations) && bedConfigurations.length > 0
+                    ? `${formatCurrency(bedConfigurations.filter(b => b.needsSheets).length * sheetFeePerBed)} (${formatCurrency(sheetFeePerBed)} x ${bedConfigurations.filter(b => b.needsSheets).length} beds)`
+                    : `${formatCurrency(sheetFeePerBed)} per bed`}
                 </Text>
               </View>
             </View>
@@ -970,7 +971,7 @@ const EachAppointment = ({
           </View>
 
           {/* Bed Size Configuration - shown when sheets is "yes" */}
-          {normalizedBringSheets === "yes" && bedConfigurations.length > 0 && !isDisabled && (
+          {normalizedBringSheets === "yes" && Array.isArray(bedConfigurations) && bedConfigurations.length > 0 && !isDisabled && (
             <View style={styles.expandableSection}>
               {!showBedOptions ? (
                 <TouchableOpacity
@@ -1040,9 +1041,9 @@ const EachAppointment = ({
               <View>
                 <Text style={styles.toggleLabel}>Fresh Towels</Text>
                 <Text style={styles.togglePrice}>
-                  {normalizedBringTowels === "yes" && bathroomConfigurations.length > 0
-                    ? `$${bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * towelFee + (b.faceCloths || 0) * faceClothFee, 0)} - $${towelFee}/towel, $${faceClothFee}/face cloth`
-                    : `$${towelFee}/towel, $${faceClothFee}/face cloth`}
+                  {normalizedBringTowels === "yes" && Array.isArray(bathroomConfigurations) && bathroomConfigurations.length > 0
+                    ? `${formatCurrency(bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * towelFee + (b.faceCloths || 0) * faceClothFee, 0))} - ${formatCurrency(towelFee)}/towel, ${formatCurrency(faceClothFee)}/face cloth`
+                    : `${formatCurrency(towelFee)}/towel, ${formatCurrency(faceClothFee)}/face cloth`}
                 </Text>
               </View>
             </View>
@@ -1067,7 +1068,7 @@ const EachAppointment = ({
           </View>
 
           {/* Bathroom Configuration - shown when towels is "yes" */}
-          {normalizedBringTowels === "yes" && bathroomConfigurations.length > 0 && !isDisabled && (
+          {normalizedBringTowels === "yes" && Array.isArray(bathroomConfigurations) && bathroomConfigurations.length > 0 && !isDisabled && (
             <View style={styles.expandableSection}>
               {!showTowelOptions ? (
                 <TouchableOpacity
@@ -1096,7 +1097,7 @@ const EachAppointment = ({
 
                       {/* Towels Counter */}
                       <View style={styles.counterRow}>
-                        <Text style={styles.counterLabel}>Towels (${towelFee} each):</Text>
+                        <Text style={styles.counterLabel}>Towels ({formatCurrency(towelFee)} each):</Text>
                         <View style={styles.counterControls}>
                           <TouchableOpacity
                             style={styles.counterButton}
@@ -1118,7 +1119,7 @@ const EachAppointment = ({
 
                       {/* Face Cloths Counter */}
                       <View style={styles.counterRow}>
-                        <Text style={styles.counterLabel}>Face cloths (${faceClothFee} each):</Text>
+                        <Text style={styles.counterLabel}>Face cloths ({formatCurrency(faceClothFee)} each):</Text>
                         <View style={styles.counterControls}>
                           <TouchableOpacity
                             style={styles.counterButton}

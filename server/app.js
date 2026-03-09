@@ -69,9 +69,10 @@ const financialLimiter = rateLimit({
 	message: { error: "Too many financial requests, please try again later" },
 	standardHeaders: true,
 	legacyHeaders: false,
+	validate: false, // Disable strict IP validation for IPv6 compatibility
 	keyGenerator: (req) => {
 		// Rate limit by user ID if authenticated, otherwise by IP
-		return req.user?.id || req.ip;
+		return req.user?.id || req.ip || "unknown";
 	},
 });
 

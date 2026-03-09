@@ -175,7 +175,7 @@ const NotificationDetailScreen = () => {
 
     Alert.alert(
       "Accept Home Request",
-      `Accept this home and add it to your client list?\n\nCalculated Price: $${notification.data.calculatedPrice || "N/A"}`,
+      `Accept this home and add it to your client list?\n\nCalculated Price: $${notification.data.calculatedPriceDollars || (notification.data.calculatedPrice ? (notification.data.calculatedPrice / 100).toFixed(2) : "N/A")}`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -396,7 +396,7 @@ const NotificationDetailScreen = () => {
             {notification.data.calculatedPrice && (
               <View style={styles.priceDisplay}>
                 <Text style={styles.priceLabel}>Calculated Price</Text>
-                <Text style={styles.priceValue}>${notification.data.calculatedPrice}</Text>
+                <Text style={styles.priceValue}>${notification.data.calculatedPriceDollars || (notification.data.calculatedPrice / 100).toFixed(2)}</Text>
               </View>
             )}
 

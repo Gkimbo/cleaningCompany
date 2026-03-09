@@ -560,7 +560,7 @@ const CompleteHomeSetupWizard = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Sheets</Text>
           <Text style={styles.toggleCardDescription}>
             {formData.sheetsProvided === "yes"
-              ? `$${pricing?.linens?.sheetFeePerBed || 15} per bed`
+              ? `$${((pricing?.linens?.sheetFeePerBed || 3000) / 100).toFixed(0)} per bed`
               : "You provide your own sheets"}
           </Text>
         </View>
@@ -658,7 +658,7 @@ const CompleteHomeSetupWizard = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Towels</Text>
           <Text style={styles.toggleCardDescription}>
             {formData.towelsProvided === "yes"
-              ? `$${pricing?.linens?.towelFee || 5}/towel, $${pricing?.linens?.faceClothFee || 2}/face cloth`
+              ? `$${((pricing?.linens?.towelFee || 500) / 100).toFixed(0)}/towel, $${((pricing?.linens?.faceClothFee || 200) / 100).toFixed(0)}/face cloth`
               : "You provide your own towels"}
           </Text>
         </View>
@@ -676,7 +676,7 @@ const CompleteHomeSetupWizard = ({ state, dispatch }) => {
               <Text style={localStyles.bathroomTitle}>Bathroom {bath.bathroomNumber}</Text>
               <View style={localStyles.configRow}>
                 <Text style={localStyles.configLabel}>
-                  Towels (${pricing?.linens?.towelFee || 5} each):
+                  Towels (${((pricing?.linens?.towelFee || 500) / 100).toFixed(0)} each):
                 </Text>
                 <View style={localStyles.counterContainer}>
                   <TouchableOpacity
@@ -696,7 +696,7 @@ const CompleteHomeSetupWizard = ({ state, dispatch }) => {
               </View>
               <View style={localStyles.configRow}>
                 <Text style={localStyles.configLabel}>
-                  Face cloths (${pricing?.linens?.faceClothFee || 2} each):
+                  Face cloths (${((pricing?.linens?.faceClothFee || 200) / 100).toFixed(0)} each):
                 </Text>
                 <View style={localStyles.counterContainer}>
                   <TouchableOpacity

@@ -23,6 +23,8 @@ import {
   typography,
   shadows,
 } from "../../../services/styles/theme";
+import { formatCurrency } from "../../../services/formatters";
+import { parseLocalDate } from "../../../utils/dateUtils";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -47,6 +49,7 @@ const sortOptions = [
 
 const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const [allAppointments, setAllAppointments] = useState([]);
+  const [confirmedMultiCleanerJobs, setConfirmedMultiCleanerJobs] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
   const [sortOption, setSortOption] = useState("dateNewest");
@@ -68,15 +71,21 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     if (!isRefresh) setLoading(true);
 
     try {
-      const [appointmentResponse, userResponse] = await Promise.all([
+      const [appointmentResponse, userResponse, multiCleanerResponse] = await Promise.all([
         FetchData.get("/api/v1/employee-info", state.currentUser.token),
         getCurrentUser(state.currentUser.token),
+        FetchData.getMyConfirmedMultiCleanerJobs(state.currentUser.token),
       ]);
 
       const appointments = appointmentResponse.employee?.cleanerAppointments || [];
       dispatch({ type: "USER_APPOINTMENTS", payload: appointments });
       setAllAppointments(appointments);
       setUserId(userResponse.user.id);
+
+      // Set confirmed multi-cleaner jobs
+      if (!multiCleanerResponse.error) {
+        setConfirmedMultiCleanerJobs(multiCleanerResponse.jobs || []);
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -169,16 +178,24 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     fetchData(true);
   };
 
-  // Filter to only show assigned appointments
-  // For multi-cleaner jobs, the cleaner is linked via UserCleanerAppointments (already filtered by API)
-  // so we include them even if not in employeesAssigned array yet
+  // Get appointment IDs that are multi-cleaner jobs to avoid duplicates
+  // Convert to strings to ensure consistent comparison
+  const multiCleanerAppointmentIds = useMemo(() => {
+    return new Set(confirmedMultiCleanerJobs.map((job) => String(job.appointmentId)));
+  }, [confirmedMultiCleanerJobs]);
+
+  // Combine solo appointments with confirmed multi-cleaner jobs (matching Dashboard logic)
   const assignedAppointments = useMemo(() => {
-    if (!userId) return [];
-    return allAppointments.filter((appointment) =>
-      appointment.employeesAssigned?.includes(String(userId)) ||
-      appointment.isMultiCleanerJob
-    );
-  }, [allAppointments, userId]);
+    // Filter solo appointments (exclude those already in confirmedMultiCleanerJobs to avoid duplicates)
+    const soloAppointments = allAppointments
+      .filter((apt) => !multiCleanerAppointmentIds.has(String(apt.id)))
+      .map((apt) => ({ ...apt, jobType: "solo" }));
+
+    // Add confirmed multi-cleaner jobs with jobType
+    const teamJobs = confirmedMultiCleanerJobs.map((job) => ({ ...job, jobType: "team" }));
+
+    return [...soloAppointments, ...teamJobs];
+  }, [allAppointments, confirmedMultiCleanerJobs, multiCleanerAppointmentIds]);
 
   // Sort appointments
   const sortedAppointments = useMemo(() => {
@@ -212,20 +229,23 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     });
   }, [assignedAppointments, userLocation, appointmentLocations, sortOption]);
 
-  // Separate upcoming and completed
-  const now = new Date();
+  // Filter to only upcoming jobs (today or future, not completed) - matches Dashboard logic
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const upcomingJobs = sortedAppointments.filter(
-    (a) => new Date(a.date) >= new Date(now.toDateString()) && !a.completed
+    (a) => parseLocalDate(a.date) >= today && !a.completed
   );
-  const completedJobs = sortedAppointments.filter((a) => a.completed);
 
-  const totalEarnings = sortedAppointments.reduce((sum, a) => {
+  // Calculate expected earnings from upcoming jobs only (matches Dashboard's Expected Payout)
+  const totalEarnings = upcomingJobs.reduce((sum, a) => {
     const price = Number(a.price) || 0;
+    // Check if this is a team/multi-cleaner job
+    const isTeamJob = a.jobType === "team" || a.isMultiCleanerJob;
     // For multi-cleaner jobs, split by number of cleaners and use multi-cleaner fee
-    const numCleaners = a.isMultiCleanerJob
-      ? (a.multiCleanerJob?.totalCleanersRequired || a.employeesAssigned?.length || 1)
+    const numCleaners = isTeamJob
+      ? (a.multiCleanerJob?.totalCleanersRequired || a.totalCleanersRequired || a.employeesAssigned?.length || 1)
       : 1;
-    const feePercent = a.isMultiCleanerJob ? multiCleanerFeePercent : regularFeePercent;
+    const feePercent = isTeamJob ? multiCleanerFeePercent : regularFeePercent;
     const sharePercent = 1 - feePercent;
     return sum + (price / numCleaners) * sharePercent;
   }, 0);
@@ -266,18 +286,14 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
         </View>
         <View style={[styles.statCard, styles.statCardHighlight]}>
           <Text style={[styles.statValue, styles.statValueHighlight]}>
-            ${totalEarnings.toFixed(0)}
+            {formatCurrency(totalEarnings, false)}
           </Text>
-          <Text style={[styles.statLabel, styles.statLabelHighlight]}>Earnings</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{completedJobs.length}</Text>
-          <Text style={styles.statLabel}>Completed</Text>
+          <Text style={[styles.statLabel, styles.statLabelHighlight]}>Expected</Text>
         </View>
       </View>
 
       {/* Sort Button */}
-      {sortedAppointments.length > 0 && (
+      {upcomingJobs.length > 0 && (
         <Pressable style={styles.sortButton} onPress={() => setShowSortModal(true)}>
           <Icon name="sort" size={14} color={colors.primary[600]} />
           <Text style={styles.sortButtonText}>{currentSortLabel}</Text>
@@ -299,7 +315,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
           />
         }
       >
-        {sortedAppointments.length === 0 ? (
+        {upcomingJobs.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
               <Icon name="clipboard" size={40} color={colors.primary[300]} />
@@ -334,79 +350,41 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
                   </View>
                   <Text style={styles.sectionCount}>{upcomingJobs.length}</Text>
                 </View>
-                {upcomingJobs.map((appointment) => (
-                  <View key={appointment.id} style={styles.tileWrapper}>
-                    <EmployeeAssignmentTile
-                      id={appointment.id}
-                      cleanerId={userId}
-                      date={appointment.date}
-                      price={appointment.price}
-                      homeId={appointment.homeId}
-                      hasBeenAssigned={appointment.hasBeenAssigned}
-                      bringSheets={appointment.bringSheets}
-                      bringTowels={appointment.bringTowels}
-                      completed={appointment.completed}
-                      keyPadCode={appointment.keyPadCode}
-                      keyLocation={appointment.keyLocation}
-                      addEmployee={addEmployee}
-                      removeEmployee={removeEmployee}
-                      assigned={true}
-                      distance={appointment.distance}
-                      timeToBeCompleted={appointment.timeToBeCompleted}
-                      token={state.currentUser.token}
-                      isMultiCleanerJob={appointment.isMultiCleanerJob}
-                      multiCleanerJob={appointment.multiCleanerJob}
-                      employeesAssigned={appointment.employeesAssigned}
-                      sheetConfigurations={appointment.sheetConfigurations}
-                      towelConfigurations={appointment.towelConfigurations}
-                      cleanerRoomAssignments={appointment.cleanerRoomAssignments}
-                    />
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Completed Jobs */}
-            {completedJobs.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionTitleRow}>
-                    <View style={[styles.sectionBadge, styles.sectionBadgeCompleted]}>
-                      <Icon name="check" size={12} color={colors.success[600]} />
+                {upcomingJobs.map((appointment) => {
+                  const isTeamJob = appointment.jobType === "team";
+                  const uniqueKey = isTeamJob ? `team-${appointment.completionId}` : `solo-${appointment.id}`;
+                  return (
+                    <View key={uniqueKey} style={styles.tileWrapper}>
+                      <EmployeeAssignmentTile
+                        id={appointment.id || appointment.appointmentId}
+                        cleanerId={userId}
+                        date={appointment.date}
+                        price={appointment.price}
+                        homeId={appointment.homeId}
+                        hasBeenAssigned={appointment.hasBeenAssigned}
+                        bringSheets={appointment.bringSheets}
+                        bringTowels={appointment.bringTowels}
+                        completed={appointment.completed}
+                        keyPadCode={appointment.keyPadCode}
+                        keyLocation={appointment.keyLocation}
+                        addEmployee={addEmployee}
+                        removeEmployee={removeEmployee}
+                        assigned={true}
+                        distance={appointment.distance}
+                        timeToBeCompleted={appointment.timeToBeCompleted}
+                        token={state.currentUser.token}
+                        isMultiCleanerJob={isTeamJob || appointment.isMultiCleanerJob}
+                        multiCleanerJob={appointment.multiCleanerJob}
+                        totalCleanersRequired={appointment.totalCleanersRequired}
+                        employeesAssigned={appointment.employeesAssigned}
+                        sheetConfigurations={appointment.sheetConfigurations}
+                        towelConfigurations={appointment.towelConfigurations}
+                        cleanerRoomAssignments={appointment.cleanerRoomAssignments}
+                        jobType={appointment.jobType}
+                      />
                     </View>
-                    <Text style={styles.sectionTitle}>Completed</Text>
-                  </View>
-                  <Text style={styles.sectionCount}>{completedJobs.length}</Text>
-                </View>
-                {completedJobs.map((appointment) => (
-                  <View key={appointment.id} style={styles.tileWrapper}>
-                    <EmployeeAssignmentTile
-                      id={appointment.id}
-                      cleanerId={userId}
-                      date={appointment.date}
-                      price={appointment.price}
-                      homeId={appointment.homeId}
-                      hasBeenAssigned={appointment.hasBeenAssigned}
-                      bringSheets={appointment.bringSheets}
-                      bringTowels={appointment.bringTowels}
-                      completed={appointment.completed}
-                      keyPadCode={appointment.keyPadCode}
-                      keyLocation={appointment.keyLocation}
-                      addEmployee={addEmployee}
-                      removeEmployee={removeEmployee}
-                      assigned={true}
-                      distance={appointment.distance}
-                      timeToBeCompleted={appointment.timeToBeCompleted}
-                      token={state.currentUser.token}
-                      isMultiCleanerJob={appointment.isMultiCleanerJob}
-                      multiCleanerJob={appointment.multiCleanerJob}
-                      employeesAssigned={appointment.employeesAssigned}
-                      sheetConfigurations={appointment.sheetConfigurations}
-                      towelConfigurations={appointment.towelConfigurations}
-                      cleanerRoomAssignments={appointment.cleanerRoomAssignments}
-                    />
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             )}
 

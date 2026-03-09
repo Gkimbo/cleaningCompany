@@ -61,38 +61,39 @@ const businessConfig = {
   /**
    * PRICING CONFIGURATION
    * Single source of truth for all pricing in the backend
+   * ALL PRICES ARE IN CENTS (e.g., 15000 = $150.00)
    */
   pricing: {
-    // Base cleaning rate
-    basePrice: 150, // 1 bed/1 bath starting price
-    extraBedBathFee: 50, // Per additional bedroom or full bathroom
-    halfBathFee: 25, // Per half bathroom
+    // Base cleaning rate (in cents)
+    basePrice: 15000, // $150.00 - 1 bed/1 bath starting price
+    extraBedBathFee: 5000, // $50.00 - Per additional bedroom or full bathroom
+    halfBathFee: 2500, // $25.00 - Per half bathroom
 
-    // Linen services
+    // Linen services (in cents)
     linens: {
-      sheetFeePerBed: 30, // Per bed needing fresh sheets
-      towelFee: 5, // Per towel
-      faceClothFee: 2, // Per face cloth
+      sheetFeePerBed: 3000, // $30.00 - Per bed needing fresh sheets
+      towelFee: 500, // $5.00 - Per towel
+      faceClothFee: 200, // $2.00 - Per face cloth
     },
 
-    // Time window surcharges
+    // Time window surcharges (in cents)
     timeWindows: {
       anytime: 0,
-      "10-3": 25,
-      "11-4": 25,
-      "12-2": 30,
+      "10-3": 2500, // $25.00
+      "11-4": 2500, // $25.00
+      "12-2": 3000, // $30.00
     },
 
     // Cancellation policy
     cancellation: {
-      fee: 25, // Flat cancellation fee
+      fee: 2500, // $25.00 - Flat cancellation fee (in cents)
       windowDays: 7, // Days before appointment when fee applies
       homeownerPenaltyDays: 3, // Days before when homeowner gets partial refund
       cleanerPenaltyDays: 4, // Days before when cleaner gets penalty
       refundPercentage: 0.5, // Percentage refunded within penalty window (50%)
     },
 
-    // Platform fees
+    // Platform fees (percentages, not cents)
     platform: {
       feePercent: 0.1, // 10% platform fee on regular cleaner payouts
       businessOwnerFeePercent: 0.1, // 10% platform fee on business owner cleaner payouts
@@ -101,8 +102,8 @@ const businessConfig = {
       largeBusinessLookbackMonths: 1, // Check last 1 month (rolling window)
     },
 
-    // High volume day surcharge
-    highVolumeFee: 50,
+    // High volume day surcharge (in cents)
+    highVolumeFee: 5000, // $50.00
     highVolumeDays: ["holiday", "holiday weekend"],
   },
 
@@ -334,7 +335,7 @@ function getCleanersNeeded(numBeds, numBaths, timeWindow = null) {
 /**
  * Helper function to calculate time window surcharge
  * @param {string} timeWindow - Time window selection
- * @returns {number} Surcharge amount
+ * @returns {number} Surcharge amount in CENTS (e.g., 2500 = $25.00)
  */
 function getTimeWindowSurcharge(timeWindow) {
   return businessConfig.pricing.timeWindows[timeWindow] || 0;

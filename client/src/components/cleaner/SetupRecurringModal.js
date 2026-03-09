@@ -88,10 +88,11 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token, selec
     : client?.invitedName || "Client";
 
   // Use the selected home's defaultPrice if available, otherwise fall back to client-level price
+  // Prices are stored in cents, convert to dollars for display
   const defaultPrice = selectedHome?.defaultPrice
-    ? parseFloat(selectedHome.defaultPrice).toFixed(0)
+    ? (parseFloat(selectedHome.defaultPrice) / 100).toFixed(0)
     : client?.defaultPrice
-    ? parseFloat(client.defaultPrice).toFixed(0)
+    ? (parseFloat(client.defaultPrice) / 100).toFixed(0)
     : null;
 
   // Fetch existing schedules when modal opens

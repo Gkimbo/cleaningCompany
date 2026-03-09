@@ -536,10 +536,10 @@ const ClientDetailPage = ({ state, dispatch }) => {
     fetchClientData();
   }, [fetchClientData]);
 
-  // Update price input when client data changes
+  // Update price input when client data changes (convert cents to dollars for display)
   useEffect(() => {
     if (clientData?.cleanerClient?.defaultPrice) {
-      setPriceInput(clientData.cleanerClient.defaultPrice.toString());
+      setPriceInput((clientData.cleanerClient.defaultPrice / 100).toString());
     }
   }, [clientData?.cleanerClient?.defaultPrice]);
 
@@ -585,27 +585,30 @@ const ClientDetailPage = ({ state, dispatch }) => {
     const targetHome = homes.find(h => h.id === homeId) || home;
     const cleanerClientIdToUpdate = targetHome?.cleanerClientId || clientData.cleanerClient.id;
 
+    // Convert dollars to cents for storage
+    const priceInCents = Math.round(parseFloat(priceInput) * 100);
+
     setSavingPrice(true);
     try {
       const result = await CleanerClientService.updateDefaultPrice(
         state.currentUser.token,
         cleanerClientIdToUpdate,
-        parseFloat(priceInput)
+        priceInCents
       );
 
       if (result.success) {
         setEditingPriceHomeId(null);
-        // Update local state - update the specific home's price
+        // Update local state - update the specific home's price (in cents)
         setClientData((prev) => ({
           ...prev,
           homes: prev.homes.map(h =>
             h.id === homeId
-              ? { ...h, defaultPrice: parseFloat(priceInput) }
+              ? { ...h, defaultPrice: priceInCents }
               : h
           ),
           // Also update cleanerClient if it's the primary home
           cleanerClient: targetHome?.cleanerClientId === prev.cleanerClient.id
-            ? { ...prev.cleanerClient, defaultPrice: parseFloat(priceInput) }
+            ? { ...prev.cleanerClient, defaultPrice: priceInCents }
             : prev.cleanerClient,
         }));
         Alert.alert("Success", "Price updated for this home");
@@ -1089,7 +1092,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                       <View style={styles.homePriceDisplay}>
                         <Text style={styles.homePriceLabel}>Default Price</Text>
                         <Text style={styles.homePriceValue}>
-                          ${homeItem.defaultPrice || cleanerClient.defaultPrice || "0"}
+                          ${((homeItem.defaultPrice || cleanerClient.defaultPrice || 0) / 100).toFixed(0)}
                         </Text>
                       </View>
                       <Pressable
@@ -1098,7 +1101,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                           pressed && styles.homePriceEditBtnPressed,
                         ]}
                         onPress={() => {
-                          setPriceInput((homeItem.defaultPrice || cleanerClient.defaultPrice || 0).toString());
+                          setPriceInput(((homeItem.defaultPrice || cleanerClient.defaultPrice || 0) / 100).toString());
                           setEditingPriceHomeId(homeItem.id);
                         }}
                       >
@@ -1267,7 +1270,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                       <View style={styles.homePriceDisplay}>
                         <Text style={styles.homePriceLabel}>Default Price</Text>
                         <Text style={styles.homePriceValue}>
-                          ${cleanerClient.defaultPrice || "0"}
+                          ${((cleanerClient.defaultPrice || 0) / 100).toFixed(0)}
                         </Text>
                       </View>
                       <Pressable
@@ -1276,7 +1279,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                           pressed && styles.homePriceEditBtnPressed,
                         ]}
                         onPress={() => {
-                          setPriceInput((cleanerClient.defaultPrice || 0).toString());
+                          setPriceInput(((cleanerClient.defaultPrice || 0) / 100).toString());
                           setEditingPriceHomeId(home.id);
                         }}
                       >

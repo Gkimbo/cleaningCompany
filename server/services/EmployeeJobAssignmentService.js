@@ -65,14 +65,14 @@ class EmployeeJobAssignmentService {
     const hoursPerBath = 0.5;
 
     const rawTotalHours = baseHours + (numBeds * hoursPerBed) + (numBaths * hoursPerBath);
-    // Round total to nearest 0.5 before dividing by cleaners
-    const totalHours = Math.round(rawTotalHours * 2) / 2;
+    // Round UP to nearest 0.5 before dividing by cleaners
+    const totalHours = Math.ceil(rawTotalHours * 2) / 2;
 
     // Divide by number of cleaners (minimum 1 hour per person)
     const hoursPerCleaner = Math.max(1, totalHours / Math.max(1, numCleaners));
 
-    // Round to nearest 0.5
-    return Math.round(hoursPerCleaner * 2) / 2;
+    // Round UP to nearest 0.5
+    return Math.ceil(hoursPerCleaner * 2) / 2;
   }
 
   /**
@@ -123,6 +123,95 @@ class EmployeeJobAssignmentService {
         const hourlyPay = Math.round(hourlyRate * estimatedHours);
         return { payAmount: hourlyPay, payType: "hourly", estimatedHours, warning };
     }
+  }
+
+  /**
+   * Recalculate pay for all existing assignments when the cleaner count changes.
+   * Only recalculates hourly and percentage employees (flat rate stays the same).
+   * @param {number} appointmentId - The appointment ID
+   * @param {number} businessOwnerId - The business owner ID
+   * @param {Object} [excludeAssignmentId] - Assignment ID to exclude (the one just created)
+   * @returns {Promise<number>} Number of assignments updated
+   */
+  static async recalculateAllAssignmentsForJob(appointmentId, businessOwnerId, excludeAssignmentId = null) {
+    // Get appointment with home details
+    const appointment = await UserAppointments.findByPk(appointmentId, {
+      include: [{ model: UserHomes, as: "home" }],
+    });
+    if (!appointment) return 0;
+
+    // Get home size
+    const numBeds = appointment.home?.numBeds || 2;
+    const numBaths = appointment.home?.numBaths || 1;
+
+    // Count ALL active assignments (including the new one)
+    const totalCleaners = await EmployeeJobAssignment.count({
+      where: {
+        appointmentId,
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
+      },
+    });
+
+    // Calculate hours per cleaner
+    const hoursPerCleaner = this.estimateJobDuration(numBeds, numBaths, totalCleaners);
+    const jobPriceInCents = appointment.price || 0;
+
+    // Get all existing assignments (excluding the new one if specified)
+    const whereClause = {
+      appointmentId,
+      businessOwnerId,
+      status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
+      isSelfAssignment: false, // Only update employees, not self-assignments
+    };
+    if (excludeAssignmentId) {
+      whereClause.id = { [Op.ne]: excludeAssignmentId };
+    }
+
+    const existingAssignments = await EmployeeJobAssignment.findAll({
+      where: whereClause,
+      include: [{ model: BusinessEmployee, as: "employee" }],
+    });
+
+    let updatedCount = 0;
+    for (const assignment of existingAssignments) {
+      const emp = assignment.employee;
+      if (!emp) continue;
+
+      const payType = emp.payType || "hourly";
+
+      // Only recalculate for hourly and percentage employees
+      // Flat rate/per_job stays the same regardless of cleaner count
+      if (payType === "hourly") {
+        const hourlyRate = emp.defaultHourlyRate || 0;
+        const newPayAmount = Math.round(hourlyRate * hoursPerCleaner);
+
+        if (newPayAmount !== assignment.payAmount) {
+          await assignment.update({
+            payAmount: newPayAmount,
+            payAdjustmentReason: `Recalculated: cleaner count changed to ${totalCleaners}`,
+          });
+          updatedCount++;
+        }
+      } else if (payType === "percentage") {
+        // For percentage, divide among all cleaners
+        const percentRate = parseFloat(emp.payRate) || 0;
+        const newPayAmount = Math.round((jobPriceInCents * percentRate) / (100 * totalCleaners));
+
+        if (newPayAmount !== assignment.payAmount) {
+          await assignment.update({
+            payAmount: newPayAmount,
+            payAdjustmentReason: `Recalculated: cleaner count changed to ${totalCleaners}`,
+          });
+          updatedCount++;
+        }
+      }
+    }
+
+    if (updatedCount > 0) {
+      console.log(`[EmployeeJobAssignmentService] Recalculated pay for ${updatedCount} assignments (new cleaner count: ${totalCleaners})`);
+    }
+
+    return updatedCount;
   }
 
   /**
@@ -307,6 +396,14 @@ class EmployeeJobAssignmentService {
       console.error("[EmployeeJobAssignmentService] Failed to clear unassigned reminder notifications:", clearError);
     }
 
+    // Recalculate pay for all existing assignments now that cleaner count has changed
+    // This ensures hourly employees get paid for the correct hours (total ÷ cleaners)
+    try {
+      await this.recalculateAllAssignmentsForJob(appointmentId, businessOwnerId, assignment.id);
+    } catch (recalcError) {
+      console.error("[EmployeeJobAssignmentService] Failed to recalculate pay for existing assignments:", recalcError);
+    }
+
     return assignment;
   }
 
@@ -424,6 +521,14 @@ class EmployeeJobAssignmentService {
       console.error("[EmployeeJobAssignmentService] Failed to clear unassigned reminder notifications:", clearError);
     }
 
+    // Recalculate pay for all existing employee assignments now that owner joined
+    // This ensures hourly employees get paid for the correct hours (total ÷ cleaners)
+    try {
+      await this.recalculateAllAssignmentsForJob(appointmentId, businessOwnerId, assignment.id);
+    } catch (recalcError) {
+      console.error("[EmployeeJobAssignmentService] Failed to recalculate pay for existing assignments:", recalcError);
+    }
+
     return assignment;
   }
 
@@ -520,6 +625,16 @@ class EmployeeJobAssignmentService {
         }
       } catch (notifyError) {
         console.error("[EmployeeJobAssignmentService] Failed to create unassigned reminder:", notifyError);
+      }
+    }
+
+    // Recalculate pay for remaining assignments now that cleaner count decreased
+    // Remaining hourly employees now have more hours (total ÷ fewer cleaners)
+    if (otherAssignments > 0) {
+      try {
+        await this.recalculateAllAssignmentsForJob(assignment.appointmentId, businessOwnerId);
+      } catch (recalcError) {
+        console.error("[EmployeeJobAssignmentService] Failed to recalculate pay for remaining assignments:", recalcError);
       }
     }
 
@@ -1335,7 +1450,7 @@ class EmployeeJobAssignmentService {
         {
           model: BusinessEmployee,
           as: "employee",
-          attributes: ["id", "firstName", "lastName"],
+          attributes: ["id", "firstName", "lastName", "payType", "defaultHourlyRate", "defaultJobRate", "payRate"],
           required: false, // Allow self-assignments (null businessEmployeeId)
         },
         {

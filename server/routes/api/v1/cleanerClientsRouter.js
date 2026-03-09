@@ -1289,8 +1289,8 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       // User input is in dollars, convert to cents
       appointmentPriceCents = Math.round(parseFloat(price) * 100);
     } else if (cleanerClient.defaultPrice) {
-      // defaultPrice is stored in dollars (DECIMAL), convert to cents
-      appointmentPriceCents = Math.round(parseFloat(cleanerClient.defaultPrice) * 100);
+      // defaultPrice is stored in cents (INTEGER)
+      appointmentPriceCents = cleanerClient.defaultPrice;
     } else {
       // calculatePrice returns cents
       appointmentPriceCents = await calculatePrice(
@@ -1518,12 +1518,13 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
     }
 
     // Calculate price in cents
-    // price from request is in dollars, defaultPrice is DECIMAL (dollars), fallback is cents
+    // price from request is in dollars, defaultPrice is INTEGER (cents), fallback is cents
     let appointmentPriceCents;
     if (price) {
       appointmentPriceCents = Math.round(parseFloat(price) * 100);
     } else if (cleanerClient.defaultPrice) {
-      appointmentPriceCents = Math.round(parseFloat(cleanerClient.defaultPrice) * 100);
+      // defaultPrice is stored in cents (INTEGER)
+      appointmentPriceCents = cleanerClient.defaultPrice;
     } else {
       appointmentPriceCents = 15000; // Default $150.00 in cents
     }
@@ -1706,7 +1707,7 @@ cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res)
     const { price } = req.body;
     const cleanerId = req.user.id;
 
-    // Validate price
+    // Validate price (user input is in dollars)
     if (price === undefined || price === null) {
       return res.status(400).json({ error: "Price is required" });
     }
@@ -1715,6 +1716,9 @@ cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res)
     if (isNaN(numericPrice) || numericPrice < 0) {
       return res.status(400).json({ error: "Price must be a positive number" });
     }
+
+    // Convert dollars to cents for storage
+    const priceCents = Math.round(numericPrice * 100);
 
     // Get the cleaner-client relationship with home data
     const cleanerClient = await CleanerClient.findOne({
@@ -1726,12 +1730,12 @@ cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res)
       return res.status(404).json({ error: "Client not found" });
     }
 
-    // Store old price before update
-    const oldPrice = cleanerClient.defaultPrice;
-    const priceChanged = oldPrice !== numericPrice;
+    // Store old price before update (in cents)
+    const oldPriceCents = cleanerClient.defaultPrice;
+    const priceChanged = oldPriceCents !== priceCents;
 
-    // Update the default price
-    await cleanerClient.update({ defaultPrice: numericPrice });
+    // Update the default price (stored in cents)
+    await cleanerClient.update({ defaultPrice: priceCents });
 
     // Send notifications if active client (has clientId) and price changed
     if (cleanerClient.clientId && priceChanged) {
@@ -1743,8 +1747,8 @@ cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res)
         cleanerId,
         cleanerName: `${cleaner.firstName} ${cleaner.lastName}`,
         businessName: cleaner.businessName,
-        oldPrice,
-        newPrice: numericPrice,
+        oldPrice: oldPriceCents, // In cents - NotificationService will convert to dollars
+        newPrice: priceCents, // In cents - NotificationService will convert to dollars
         homeAddress,
         io: req.app.get("io"),
       });
@@ -1754,7 +1758,7 @@ cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res)
       success: true,
       cleanerClient: {
         id: cleanerClient.id,
-        defaultPrice: numericPrice,
+        defaultPrice: priceCents, // Return cents, frontend handles conversion
       },
     });
   } catch (err) {

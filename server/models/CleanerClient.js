@@ -86,8 +86,9 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     defaultPrice: {
-      type: DataTypes.DECIMAL(10, 2),
+      type: DataTypes.INTEGER,
       allowNull: true,
+      comment: "Custom price in cents (e.g., 15000 = $150.00)",
     },
     defaultDayOfWeek: {
       type: DataTypes.INTEGER, // 0-6, 0=Sunday

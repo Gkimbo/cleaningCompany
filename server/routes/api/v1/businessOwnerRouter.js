@@ -1383,6 +1383,12 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
       return res.status(404).json({ error: "Job not found or not accessible" });
     }
 
+    // Get active pricing config for platform fee calculation
+    const pricingConfig = await PricingConfig.getActive();
+    const platformFeePercent = pricingConfig
+      ? parseFloat(pricingConfig.businessOwnerFeePercent || pricingConfig.platformFeePercent)
+      : FINANCIAL_CONSTANTS.DEFAULT_BUSINESS_OWNER_FEE_PERCENT;
+
     // Check for active assignments (supports multi-cleaner jobs)
     const allAssignments = await EmployeeJobAssignment.findAll({
       where: {
@@ -1393,11 +1399,13 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
         {
           model: BusinessEmployee,
           as: "employee",
+          required: false, // Don't exclude assignments without employee (e.g., self-assignments)
           include: [
             {
               model: User,
               as: "user",
               attributes: ["firstName", "lastName"],
+              required: false,
             },
           ],
         },
@@ -1492,6 +1500,8 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
           name: "You (Business Owner)",
           isSelfAssignment: true,
           payAmount: a.payAmount || 0,
+          // Self-assignment means no employee pay needed
+          payConfig: null,
         });
       } else if (a.employee) {
         const empFirstName = a.employee.user?.firstName
@@ -1507,6 +1517,25 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
           name: `${empFirstName} ${empLastName}`.trim(),
           isSelfAssignment: false,
           payAmount: a.payAmount || 0,
+          // Include employee pay configuration for profit calculation
+          payConfig: {
+            payType: a.employee.payType || "hourly",
+            hourlyRate: a.employee.defaultHourlyRate || 0, // in cents
+            jobRate: a.employee.defaultJobRate || 0, // in cents
+            percentageRate: a.employee.payRate ? parseFloat(a.employee.payRate) : 0, // as decimal (0.50 = 50%)
+          },
+        });
+      } else {
+        // Assignment exists but employee relationship not loaded (edge case)
+        // Still include it so UI can show something
+        assignees.push({
+          id: a.id,
+          type: "employee",
+          employeeId: a.businessEmployeeId,
+          name: "Employee",
+          isSelfAssignment: false,
+          payAmount: a.payAmount || 0,
+          payConfig: null, // Unknown pay config
         });
       }
     });
@@ -1526,6 +1555,12 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
     const isAssigned = assignees.length > 0;
     const isMultiCleaner = assignees.length > 1;
 
+    // Calculate estimated duration from beds/baths (same formula as calendar endpoint)
+    const numBeds = appointment.home?.numBeds || 2;
+    const numBaths = appointment.home?.numBaths || 1;
+    const rawDuration = 1 + (numBeds * 0.25) + (numBaths * 0.5);
+    const estimatedDuration = Math.ceil(rawDuration * 2) / 2; // Round UP to nearest 0.5
+
     res.json({
       job: {
         id: appointment.id,
@@ -1533,6 +1568,7 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
         startTime: appointment.startTime,
         timeToBeCompleted: appointment.timeToBeCompleted,
         timeWindow: appointment.recurringSchedule?.timeWindow || null,
+        duration: estimatedDuration, // Estimated hours based on home size
         price: appointment.price,
         paid: appointment.paid,
         paymentStatus: appointment.paymentStatus,
@@ -1558,6 +1594,8 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
           canReassign: isAssigned && assignment?.status === "assigned",
           canUnassign: isAssigned && assignment?.status === "assigned",
         },
+        // Profit breakdown data
+        platformFeePercent,
       },
       home: {
         id: appointment.home?.id,
@@ -2515,6 +2553,13 @@ router.get("/calendar", async (req, res) => {
           id: a.employee.id,
           firstName: empFirstName,
           lastName: empLastName,
+          // Include pay config for profit calculation
+          payConfig: {
+            payType: a.employee.payType || "hourly",
+            hourlyRate: a.employee.defaultHourlyRate || 0,
+            jobRate: a.employee.defaultJobRate || 0,
+            percentageRate: a.employee.payRate ? parseFloat(a.employee.payRate) : 0,
+          },
         } : null,
       });
     });
@@ -2560,6 +2605,13 @@ router.get("/calendar", async (req, res) => {
           id: assignment.employee.id,
           firstName: employeeFirstName,
           lastName: employeeLastName,
+          // Include pay config for profit calculation
+          payConfig: {
+            payType: assignment.employee.payType || "hourly",
+            hourlyRate: assignment.employee.defaultHourlyRate || 0,
+            jobRate: assignment.employee.defaultJobRate || 0,
+            percentageRate: assignment.employee.payRate ? parseFloat(assignment.employee.payRate) : 0,
+          },
         } : null,
         appointment: {
           id: assignment.appointment?.id,
@@ -3404,7 +3456,7 @@ router.get("/client-payments", async (req, res) => {
       return {
         id: apt.id,
         date: apt.date,
-        price: apt.price,
+        price: apt.price || 0, // Return cents, frontend handles conversion
         paymentStatus: apt.paymentStatus,
         clientName: clientFirstName && clientLastName
           ? `${clientFirstName} ${clientLastName}`
@@ -3414,9 +3466,10 @@ router.get("/client-payments", async (req, res) => {
       };
     });
 
-    const totalUnpaid = unpaidAppointments.reduce((sum, a) => sum + parseFloat(a.price || 0), 0);
+    // Calculate total in cents
+    const totalUnpaid = appointments.reduce((sum, a) => sum + (a.price || 0), 0);
 
-    res.json({ unpaidAppointments, totalUnpaid });
+    res.json({ unpaidAppointments, totalUnpaid }); // Return cents, frontend handles conversion
   } catch (error) {
     console.error("Error fetching client payments:", error);
     res.status(500).json({ error: error.message });

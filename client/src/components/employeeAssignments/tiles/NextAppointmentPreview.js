@@ -12,6 +12,7 @@ import FetchData from "../../../services/fetchRequests/fetchData";
 import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { PricingContext } from "../../../context/PricingContext";
+import { formatCurrency } from "../../../services/formatters";
 
 const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
   const { pricing } = useContext(PricingContext);
@@ -266,7 +267,7 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
         </View>
         <View style={styles.detailItem}>
           <Text style={styles.detailLabel}>Payout</Text>
-          <Text style={[styles.detailValue, styles.payoutValue]}>${payout.toFixed(2)}</Text>
+          <Text style={[styles.detailValue, styles.payoutValue]}>{formatCurrency(payout)}</Text>
         </View>
       </View>
 

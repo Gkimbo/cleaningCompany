@@ -91,6 +91,23 @@ const UnassignedJobCard = ({ job, onAssign }) => {
   );
 };
 
+// Helper to calculate employee pay from pay config (consistent with BusinessOwnerJobDetails)
+const calculatePayFromConfig = (payConfig, jobPrice, hours) => {
+  if (!payConfig) return 0;
+
+  switch (payConfig.payType) {
+    case "hourly":
+      return Math.round((payConfig.hourlyRate || 0) * hours);
+    case "per_job":
+    case "flat_rate":
+      return payConfig.jobRate || 0;
+    case "percentage":
+      return Math.round(jobPrice * (payConfig.percentageRate || 0));
+    default:
+      return 0;
+  }
+};
+
 // Assigned Job Card
 const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, platformFeePercent }) => {
   const statusColors = STATUS_COLORS[assignment.status] || STATUS_COLORS.assigned;
@@ -100,7 +117,6 @@ const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, pl
 
   // Calculate financials
   const jobPrice = assignment.appointment?.price || assignment.appointment?.totalPrice || 0;
-  const employeePay = assignment.payAmount || 0;
   const platformFee = Math.round(jobPrice * (platformFeePercent / 100));
 
   // Check if owner is also assigned (from allAssignments array)
@@ -112,7 +128,7 @@ const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, pl
   const isMultiCleaner = totalAssigned > 1;
   const ownerIsAssigned = ownerAssignment || assignment.isSelfAssignment;
 
-  // Calculate adjusted duration for multi-cleaner jobs
+  // Calculate adjusted duration for multi-cleaner jobs (divided among all cleaners)
   const baseDuration = assignment.appointment?.duration || 2;
   const adjustedDuration = isMultiCleaner ? roundToHalfHour(baseDuration / totalAssigned) : baseDuration;
 
@@ -134,12 +150,31 @@ const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, pl
     return `${assignment.employee?.firstName || ""} ${assignment.employee?.lastName || ""}`.trim();
   };
 
-  // Calculate total employee pay for multi-assignment jobs
+  // Calculate total employee pay using pay config and divided hours (consistent calculation)
   const getTotalEmployeePay = () => {
-    if (allAssignments.length > 1) {
-      return allAssignments.reduce((sum, a) => sum + (a.payAmount || 0), 0);
+    // For multi-cleaner jobs, calculate pay for each employee using their pay config
+    if (allAssignments.length > 0) {
+      return allAssignments.reduce((sum, a) => {
+        // Self-assignments don't have employee pay
+        if (a.isSelfAssignment) return sum;
+
+        // If we have pay config, calculate based on divided hours
+        if (a.employee?.payConfig) {
+          return sum + calculatePayFromConfig(a.employee.payConfig, jobPrice, adjustedDuration);
+        }
+
+        // Fallback to stored payAmount if no pay config available
+        return sum + (a.payAmount || 0);
+      }, 0);
     }
-    return employeePay;
+
+    // Single assignment - use pay config if available
+    if (assignment.employee?.payConfig) {
+      return calculatePayFromConfig(assignment.employee.payConfig, jobPrice, adjustedDuration);
+    }
+
+    // Fallback to stored payAmount
+    return assignment.payAmount || 0;
   };
 
   const totalEmployeePay = getTotalEmployeePay();

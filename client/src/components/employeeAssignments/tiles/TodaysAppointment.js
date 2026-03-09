@@ -80,12 +80,14 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
     ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
     : (pricing?.platform?.feePercent || 0.1);
   const cleanerSharePercent = 1 - platformFeePercent;
-  const totalPrice = Number(appointment.price);
+  const totalPriceCents = Number(appointment.price) || 0;
   // For multi-cleaner jobs, divide by number of cleaners
+  // Note: totalCleanersRequired can be directly on appointment (from confirmedMultiCleanerJobs) or nested under multiCleanerJob
   const numCleaners = isMultiCleanerJob
-    ? (appointment.multiCleanerJob?.totalCleanersRequired || appointment.employeesAssigned?.length || 1)
+    ? (appointment.multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired || appointment.employeesAssigned?.length || 1)
     : 1;
-  const correctedAmount = (totalPrice / numCleaners) * cleanerSharePercent;
+  // Convert cents to dollars
+  const correctedAmount = ((totalPriceCents / numCleaners) * cleanerSharePercent) / 100;
 
   useEffect(() => {
     FetchData.getHome(appointment.homeId).then((response) => {

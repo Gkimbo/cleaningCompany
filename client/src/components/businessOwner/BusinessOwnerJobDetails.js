@@ -44,6 +44,63 @@ const parseConfig = (config) => {
   return [];
 };
 
+// Helper to round up to nearest half hour
+const roundUpToHalfHour = (hours) => {
+  return Math.ceil(hours * 2) / 2;
+};
+
+// Helper to get employee pay - calculates from payConfig to ensure consistency with displayed formula
+// For multi-cleaner jobs, time is divided among ALL cleaners (including owner) and rounded up to nearest half hour
+// Self-assignments return 0 (owner doesn't pay themselves)
+const getEmployeePay = (assignee, jobPrice, estimatedHours, cleanerCount = 1) => {
+  // Self-assignment means business owner does the work - no employee pay
+  if (assignee.isSelfAssignment) {
+    return 0;
+  }
+
+  // Always calculate from payConfig to ensure the displayed formula matches the amount
+  // This prevents mismatches between "$25/hr × 2h" display and the actual amount shown
+  if (!assignee.payConfig) {
+    // Fall back to stored payAmount only if no payConfig available
+    return assignee.payAmount || 0;
+  }
+
+  const { payType, hourlyRate, jobRate, percentageRate } = assignee.payConfig;
+
+  switch (payType) {
+    case "hourly":
+      // Divide total hours by number of cleaners, round up to nearest half hour
+      const totalHours = parseFloat(estimatedHours) || 0;
+      const hoursPerCleaner = totalHours / Math.max(cleanerCount, 1);
+      const roundedHours = roundUpToHalfHour(hoursPerCleaner);
+      return Math.round(hourlyRate * roundedHours);
+    case "per_job":
+      // jobRate is already in cents - flat rate per employee
+      return jobRate || 0;
+    case "percentage":
+      // percentageRate is a decimal (0.50 = 50%), jobPrice is in cents
+      // For percentage, divide the percentage among cleaners
+      return Math.round((jobPrice * (percentageRate || 0)) / Math.max(cleanerCount, 1));
+    default:
+      return 0;
+  }
+};
+
+// Helper to get pay type label
+const getPayTypeLabel = (payConfig) => {
+  if (!payConfig) return "";
+  switch (payConfig.payType) {
+    case "hourly":
+      return "Hourly";
+    case "per_job":
+      return "Per Job";
+    case "percentage":
+      return "Percentage";
+    default:
+      return "";
+  }
+};
+
 const BusinessOwnerJobDetails = ({ state }) => {
   const { appointmentId } = useParams();
   const { goBack, navigate } = useSafeNavigation();
@@ -356,6 +413,164 @@ const BusinessOwnerJobDetails = ({ state }) => {
           <Icon name="dollar" size={20} color="#10b981" />
         </View>
       </View>
+
+      {/* Profit Breakdown - Show when job is assigned */}
+      {job.isAssigned && job.assignees?.length > 0 && (() => {
+        const jobPrice = job.price || 0;
+        const platformFeePercent = job.platformFeePercent || 0.10;
+        const platformFee = Math.round(jobPrice * platformFeePercent);
+        // Use duration (calculated from beds/baths) not timeToBeCompleted (time window string)
+        // Fallback: calculate from home if duration not provided
+        const estimatedHours = job.duration
+          ? parseFloat(job.duration)
+          : (home?.numBeds || home?.numBaths)
+            ? Math.ceil((1 + ((home?.numBeds || 2) * 0.25) + ((home?.numBaths || 1) * 0.5)) * 2) / 2
+            : 2; // Default fallback
+
+        // Count ALL cleaners for time division (including owner if self-assigned)
+        const totalCleaners = job.assignees.length;
+
+        // Count only employees (non-self-assigned) for pay calculation
+        const employeeCount = job.assignees.filter(a => !a.isSelfAssignment).length;
+
+        // Calculate hours per cleaner (rounded up to nearest half hour)
+        // Time is divided among ALL cleaners including owner
+        const hoursPerCleaner = totalCleaners > 0
+          ? roundUpToHalfHour(estimatedHours / totalCleaners)
+          : estimatedHours;
+
+        // Calculate total employee pay for all assignees
+        // Pass totalCleaners for time division, but only employees get paid
+        const totalEmployeePay = job.assignees.reduce((total, assignee) => {
+          return total + getEmployeePay(assignee, jobPrice, estimatedHours, totalCleaners);
+        }, 0);
+
+        // Business profit = Job Price - Platform Fee - Employee Pay
+        const businessProfit = jobPrice - platformFee - totalEmployeePay;
+
+        // Check if all assignees are self-assignments
+        const allSelfAssigned = job.assignees.every(a => a.isSelfAssignment);
+
+        return (
+          <View style={styles.profitCard}>
+            <View style={styles.cardHeader}>
+              <Icon name="pie-chart" size={18} color="#6366f1" />
+              <Text style={styles.cardTitle}>Profit Breakdown</Text>
+            </View>
+
+            {/* Breakdown rows */}
+            <View style={styles.profitBreakdown}>
+              {/* Job Price */}
+              <View style={styles.profitRow}>
+                <View style={styles.profitRowLeft}>
+                  <Icon name="tag" size={14} color="#6b7280" />
+                  <Text style={styles.profitRowLabel}>Job Price</Text>
+                </View>
+                <Text style={styles.profitRowValue}>{formatCurrency(jobPrice)}</Text>
+              </View>
+
+              {/* Platform Fee */}
+              <View style={styles.profitRow}>
+                <View style={styles.profitRowLeft}>
+                  <Icon name="building" size={14} color="#6b7280" />
+                  <Text style={styles.profitRowLabel}>
+                    Platform Fee ({Math.round(platformFeePercent * 100)}%)
+                  </Text>
+                </View>
+                <Text style={[styles.profitRowValue, styles.profitRowDeduction]}>
+                  -{formatCurrency(platformFee)}
+                </Text>
+              </View>
+
+              {/* Estimated Time - show when multiple cleaners */}
+              {totalCleaners > 1 && estimatedHours > 0 && (
+                <View style={styles.profitRow}>
+                  <View style={styles.profitRowLeft}>
+                    <Icon name="clock-o" size={14} color="#6b7280" />
+                    <View style={styles.profitRowLabelContainer}>
+                      <Text style={styles.profitRowLabel}>Estimated Time</Text>
+                      <Text style={styles.profitRowSublabel}>
+                        {estimatedHours}h total ÷ {totalCleaners} cleaners = {hoursPerCleaner}h each
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Employee Pay - show details for each employee */}
+              {!allSelfAssigned && job.assignees.map((assignee, index) => {
+                if (assignee.isSelfAssignment) return null;
+                const employeePay = getEmployeePay(assignee, jobPrice, estimatedHours, totalCleaners);
+                const payTypeLabel = getPayTypeLabel(assignee.payConfig);
+
+                // Determine the sublabel text based on pay config
+                let payDescription = "";
+                if (payTypeLabel === "Hourly" && assignee.payConfig?.hourlyRate) {
+                  // Show divided hours when multiple cleaners
+                  const displayHours = totalCleaners > 1
+                    ? `${hoursPerCleaner}h (${estimatedHours}h ÷ ${totalCleaners})`
+                    : `${hoursPerCleaner}h`;
+                  payDescription = `${formatCurrency(assignee.payConfig.hourlyRate)}/hr × ${displayHours}`;
+                } else if (payTypeLabel === "Per Job") {
+                  payDescription = "Flat rate per employee";
+                } else if (payTypeLabel === "Percentage" && assignee.payConfig?.percentageRate) {
+                  const pctDisplay = totalCleaners > 1
+                    ? `${Math.round(assignee.payConfig.percentageRate * 100)}% ÷ ${totalCleaners}`
+                    : `${Math.round(assignee.payConfig.percentageRate * 100)}% of job`;
+                  payDescription = pctDisplay;
+                } else if (assignee.payAmount > 0) {
+                  payDescription = "Assigned pay";
+                }
+
+                return (
+                  <View key={index} style={styles.profitRow}>
+                    <View style={styles.profitRowLeft}>
+                      <Icon name="user" size={14} color="#6b7280" />
+                      <View style={styles.profitRowLabelContainer}>
+                        <Text style={styles.profitRowLabel}>{assignee.name}</Text>
+                        {payDescription ? (
+                          <Text style={styles.profitRowSublabel}>{payDescription}</Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    <Text style={[styles.profitRowValue, styles.profitRowDeduction]}>
+                      -{formatCurrency(employeePay)}
+                    </Text>
+                  </View>
+                );
+              })}
+
+              {/* Self-assigned note */}
+              {allSelfAssigned && (
+                <View style={styles.profitRow}>
+                  <View style={styles.profitRowLeft}>
+                    <Icon name="user" size={14} color="#6b7280" />
+                    <Text style={styles.profitRowLabel}>Employee Pay</Text>
+                  </View>
+                  <Text style={styles.profitRowValueMuted}>Self-assigned</Text>
+                </View>
+              )}
+
+              {/* Divider */}
+              <View style={styles.profitDivider} />
+
+              {/* Business Profit */}
+              <View style={styles.profitRowTotal}>
+                <View style={styles.profitRowLeft}>
+                  <Icon name="briefcase" size={16} color="#065f46" />
+                  <Text style={styles.profitRowTotalLabel}>Your Profit</Text>
+                </View>
+                <Text style={[
+                  styles.profitRowTotalValue,
+                  businessProfit < 0 && styles.profitRowNegative,
+                ]}>
+                  {formatCurrency(businessProfit)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        );
+      })()}
 
       {/* Payment Issue Warning */}
       {job.paymentCaptureFailed && !job.completed && (
@@ -1111,6 +1326,88 @@ const styles = StyleSheet.create({
     backgroundColor: "#d1fae5",
     justifyContent: "center",
     alignItems: "center",
+  },
+  // Profit Breakdown styles
+  profitCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 20,
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  profitBreakdown: {
+    gap: 12,
+  },
+  profitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  profitRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  profitRowLabelContainer: {
+    flex: 1,
+  },
+  profitRowLabel: {
+    fontSize: 14,
+    color: "#374151",
+  },
+  profitRowSublabel: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginTop: 1,
+  },
+  profitRowValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  profitRowValueMuted: {
+    fontSize: 14,
+    color: "#9ca3af",
+    fontStyle: "italic",
+  },
+  profitRowDeduction: {
+    color: "#ef4444",
+  },
+  profitDivider: {
+    height: 1,
+    backgroundColor: "#e5e7eb",
+    marginVertical: 4,
+  },
+  profitRowTotal: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#ecfdf5",
+    marginHorizontal: -20,
+    marginBottom: -20,
+    marginTop: 4,
+    padding: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+  },
+  profitRowTotalLabel: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#065f46",
+  },
+  profitRowTotalValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#065f46",
+  },
+  profitRowNegative: {
+    color: "#dc2626",
   },
   card: {
     backgroundColor: "#fff",

@@ -16,7 +16,7 @@ import { usePricing } from "../../context/PricingContext";
 const EditHomeList = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { pricing } = usePricing();
-  const cancellationFeePerAppt = pricing?.cancellation?.fee ?? 25;
+  const cancellationFeePerAppt = pricing?.cancellation?.fee ?? 2500; // Fee in cents ($25.00)
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedHomeId, setSelectedHomeId] = useState(null);
   const [deleteFee, setDeleteFee] = useState(0);
@@ -176,7 +176,7 @@ const EditHomeList = ({ state, dispatch }) => {
             <Text style={styles.modalTitle}>Delete Home?</Text>
             <Text style={styles.modalText}>
               {deleteFee > 0
-                ? `This will cancel all appointments. A $${deleteFee} cancellation fee will be charged for appointments within the next 7 days.`
+                ? `This will cancel all appointments. A $${(deleteFee / 100).toFixed(0)} cancellation fee will be charged for appointments within the next 7 days.`
                 : "This will permanently delete this home and all associated data."}
             </Text>
             <View style={styles.modalButtons}>

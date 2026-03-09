@@ -71,9 +71,9 @@ class NewHomeRequestService {
   static async calculateHomePrice(numBeds, numBaths) {
     const config = await PricingConfig.getActive();
     if (!config) {
-      // Fallback to defaults if no config
-      const basePrice = 150;
-      const extraBedBathFee = 50;
+      // Fallback to defaults if no config (all values in cents)
+      const basePrice = 15000; // $150.00 in cents
+      const extraBedBathFee = 5000; // $50.00 in cents
       const extraBeds = Math.max(0, numBeds - 1);
       const extraBaths = Math.max(0, numBaths - 1);
       return basePrice + (extraBeds * extraBedBathFee) + (extraBaths * extraBedBathFee);
@@ -83,11 +83,12 @@ class NewHomeRequestService {
     const extraBaths = Math.max(0, Math.floor(numBaths) - 1);
     const halfBaths = numBaths % 1 >= 0.5 ? 1 : 0;
 
+    // All config values are in cents
     return (
       config.basePrice +
       extraBeds * config.extraBedBathFee +
       extraBaths * config.extraBedBathFee +
-      halfBaths * (config.halfBathFee || 25)
+      halfBaths * (config.halfBathFee || 2500) // $25.00 default in cents
     );
   }
 

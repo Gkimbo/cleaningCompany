@@ -108,7 +108,7 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
         multiCleanerJobId: job.id,
         appointmentId: appointment.id,
         date: appointment.date,
-        price: appointment.price,
+        price: appointment.price,  // Price in cents (consistent with AppointmentSerializer)
         isMultiCleanerJob: true,
         status: completion.status,
         completionStatus: completion.completionStatus,

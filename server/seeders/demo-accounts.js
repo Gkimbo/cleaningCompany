@@ -1525,7 +1525,7 @@ async function createDemoAccounts() {
 
 					if (!existingAssignment) {
 						// Create the job assignment
-						const jobPrice = parseFloat(appointment.price);
+						const jobPriceCents = parseFloat(appointment.price);
 						await EmployeeJobAssignment.create({
 							businessOwnerId: createdAccounts.businessOwner.id,
 							businessEmployeeId: createdAccounts.businessEmployeeId,
@@ -1533,7 +1533,7 @@ async function createDemoAccounts() {
 							assignedBy: createdAccounts.businessOwner.id,
 							status: "assigned",
 							payType: "percentage",
-							payAmount: Math.round(jobPrice * 0.7 * 100), // 70% of job price in cents
+							payAmount: Math.round(jobPriceCents * 0.7), // 70% of job price (already in cents)
 						});
 						console.log(`  - Created job assignment for ${jobDate}`);
 					}
@@ -1712,7 +1712,7 @@ async function createDemoAccounts() {
 							assignedBy: createdAccounts.businessOwner.id,
 							status: "completed",
 							payType: "percentage",
-							payAmount: Math.round(160 * 0.7 * 100),
+							payAmount: Math.round(16000 * 0.7), // 70% of $160.00 (16000 cents)
 							completedAt: new Date(pastDate),
 						});
 					}
@@ -1785,7 +1785,7 @@ async function createDemoAccounts() {
 							assignedBy: createdAccounts.businessOwner.id,
 							status: "assigned",
 							payType: "percentage",
-							payAmount: Math.round(price * 0.7 * 100),
+							payAmount: Math.round(price * 0.7), // 70% of price (already in cents)
 						});
 					}
 				} catch (error) {
