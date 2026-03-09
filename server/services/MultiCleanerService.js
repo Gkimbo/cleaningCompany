@@ -1073,7 +1073,7 @@ class MultiCleanerService {
           businessOwnerId,
           assignedBy: businessOwnerId,
           status: "assigned",
-          payAmount: Math.round(earnings * 100), // Convert to cents
+          payAmount: earnings, // Already in cents from cleanerEarningsShare
           payType: "flat_rate",
           isMarketplacePickup: true,
           payoutStatus: "pending",

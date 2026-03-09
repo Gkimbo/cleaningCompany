@@ -672,12 +672,14 @@ const SelectNewJobList = ({ state }) => {
 
   const transformJobData = (job) => {
     // Calculate per-cleaner earnings from appointment price (after platform fee, split by cleaners)
-    const totalPrice = job.appointment?.price || 0;
+    // Note: price from serializer is in dollars (string), convert to cents for consistency with formatPrice
+    const totalPriceDollars = parseFloat(job.appointment?.price) || 0;
+    const totalPriceCents = Math.round(totalPriceDollars * 100);
     const cleanersRequired = job.totalCleanersRequired || 2;
     const cleanersConfirmed = job.cleanersConfirmed || 0;
-    const cleanersTotalShare = totalPrice * cleanerSharePercent;
+    const cleanersTotalShareCents = totalPriceCents * cleanerSharePercent;
     const perCleanerEarnings =
-      totalPrice > 0 ? Math.round(cleanersTotalShare / cleanersRequired) : null;
+      totalPriceCents > 0 ? Math.round(cleanersTotalShareCents / cleanersRequired) : null;
 
     // Get estimated time (totalEstimatedMinutes from job, or parse timeToBeCompleted from appointment)
     let estimatedMinutes = job.totalEstimatedMinutes;
@@ -723,7 +725,7 @@ const SelectNewJobList = ({ state }) => {
       remainingSlots: cleanersRequired - cleanersConfirmed,
       status: job.status,
       perCleanerEarnings,
-      totalJobPrice: totalPrice,
+      totalJobPrice: totalPriceCents,
       estimatedMinutes,
       timeToBeCompleted: job.appointment?.timeToBeCompleted,
       distance,
@@ -733,11 +735,13 @@ const SelectNewJobList = ({ state }) => {
   };
 
   const transformJobToOfferFormat = (job) => {
-    const totalPrice = job.appointment?.price || 0;
+    // Note: price from serializer is in dollars (string), convert to cents for consistency with formatPrice
+    const totalPriceDollars = parseFloat(job.appointment?.price) || 0;
+    const totalPriceCents = Math.round(totalPriceDollars * 100);
     const cleanersRequired = job.totalCleanersRequired || 2;
-    const cleanersTotalShare = totalPrice * cleanerSharePercent;
+    const cleanersTotalShareCents = totalPriceCents * cleanerSharePercent;
     const perCleanerEarnings =
-      totalPrice > 0 ? Math.round(cleanersTotalShare / cleanersRequired) : null;
+      totalPriceCents > 0 ? Math.round(cleanersTotalShareCents / cleanersRequired) : null;
 
     return {
       id: job.id,
@@ -748,7 +752,7 @@ const SelectNewJobList = ({ state }) => {
       state: job.appointment?.home?.state,
       estimatedMinutes: null,
       earningsOffered: perCleanerEarnings,
-      totalJobPrice: totalPrice,
+      totalJobPrice: totalPriceCents,
       platformFee: null,
       percentOfWork: Math.round(100 / cleanersRequired),
       roomAssignments: [],
@@ -1576,8 +1580,9 @@ const SelectNewJobList = ({ state }) => {
                                   ((Number(request.appointment?.price) || 0) *
                                     cleanerSharePercent) /
                                   (request.multiCleanerJob
-                                    ?.totalCleanersRequired || 2)
-                                ).toFixed(0)}{" "}
+                                    ?.totalCleanersRequired || 2) /
+                                  100
+                                ).toFixed(2)}{" "}
                                 your share
                               </Text>
                             </View>

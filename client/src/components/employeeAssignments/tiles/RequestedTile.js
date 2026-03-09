@@ -202,7 +202,7 @@ const RequestedTile = ({
       {/* Earnings */}
       <View style={styles.earningsRow}>
         <Icon name="dollar" size={12} color={colors.success[600]} />
-        <Text style={styles.earningsText}>{amount.toFixed(0)} potential</Text>
+        <Text style={styles.earningsText}>{(amount / 100).toFixed(0)} potential</Text>
       </View>
 
       {/* Time Constraint */}

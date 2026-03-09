@@ -492,7 +492,7 @@ const MyRequestsCalendar = ({ state }) => {
             </Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{totalEarnings.toFixed(0)}</Text>
+            <Text style={styles.statValue}>{(totalEarnings / 100).toFixed(0)}</Text>
             <Text style={styles.statLabel}>Potential</Text>
           </View>
           <View style={styles.statCard}>

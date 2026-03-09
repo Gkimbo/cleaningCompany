@@ -3238,10 +3238,10 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     console.log(`[Cancellation] isWithinCancellationFeeWindow: ${isWithinCancellationFeeWindow}`);
     console.log(`[Cancellation] User stripeCustomerId: ${user.stripeCustomerId}`);
     console.log(`[Cancellation] User hasPaymentMethod: ${user.hasPaymentMethod}`);
-    console.log(`[Cancellation] Cancellation fee: $${cancellationConfig.fee}`);
+    console.log(`[Cancellation] Cancellation fee: $${(cancellationConfig.fee / 100).toFixed(2)} (${cancellationConfig.fee} cents)`);
 
-    // Convert cancellation fee to cents for database storage (config stores in dollars)
-    const cancellationFeeAmountCents = Math.round(cancellationConfig.fee * 100);
+    // Cancellation fee is already stored in cents in the config
+    const cancellationFeeAmountCents = Math.round(cancellationConfig.fee);
 
     // Charge cancellation fee if within the window, cleaner is assigned, and user has payment method
     // No fee charged if no cleaner assigned - homeowner can cancel freely
@@ -3259,7 +3259,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           await CancellationAuditService.logFeeChargeAttempted(parseInt(id, 10), cancellationFeeAmountCents, defaultPaymentMethod, req);
 
           // Create and confirm a PaymentIntent for the cancellation fee
-          console.log(`[Cancellation] Creating PaymentIntent for $${cancellationConfig.fee} (${cancellationFeeAmountCents} cents)`);
+          console.log(`[Cancellation] Creating PaymentIntent for $${(cancellationConfig.fee / 100).toFixed(2)} (${cancellationFeeAmountCents} cents)`);
           const cancellationPaymentIntent = await stripe.paymentIntents.create({
             amount: cancellationFeeAmountCents,
             currency: "usd",
@@ -3282,7 +3282,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
 
           cancellationFeeResult = {
             charged: true,
-            amount: cancellationConfig.fee, // API response in dollars for backward compatibility
+            amount: cancellationConfig.fee / 100, // API response in dollars for backward compatibility
             amountCents: cancellationFeeAmountCents, // Internal use in cents
             paymentIntentId: cancellationPaymentIntent.id,
           };
@@ -3293,7 +3293,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           if (existingBillForFee) {
             const currentFee = Number(existingBillForFee.cancellationFee) || 0;
             const currentTotal = Number(existingBillForFee.totalDue) || 0;
-            // UserBills stores amounts in cents, cancellationConfig.fee is in dollars
+            // UserBills stores amounts in cents, cancellationConfig.fee is also in cents
             await existingBillForFee.update({
               cancellationFee: currentFee + cancellationFeeAmountCents,
               totalDue: currentTotal + cancellationFeeAmountCents,
@@ -3302,7 +3302,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           cancellationFeeResult = {
             charged: false,
             addedToBill: true,
-            amount: cancellationConfig.fee, // API response in dollars for backward compatibility
+            amount: cancellationConfig.fee / 100, // API response in dollars for backward compatibility
             amountCents: cancellationFeeAmountCents, // Internal use in cents
             reason: "No default payment method - added to bill",
           };
@@ -3329,7 +3329,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
         cancellationFeeResult = {
           charged: false,
           addedToBill: true,
-          amount: cancellationConfig.fee, // API response in dollars for backward compatibility
+          amount: cancellationConfig.fee / 100, // API response in dollars for backward compatibility
           amountCents: cancellationFeeAmountCents, // Internal use in cents
           reason: `Charge failed: ${stripeError.message} - added to bill`,
         };
@@ -3350,7 +3350,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       cancellationFeeResult = {
         charged: false,
         addedToBill: true,
-        amount: cancellationConfig.fee, // API response in dollars for backward compatibility
+        amount: cancellationConfig.fee / 100, // API response in dollars for backward compatibility
         amountCents: cancellationFeeAmountCents, // Internal use in cents
         reason: "No payment method configured - added to bill",
       };

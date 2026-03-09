@@ -408,7 +408,7 @@ async function testDisputeSystem() {
 
       let refundIssues = 0;
       for (const apt of appointmentsWithRefunds) {
-        const originalAmount = (apt.price || 0) * 100; // Convert to cents
+        const originalAmount = apt.price || 0; // Already in cents (INTEGER)
         const refundedAmount = apt.refundAmount || 0;
 
         if (refundedAmount > originalAmount) {

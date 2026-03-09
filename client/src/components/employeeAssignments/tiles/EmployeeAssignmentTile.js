@@ -83,7 +83,7 @@ const EmployeeAssignmentTile = ({
   const numCleaners = isMultiCleanerJob
     ? (multiCleanerJob?.totalCleanersRequired || employeesAssigned?.length || 1)
     : 1;
-  // Price is stored in dollars
+  // Price is stored in cents - formatCurrency handles conversion to dollars
   const amount = (Number(price) / numCleaners) * cleanerSharePercent;
 
   const formatDate = (dateString) => {

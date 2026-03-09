@@ -159,7 +159,7 @@ const mockPricingConfig = {
     "12-2": 30,
   },
   cancellation: {
-    fee: 10, // Owner-set cancellation fee
+    fee: 1000, // Owner-set cancellation fee in cents ($10.00)
     windowDays: 7,
     homeownerPenaltyDays: 3,
     cleanerPenaltyDays: 4,
@@ -402,7 +402,7 @@ describe("Cancellation Fee Charging", () => {
       mockPaymentIntentsCreate.mockResolvedValue({
         id: "pi_cancellation_test",
         status: "succeeded",
-        amount: mockPricingConfig.cancellation.fee * 100, // fee in cents
+        amount: mockPricingConfig.cancellation.fee, // fee already in cents
       });
 
       UserBills.findOne.mockResolvedValue({
@@ -424,14 +424,14 @@ describe("Cancellation Fee Charging", () => {
       expect(res.body.success).toBe(true);
       expect(res.body.cancellationFee).toBeDefined();
       expect(res.body.cancellationFee.charged).toBe(true);
-      expect(res.body.cancellationFee.amount).toBe(mockPricingConfig.cancellation.fee);
+      expect(res.body.cancellationFee.amount).toBe(mockPricingConfig.cancellation.fee / 100); // Amount in dollars
       expect(res.body.cancellationFee.paymentIntentId).toBe("pi_cancellation_test");
-      expect(res.body.message).toContain(`$${mockPricingConfig.cancellation.fee} cancellation fee has been charged`);
+      expect(res.body.message).toContain(`$${mockPricingConfig.cancellation.fee / 100} cancellation fee has been charged`);
 
       // Verify Stripe PaymentIntent was created correctly
       expect(mockPaymentIntentsCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          amount: mockPricingConfig.cancellation.fee * 100, // fee in cents
+          amount: mockPricingConfig.cancellation.fee, // fee already in cents
           currency: "usd",
           customer: "cus_test123",
           payment_method: "pm_test123",
@@ -759,7 +759,7 @@ describe("Cancellation Fee Charging", () => {
       expect(res.body.success).toBe(true);
       expect(res.body.wasWithinPenaltyWindow).toBe(true);
       expect(res.body.cancellationFee.charged).toBe(true);
-      expect(res.body.cancellationFee.amount).toBe(mockPricingConfig.cancellation.fee);
+      expect(res.body.cancellationFee.amount).toBe(mockPricingConfig.cancellation.fee / 100); // Amount in dollars
       expect(res.body.refund.amount).toBe(100); // 50% refund of $200
       expect(res.body.cleanerPayout).toBeDefined();
     });
@@ -814,7 +814,7 @@ describe("Cancellation Fee Charging", () => {
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.message).toContain(`$${mockPricingConfig.cancellation.fee} cancellation fee has been charged`);
+      expect(res.body.message).toContain(`$${mockPricingConfig.cancellation.fee / 100} cancellation fee has been charged`);
     });
   });
 
@@ -998,8 +998,8 @@ describe("Cancellation Fee Charging", () => {
       expect(res.body.cancellationFee.addedToBill).toBe(true);
 
       // Verify fee was added to existing bill amounts (amounts in cents)
-      // cancellationConfig.fee is in dollars, so multiply by 100 for cents
-      const cancellationFeeCents = mockPricingConfig.cancellation.fee * 100;
+      // cancellationConfig.fee is already in cents
+      const cancellationFeeCents = mockPricingConfig.cancellation.fee;
       expect(mockBillUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           cancellationFee: 2500 + cancellationFeeCents,
@@ -1065,8 +1065,8 @@ describe("Cancellation Fee Charging", () => {
       expect(res.body.cancellationFee.reason).toContain("added to bill");
 
       // Verify fee was added to bill (amounts in cents)
-      // cancellationConfig.fee is in dollars, so multiply by 100 for cents
-      const cancellationFeeCents = mockPricingConfig.cancellation.fee * 100;
+      // cancellationConfig.fee is already in cents
+      const cancellationFeeCents = mockPricingConfig.cancellation.fee;
       expect(mockBillUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           cancellationFee: cancellationFeeCents,

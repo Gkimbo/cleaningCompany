@@ -918,7 +918,7 @@ paymentRouter.post("/prepay-all-and-remove", async (req, res) => {
               capturedAppointments.push({
                 id: appointment.id,
                 date: appointment.date,
-                amount: price,
+                amount: newPaymentIntent.amount / 100, // Convert cents to dollars for response
               });
 
               console.log(`[Prepay & Remove] Created and captured payment for appointment ${appointment.id}`);
