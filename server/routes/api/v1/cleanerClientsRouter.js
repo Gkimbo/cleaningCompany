@@ -1707,18 +1707,15 @@ cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res)
     const { price } = req.body;
     const cleanerId = req.user.id;
 
-    // Validate price (user input is in dollars)
+    // Validate price (client sends price in cents)
     if (price === undefined || price === null) {
       return res.status(400).json({ error: "Price is required" });
     }
 
-    const numericPrice = parseFloat(price);
-    if (isNaN(numericPrice) || numericPrice < 0) {
+    const priceCents = Math.round(parseFloat(price));
+    if (isNaN(priceCents) || priceCents < 0) {
       return res.status(400).json({ error: "Price must be a positive number" });
     }
-
-    // Convert dollars to cents for storage
-    const priceCents = Math.round(numericPrice * 100);
 
     // Get the cleaner-client relationship with home data
     const cleanerClient = await CleanerClient.findOne({

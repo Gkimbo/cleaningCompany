@@ -186,11 +186,18 @@ const homePickerStyles = StyleSheet.create({
   },
 });
 
-// Format time constraint for display: "10-3" → "10am - 3pm"
+// Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (timeToBeCompleted) => {
   if (!timeToBeCompleted || timeToBeCompleted.toLowerCase() === "anytime") {
     return "Anytime";
   }
+  // Check if it's a numeric hours limit (e.g., "2.5", "3")
+  const numericValue = parseFloat(timeToBeCompleted);
+  if (!isNaN(numericValue) && numericValue > 0 && numericValue <= 12) {
+    const unit = numericValue === 1 ? "hr" : "hrs";
+    return `Within ${numericValue} ${unit}`;
+  }
+  // Check for time window pattern (e.g., "10-3", "9am-12pm")
   const match = timeToBeCompleted.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
   if (!match) return timeToBeCompleted;
   const startHour = parseInt(match[1], 10);
@@ -530,7 +537,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [state?.currentUser?.token, clientId, navigate]);
+  }, [state?.currentUser?.token, clientId, goBack]);
 
   useEffect(() => {
     fetchClientData();

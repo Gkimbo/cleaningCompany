@@ -96,7 +96,8 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
   const handlePriceCancel = (e) => {
     e.stopPropagation();
     setEditingPrice(false);
-    setPriceInput(client.defaultPrice?.toString() || "");
+    // Convert cents to dollars for display
+    setPriceInput(client.defaultPrice ? (client.defaultPrice / 100).toString() : "");
   };
 
   const handleUsePlatformPrice = (e) => {

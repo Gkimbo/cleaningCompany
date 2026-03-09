@@ -79,9 +79,9 @@ module.exports = {
 
       // === Price calculation (stored at request time) ===
       calculatedPrice: {
-        type: Sequelize.DECIMAL(10, 2),
+        type: Sequelize.INTEGER,
         allowNull: true,
-        comment: "The auto-calculated price based on home size and hourly rate",
+        comment: "The auto-calculated price in cents based on home size and hourly rate",
       },
       numBeds: {
         type: Sequelize.INTEGER,
@@ -94,9 +94,9 @@ module.exports = {
         comment: "Number of bathrooms at time of request",
       },
       hourlyRate: {
-        type: Sequelize.DECIMAL(10, 2),
+        type: Sequelize.INTEGER,
         allowNull: true,
-        comment: "Business owner hourly rate used for calculation",
+        comment: "Business owner hourly rate in cents used for calculation",
       },
 
       // === Rate limiting for re-requests ===

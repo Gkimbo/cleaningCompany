@@ -32,7 +32,13 @@ import { useOffline } from "../../services/offline/OfflineContext";
 
 import useSafeNavigation from "../../hooks/useSafeNavigation";
 // Home Picker Modal Component
-const HomePickerModal = ({ visible, onClose, homes, onSelectHome, actionType }) => {
+const HomePickerModal = ({
+  visible,
+  onClose,
+  homes,
+  onSelectHome,
+  actionType,
+}) => {
   if (!visible) return null;
 
   const actionLabel = actionType === "recurring" ? "Set Up Recurring" : "Book";
@@ -51,15 +57,23 @@ const HomePickerModal = ({ visible, onClose, homes, onSelectHome, actionType }) 
             <View style={homePickerStyles.content}>
               <View style={homePickerStyles.header}>
                 <View style={homePickerStyles.headerIcon}>
-                  <Feather name={actionIcon} size={20} color={colors.primary[600]} />
+                  <Feather
+                    name={actionIcon}
+                    size={20}
+                    color={colors.primary[600]}
+                  />
                 </View>
                 <Text style={homePickerStyles.title}>Select a Home</Text>
-                <Pressable style={homePickerStyles.closeButton} onPress={onClose}>
+                <Pressable
+                  style={homePickerStyles.closeButton}
+                  onPress={onClose}
+                >
                   <Feather name="x" size={20} color={colors.neutral[500]} />
                 </Pressable>
               </View>
               <Text style={homePickerStyles.subtitle}>
-                Which home would you like to {actionType === "recurring" ? "set up recurring for" : "book"}?
+                Which home would you like to{" "}
+                {actionType === "recurring" ? "set up recurring for" : "book"}?
               </Text>
               <View style={homePickerStyles.homesList}>
                 {homes.map((home, index) => (
@@ -72,20 +86,34 @@ const HomePickerModal = ({ visible, onClose, homes, onSelectHome, actionType }) 
                     onPress={() => onSelectHome(home)}
                   >
                     <View style={homePickerStyles.homeIconContainer}>
-                      <Feather name="home" size={18} color={colors.primary[600]} />
+                      <Feather
+                        name="home"
+                        size={18}
+                        color={colors.primary[600]}
+                      />
                     </View>
                     <View style={homePickerStyles.homeInfo}>
                       <Text style={homePickerStyles.homeName}>
-                        Home {index + 1}{home.nickName ? `: ${home.nickName}` : ""}
+                        Home {index + 1}
+                        {home.nickName ? `: ${home.nickName}` : ""}
                       </Text>
-                      <Text style={homePickerStyles.homeAddress} numberOfLines={1}>
-                        {home.address ? `${home.address}, ${home.city}` : "No address"}
+                      <Text
+                        style={homePickerStyles.homeAddress}
+                        numberOfLines={1}
+                      >
+                        {home.address
+                          ? `${home.address}, ${home.city}`
+                          : "No address"}
                       </Text>
                       <Text style={homePickerStyles.homeDetails}>
                         {home.numBeds || 1} bed • {home.numBaths || 1} bath
                       </Text>
                     </View>
-                    <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+                    <Feather
+                      name="chevron-right"
+                      size={20}
+                      color={colors.neutral[400]}
+                    />
                   </Pressable>
                 ))}
               </View>
@@ -238,9 +266,11 @@ const MyClientsPage = ({ state }) => {
   const [activeTab, setActiveTab] = useState("all"); // 'all', 'active', 'pending'
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [selectedClientForBooking, setSelectedClientForBooking] = useState(null);
+  const [selectedClientForBooking, setSelectedClientForBooking] =
+    useState(null);
   const [showRecurringModal, setShowRecurringModal] = useState(false);
-  const [selectedClientForRecurring, setSelectedClientForRecurring] = useState(null);
+  const [selectedClientForRecurring, setSelectedClientForRecurring] =
+    useState(null);
   const [selectedHomeForAction, setSelectedHomeForAction] = useState(null);
   const [showHomePicker, setShowHomePicker] = useState(false);
   const [homePickerActionType, setHomePickerActionType] = useState(null); // 'book' or 'recurring'
@@ -250,38 +280,52 @@ const MyClientsPage = ({ state }) => {
   const [showPaymentBanner, setShowPaymentBanner] = useState(false);
 
   // Calculate platform price for a client based on their home's beds/baths
-  const calculatePlatformPrice = useCallback((client) => {
-    if (!pricing?.basePrice) return null;
+  // Returns price in dollars for display
+  const calculatePlatformPrice = useCallback(
+    (client) => {
+      if (!pricing?.basePrice) return null;
 
-    // Use invitedBeds/invitedBaths for pending clients, or home data for active clients
-    const beds = client.invitedBeds || client.home?.numBeds;
-    const baths = client.invitedBaths || client.home?.numBaths;
+      // Use invitedBeds/invitedBaths for pending clients, or home data for active clients
+      const beds = client.invitedBeds || client.home?.numBeds;
+      const baths = client.invitedBaths || client.home?.numBaths;
 
-    if (!beds || !baths) return null;
+      if (!beds || !baths) return null;
 
-    const numBeds = parseInt(beds) || 1;
-    const numBaths = parseFloat(baths) || 1;
+      const numBeds = parseInt(beds) || 1;
+      const numBaths = parseFloat(baths) || 1;
 
-    const basePrice = pricing.basePrice || 150;
-    const extraBedBathFee = pricing.extraBedBathFee || 50;
-    const halfBathFee = pricing.halfBathFee || 25;
+      // Prices from API are in cents - fallbacks also in cents
+      const basePrice = pricing.basePrice || 15000;
+      const extraBedBathFee = pricing.extraBedBathFee || 5000;
+      const halfBathFee = pricing.halfBathFee || 2500;
 
-    const extraBeds = Math.max(0, numBeds - 1);
-    const fullBaths = Math.floor(numBaths);
-    const halfBaths = numBaths % 1 >= 0.5 ? 1 : 0;
-    const extraFullBaths = Math.max(0, fullBaths - 1);
+      const extraBeds = Math.max(0, numBeds - 1);
+      const fullBaths = Math.floor(numBaths);
+      const halfBaths = numBaths % 1 >= 0.5 ? 1 : 0;
+      const extraFullBaths = Math.max(0, fullBaths - 1);
 
-    return basePrice +
-           (extraBeds * extraBedBathFee) +
-           (extraFullBaths * extraBedBathFee) +
-           (halfBaths * halfBathFee);
-  }, [pricing]);
+      // Calculate in cents, then convert to dollars for display
+      const totalCents =
+        basePrice +
+        extraBeds * extraBedBathFee +
+        extraFullBaths * extraBedBathFee +
+        halfBaths * halfBathFee;
+
+      return Math.round(totalCents / 100);
+    },
+    [pricing]
+  );
 
   const fetchClients = useCallback(async () => {
     if (!state?.currentUser?.token) return;
 
     try {
-      const status = activeTab === "all" ? null : activeTab === "pending" ? "pending_invite" : activeTab;
+      const status =
+        activeTab === "all"
+          ? null
+          : activeTab === "pending"
+          ? "pending_invite"
+          : activeTab;
       const data = await CleanerClientService.getClients(
         state.currentUser.token,
         status
@@ -294,11 +338,13 @@ const MyClientsPage = ({ state }) => {
         const clientId = record.client?.id;
 
         // Include defaultPrice and cleanerClientId with the home data
-        const homeWithPrice = record.home ? {
-          ...record.home,
-          defaultPrice: record.defaultPrice,
-          cleanerClientId: record.id,
-        } : null;
+        const homeWithPrice = record.home
+          ? {
+              ...record.home,
+              defaultPrice: record.defaultPrice,
+              cleanerClientId: record.id,
+            }
+          : null;
 
         if (!clientId) {
           // If no client linked yet (pending invite), keep as separate entry
@@ -316,8 +362,12 @@ const MyClientsPage = ({ state }) => {
             existing.homes.push(homeWithPrice);
           }
           // Keep the most recent nextAppointment
-          if (record.nextAppointment && (!existing.nextAppointment ||
-              new Date(record.nextAppointment.date) < new Date(existing.nextAppointment.date))) {
+          if (
+            record.nextAppointment &&
+            (!existing.nextAppointment ||
+              new Date(record.nextAppointment.date) <
+                new Date(existing.nextAppointment.date))
+          ) {
             existing.nextAppointment = record.nextAppointment;
           }
         } else {
@@ -412,7 +462,10 @@ const MyClientsPage = ({ state }) => {
                 Alert.alert("Success", "Invitation cancelled");
                 fetchClients();
               } else {
-                Alert.alert("Error", result.error || "Failed to cancel invitation");
+                Alert.alert(
+                  "Error",
+                  result.error || "Failed to cancel invitation"
+                );
               }
             } catch (error) {
               Alert.alert("Error", "Failed to cancel invitation");
@@ -430,7 +483,10 @@ const MyClientsPage = ({ state }) => {
   const handleMessageClient = async (client) => {
     if (requiresOnline("Messaging a client")) return;
     if (!client.clientId) {
-      Alert.alert("Cannot Message", "This client hasn't accepted their invitation yet.");
+      Alert.alert(
+        "Cannot Message",
+        "This client hasn't accepted their invitation yet."
+      );
       return;
     }
 
@@ -467,7 +523,10 @@ const MyClientsPage = ({ state }) => {
       // Single home or no homes - proceed directly
       const clientWithUser = {
         ...client,
-        client: client.client || { firstName: client.invitedName?.split(' ')[0], lastName: client.invitedName?.split(' ').slice(1).join(' ') },
+        client: client.client || {
+          firstName: client.invitedName?.split(" ")[0],
+          lastName: client.invitedName?.split(" ").slice(1).join(" "),
+        },
       };
       setSelectedClientForBooking(clientWithUser);
       setSelectedHomeForAction(client.homes?.[0] || client.home || null);
@@ -493,7 +552,10 @@ const MyClientsPage = ({ state }) => {
       // Single home or no homes - proceed directly
       const clientWithUser = {
         ...client,
-        client: client.client || { firstName: client.invitedName?.split(' ')[0], lastName: client.invitedName?.split(' ').slice(1).join(' ') },
+        client: client.client || {
+          firstName: client.invitedName?.split(" ")[0],
+          lastName: client.invitedName?.split(" ").slice(1).join(" "),
+        },
       };
       setSelectedClientForRecurring(clientWithUser);
       setSelectedHomeForAction(client.homes?.[0] || client.home || null);
@@ -512,7 +574,10 @@ const MyClientsPage = ({ state }) => {
     setShowHomePicker(false);
     const clientWithUser = {
       ...pendingClient,
-      client: pendingClient.client || { firstName: pendingClient.invitedName?.split(' ')[0], lastName: pendingClient.invitedName?.split(' ').slice(1).join(' ') },
+      client: pendingClient.client || {
+        firstName: pendingClient.invitedName?.split(" ")[0],
+        lastName: pendingClient.invitedName?.split(" ").slice(1).join(" "),
+      },
     };
     setSelectedHomeForAction(home);
 
@@ -563,7 +628,9 @@ const MyClientsPage = ({ state }) => {
   });
 
   const activeCount = clients.filter((c) => c.status === "active").length;
-  const pendingCount = clients.filter((c) => c.status === "pending_invite").length;
+  const pendingCount = clients.filter(
+    (c) => c.status === "pending_invite"
+  ).length;
 
   if (isLoading) {
     return (
@@ -633,10 +700,7 @@ const MyClientsPage = ({ state }) => {
         ].map((tab) => (
           <Pressable
             key={tab.key}
-            style={[
-              styles.tab,
-              activeTab === tab.key && styles.tabActive,
-            ]}
+            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
             onPress={() => setActiveTab(tab.key)}
           >
             <Text
@@ -710,7 +774,9 @@ const MyClientsPage = ({ state }) => {
                 onPress={() => setShowInviteModal(true)}
               >
                 <Feather name="user-plus" size={18} color={colors.neutral[0]} />
-                <Text style={styles.emptyButtonText}>Invite Your First Client</Text>
+                <Text style={styles.emptyButtonText}>
+                  Invite Your First Client
+                </Text>
               </Pressable>
             )}
           </View>

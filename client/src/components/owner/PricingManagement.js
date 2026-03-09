@@ -95,20 +95,23 @@ const PricingManagement = ({ state }) => {
 
       if (result) {
         let values;
+        // Helper to convert cents to dollars for display
+        const fromCents = (cents) => cents != null ? (cents / 100).toString() : "";
+
         if (result.config) {
-          // Database config exists
+          // Database config exists - convert cents to dollars for display
           values = {
-            basePrice: result.config.basePrice?.toString() || "",
-            extraBedBathFee: result.config.extraBedBathFee?.toString() || "",
-            halfBathFee: result.config.halfBathFee?.toString() || "",
-            sheetFeePerBed: result.config.sheetFeePerBed?.toString() || "",
-            towelFee: result.config.towelFee?.toString() || "",
-            faceClothFee: result.config.faceClothFee?.toString() || "",
-            timeWindowAnytime: result.config.timeWindowAnytime?.toString() || "",
-            timeWindow10To3: result.config.timeWindow10To3?.toString() || "",
-            timeWindow11To4: result.config.timeWindow11To4?.toString() || "",
-            timeWindow12To2: result.config.timeWindow12To2?.toString() || "",
-            cancellationFee: result.config.cancellationFee?.toString() || "",
+            basePrice: fromCents(result.config.basePrice),
+            extraBedBathFee: fromCents(result.config.extraBedBathFee),
+            halfBathFee: fromCents(result.config.halfBathFee),
+            sheetFeePerBed: fromCents(result.config.sheetFeePerBed),
+            towelFee: fromCents(result.config.towelFee),
+            faceClothFee: fromCents(result.config.faceClothFee),
+            timeWindowAnytime: fromCents(result.config.timeWindowAnytime),
+            timeWindow10To3: fromCents(result.config.timeWindow10To3),
+            timeWindow11To4: fromCents(result.config.timeWindow11To4),
+            timeWindow12To2: fromCents(result.config.timeWindow12To2),
+            cancellationFee: fromCents(result.config.cancellationFee),
             cancellationWindowDays: result.config.cancellationWindowDays?.toString() || "",
             homeownerPenaltyDays: result.config.homeownerPenaltyDays?.toString() || "",
             cleanerPenaltyDays: result.config.cleanerPenaltyDays?.toString() || "",
@@ -119,28 +122,28 @@ const PricingManagement = ({ state }) => {
             largeBusinessMonthlyThreshold: result.config.largeBusinessMonthlyThreshold?.toString() || "50",
             largeBusinessLookbackMonths: result.config.largeBusinessLookbackMonths?.toString() || "1",
             multiCleanerPlatformFeePercent: (parseFloat(result.config.multiCleanerPlatformFeePercent || 0.13) * 100).toString() || "13",
-            highVolumeFee: result.config.highVolumeFee?.toString() || "",
+            highVolumeFee: fromCents(result.config.highVolumeFee),
             incentiveRefundPercent: (parseFloat(result.config.incentiveRefundPercent || 0.10) * 100).toString() || "10",
             incentiveCleanerPercent: (parseFloat(result.config.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
-            lastMinuteFee: result.config.lastMinuteFee?.toString() || "50",
+            lastMinuteFee: fromCents(result.config.lastMinuteFee),
             lastMinuteThresholdHours: result.config.lastMinuteThresholdHours?.toString() || "48",
             lastMinuteNotificationRadiusMiles: result.config.lastMinuteNotificationRadiusMiles?.toString() || "25",
             changeNote: "",
           };
         } else if (result.staticDefaults) {
-          // Use static defaults
+          // Use static defaults - convert cents to dollars for display
           values = {
-            basePrice: result.staticDefaults.basePrice?.toString() || "",
-            extraBedBathFee: result.staticDefaults.extraBedBathFee?.toString() || "",
-            halfBathFee: result.staticDefaults.halfBathFee?.toString() || "",
-            sheetFeePerBed: result.staticDefaults.sheetFeePerBed?.toString() || "",
-            towelFee: result.staticDefaults.towelFee?.toString() || "",
-            faceClothFee: result.staticDefaults.faceClothFee?.toString() || "",
-            timeWindowAnytime: result.staticDefaults.timeWindowAnytime?.toString() || "",
-            timeWindow10To3: result.staticDefaults.timeWindow10To3?.toString() || "",
-            timeWindow11To4: result.staticDefaults.timeWindow11To4?.toString() || "",
-            timeWindow12To2: result.staticDefaults.timeWindow12To2?.toString() || "",
-            cancellationFee: result.staticDefaults.cancellationFee?.toString() || "",
+            basePrice: fromCents(result.staticDefaults.basePrice),
+            extraBedBathFee: fromCents(result.staticDefaults.extraBedBathFee),
+            halfBathFee: fromCents(result.staticDefaults.halfBathFee),
+            sheetFeePerBed: fromCents(result.staticDefaults.sheetFeePerBed),
+            towelFee: fromCents(result.staticDefaults.towelFee),
+            faceClothFee: fromCents(result.staticDefaults.faceClothFee),
+            timeWindowAnytime: fromCents(result.staticDefaults.timeWindowAnytime),
+            timeWindow10To3: fromCents(result.staticDefaults.timeWindow10To3),
+            timeWindow11To4: fromCents(result.staticDefaults.timeWindow11To4),
+            timeWindow12To2: fromCents(result.staticDefaults.timeWindow12To2),
+            cancellationFee: fromCents(result.staticDefaults.cancellationFee),
             cancellationWindowDays: result.staticDefaults.cancellationWindowDays?.toString() || "",
             homeownerPenaltyDays: result.staticDefaults.homeownerPenaltyDays?.toString() || "",
             cleanerPenaltyDays: result.staticDefaults.cleanerPenaltyDays?.toString() || "",
@@ -151,10 +154,10 @@ const PricingManagement = ({ state }) => {
             largeBusinessMonthlyThreshold: result.staticDefaults.largeBusinessMonthlyThreshold?.toString() || "50",
             largeBusinessLookbackMonths: result.staticDefaults.largeBusinessLookbackMonths?.toString() || "1",
             multiCleanerPlatformFeePercent: ((result.staticDefaults.multiCleanerPlatformFeePercent || 0.13) * 100).toString() || "13",
-            highVolumeFee: result.staticDefaults.highVolumeFee?.toString() || "",
+            highVolumeFee: fromCents(result.staticDefaults.highVolumeFee),
             incentiveRefundPercent: ((result.staticDefaults.incentiveRefundPercent || 0.10) * 100).toString() || "10",
             incentiveCleanerPercent: ((result.staticDefaults.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
-            lastMinuteFee: result.staticDefaults.lastMinuteFee?.toString() || "50",
+            lastMinuteFee: fromCents(result.staticDefaults.lastMinuteFee),
             lastMinuteThresholdHours: result.staticDefaults.lastMinuteThresholdHours?.toString() || "48",
             lastMinuteNotificationRadiusMiles: result.staticDefaults.lastMinuteNotificationRadiusMiles?.toString() || "25",
             changeNote: "",

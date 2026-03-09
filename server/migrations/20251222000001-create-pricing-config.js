@@ -9,59 +9,69 @@ module.exports = {
         primaryKey: true,
         type: Sequelize.INTEGER,
       },
-      // Base pricing (in dollars)
+      // Base pricing (in cents)
       basePrice: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        defaultValue: 150,
+        defaultValue: 15000,
+        comment: "Base price in cents (15000 = $150.00)",
       },
       extraBedBathFee: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        defaultValue: 50,
+        defaultValue: 5000,
+        comment: "Extra bed/bath fee in cents",
       },
-      // Linen services (in dollars)
+      // Linen services (in cents)
       sheetFeePerBed: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        defaultValue: 30,
+        defaultValue: 3000,
+        comment: "Sheet fee per bed in cents",
       },
       towelFee: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        defaultValue: 5,
+        defaultValue: 500,
+        comment: "Towel fee in cents",
       },
       faceClothFee: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        defaultValue: 2,
+        defaultValue: 200,
+        comment: "Face cloth fee in cents",
       },
-      // Time window surcharges (in dollars)
+      // Time window surcharges (in cents)
       timeWindowAnytime: {
         type: Sequelize.INTEGER,
         allowNull: false,
         defaultValue: 0,
+        comment: "Anytime window surcharge in cents",
       },
       timeWindow10To3: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        defaultValue: 25,
+        defaultValue: 2500,
+        comment: "10-3 window surcharge in cents",
       },
       timeWindow11To4: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        defaultValue: 25,
+        defaultValue: 2500,
+        comment: "11-4 window surcharge in cents",
       },
       timeWindow12To2: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        defaultValue: 30,
+        defaultValue: 3000,
+        comment: "12-2 window surcharge in cents",
       },
       // Cancellation policy
       cancellationFee: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        defaultValue: 25,
+        defaultValue: 2500,
+        comment: "Cancellation fee in cents",
       },
       cancellationWindowDays: {
         type: Sequelize.INTEGER,
@@ -93,7 +103,8 @@ module.exports = {
       highVolumeFee: {
         type: Sequelize.INTEGER,
         allowNull: false,
-        defaultValue: 50,
+        defaultValue: 5000,
+        comment: "High volume fee in cents",
       },
       // Audit fields
       isActive: {

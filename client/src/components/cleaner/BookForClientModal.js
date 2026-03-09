@@ -100,7 +100,8 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
 
   const handleUsePlatformPrice = () => {
     if (platformPriceData?.platformPrice) {
-      setCustomPrice(platformPriceData.platformPrice.toString());
+      // Convert cents to dollars for the input field
+      setCustomPrice((platformPriceData.platformPrice / 100).toString());
     }
   };
 
@@ -426,7 +427,7 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
                 >
                   <Feather name="trending-up" size={14} color={colors.primary[600]} />
                   <Text style={styles.platformPriceButtonText}>
-                    Use Platform Price: ${platformPriceData.platformPrice}
+                    Use Platform Price: ${(platformPriceData.platformPrice / 100).toFixed(0)}
                   </Text>
                   <Text style={styles.platformPriceBreakdown}>
                     ({platformPriceData.numBeds} bed, {platformPriceData.numBaths} bath)

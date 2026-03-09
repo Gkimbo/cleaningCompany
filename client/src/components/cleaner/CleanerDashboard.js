@@ -121,10 +121,17 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-// Format time constraint for display: "10-3" → "10am - 3pm"
+// Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (timeToBeCompleted) => {
   if (!timeToBeCompleted || timeToBeCompleted.toLowerCase() === "anytime") {
     return "Anytime";
+  }
+
+  // Check if it's a numeric hours limit (e.g., "2.5", "3")
+  const numericValue = parseFloat(timeToBeCompleted);
+  if (!isNaN(numericValue) && numericValue > 0 && numericValue <= 12) {
+    const unit = numericValue === 1 ? "hr" : "hrs";
+    return `Within ${numericValue} ${unit}`;
   }
 
   // Match pattern like "10-3" or "10am-3pm"

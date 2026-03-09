@@ -33,8 +33,9 @@ module.exports = {
     });
 
     await queryInterface.addColumn("UserAppointments", "businessOwnerPrice", {
-      type: Sequelize.DECIMAL(10, 2),
+      type: Sequelize.INTEGER,
       allowNull: true,
+      comment: "Business owner custom price in cents",
     });
 
     // Add index for finding appointments awaiting client response

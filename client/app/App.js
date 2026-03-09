@@ -549,6 +549,10 @@ export default function App() {
                 element={<MyClientsPage state={state} />}
               />
               <Route
+                path="/my-clients/:clientId"
+                element={<ClientDetailPage state={state} dispatch={dispatch} />}
+              />
+              <Route
                 path="/client-detail/:clientId"
                 element={<ClientDetailPage state={state} dispatch={dispatch} />}
               />

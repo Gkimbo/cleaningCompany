@@ -56,8 +56,18 @@ const HomePage = ({ state, dispatch }) => {
   const pricing = fetchedPricing?.basePrice ? fetchedPricing : defaultPricing;
 
   // Display the full base price (no platform fee deduction - that's only shown to cleaners)
+  // Prices from API are in cents - convert to dollars for display
   const displayBasePrice = Math.round(
-    pricing.basePrice ?? defaultPricing.basePrice
+    (pricing.basePrice ?? defaultPricing.basePrice) / 100
+  );
+  const displayExtraBedBathFee = Math.round(
+    (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee) / 100
+  );
+  const displaySheetFee = Math.round(
+    (pricing.linens?.sheetFeePerBed ?? defaultPricing.linens.sheetFeePerBed) / 100
+  );
+  const displayTowelFee = Math.round(
+    (pricing.linens?.towelFee ?? defaultPricing.linens.towelFee) / 100
   );
 
   useEffect(() => {
@@ -771,16 +781,9 @@ const HomePage = ({ state, dispatch }) => {
           >
             {[
               "1 bed / 1 bath base rate",
-              `+$${
-                pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee
-              } per additional bed or bath`,
-              `Fresh sheets (+$${
-                pricing.linens?.sheetFeePerBed ??
-                defaultPricing.linens.sheetFeePerBed
-              }/bed)`,
-              `Fresh towels (+$${
-                pricing.linens?.towelFee ?? defaultPricing.linens.towelFee
-              }/towel)`,
+              `+$${displayExtraBedBathFee} per additional bed or bath`,
+              `Fresh sheets (+$${displaySheetFee}/bed)`,
+              `Fresh towels (+$${displayTowelFee}/towel)`,
               "Flexible 10am-4pm scheduling",
             ].map((item, index) => (
               <View

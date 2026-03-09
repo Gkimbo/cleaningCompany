@@ -92,16 +92,15 @@ const CleanerApplicationForm = () => {
   const pricing = fetchedPricing?.basePrice ? fetchedPricing : defaultPricing;
 
   // Calculate cleaner earnings (base price minus platform fee)
+  // Prices from API are in cents - convert to dollars for display
   const platformFeePercent =
     pricing.platform?.feePercent ?? defaultPricing.platform.feePercent;
-  const minCleanerPay = Math.round(
-    (pricing.basePrice ?? defaultPricing.basePrice) * (1 - platformFeePercent)
-  );
+  const basePriceDollars = (pricing.basePrice ?? defaultPricing.basePrice) / 100;
+  const extraBedBathFeeDollars = (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee) / 100;
+  const minCleanerPay = Math.round(basePriceDollars * (1 - platformFeePercent));
   // Max pay assumes a 2bed/1bath (1 extra bed = 1 extra)
   const maxCleanerPay = Math.round(
-    ((pricing.basePrice ?? defaultPricing.basePrice) +
-      (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee)) *
-      (1 - platformFeePercent)
+    (basePriceDollars + extraBedBathFeeDollars) * (1 - platformFeePercent)
   );
 
   // Calculate weekly/monthly/yearly earnings for different tiers

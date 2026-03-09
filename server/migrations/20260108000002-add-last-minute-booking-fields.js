@@ -15,8 +15,8 @@ module.exports = {
     await queryInterface.addColumn("PricingConfigs", "lastMinuteFee", {
       type: Sequelize.INTEGER,
       allowNull: false,
-      defaultValue: 50,
-      comment: "Flat fee for bookings within threshold hours (in dollars)",
+      defaultValue: 5000,
+      comment: "Flat fee for bookings within threshold hours (in cents)",
     });
 
     await queryInterface.addColumn("PricingConfigs", "lastMinuteThresholdHours", {
@@ -74,7 +74,7 @@ module.exports = {
     await queryInterface.addColumn("UserAppointments", "lastMinuteFeeApplied", {
       type: Sequelize.INTEGER,
       allowNull: true,
-      comment: "Last-minute fee amount in dollars (null if not applicable)",
+      comment: "Last-minute fee amount in cents (null if not applicable)",
     });
 
     await queryInterface.addColumn(

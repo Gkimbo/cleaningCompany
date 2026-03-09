@@ -10,7 +10,13 @@ import {
 import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
+import {
+  colors,
+  spacing,
+  radius,
+  shadows,
+  typography,
+} from "../../../services/styles/theme";
 import { usePricing, defaultPricing } from "../../../context/PricingContext";
 
 const { width } = Dimensions.get("window");
@@ -24,11 +30,14 @@ const NewCleanerInformationPage = () => {
   const [jobsPerWeek, setJobsPerWeek] = useState(15);
 
   // Calculate earnings from pricing config
-  const platformFeePercent = pricing?.platform?.feePercent || 0.10;
+  // Prices from API are in cents - convert to dollars for display
+  const platformFeePercent = pricing?.platform?.feePercent || 0.1;
   const keepPercent = Math.round((1 - platformFeePercent) * 100);
-  const basePrice = pricing?.basePrice || 150;
+  const basePrice = (pricing?.basePrice || 15000) / 100; // cents to dollars
   const avgJobPrice = basePrice + 50; // Average job is slightly above base
-  const cleanerEarningsPerJob = Math.round(avgJobPrice * (1 - platformFeePercent));
+  const cleanerEarningsPerJob = Math.round(
+    avgJobPrice * (1 - platformFeePercent)
+  );
 
   // Weekly/Monthly/Yearly calculations
   const weeklyEarnings = jobsPerWeek * cleanerEarningsPerJob;
@@ -57,28 +66,35 @@ const NewCleanerInformationPage = () => {
     {
       icon: "calendar",
       title: "You Control Your Schedule",
-      description: "Work when you want. Accept only the jobs that fit your life. Take time off whenever you need - no permission required.",
+      description:
+        "Work when you want. Accept only the jobs that fit your life. Take time off whenever you need - no permission required.",
       stat: "100%",
       statLabel: "Schedule Control",
     },
     {
       icon: "dollar-sign",
       title: "Earn More Per Job",
-      description: `Average $${cleanerEarningsPerJob} per cleaning. That's $${weeklyEarnings.toLocaleString()}/week at ${jobsPerWeek} jobs. Top cleaners earn $${(25 * cleanerEarningsPerJob * 4).toLocaleString()}+/month.`,
+      description: `Average $${cleanerEarningsPerJob} per cleaning. That's $${weeklyEarnings.toLocaleString()}/week at ${jobsPerWeek} jobs. Top cleaners earn $${(
+        25 *
+        cleanerEarningsPerJob *
+        4
+      ).toLocaleString()}+/month.`,
       stat: `$${cleanerEarningsPerJob}`,
       statLabel: "Per Cleaning",
     },
     {
       icon: "zap",
       title: "Get Paid Fast",
-      description: "No more waiting weeks for paychecks. Complete a job, get paid within 1-2 business days directly to your bank account.",
+      description:
+        "No more waiting weeks for paychecks. Complete a job, get paid within 1-2 business days directly to your bank account.",
       stat: "Fast",
       statLabel: "Payouts",
     },
     {
       icon: "shield",
       title: "Guaranteed Payment",
-      description: "Never chase payments again. Clients pay through the app before you arrive. 100% of your earnings, guaranteed.",
+      description:
+        "Never chase payments again. Clients pay through the app before you arrive. 100% of your earnings, guaranteed.",
       stat: "100%",
       statLabel: "Payment Rate",
     },
@@ -100,32 +116,63 @@ const NewCleanerInformationPage = () => {
     { icon: "check", text: "Reliable transportation", required: true },
     { icon: "check", text: "Smartphone with internet access", required: true },
     { icon: "check", text: "Attention to detail", required: true },
-    { icon: "plus", text: "Cleaning experience (helpful but not required)", required: false },
-    { icon: "plus", text: "Own cleaning supplies (we can help)", required: false },
+    {
+      icon: "plus",
+      text: "Cleaning experience (helpful but not required)",
+      required: false,
+    },
+    {
+      icon: "plus",
+      text: "Own cleaning supplies (we can help)",
+      required: false,
+    },
   ];
 
   const howItWorks = [
-    { step: "1", title: "Apply", desc: "Quick 5-min application", icon: "edit-3" },
-    { step: "2", title: "Get Approved", desc: "Usually within 48 hours", icon: "check-circle" },
-    { step: "3", title: "Set Availability", desc: "Choose your working hours", icon: "calendar" },
-    { step: "4", title: "Start Earning", desc: "Accept jobs & get paid", icon: "dollar-sign" },
+    {
+      step: "1",
+      title: "Apply",
+      desc: "Quick 5-min application",
+      icon: "edit-3",
+    },
+    {
+      step: "2",
+      title: "Get Approved",
+      desc: "Usually within 48 hours",
+      icon: "check-circle",
+    },
+    {
+      step: "3",
+      title: "Set Availability",
+      desc: "Choose your working hours",
+      icon: "calendar",
+    },
+    {
+      step: "4",
+      title: "Start Earning",
+      desc: "Accept jobs & get paid",
+      icon: "dollar-sign",
+    },
   ];
 
   const testimonials = [
     {
-      quote: "I left my 9-5 to clean full-time. Best decision ever. I make more money, set my own hours, and actually enjoy my work.",
+      quote:
+        "I left my 9-5 to clean full-time. Best decision ever. I make more money, set my own hours, and actually enjoy my work.",
       name: "Jessica M.",
       earnings: "$4,200/month",
       time: "8 months on platform",
     },
     {
-      quote: "Started part-time while in school. Now I have 12 regular clients and make more than my friends with office jobs.",
+      quote:
+        "Started part-time while in school. Now I have 12 regular clients and make more than my friends with office jobs.",
       name: "Marcus T.",
       earnings: "$2,800/month",
       time: "Part-time cleaner",
     },
     {
-      quote: "The guaranteed payments changed everything. No more awkward conversations about money. Just clean and get paid.",
+      quote:
+        "The guaranteed payments changed everything. No more awkward conversations about money. Just clean and get paid.",
       name: "Sarah L.",
       earnings: "$3,500/month",
       time: "1 year on platform",
@@ -135,11 +182,23 @@ const NewCleanerInformationPage = () => {
   const faqs = [
     {
       q: "How much can I really earn?",
-      a: `The average cleaner earns $${cleanerEarningsPerJob} per job after our ${Math.round(platformFeePercent * 100)}% platform fee. At 15 jobs/week, that's $${(15 * cleanerEarningsPerJob * 4).toLocaleString()}/month. Top earners doing 25 jobs/week make $${(25 * cleanerEarningsPerJob * 4).toLocaleString()}+/month.`,
+      a: `The average cleaner earns $${cleanerEarningsPerJob} per job after our ${Math.round(
+        platformFeePercent * 100
+      )}% platform fee. At 15 jobs/week, that's $${(
+        15 *
+        cleanerEarningsPerJob *
+        4
+      ).toLocaleString()}/month. Top earners doing 25 jobs/week make $${(
+        25 *
+        cleanerEarningsPerJob *
+        4
+      ).toLocaleString()}+/month.`,
     },
     {
       q: "What's the platform fee?",
-      a: `We take ${Math.round(platformFeePercent * 100)}% to cover payment processing, insurance, customer support, and app development. You keep ${keepPercent}% of every job. No hidden fees, no surprises.`,
+      a: `We take ${Math.round(
+        platformFeePercent * 100
+      )}% to cover payment processing, insurance, customer support, and app development. You keep ${keepPercent}% of every job. No hidden fees, no surprises.`,
     },
     {
       q: "Do I need experience?",
@@ -154,7 +213,6 @@ const NewCleanerInformationPage = () => {
       a: "Within 1-2 business days of completing a job, the money is in your bank account. No waiting for bi-weekly paychecks.",
     },
   ];
-
   return (
     <View style={styles.container}>
       <ScrollView
@@ -174,7 +232,9 @@ const NewCleanerInformationPage = () => {
 
           <Text style={styles.heroTitle}>
             Earn Up To{"\n"}
-            <Text style={styles.heroTitleAccent}>${yearlyEarnings.toLocaleString()}/Year</Text>
+            <Text style={styles.heroTitleAccent}>
+              ${yearlyEarnings.toLocaleString()}/Year
+            </Text>
           </Text>
 
           <Text style={styles.heroSubtitle}>
@@ -198,7 +258,9 @@ const NewCleanerInformationPage = () => {
             <Feather name="arrow-right" size={20} color="#065f46" />
           </TouchableOpacity>
 
-          <Text style={styles.heroNote}>No fees to apply. Start earning this week.</Text>
+          <Text style={styles.heroNote}>
+            No fees to apply. Start earning this week.
+          </Text>
         </LinearGradient>
 
         {/* Earnings Calculator */}
@@ -221,7 +283,8 @@ const NewCleanerInformationPage = () => {
                   <Text
                     style={[
                       styles.sliderButtonText,
-                      jobsPerWeek === tier.jobs && styles.sliderButtonTextActive,
+                      jobsPerWeek === tier.jobs &&
+                        styles.sliderButtonTextActive,
                     ]}
                   >
                     {tier.jobs}
@@ -229,7 +292,8 @@ const NewCleanerInformationPage = () => {
                   <Text
                     style={[
                       styles.sliderButtonLabel,
-                      jobsPerWeek === tier.jobs && styles.sliderButtonLabelActive,
+                      jobsPerWeek === tier.jobs &&
+                        styles.sliderButtonLabelActive,
                     ]}
                   >
                     {tier.label}
@@ -241,22 +305,29 @@ const NewCleanerInformationPage = () => {
             <View style={styles.earningsDisplay}>
               <View style={styles.earningsRow}>
                 <Text style={styles.earningsLabel}>Weekly</Text>
-                <Text style={styles.earningsValue}>${weeklyEarnings.toLocaleString()}</Text>
+                <Text style={styles.earningsValue}>
+                  ${weeklyEarnings.toLocaleString()}
+                </Text>
               </View>
               <View style={styles.earningsRow}>
                 <Text style={styles.earningsLabel}>Monthly</Text>
-                <Text style={styles.earningsValueLarge}>${monthlyEarnings.toLocaleString()}</Text>
+                <Text style={styles.earningsValueLarge}>
+                  ${monthlyEarnings.toLocaleString()}
+                </Text>
               </View>
               <View style={styles.earningsRow}>
                 <Text style={styles.earningsLabel}>Yearly</Text>
-                <Text style={styles.earningsValue}>${yearlyEarnings.toLocaleString()}</Text>
+                <Text style={styles.earningsValue}>
+                  ${yearlyEarnings.toLocaleString()}
+                </Text>
               </View>
             </View>
 
             <View style={styles.earningsNote}>
               <Feather name="info" size={14} color={colors.primary[600]} />
               <Text style={styles.earningsNoteText}>
-                Based on avg ${avgJobPrice} job price, you keep ${cleanerEarningsPerJob} ({keepPercent}%)
+                Based on avg ${avgJobPrice} job price, you keep $
+                {cleanerEarningsPerJob} ({keepPercent}%)
               </Text>
             </View>
           </View>
@@ -275,15 +346,23 @@ const NewCleanerInformationPage = () => {
               <View key={index} style={styles.whyJoinCard}>
                 <View style={styles.whyJoinHeader}>
                   <View style={styles.whyJoinIconCircle}>
-                    <Feather name={item.icon} size={20} color={colors.success[600]} />
+                    <Feather
+                      name={item.icon}
+                      size={20}
+                      color={colors.success[600]}
+                    />
                   </View>
                   <View style={styles.whyJoinStat}>
                     <Text style={styles.whyJoinStatValue}>{item.stat}</Text>
-                    <Text style={styles.whyJoinStatLabel}>{item.statLabel}</Text>
+                    <Text style={styles.whyJoinStatLabel}>
+                      {item.statLabel}
+                    </Text>
                   </View>
                 </View>
                 <Text style={styles.whyJoinTitle}>{item.title}</Text>
-                <Text style={styles.whyJoinDescription}>{item.description}</Text>
+                <Text style={styles.whyJoinDescription}>
+                  {item.description}
+                </Text>
               </View>
             ))}
           </View>
@@ -292,13 +371,19 @@ const NewCleanerInformationPage = () => {
         {/* Benefits Grid */}
         <View style={styles.benefitsSection}>
           <Text style={styles.sectionLabel}>PLATFORM BENEFITS</Text>
-          <Text style={styles.sectionTitle}>Everything You Need to Succeed</Text>
+          <Text style={styles.sectionTitle}>
+            Everything You Need to Succeed
+          </Text>
 
           <View style={styles.benefitsGrid}>
             {benefits.map((benefit, index) => (
               <View key={index} style={styles.benefitItem}>
                 <View style={styles.benefitIcon}>
-                  <Feather name={benefit.icon} size={18} color={colors.primary[600]} />
+                  <Feather
+                    name={benefit.icon}
+                    size={18}
+                    color={colors.primary[600]}
+                  />
                 </View>
                 <Text style={styles.benefitText}>{benefit.text}</Text>
               </View>
@@ -312,15 +397,23 @@ const NewCleanerInformationPage = () => {
           style={styles.howItWorksSection}
         >
           <Text style={styles.howItWorksLabel}>GET STARTED</Text>
-          <Text style={styles.howItWorksTitle}>Start Earning in 4 Simple Steps</Text>
+          <Text style={styles.howItWorksTitle}>
+            Start Earning in 4 Simple Steps
+          </Text>
 
           <View style={styles.stepsContainer}>
             {howItWorks.map((item, index) => (
               <View key={index} style={styles.stepItem}>
                 <View style={styles.stepCircle}>
-                  <Feather name={item.icon} size={20} color={colors.primary[600]} />
+                  <Feather
+                    name={item.icon}
+                    size={20}
+                    color={colors.primary[600]}
+                  />
                 </View>
-                {index < howItWorks.length - 1 && <View style={styles.stepLine} />}
+                {index < howItWorks.length - 1 && (
+                  <View style={styles.stepLine} />
+                )}
                 <Text style={styles.stepTitle}>{item.title}</Text>
                 <Text style={styles.stepDesc}>{item.desc}</Text>
               </View>
@@ -345,7 +438,9 @@ const NewCleanerInformationPage = () => {
                   <Feather
                     name={req.icon}
                     size={14}
-                    color={req.required ? colors.success[600] : colors.warning[600]}
+                    color={
+                      req.required ? colors.success[600] : colors.warning[600]
+                    }
                   />
                 </View>
                 <Text style={styles.requirementText}>
@@ -368,16 +463,24 @@ const NewCleanerInformationPage = () => {
             <View key={index} style={styles.testimonialCard}>
               <View style={styles.testimonialHeader}>
                 <View style={styles.quoteIcon}>
-                  <Feather name="message-circle" size={20} color={colors.success[400]} />
+                  <Feather
+                    name="message-circle"
+                    size={20}
+                    color={colors.success[400]}
+                  />
                 </View>
                 <View style={styles.testimonialStatBadge}>
-                  <Text style={styles.testimonialStatText}>{testimonial.earnings}</Text>
+                  <Text style={styles.testimonialStatText}>
+                    {testimonial.earnings}
+                  </Text>
                 </View>
               </View>
               <Text style={styles.testimonialQuote}>"{testimonial.quote}"</Text>
               <View style={styles.testimonialAuthor}>
                 <View style={styles.authorAvatar}>
-                  <Text style={styles.authorInitial}>{testimonial.name[0]}</Text>
+                  <Text style={styles.authorInitial}>
+                    {testimonial.name[0]}
+                  </Text>
                 </View>
                 <View>
                   <Text style={styles.authorName}>{testimonial.name}</Text>
@@ -411,19 +514,28 @@ const NewCleanerInformationPage = () => {
           <View style={styles.finalCtaFeatures}>
             <View style={styles.finalCtaFeatureRow}>
               <Feather name="check-circle" size={18} color="#a7f3d0" />
-              <Text style={styles.finalCtaFeatureText}>Free to apply - no fees ever</Text>
+              <Text style={styles.finalCtaFeatureText}>
+                Free to apply - no fees ever
+              </Text>
             </View>
             <View style={styles.finalCtaFeatureRow}>
               <Feather name="check-circle" size={18} color="#a7f3d0" />
-              <Text style={styles.finalCtaFeatureText}>Get approved in 24-48 hours</Text>
+              <Text style={styles.finalCtaFeatureText}>
+                Get approved in 24-48 hours
+              </Text>
             </View>
             <View style={styles.finalCtaFeatureRow}>
               <Feather name="check-circle" size={18} color="#a7f3d0" />
-              <Text style={styles.finalCtaFeatureText}>Start working this week</Text>
+              <Text style={styles.finalCtaFeatureText}>
+                Start working this week
+              </Text>
             </View>
           </View>
 
-          <TouchableOpacity style={styles.finalCtaButton} onPress={handleApplyPress}>
+          <TouchableOpacity
+            style={styles.finalCtaButton}
+            onPress={handleApplyPress}
+          >
             <Feather name="edit-3" size={20} color="#065f46" />
             <Text style={styles.finalCtaButtonText}>Apply Now - 5 Minutes</Text>
           </TouchableOpacity>

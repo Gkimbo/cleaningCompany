@@ -107,8 +107,9 @@ module.exports = {
         allowNull: true,
       },
       defaultPrice: {
-        type: Sequelize.DECIMAL(10, 2),
+        type: Sequelize.INTEGER,
         allowNull: true,
+        comment: "Default price in cents",
       },
       defaultDayOfWeek: {
         type: Sequelize.INTEGER, // 0-6, 0=Sunday
