@@ -22,6 +22,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { formatCurrency } from "../../services/formatters";
 
 // Response Modal Component
 const ResponseModal = ({ visible, appointment, onClose, onRespond, loading }) => {
@@ -234,7 +235,7 @@ const DeclinedAppointmentsSection = ({ token, onRefresh }) => {
         } else if (action === "opened_to_market") {
           Alert.alert(
             "Opened to Other Cleaners",
-            `Your appointment is now open to other cleaners. The price has been updated to platform pricing ($${result.newPrice?.toFixed(2) || "varies"}).`
+            `Your appointment is now open to other cleaners. The price has been updated to platform pricing (${formatCurrency(result.newPrice) || "varies"}).`
           );
         }
 
