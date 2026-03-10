@@ -316,35 +316,36 @@ describe("Platform fee config values are accessible", () => {
 describe("Default pricing values match expected configuration", () => {
   const { pricing } = businessConfig;
 
-  it("should have base price of $150", () => {
-    expect(pricing.basePrice).toBe(150);
+  // Note: All prices are stored in cents for Stripe compatibility
+  it("should have base price of $150 (15000 cents)", () => {
+    expect(pricing.basePrice).toBe(15000);
   });
 
-  it("should have extra bed/bath fee of $50", () => {
-    expect(pricing.extraBedBathFee).toBe(50);
+  it("should have extra bed/bath fee of $50 (5000 cents)", () => {
+    expect(pricing.extraBedBathFee).toBe(5000);
   });
 
-  it("should have sheet fee of $30/bed", () => {
-    expect(pricing.linens.sheetFeePerBed).toBe(30);
+  it("should have sheet fee of $30/bed (3000 cents)", () => {
+    expect(pricing.linens.sheetFeePerBed).toBe(3000);
   });
 
-  it("should have towel fee of $5/towel", () => {
-    expect(pricing.linens.towelFee).toBe(5);
+  it("should have towel fee of $5/towel (500 cents)", () => {
+    expect(pricing.linens.towelFee).toBe(500);
   });
 
-  it("should have face cloth fee of $2 each", () => {
-    expect(pricing.linens.faceClothFee).toBe(2);
+  it("should have face cloth fee of $2 each (200 cents)", () => {
+    expect(pricing.linens.faceClothFee).toBe(200);
   });
 
-  it("should have correct time window surcharges", () => {
+  it("should have correct time window surcharges (in cents)", () => {
     expect(pricing.timeWindows.anytime).toBe(0);
-    expect(pricing.timeWindows["10-3"]).toBe(25);
-    expect(pricing.timeWindows["11-4"]).toBe(25);
-    expect(pricing.timeWindows["12-2"]).toBe(30);
+    expect(pricing.timeWindows["10-3"]).toBe(2500);
+    expect(pricing.timeWindows["11-4"]).toBe(2500);
+    expect(pricing.timeWindows["12-2"]).toBe(3000);
   });
 
-  it("should have cancellation fee of $25", () => {
-    expect(pricing.cancellation.fee).toBe(25);
+  it("should have cancellation fee of $25 (2500 cents)", () => {
+    expect(pricing.cancellation.fee).toBe(2500);
   });
 
   it("should have cancellation window of 7 days", () => {

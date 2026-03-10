@@ -225,8 +225,8 @@ describe("Payment Method Removal Protection", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.unpaidAppointments[0].isWithinCancellationWindow).toBe(true);
-      expect(res.body.unpaidAppointments[0].cancellationFee).toBe(25);
-      expect(res.body.totalCancellationFees).toBe(25);
+      expect(res.body.unpaidAppointments[0].cancellationFee).toBe(2500); // 25 dollars in cents
+      expect(res.body.totalCancellationFees).toBe(2500); // 25 dollars in cents
     });
 
     it("should return 401 without authorization", async () => {
@@ -470,7 +470,7 @@ describe("Payment Method Removal Protection", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.totalCancellationFees).toBe(25);
+      expect(res.body.totalCancellationFees).toBe(2500); // 25 dollars in cents
       expect(res.body.cancelledAppointments[0].wasWithinWindow).toBe(true);
     });
 

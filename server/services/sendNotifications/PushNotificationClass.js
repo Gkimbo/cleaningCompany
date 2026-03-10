@@ -863,7 +863,7 @@ class PushNotification {
   // 56. Stripe Connect setup invitation (to employee)
   static async sendPushStripeSetupInvitation(expoPushToken, businessOwnerName) {
     const title = "Set Up Direct Payments 💰";
-    const body = `${businessOwnerName} has enabled direct payments for you. Tap to set up Stripe Connect and get paid faster!`;
+    const body = `${businessOwnerName} has enabled bi-weekly direct payments for you. Tap to connect your bank account and get paid!`;
 
     return this.sendPushNotification(expoPushToken, title, body, {
       type: "stripe_setup_invitation",

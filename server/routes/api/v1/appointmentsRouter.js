@@ -607,9 +607,10 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
 
       // Check if discount was applied (incentive appointment)
       const discountApplied = appointment.discountApplied === true;
-      // originalPrice is stored in cents, convert to dollars
+      // originalPrice is stored in cents (INTEGER), convert to dollars
+      // Use parseInt for backwards compatibility with any string values
       const originalPrice = discountApplied && appointment.originalPrice
-        ? appointment.originalPrice / 100
+        ? parseInt(appointment.originalPrice, 10) / 100
         : price;
 
       // Get incentive-specific cancellation rates
@@ -1068,7 +1069,7 @@ appointmentRouter.post("/", async (req, res) => {
         if (discountResult.eligible && discountResult.remainingCleanings > 0) {
           const discountAmount = Math.round(originalPrice * discountResult.discountPercent);
           finalPrice = originalPrice - discountAmount;
-          date.originalPrice = originalPrice.toString();
+          date.originalPrice = originalPrice; // Store as INTEGER (cents), not string
           date.discountApplied = true;
           date.discountPercent = discountResult.discountPercent;
           // Decrement remaining for this batch of appointments
@@ -1926,8 +1927,9 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
       const pricingConfig = await getPricingConfig();
       const { platform: platformConfig } = pricingConfig;
 
+      // Use parseInt for backwards compatibility with any string values stored for originalPrice
       const priceInCents = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
-        ? appointment.dataValues.originalPrice
+        ? parseInt(appointment.dataValues.originalPrice, 10)
         : appointment.dataValues.price;
 
       const feeResult = await IncentiveService.calculateCleanerFee(
@@ -1963,40 +1965,106 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
         diffInDays >= 0 &&
         appointment.dataValues.paymentStatus !== "captured"
       ) {
+        // Use transaction with row-level locking to prevent race conditions
+        const captureTransaction = await models.sequelize.transaction();
         try {
-          const user = await User.findByPk(appointment.dataValues.userId);
+          // Re-fetch appointment with exclusive lock
+          const lockedAppointment = await UserAppointments.findByPk(appointment.id, {
+            lock: captureTransaction.LOCK.UPDATE,
+            transaction: captureTransaction,
+          });
 
-          if (appointment.dataValues.paymentIntentId) {
-            await stripe.paymentIntents.capture(appointment.dataValues.paymentIntentId);
-            await appointment.update({ paymentStatus: "captured" });
-          } else if (user && user.stripeCustomerId) {
-            const customer = await stripe.customers.retrieve(user.stripeCustomerId);
-            const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+          // Double-check payment status after acquiring lock (race condition protection)
+          if (lockedAppointment.paymentStatus === "captured" ||
+              lockedAppointment.paymentStatus === "capture_in_progress") {
+            await captureTransaction.rollback();
+            console.log(`[Auto-Capture] Appointment ${appointment.id} already captured or in progress, skipping`);
+          } else {
+            // Mark as capture_in_progress to prevent concurrent captures
+            await lockedAppointment.update({
+              paymentStatus: "capture_in_progress",
+            }, { transaction: captureTransaction });
+            await captureTransaction.commit();
 
-            if (defaultPaymentMethod) {
-              const priceForCapture = appointment.dataValues.price;
-              const capturedIntent = await stripe.paymentIntents.create({
-                amount: priceForCapture,
-                currency: "usd",
-                customer: user.stripeCustomerId,
-                payment_method: defaultPaymentMethod,
-                confirm: true,
-                off_session: true,
-                metadata: {
-                  userId: appointment.dataValues.userId,
-                  homeId: homeId,
-                  appointmentId: Number(appointmentId),
-                },
-              });
+            // Now perform Stripe capture outside transaction (external API call)
+            const user = await User.findByPk(lockedAppointment.userId);
+            let captureSuccess = false;
+            let capturedAmount = 0;
+            let stripeChargeId = null;
+            let paymentIntentId = lockedAppointment.paymentIntentId;
 
-              await appointment.update({
-                paymentIntentId: capturedIntent.id,
-                paymentStatus: "captured",
+            try {
+              if (lockedAppointment.paymentIntentId) {
+                const capturedPaymentIntent = await stripe.paymentIntents.capture(lockedAppointment.paymentIntentId);
+                captureSuccess = true;
+                capturedAmount = capturedPaymentIntent.amount_received || capturedPaymentIntent.amount;
+                stripeChargeId = capturedPaymentIntent.latest_charge;
+              } else if (user && user.stripeCustomerId) {
+                const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+                const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+
+                if (defaultPaymentMethod) {
+                  const priceForCapture = lockedAppointment.price;
+                  const capturedIntent = await stripe.paymentIntents.create({
+                    amount: priceForCapture,
+                    currency: "usd",
+                    customer: user.stripeCustomerId,
+                    payment_method: defaultPaymentMethod,
+                    confirm: true,
+                    off_session: true,
+                    metadata: {
+                      userId: lockedAppointment.userId,
+                      homeId: homeId,
+                      appointmentId: Number(appointmentId),
+                    },
+                  });
+                  captureSuccess = true;
+                  capturedAmount = capturedIntent.amount_received || capturedIntent.amount;
+                  stripeChargeId = capturedIntent.latest_charge;
+                  paymentIntentId = capturedIntent.id;
+                }
+              }
+
+              // Update appointment with final status
+              if (captureSuccess) {
+                await lockedAppointment.update({
+                  paymentIntentId: paymentIntentId,
+                  paymentStatus: "captured",
+                  paid: true,
+                  amountPaid: capturedAmount,
+                });
+
+                // Record capture transaction in Payment table for audit trail
+                await recordPaymentTransaction({
+                  type: "capture",
+                  status: "succeeded",
+                  amount: capturedAmount,
+                  userId: lockedAppointment.userId,
+                  appointmentId: lockedAppointment.id,
+                  stripePaymentIntentId: paymentIntentId,
+                  stripeChargeId: stripeChargeId,
+                  description: `Auto-capture for direct booking appointment ${lockedAppointment.id}`,
+                });
+              } else {
+                // Revert status if capture didn't happen (no payment method)
+                await lockedAppointment.update({ paymentStatus: "pending" });
+              }
+            } catch (stripeError) {
+              // Stripe capture failed - revert status
+              console.error("Error capturing payment on direct booking:", stripeError);
+              await lockedAppointment.update({
+                paymentStatus: "pending",
+                paymentCaptureFailed: true,
+                paymentFirstFailedAt: new Date(),
               });
             }
           }
         } catch (captureError) {
-          console.error("Error capturing payment on direct booking:", captureError);
+          // Rollback transaction if it hasn't been committed
+          if (captureTransaction && !captureTransaction.finished) {
+            await captureTransaction.rollback();
+          }
+          console.error("Error in auto-capture transaction:", captureError);
         }
       }
 
@@ -2265,8 +2333,9 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
 
       // Use original price for cleaner payout if a homeowner discount was applied
       // This ensures cleaners get paid based on the full price, with the platform absorbing the discount (prices in cents)
+      // Use parseInt for backwards compatibility with any string values stored for originalPrice
       const priceInCents = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
-        ? appointment.dataValues.originalPrice
+        ? parseInt(appointment.dataValues.originalPrice, 10)
         : appointment.dataValues.price;
 
       // Check cleaner incentive eligibility and calculate fees

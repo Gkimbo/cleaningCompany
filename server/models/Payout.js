@@ -34,7 +34,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: false,
       defaultValue: "pending",
-      // pending, held, processing, completed, failed
+      // pending, held, processing, completed, failed, reversed, cancelled
     },
     paymentCapturedAt: {
       type: DataTypes.DATE,
@@ -51,6 +51,22 @@ module.exports = (sequelize, DataTypes) => {
     failureReason: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    // Reversal tracking fields (for refunds)
+    reversalId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: "Stripe transfer reversal ID",
+    },
+    reversedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "When the payout was reversed",
+    },
+    reversalReason: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      comment: "Reason for reversal: customer_refund, already_reversed, dispute, etc.",
     },
     // Incentive tracking
     incentiveApplied: {

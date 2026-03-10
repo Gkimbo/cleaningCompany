@@ -7568,29 +7568,30 @@ Kleanr Support Team`;
         content: `
           <p><strong>${businessOwnerName}</strong> has enabled direct payments for you through Stripe Connect!</p>
           <p>This means you can receive your earnings directly to your bank account - no more waiting for checks or manual transfers.</p>
+          <p><strong>Payments are processed bi-weekly</strong>, so you'll receive your earnings every two weeks directly to your connected bank account.</p>
         `,
         steps: {
           title: "How to Set Up",
           items: [
-            "Open the Kleanr app and go to Settings",
-            "Tap on 'Payment Settings' or 'Direct Deposit'",
+            "Open the Kleanr app and go to your Dashboard",
+            "Tap on the 'Set Up Direct Payments' banner",
             "Follow the Stripe Connect setup wizard",
             "Enter your banking details securely",
           ],
         },
         infoBox: {
-          icon: "🔒",
-          title: "Secure & Fast",
+          icon: "📅",
+          title: "Payment Details",
           items: [
+            { label: "Schedule", value: "Bi-weekly (every 2 weeks)" },
             { label: "Processing", value: "1-2 business days" },
             { label: "Security", value: "Bank-level encryption" },
-            { label: "Fees", value: "No hidden fees" },
           ],
         },
         ctaText: `
           <a href="${appUrl}" style="display: inline-block; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Set Up Now</a>
         `,
-        footerMessage: "Get paid faster with direct deposit!",
+        footerMessage: "Get paid with direct deposit!",
       });
 
       const textContent = `Set Up Direct Payments
@@ -7601,22 +7602,24 @@ ${businessOwnerName} has enabled direct payments for you through Stripe Connect!
 
 This means you can receive your earnings directly to your bank account.
 
+Payments are processed bi-weekly, so you'll receive your earnings every two weeks directly to your connected bank account.
+
 HOW TO SET UP
 ━━━━━━━━━━━━━━━━━━━━━━
-1. Open the Kleanr app and go to Settings
-2. Tap on 'Payment Settings' or 'Direct Deposit'
+1. Open the Kleanr app and go to your Dashboard
+2. Tap on the 'Set Up Direct Payments' banner
 3. Follow the Stripe Connect setup wizard
 4. Enter your banking details securely
 
-BENEFITS
+PAYMENT DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━
+Schedule: Bi-weekly (every 2 weeks)
 Processing: 1-2 business days
 Security: Bank-level encryption
-Fees: No hidden fees
 
 Visit ${appUrl} to set up direct payments.
 
-Get paid faster with direct deposit!
+Get paid with direct deposit!
 Kleanr Support Team`;
 
       const mailOptions = {

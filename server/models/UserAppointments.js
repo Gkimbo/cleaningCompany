@@ -77,6 +77,7 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 			defaultValue: "pending",
+			// Valid statuses: pending, capture_in_progress, captured, succeeded, failed, cancelled, refunded
 		},
 		amountPaid: {
 			type: DataTypes.INTEGER,

@@ -160,10 +160,12 @@ async function retryPaymentCapture(appointment, io) {
         );
 
         if (existingIntent.status === "succeeded") {
-          // Payment already succeeded - clear the failure flag
+          // Payment already succeeded - clear the failure flag and mark as paid
           await appointment.update({
             paymentCaptureFailed: false,
             paymentStatus: "captured",
+            paid: true,
+            amountPaid: existingIntent.amount_received || existingIntent.amount,
             lastPaymentRetryAt: now,
           });
           console.log(
@@ -174,17 +176,23 @@ async function retryPaymentCapture(appointment, io) {
         }
 
         if (existingIntent.status === "requires_capture") {
-          // Capture the payment
+          // Capture the payment with idempotency key to prevent duplicate captures
+          const captureIdempotencyKey = `capture_${appointment.id}_${appointment.paymentIntentId}`;
           paymentIntent = await stripe.paymentIntents.capture(
-            appointment.paymentIntentId
+            appointment.paymentIntentId,
+            {},
+            { idempotencyKey: captureIdempotencyKey }
           );
         } else if (existingIntent.status === "canceled") {
           // Need to create a new payment intent
           paymentIntent = await createNewPaymentIntent(appointment, homeowner);
         } else {
-          // Other status - try to capture anyway
+          // Other status - try to capture anyway with idempotency key
+          const captureIdempotencyKey = `capture_${appointment.id}_${appointment.paymentIntentId}`;
           paymentIntent = await stripe.paymentIntents.capture(
-            appointment.paymentIntentId
+            appointment.paymentIntentId,
+            {},
+            { idempotencyKey: captureIdempotencyKey }
           );
         }
       } catch (captureError) {
@@ -204,21 +212,35 @@ async function retryPaymentCapture(appointment, io) {
       await appointment.update({
         paymentCaptureFailed: false,
         paymentStatus: "captured",
+        paid: true,
         paymentIntentId: paymentIntent.id,
-        amountPaid: paymentIntent.amount,
+        amountPaid: paymentIntent.amount_received || paymentIntent.amount,
         lastPaymentRetryAt: now,
       });
 
-      // Record in Payment table
-      await Payment.create({
-        appointmentId: appointment.id,
-        stripePaymentIntentId: paymentIntent.id,
-        amount: paymentIntent.amount,
-        currency: paymentIntent.currency || "usd",
-        status: "succeeded",
-        type: "capture",
-        metadata: { retrySuccess: true, retryCount: appointment.paymentRetryCount },
+      // Record in Payment table (check for existing to avoid duplicates)
+      const existingCapture = await Payment.findOne({
+        where: {
+          appointmentId: appointment.id,
+          stripePaymentIntentId: paymentIntent.id,
+          type: "capture",
+          status: "succeeded",
+        },
       });
+
+      if (!existingCapture) {
+        await Payment.create({
+          transactionId: Payment.generateTransactionId(),
+          appointmentId: appointment.id,
+          stripePaymentIntentId: paymentIntent.id,
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency || "usd",
+          status: "succeeded",
+          type: "capture",
+          processedAt: new Date(),
+          metadata: { retrySuccess: true, retryCount: appointment.paymentRetryCount },
+        });
+      }
 
       console.log(
         `[PaymentRetryMonitor] Payment retry succeeded for appointment ${appointment.id}`
@@ -250,8 +272,10 @@ async function retryPaymentCapture(appointment, io) {
       lastPaymentRetryAt: now,
     });
 
-    // Record failure (price already in cents)
+    // Record failure with unique transactionId (price already in cents)
+    // Each retry attempt gets its own record for audit trail
     await Payment.create({
+      transactionId: Payment.generateTransactionId(),
       appointmentId: appointment.id,
       stripePaymentIntentId: appointment.paymentIntentId,
       amount: appointment.price,
@@ -259,7 +283,11 @@ async function retryPaymentCapture(appointment, io) {
       status: "failed",
       type: "capture",
       failureReason: error.message,
-      metadata: { retryAttempt: appointment.paymentRetryCount + 1 },
+      processedAt: new Date(),
+      metadata: {
+        retryAttempt: currentRetryCount + 1,
+        isRetry: true,
+      },
     });
 
     await notifyPaymentRetryFailed(appointment, homeowner, io);
@@ -289,21 +317,33 @@ async function createNewPaymentIntent(appointment, homeowner) {
   // Price is already stored in cents
   const priceInCents = appointment.price;
 
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: priceInCents,
-    currency: "usd",
-    customer: homeowner.stripeCustomerId,
-    payment_method: defaultPaymentMethod,
-    confirm: true,
-    automatic_payment_methods: {
-      enabled: true,
-      allow_redirects: "never",
+  // Generate idempotency key based on appointment ID, retry count, and timestamp (rounded to hour)
+  // This prevents duplicate charges if the same retry is processed multiple times
+  const currentRetryCount = appointment.paymentRetryCount || 0;
+  const hourTimestamp = Math.floor(Date.now() / (1000 * 60 * 60)); // Round to current hour
+  const idempotencyKey = `retry_${appointment.id}_${currentRetryCount + 1}_${hourTimestamp}`;
+
+  const paymentIntent = await stripe.paymentIntents.create(
+    {
+      amount: priceInCents,
+      currency: "usd",
+      customer: homeowner.stripeCustomerId,
+      payment_method: defaultPaymentMethod,
+      confirm: true,
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: "never",
+      },
+      metadata: {
+        appointmentId: appointment.id,
+        isRetry: "true",
+        retryCount: currentRetryCount + 1,
+      },
     },
-    metadata: {
-      appointmentId: appointment.id,
-      isRetry: "true",
-    },
-  });
+    {
+      idempotencyKey,
+    }
+  );
 
   return paymentIntent;
 }

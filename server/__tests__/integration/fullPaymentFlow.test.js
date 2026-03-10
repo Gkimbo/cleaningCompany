@@ -6,6 +6,12 @@
 
 const request = require("supertest");
 const express = require("express");
+const jwt = require("jsonwebtoken");
+
+// Test auth token (cleaner user)
+const TEST_SECRET = process.env.SESSION_SECRET || "test-secret-key";
+const TEST_CLEANER_TOKEN = jwt.sign({ userId: 2 }, TEST_SECRET);
+const TEST_OWNER_TOKEN = jwt.sign({ userId: 1 }, TEST_SECRET);
 
 // Mock Stripe
 jest.mock("stripe", () => {
@@ -61,6 +67,7 @@ const mockAppointment = {
   paid: false,
   completed: false,
   hasBeenAssigned: false,
+  employeesAssigned: ["2"], // Cleaner ID 2 is assigned
   paymentIntentId: null,
   paymentStatus: "pending",
   update: jest.fn().mockImplementation(function (data) {
@@ -71,8 +78,12 @@ const mockAppointment = {
 
 jest.mock("../../models", () => ({
   User: {
-    findByPk: jest.fn().mockResolvedValue({ id: 1, email: "test@example.com" }),
-    findOne: jest.fn().mockResolvedValue({ id: 1, email: "test@example.com" }),
+    findByPk: jest.fn().mockImplementation((id) => {
+      if (id === 1) return Promise.resolve({ id: 1, email: "test@example.com", type: "owner" });
+      if (id === 2) return Promise.resolve({ id: 2, email: "cleaner@example.com", type: "cleaner" });
+      return Promise.resolve(null);
+    }),
+    findOne: jest.fn().mockResolvedValue({ id: 1, email: "test@example.com", type: "owner" }),
   },
   UserAppointments: {
     findByPk: jest.fn().mockResolvedValue(mockAppointment),
@@ -96,9 +107,18 @@ jest.mock("../../models", () => ({
   Payout: {
     findByPk: jest.fn(),
     findAll: jest.fn().mockResolvedValue([]),
+    update: jest.fn().mockResolvedValue([1]),
   },
   UserPendingRequests: {
     destroy: jest.fn().mockResolvedValue(0),
+  },
+  sequelize: {
+    transaction: jest.fn().mockImplementation(() => Promise.resolve({
+      LOCK: { UPDATE: 'UPDATE' },
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      finished: false,
+    })),
   },
 }));
 
@@ -139,6 +159,7 @@ describe("Full Payment Flow", () => {
     mockAppointment.paid = false;
     mockAppointment.completed = false;
     mockAppointment.hasBeenAssigned = false;
+    mockAppointment.employeesAssigned = ["2"]; // Reset cleaner assignment
     mockAppointment.paymentIntentId = null;
     mockAppointment.paymentStatus = "pending";
   });
@@ -174,6 +195,7 @@ describe("Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/capture")
+        .set("Authorization", `Bearer ${TEST_CLEANER_TOKEN}`)
         .send({ appointmentId: 1 });
 
       expect(res.status).toBe(200);
@@ -181,7 +203,9 @@ describe("Full Payment Flow", () => {
     });
 
     it("Step 4: Customer can view payment history", async () => {
-      const res = await request(app).get("/api/v1/payments/history/1");
+      const res = await request(app)
+        .get("/api/v1/payments/history/1")
+        .set("Authorization", `Bearer ${TEST_OWNER_TOKEN}`);
 
       expect(res.status).toBe(200);
       expect(res.body.payments).toBeDefined();
@@ -189,7 +213,9 @@ describe("Full Payment Flow", () => {
     });
 
     it("Step 5: Employee can view earnings", async () => {
-      const res = await request(app).get("/api/v1/payments/earnings/2");
+      const res = await request(app)
+        .get("/api/v1/payments/earnings/2")
+        .set("Authorization", `Bearer ${TEST_CLEANER_TOKEN}`);
 
       expect(res.status).toBe(200);
       expect(res.body.totalEarnings).toBeDefined();
@@ -243,6 +269,7 @@ describe("Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/capture")
+        .set("Authorization", `Bearer ${TEST_CLEANER_TOKEN}`)
         .send({ appointmentId: 999 });
 
       expect(res.status).toBe(404);
@@ -255,6 +282,7 @@ describe("Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/capture")
+        .set("Authorization", `Bearer ${TEST_CLEANER_TOKEN}`)
         .send({ appointmentId: 1 });
 
       expect(res.status).toBe(400);
@@ -316,13 +344,16 @@ describe("Full Payment Flow", () => {
       // 4. Cleaner completes job and triggers capture
       const captureRes = await request(app)
         .post("/api/v1/payments/capture")
+        .set("Authorization", `Bearer ${TEST_CLEANER_TOKEN}`)
         .send({ appointmentId: 1 });
 
       expect(captureRes.status).toBe(200);
       expect(captureRes.body.success).toBe(true);
 
       // 5. Check earnings updated
-      const earningsRes = await request(app).get("/api/v1/payments/earnings/2");
+      const earningsRes = await request(app)
+        .get("/api/v1/payments/earnings/2")
+        .set("Authorization", `Bearer ${TEST_CLEANER_TOKEN}`);
 
       expect(earningsRes.status).toBe(200);
     });

@@ -662,6 +662,16 @@ const PayrollScreen = ({ state }) => {
   const [largeBusinessThreshold, setLargeBusinessThreshold] = useState(50);
   const [currentMonthlyJobs, setCurrentMonthlyJobs] = useState(0);
 
+  // Payout settings state
+  const [payoutSettings, setPayoutSettings] = useState({
+    employeePayoutMethod: "all_to_owner",
+    totalActiveEmployees: 0,
+    employeesReadyForDirectPayout: 0,
+    employees: [],
+  });
+  const [payoutSettingsLoading, setPayoutSettingsLoading] = useState(false);
+  const [showEmployeeStripeStatus, setShowEmployeeStripeStatus] = useState(false);
+
   // Selection state
   const [selectedPayouts, setSelectedPayouts] = useState(new Set());
 
@@ -701,16 +711,25 @@ const PayrollScreen = ({ state }) => {
     setError(null);
 
     try {
-      const [pendingResult, paidResult, bonusesResult] = await Promise.all([
+      const [pendingResult, paidResult, bonusesResult, payoutSettingsResult] = await Promise.all([
         BusinessOwnerService.getPendingPayouts(state.currentUser.token),
         BusinessOwnerService.getPayrollHistory(state.currentUser.token),
         BusinessOwnerService.getBonuses(state.currentUser.token),
+        BusinessOwnerService.getEmployeePayoutSettings(state.currentUser.token),
       ]);
 
       const pendingPayouts = pendingResult.pendingPayouts || [];
       setPayouts(pendingPayouts);
       setPaidPayouts(paidResult.payouts || []);
       setBonuses(bonusesResult.bonuses || []);
+
+      // Set payout settings
+      setPayoutSettings({
+        employeePayoutMethod: payoutSettingsResult.employeePayoutMethod || "all_to_owner",
+        totalActiveEmployees: payoutSettingsResult.totalActiveEmployees || 0,
+        employeesReadyForDirectPayout: payoutSettingsResult.employeesReadyForDirectPayout || 0,
+        employees: payoutSettingsResult.employees || [],
+      });
 
       // Set large business status from API
       setIsLargeBusiness(pendingResult.isLargeBusiness || false);
@@ -763,6 +782,38 @@ const PayrollScreen = ({ state }) => {
   const onRefresh = useCallback(() => {
     fetchData(true);
   }, [state.currentUser.token]);
+
+  const handlePayoutMethodChange = async (newMethod) => {
+    setPayoutSettingsLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const result = await BusinessOwnerService.updateEmployeePayoutSettings(
+        state.currentUser.token,
+        { employeePayoutMethod: newMethod }
+      );
+
+      if (result.success) {
+        setPayoutSettings((prev) => ({ ...prev, employeePayoutMethod: newMethod }));
+        // Refresh data to get updated employee list
+        fetchData(true);
+        setSuccess(
+          result.message ||
+            (newMethod === "direct_to_employees"
+              ? "Employees will now receive payouts directly to their connected Stripe accounts"
+              : "All payouts will now go to you for manual distribution")
+        );
+      } else {
+        setError(result.error || "Failed to update payout settings");
+      }
+    } catch (err) {
+      console.error("Error updating payout settings:", err);
+      setError("Failed to update payout settings. Please try again.");
+    } finally {
+      setPayoutSettingsLoading(false);
+    }
+  };
 
   const togglePayoutSelection = (payoutId) => {
     setSelectedPayouts((prev) => {
@@ -1040,6 +1091,178 @@ const PayrollScreen = ({ state }) => {
               <Icon name="credit-card" size={14} color="#fff" />
               <Text style={styles.processButtonText}>Process Selected</Text>
             </Pressable>
+          </View>
+        )}
+      </View>
+
+      {/* Payout Settings Card */}
+      <View style={styles.payoutSettingsCard}>
+        <View style={styles.payoutSettingsRow}>
+          <View style={styles.payoutSettingsHeader}>
+            <View style={styles.payoutSettingsIconContainer}>
+              <Icon name="cog" size={16} color={colors.primary[600]} />
+            </View>
+            <View style={styles.payoutSettingsInfo}>
+              <Text style={styles.payoutSettingsTitle}>Payout Method</Text>
+              <Text style={styles.payoutSettingsDescription}>
+                {payoutSettings.employeePayoutMethod === "direct_to_employees"
+                  ? "Direct to employees"
+                  : "All to owner"}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.payoutSettingsToggle}>
+            <Pressable
+              style={[
+                styles.payoutMethodOption,
+                payoutSettings.employeePayoutMethod === "all_to_owner" && styles.payoutMethodOptionActive,
+              ]}
+              onPress={() => handlePayoutMethodChange("all_to_owner")}
+              disabled={payoutSettingsLoading}
+            >
+              <Icon
+                name="user"
+                size={14}
+                color={payoutSettings.employeePayoutMethod === "all_to_owner" ? "#fff" : colors.text.secondary}
+              />
+              <Text
+                style={[
+                  styles.payoutMethodOptionText,
+                  payoutSettings.employeePayoutMethod === "all_to_owner" && styles.payoutMethodOptionTextActive,
+                ]}
+              >
+                To Owner
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.payoutMethodOption,
+                payoutSettings.employeePayoutMethod === "direct_to_employees" && styles.payoutMethodOptionActive,
+              ]}
+              onPress={() => handlePayoutMethodChange("direct_to_employees")}
+              disabled={payoutSettingsLoading}
+            >
+              {payoutSettingsLoading ? (
+                <ActivityIndicator size="small" color={colors.primary[600]} />
+              ) : (
+                <>
+                  <Icon
+                    name="users"
+                    size={14}
+                    color={payoutSettings.employeePayoutMethod === "direct_to_employees" ? "#fff" : colors.text.secondary}
+                  />
+                  <Text
+                    style={[
+                      styles.payoutMethodOptionText,
+                      payoutSettings.employeePayoutMethod === "direct_to_employees" && styles.payoutMethodOptionTextActive,
+                    ]}
+                  >
+                    Direct
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Explanation box */}
+        <View style={[
+          styles.payoutExplanationBox,
+          payoutSettings.employeePayoutMethod === "direct_to_employees"
+            ? styles.payoutExplanationBoxDirect
+            : styles.payoutExplanationBoxOwner
+        ]}>
+          <Icon
+            name={payoutSettings.employeePayoutMethod === "direct_to_employees" ? "info-circle" : "exclamation-circle"}
+            size={14}
+            color={payoutSettings.employeePayoutMethod === "direct_to_employees" ? colors.primary[600] : colors.warning[600]}
+          />
+          <Text style={styles.payoutExplanationText}>
+            {payoutSettings.employeePayoutMethod === "direct_to_employees"
+              ? "Employees with a connected Stripe account will receive payments automatically. Employees without Stripe connected will need to be paid outside the app, then marked as paid here."
+              : "You will receive all customer payments. You must pay your employees outside the app (cash, check, Venmo, etc.), then come back here and mark each job as paid to keep your records accurate."}
+          </Text>
+        </View>
+
+        {/* Employee Stripe Status */}
+        {payoutSettings.totalActiveEmployees > 0 && (
+          <View style={styles.employeeStripeSection}>
+            <Pressable
+              style={styles.employeeStripeHeader}
+              onPress={() => setShowEmployeeStripeStatus(!showEmployeeStripeStatus)}
+            >
+              <View style={styles.employeeStripeHeaderLeft}>
+                <View style={[
+                  styles.stripeStatusIndicator,
+                  payoutSettings.employeesReadyForDirectPayout === payoutSettings.totalActiveEmployees
+                    ? styles.stripeStatusIndicatorGood
+                    : payoutSettings.employeesReadyForDirectPayout > 0
+                      ? styles.stripeStatusIndicatorPartial
+                      : styles.stripeStatusIndicatorNone
+                ]}>
+                  <Icon
+                    name={payoutSettings.employeesReadyForDirectPayout === payoutSettings.totalActiveEmployees ? "check" : "stripe"}
+                    size={12}
+                    color="#fff"
+                  />
+                </View>
+                <View>
+                  <Text style={styles.employeeStripeTitle}>
+                    {payoutSettings.employeesReadyForDirectPayout} of {payoutSettings.totalActiveEmployees} employees ready
+                  </Text>
+                  <Text style={styles.employeeStripeSubtitle}>
+                    {payoutSettings.employeesReadyForDirectPayout === payoutSettings.totalActiveEmployees
+                      ? "All employees have Stripe connected"
+                      : payoutSettings.employeesReadyForDirectPayout === 0
+                        ? "No employees have Stripe connected"
+                        : `${payoutSettings.totalActiveEmployees - payoutSettings.employeesReadyForDirectPayout} need to connect Stripe`}
+                  </Text>
+                </View>
+              </View>
+              <Icon
+                name={showEmployeeStripeStatus ? "chevron-up" : "chevron-down"}
+                size={14}
+                color={colors.text.secondary}
+              />
+            </Pressable>
+
+            {showEmployeeStripeStatus && (
+              <View style={styles.employeeStripeList}>
+                {payoutSettings.employees.map((employee) => (
+                  <View key={employee.id} style={styles.employeeStripeItem}>
+                    <View style={styles.employeeStripeItemLeft}>
+                      <View style={[
+                        styles.employeeStripeAvatar,
+                        employee.stripeConnected ? styles.employeeStripeAvatarConnected : styles.employeeStripeAvatarNotConnected
+                      ]}>
+                        <Text style={styles.employeeStripeAvatarText}>
+                          {(employee.firstName?.[0] || "E").toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={styles.employeeStripeName}>
+                        {employee.firstName} {employee.lastName}
+                      </Text>
+                    </View>
+                    <View style={[
+                      styles.employeeStripeBadge,
+                      employee.stripeConnected ? styles.employeeStripeBadgeConnected : styles.employeeStripeBadgeNotConnected
+                    ]}>
+                      <Icon
+                        name={employee.stripeConnected ? "check" : "times"}
+                        size={10}
+                        color={employee.stripeConnected ? colors.success[600] : colors.error[600]}
+                      />
+                      <Text style={[
+                        styles.employeeStripeBadgeText,
+                        employee.stripeConnected ? styles.employeeStripeBadgeTextConnected : styles.employeeStripeBadgeTextNotConnected
+                      ]}>
+                        {employee.stripeConnected ? "Ready" : "Not Connected"}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -1629,6 +1852,195 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: typography.fontWeight.semibold,
     fontSize: typography.fontSize.sm,
+  },
+  payoutSettingsCard: {
+    backgroundColor: colors.background.primary,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.xl,
+    ...shadows.sm,
+  },
+  payoutSettingsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  payoutSettingsIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.sm,
+  },
+  payoutSettingsInfo: {
+    flex: 1,
+  },
+  payoutSettingsTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  payoutSettingsDescription: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  payoutSettingsToggle: {
+    flexDirection: "row",
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.lg,
+    padding: 3,
+  },
+  payoutMethodOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    gap: 4,
+  },
+  payoutMethodOptionActive: {
+    backgroundColor: colors.primary[600],
+  },
+  payoutMethodOptionText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.secondary,
+  },
+  payoutMethodOptionTextActive: {
+    color: "#fff",
+  },
+  payoutSettingsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  payoutExplanationBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+  },
+  payoutExplanationBoxOwner: {
+    backgroundColor: colors.warning[50],
+  },
+  payoutExplanationBoxDirect: {
+    backgroundColor: colors.primary[50],
+  },
+  payoutExplanationText: {
+    flex: 1,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    lineHeight: 16,
+  },
+  employeeStripeSection: {
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+    paddingTop: spacing.md,
+  },
+  employeeStripeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  employeeStripeHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: spacing.sm,
+  },
+  stripeStatusIndicator: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  stripeStatusIndicatorGood: {
+    backgroundColor: colors.success[500],
+  },
+  stripeStatusIndicatorPartial: {
+    backgroundColor: colors.warning[500],
+  },
+  stripeStatusIndicatorNone: {
+    backgroundColor: colors.error[400],
+  },
+  employeeStripeTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  employeeStripeSubtitle: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 1,
+  },
+  employeeStripeList: {
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  employeeStripeItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
+  employeeStripeItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  employeeStripeAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  employeeStripeAvatarConnected: {
+    backgroundColor: colors.success[100],
+  },
+  employeeStripeAvatarNotConnected: {
+    backgroundColor: colors.neutral[200],
+  },
+  employeeStripeAvatarText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+  employeeStripeName: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+  },
+  employeeStripeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 2,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.sm,
+    gap: 4,
+  },
+  employeeStripeBadgeConnected: {
+    backgroundColor: colors.success[100],
+  },
+  employeeStripeBadgeNotConnected: {
+    backgroundColor: colors.error[100],
+  },
+  employeeStripeBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+  },
+  employeeStripeBadgeTextConnected: {
+    color: colors.success[700],
+  },
+  employeeStripeBadgeTextNotConnected: {
+    color: colors.error[700],
   },
   quickActionsRow: {
     flexDirection: "row",

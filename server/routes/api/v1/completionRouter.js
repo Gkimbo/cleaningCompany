@@ -21,6 +21,8 @@ const {
   UserReviews,
   EmployeeJobAssignment,
   BusinessEmployee,
+  Payment,
+  sequelize,
 } = require("../../../models");
 const NotificationService = require("../../../services/NotificationService");
 const EncryptionService = require("../../../services/EncryptionService");
@@ -52,10 +54,58 @@ async function validateCompletionTiming(appointment, cleanerId = null) {
   const config = await getAutoCompleteConfig();
   const minOnSiteMinutes = config.minOnSiteMinutes || 30;
 
-  // Parse appointment date and time window
-  const [year, month, day] = appointment.date.split("-").map(Number);
+  // Validate and parse appointment date
+  if (!appointment.date || typeof appointment.date !== "string") {
+    return {
+      allowed: false,
+      reason: "invalid_date",
+      message: "Appointment date is missing or invalid",
+    };
+  }
+
+  const dateParts = appointment.date.split("-");
+  if (dateParts.length !== 3) {
+    return {
+      allowed: false,
+      reason: "invalid_date_format",
+      message: "Appointment date must be in YYYY-MM-DD format",
+    };
+  }
+
+  const [year, month, day] = dateParts.map(Number);
+
+  // Validate parsed date components
+  if (isNaN(year) || isNaN(month) || isNaN(day) ||
+      year < 2020 || year > 2100 ||
+      month < 1 || month > 12 ||
+      day < 1 || day > 31) {
+    return {
+      allowed: false,
+      reason: "invalid_date_values",
+      message: `Invalid date values: ${appointment.date}`,
+    };
+  }
+
+  // Parse time window with null check
   const timeWindow = parseTimeWindow(appointment.timeToBeCompleted);
+  if (!timeWindow || typeof timeWindow.start !== "number") {
+    return {
+      allowed: false,
+      reason: "invalid_time_window",
+      message: "Invalid or missing time window configuration",
+    };
+  }
+
   const windowStartTime = new Date(year, month - 1, day, timeWindow.start, 0, 0);
+
+  // Validate the resulting date is valid
+  if (isNaN(windowStartTime.getTime())) {
+    return {
+      allowed: false,
+      reason: "invalid_date_computation",
+      message: "Could not compute valid date from appointment date",
+    };
+  }
 
   // Check 1: Has time window started?
   const timeWindowStarted = now >= windowStartTime;
@@ -424,20 +474,29 @@ completionRouter.post("/approve/:appointmentId", verifyToken, async (req, res) =
   const { appointmentId } = req.params;
   const { cleanerId } = req.body;
 
+  // Use transaction with row-level locking to prevent race conditions
+  // between manual approval and auto-approval
+  const t = await sequelize.transaction();
+
   try {
+    // Fetch appointment with exclusive lock to prevent concurrent approval
     const appointment = await UserAppointments.findByPk(appointmentId, {
       include: [
         { model: User, as: "user" },
         { model: UserHomes, as: "home" },
       ],
+      lock: t.LOCK.UPDATE,
+      transaction: t,
     });
 
     if (!appointment) {
+      await t.rollback();
       return res.status(404).json({ error: "Appointment not found" });
     }
 
     // Check if appointment is paused (homeowner account frozen)
     if (appointment.isPaused) {
+      await t.rollback();
       return res.status(403).json({
         error: "This appointment is currently paused",
         isPaused: true,
@@ -446,21 +505,25 @@ completionRouter.post("/approve/:appointmentId", verifyToken, async (req, res) =
 
     // Check if appointment was cancelled
     if (appointment.wasCancelled) {
+      await t.rollback();
       return res.status(400).json({ error: "This appointment has been cancelled" });
     }
 
     // Verify the requesting user is the homeowner
     if (appointment.userId !== req.userId) {
+      await t.rollback();
       return res.status(403).json({ error: "Only the homeowner can approve completion" });
     }
 
-    // Handle multi-cleaner jobs
+    // Handle multi-cleaner jobs (release lock, multi-cleaner has its own locking)
     if (appointment.isMultiCleanerJob && appointment.multiCleanerJobId) {
+      await t.rollback();
       return handleMultiCleanerApprove(req, res, appointment, cleanerId);
     }
 
-    // Single-cleaner approval
+    // Single-cleaner approval - check status with lock held
     if (!appointment.canBeApproved()) {
+      await t.rollback();
       return res.status(400).json({
         error: "Completion cannot be approved",
         reason: appointment.completionStatus === "in_progress"
@@ -471,15 +534,57 @@ completionRouter.post("/approve/:appointmentId", verifyToken, async (req, res) =
 
     const now = new Date();
 
-    // Update appointment
+    // Update appointment within transaction
     await appointment.update({
       completionStatus: "approved",
       completionApprovedAt: now,
       completionApprovedBy: req.userId,
       completed: true,
+    }, { transaction: t });
+
+    // Commit the approval status change before processing payout
+    // This releases the lock but ensures no other process can approve
+    await t.commit();
+
+    // Audit logging for completion approval
+    console.log(`[Completion Audit] Approval recorded:`, {
+      appointmentId: appointment.id,
+      approvedBy: req.userId,
+      approvedAt: now.toISOString(),
+      completionStatus: "approved",
+      approvalType: "manual",
+      ipAddress: req.ip || req.headers["x-forwarded-for"] || "unknown",
+      userAgent: req.headers["user-agent"] || "unknown",
     });
 
-    // Process payout
+    // Create audit trail record in Payment table
+    try {
+      await Payment.create({
+        transactionId: Payment.generateTransactionId(),
+        type: "approval",
+        status: "succeeded",
+        amount: appointment.price,
+        userId: appointment.userId,
+        appointmentId: appointment.id,
+        currency: "usd",
+        taxYear: new Date().getFullYear(),
+        reportable: false,
+        description: `Manual completion approval for appointment ${appointment.id}`,
+        metadata: {
+          approvedBy: req.userId,
+          approvedAt: now.toISOString(),
+          approvalType: "manual",
+          ipAddress: req.ip || req.headers["x-forwarded-for"] || "unknown",
+          previousStatus: "submitted",
+        },
+        processedAt: now,
+      });
+    } catch (auditError) {
+      // Log but don't fail the approval if audit record creation fails
+      console.error(`[Completion] Failed to create audit record for approval:`, auditError);
+    }
+
+    // Process payout (has its own transaction/locking internally)
     const paymentRouter = require("./paymentRouter");
     const payoutResults = await processPayoutAfterApproval(appointment);
 
@@ -1072,14 +1177,10 @@ async function handleMultiCleanerStatus(req, res, appointment, cleanerIdParam, i
 
 /**
  * Process payout after approval (single-cleaner)
- * This calls the existing payout logic from paymentRouter
+ * Uses database transactions to ensure atomicity of payout operations
  */
 async function processPayoutAfterApproval(appointment) {
   try {
-    // Import the payout function from paymentRouter
-    // Note: processCleanerPayouts is not exported, so we need to handle this differently
-    // For now, we'll duplicate the necessary logic or make a direct call
-
     const { Payout, StripeConnectAccount, UserPendingRequests } = require("../../../models");
     const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
     const { getPricingConfig } = require("../../../config/businessConfig");
@@ -1098,13 +1199,20 @@ async function processPayoutAfterApproval(appointment) {
 
     for (const cleanerIdStr of cleanerIds) {
       const cleanerId = parseInt(cleanerIdStr, 10);
+
+      // Use a transaction for each cleaner's payout to ensure atomicity
+      const t = await sequelize.transaction();
+
       try {
-        // Get or create payout record
+        // Get or create payout record with row lock
         let payout = await Payout.findOne({
           where: { appointmentId: appointment.id, cleanerId },
+          lock: t.LOCK.UPDATE,
+          transaction: t,
         });
 
         if (payout && payout.status === "completed") {
+          await t.commit();
           results.push({ cleanerId, status: "already_paid" });
           continue;
         }
@@ -1112,9 +1220,11 @@ async function processPayoutAfterApproval(appointment) {
         // Get cleaner's Stripe Connect account
         const connectAccount = await StripeConnectAccount.findOne({
           where: { userId: cleanerId },
+          transaction: t,
         });
 
         if (!connectAccount || !connectAccount.payoutsEnabled) {
+          await t.commit();
           results.push({
             cleanerId,
             status: "skipped",
@@ -1127,11 +1237,23 @@ async function processPayoutAfterApproval(appointment) {
         // Use original price for cleaner payout if discount was applied
         // Business decision: Platform absorbs the discount, cleaners aren't penalized
         const priceInCents = appointment.discountApplied && appointment.originalPrice
-          ? appointment.originalPrice
+          ? parseInt(appointment.originalPrice, 10)
           : appointment.price;
         const perCleanerGross = Math.round(priceInCents / cleanerIds.length);
         const platformFee = Math.round(perCleanerGross * platformFeePercent);
         const netAmount = perCleanerGross - platformFee;
+
+        // Validate netAmount is positive - Stripe requires at least 1 cent
+        if (netAmount < 1) {
+          await t.commit();
+          console.warn(`[Completion] Payout skipped for cleaner ${cleanerId}: netAmount too low (${netAmount} cents)`);
+          results.push({
+            cleanerId,
+            status: "skipped",
+            reason: `Net amount too low after platform fee: ${netAmount} cents`,
+          });
+          continue;
+        }
 
         // Create payout record if it doesn't exist
         if (!payout) {
@@ -1144,7 +1266,7 @@ async function processPayoutAfterApproval(appointment) {
             status: "processing",
             paymentCapturedAt: new Date(),
             transferInitiatedAt: new Date(),
-          });
+          }, { transaction: t });
         } else {
           await payout.update({
             grossAmount: perCleanerGross,
@@ -1152,21 +1274,24 @@ async function processPayoutAfterApproval(appointment) {
             netAmount,
             status: "processing",
             transferInitiatedAt: new Date(),
-          });
+          }, { transaction: t });
         }
 
-        // Get the charge ID
+        // Commit the "processing" state before calling Stripe
+        await t.commit();
+
+        // Get the charge ID (outside transaction - read-only Stripe call)
         let chargeId = null;
         if (appointment.paymentIntentId) {
           try {
             const paymentIntent = await stripe.paymentIntents.retrieve(appointment.paymentIntentId);
             chargeId = paymentIntent.latest_charge;
           } catch (err) {
-            console.error(`Could not retrieve payment intent:`, err.message);
+            console.error(`[Completion] Could not retrieve payment intent:`, err.message);
           }
         }
 
-        // Create Stripe Transfer
+        // Create Stripe Transfer (external API call)
         const transferParams = {
           amount: netAmount,
           currency: "usd",
@@ -1182,16 +1307,93 @@ async function processPayoutAfterApproval(appointment) {
           transferParams.source_transaction = chargeId;
         }
 
-        const transfer = await stripe.transfers.create(transferParams);
+        let transfer;
+        try {
+          transfer = await stripe.transfers.create(transferParams);
+        } catch (stripeError) {
+          // Stripe transfer failed - update payout status
+          const tFailed = await sequelize.transaction();
+          try {
+            await payout.update({
+              status: "failed",
+              failureReason: stripeError.message || "Stripe transfer failed",
+              completedAt: new Date(),
+            }, { transaction: tFailed });
+            await tFailed.commit();
+          } catch (updateErr) {
+            await tFailed.rollback();
+            console.error(`[Completion] Failed to update payout status to failed:`, updateErr);
+          }
 
-        await payout.update({
-          stripeTransferId: transfer.id,
-          status: "completed",
-          transferCompletedAt: new Date(),
-        });
+          results.push({
+            cleanerId,
+            status: "failed",
+            error: stripeError.message,
+          });
+          continue;
+        }
+
+        // Stripe transfer succeeded - update payout status
+        const tSuccess = await sequelize.transaction();
+        try {
+          await payout.update({
+            stripeTransferId: transfer.id,
+            status: "completed",
+            transferCompletedAt: new Date(),
+          }, { transaction: tSuccess });
+          await tSuccess.commit();
+        } catch (updateErr) {
+          await tSuccess.rollback();
+          // Critical: Stripe transfer succeeded but we couldn't update the record
+          console.error(`[Completion] CRITICAL: Stripe transfer ${transfer.id} succeeded but failed to update payout record:`, updateErr);
+          console.error(`[Completion] RECONCILIATION DATA: payoutId=${payout.id}, cleanerId=${cleanerId}, transferId=${transfer.id}, amount=${payout.netAmount}`);
+
+          // Create emergency audit record for reconciliation
+          try {
+            await Payment.create({
+              transactionId: Payment.generateTransactionId(),
+              type: "payout",
+              status: "succeeded",
+              amount: payout.netAmount,
+              cleanerId,
+              appointmentId: payout.appointmentId,
+              payoutId: payout.id,
+              stripeTransferId: transfer.id,
+              currency: "usd",
+              taxYear: new Date().getFullYear(),
+              reportable: true,
+              reported: false,
+              description: `EMERGENCY AUDIT: Stripe transfer succeeded but payout DB update failed - requires manual reconciliation`,
+              metadata: {
+                dbError: updateErr.message,
+                requiresReconciliation: true,
+                originalPayoutStatus: payout.status,
+                transferAmount: transfer.amount,
+              },
+              processedAt: new Date(),
+            });
+            console.log(`[Completion] Emergency audit record created for transfer ${transfer.id}`);
+          } catch (auditError) {
+            console.error(`[Completion] CRITICAL: Failed to create emergency audit record for transfer ${transfer.id}:`, auditError);
+          }
+
+          results.push({
+            cleanerId,
+            status: "success_db_error",
+            transferId: transfer.id,
+            error: "Transfer succeeded but database update failed - requires manual reconciliation",
+          });
+          continue;
+        }
 
         results.push({ cleanerId, status: "success", transferId: transfer.id });
       } catch (error) {
+        // Rollback transaction if it's still active
+        try {
+          await t.rollback();
+        } catch (rollbackErr) {
+          // Transaction may already be committed/rolled back
+        }
         console.error(`[Completion] Payout error for cleaner ${cleanerId}:`, error);
         results.push({ cleanerId, status: "error", error: error.message });
       }
@@ -1317,6 +1519,16 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
     const grossAmount = cleanerShare.grossAmount;
     const platformFee = cleanerShare.platformFee;
     const netAmount = cleanerShare.netAmount;
+
+    // Validate netAmount is positive - Stripe requires at least 1 cent
+    if (netAmount < 1) {
+      console.warn(`[Completion] Multi-cleaner payout skipped for cleaner ${cleanerId}: netAmount too low (${netAmount} cents)`);
+      return {
+        cleanerId,
+        status: "skipped",
+        reason: `Net amount too low after platform fee: ${netAmount} cents`,
+      };
+    }
 
     // Create payout record if it doesn't exist
     if (!payout) {

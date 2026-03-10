@@ -4265,23 +4265,31 @@ router.get("/settings/employee-payouts", async (req, res) => {
       return res.status(404).json({ error: "Business owner not found" });
     }
 
-    // Get count of employees with Stripe Connect ready
+    // Get all active employees with their Stripe Connect status
     const employees = await BusinessEmployee.findAll({
       where: {
         businessOwnerId: req.businessOwnerId,
         status: "active",
       },
+      attributes: ["id", "firstName", "lastName", "stripeConnectAccountId", "stripeConnectOnboarded"],
+      order: [["firstName", "ASC"], ["lastName", "ASC"]],
     });
 
-    const employeesWithStripe = employees.filter(
-      (e) => e.stripeConnectAccountId && e.stripeConnectOnboarded
-    ).length;
+    const employeeList = employees.map((e) => ({
+      id: e.id,
+      firstName: e.firstName,
+      lastName: e.lastName,
+      stripeConnected: !!(e.stripeConnectAccountId && e.stripeConnectOnboarded),
+    }));
+
+    const employeesWithStripe = employeeList.filter((e) => e.stripeConnected).length;
 
     res.json({
       employeePayoutMethod: businessOwner.employeePayoutMethod || "all_to_owner",
       totalActiveEmployees: employees.length,
       employeesReadyForDirectPayout: employeesWithStripe,
       directPayoutsAvailable: employeesWithStripe > 0,
+      employees: employeeList,
     });
   } catch (error) {
     console.error("Error fetching employee payout settings:", error);
@@ -4310,6 +4318,77 @@ router.put("/settings/employee-payouts", async (req, res) => {
 
     await businessOwner.update({ employeePayoutMethod });
 
+    // When switching to direct payouts, update all employees' payment method
+    // so they see the Stripe setup prompt on their dashboard
+    let notifiedCount = 0;
+    if (employeePayoutMethod === "direct_to_employees") {
+      // Get employees who need to set up Stripe (not yet onboarded)
+      const employeesNeedingSetup = await BusinessEmployee.findAll({
+        where: {
+          businessOwnerId: req.businessOwnerId,
+          status: "active",
+          [Op.or]: [
+            { stripeConnectOnboarded: false },
+            { stripeConnectOnboarded: null },
+          ],
+        },
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "email", "firstName", "expoPushToken"],
+          },
+        ],
+      });
+
+      // Update all employees to stripe_connect payment method
+      await BusinessEmployee.update(
+        { paymentMethod: "stripe_connect" },
+        {
+          where: {
+            businessOwnerId: req.businessOwnerId,
+            status: "active",
+          },
+        }
+      );
+      console.log(
+        `[BusinessOwner] Set all employees to stripe_connect for owner ${req.businessOwnerId}`
+      );
+
+      // Send notifications to employees who need to set up Stripe
+      const businessOwnerName = `${businessOwner.firstName || "Your employer"}`;
+      for (const employee of employeesNeedingSetup) {
+        try {
+          const employeeEmail = employee.user?.email || employee.email;
+          const employeeName = employee.firstName || employee.user?.firstName || "there";
+          const pushToken = employee.user?.expoPushToken;
+
+          // Send email notification
+          if (employeeEmail) {
+            await Email.sendStripeSetupInvitation(employeeEmail, employeeName, businessOwnerName);
+          }
+
+          // Send push notification
+          if (pushToken) {
+            await PushNotification.sendPushStripeSetupInvitation(pushToken, businessOwnerName);
+          }
+
+          notifiedCount++;
+        } catch (notifyError) {
+          console.error(
+            `[BusinessOwner] Failed to notify employee ${employee.id}:`,
+            notifyError.message
+          );
+        }
+      }
+
+      if (notifiedCount > 0) {
+        console.log(
+          `[BusinessOwner] Notified ${notifiedCount} employees to set up Stripe for owner ${req.businessOwnerId}`
+        );
+      }
+    }
+
     console.log(
       `[BusinessOwner] Updated employee payout method to ${employeePayoutMethod} for owner ${req.businessOwnerId}`
     );
@@ -4317,9 +4396,12 @@ router.put("/settings/employee-payouts", async (req, res) => {
     res.json({
       success: true,
       employeePayoutMethod,
+      notifiedEmployees: notifiedCount,
       message:
         employeePayoutMethod === "direct_to_employees"
-          ? "Employees with Stripe accounts will now receive payouts directly"
+          ? notifiedCount > 0
+            ? `Employees with Stripe accounts will now receive payouts directly. ${notifiedCount} employee${notifiedCount === 1 ? " has" : "s have"} been notified to set up Stripe.`
+            : "Employees with Stripe accounts will now receive payouts directly"
           : "All payouts will go to your account",
     });
   } catch (error) {

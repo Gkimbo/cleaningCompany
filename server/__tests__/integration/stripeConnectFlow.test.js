@@ -159,6 +159,14 @@ const mockPayout = {
   }),
 };
 
+// Mock transaction for sequelize
+const mockTransaction = {
+  LOCK: { UPDATE: 'UPDATE' },
+  commit: jest.fn().mockResolvedValue(undefined),
+  rollback: jest.fn().mockResolvedValue(undefined),
+  finished: false,
+};
+
 // Mock models
 jest.mock("../../models", () => ({
   User: {
@@ -186,10 +194,25 @@ jest.mock("../../models", () => ({
     findOne: jest.fn(),
     findAll: jest.fn(),
     create: jest.fn(),
+    update: jest.fn().mockResolvedValue([1]),
+  },
+  Payment: {
+    create: jest.fn().mockResolvedValue({ id: 1 }),
+    findOne: jest.fn(),
+    findAll: jest.fn(),
+    generateTransactionId: jest.fn().mockReturnValue(`txn_test_${Date.now()}`),
   },
   UserBills: {},
   UserPendingRequests: {
     destroy: jest.fn().mockResolvedValue(0),
+  },
+  sequelize: {
+    transaction: jest.fn().mockImplementation(() => Promise.resolve({
+      LOCK: { UPDATE: 'UPDATE' },
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      finished: false,
+    })),
   },
 }));
 
@@ -354,16 +377,25 @@ describe("Stripe Connect Full Payment Flow", () => {
 
   describe("Step 4: Payment Capture (3 days before)", () => {
     it("should capture payment when cleaner is assigned", async () => {
-      UserAppointments.findByPk.mockResolvedValue({
+      const token = jwt.sign({ userId: mockCleaner.id }, secretKey);
+      const mockAppointmentWithUpdate = {
         ...mockAppointment,
         paymentIntentId: "pi_test_123",
+        paymentStatus: "pending",
         hasBeenAssigned: true,
-        employeesAssigned: [mockCleaner.id],
+        employeesAssigned: [String(mockCleaner.id)],
+        isPaused: false,
+        wasCancelled: false,
+        paid: false,
         update: jest.fn().mockResolvedValue(true),
-      });
+      };
+
+      // Mock findByPk to return the appointment (called with transaction options)
+      UserAppointments.findByPk.mockResolvedValue(mockAppointmentWithUpdate);
 
       const res = await request(app)
         .post("/api/v1/payments/capture")
+        .set("Authorization", `Bearer ${token}`)
         .send({ appointmentId: mockAppointment.id });
 
       expect(res.status).toBe(200);

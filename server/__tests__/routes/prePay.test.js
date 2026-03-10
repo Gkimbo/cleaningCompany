@@ -77,6 +77,14 @@ jest.mock("../../models", () => ({
   UserPendingRequests: {
     destroy: jest.fn().mockResolvedValue(0),
   },
+  sequelize: {
+    transaction: jest.fn().mockImplementation(() => Promise.resolve({
+      LOCK: { UPDATE: 'UPDATE' },
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      finished: false,
+    })),
+  },
 }));
 
 // Mock Email service
@@ -473,7 +481,8 @@ describe("Pre-Pay and Retry Payment Routes", () => {
             paymentStatus: "captured",
             paid: true,
             paymentCaptureFailed: false,
-          })
+          }),
+          expect.anything() // transaction option
         );
       });
 

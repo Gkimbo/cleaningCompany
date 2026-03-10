@@ -113,6 +113,14 @@ jest.mock("../../models", () => ({
   CleanerRoomAssignment: {
     findAll: jest.fn(),
   },
+  sequelize: {
+    transaction: jest.fn().mockImplementation(() => Promise.resolve({
+      LOCK: { UPDATE: 'UPDATE' },
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      finished: false,
+    })),
+  },
 }));
 
 const {
@@ -368,11 +376,14 @@ describe("Completion Router", () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.completionStatus).toBe("approved");
+      // Verify the update was called with the right status fields
+      // (transaction is passed as second arg due to row-level locking)
       expect(mockAppointmentUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           completionStatus: "approved",
           completed: true,
-        })
+        }),
+        expect.anything() // transaction option
       );
     });
 

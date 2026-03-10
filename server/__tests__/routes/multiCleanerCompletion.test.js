@@ -135,6 +135,14 @@ jest.mock("../../models", () => ({
     update: jest.fn(),
   },
   BusinessEmployee: {},
+  sequelize: {
+    transaction: jest.fn().mockImplementation(() => Promise.resolve({
+      LOCK: { UPDATE: 'UPDATE' },
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      finished: false,
+    })),
+  },
 }));
 
 const {

@@ -56,6 +56,8 @@ jest.mock("../../../models", () => ({
   },
   Payment: {
     create: jest.fn().mockResolvedValue({ id: 1 }),
+    findOne: jest.fn().mockResolvedValue(null),
+    generateTransactionId: jest.fn(() => `txn_test_${Date.now()}`),
   },
   Op: {
     ne: Symbol("ne"),
@@ -248,7 +250,11 @@ describe("PaymentRetryMonitor", () => {
 
       expect(results.retried).toBe(1);
       expect(results.succeeded).toBe(1);
-      expect(mockStripe.paymentIntents.capture).toHaveBeenCalledWith("pi_test");
+      expect(mockStripe.paymentIntents.capture).toHaveBeenCalledWith(
+        "pi_test",
+        {},
+        expect.objectContaining({ idempotencyKey: expect.stringContaining("capture_1_pi_test") })
+      );
     });
 
     it("should handle already succeeded payment intents", async () => {
@@ -328,7 +334,8 @@ describe("PaymentRetryMonitor", () => {
           currency: "usd",
           customer: "cus_test",
           payment_method: "pm_test",
-        })
+        }),
+        expect.objectContaining({ idempotencyKey: expect.stringContaining("retry_1_") })
       );
     });
 
@@ -683,7 +690,8 @@ describe("PaymentRetryMonitor", () => {
       expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 12345, // $123.45 in cents
-        })
+        }),
+        expect.objectContaining({ idempotencyKey: expect.stringContaining("retry_1_") })
       );
     });
 
@@ -724,7 +732,8 @@ describe("PaymentRetryMonitor", () => {
       expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 10000, // Rounded
-        })
+        }),
+        expect.objectContaining({ idempotencyKey: expect.stringContaining("retry_1_") })
       );
     });
   });

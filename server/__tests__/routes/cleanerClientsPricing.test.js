@@ -223,7 +223,7 @@ describe("Cleaner Clients Router - Pricing Endpoints", () => {
       const mockCleanerClient = {
         id: 1,
         cleanerId,
-        defaultPrice: 15000, // 150 dollars in cents
+        defaultPrice: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -232,11 +232,11 @@ describe("Cleaner Clients Router - Pricing Endpoints", () => {
       const res = await request(app)
         .patch("/api/v1/cleaner-clients/1/default-price")
         .set("Authorization", `Bearer ${token}`)
-        .send({ price: 175 }); // User sends dollars, backend converts to cents
+        .send({ price: 17500 }); // Price in cents ($175.00)
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(mockCleanerClient.update).toHaveBeenCalledWith({ defaultPrice: 17500 }); // 175 dollars = 17500 cents
+      expect(mockCleanerClient.update).toHaveBeenCalledWith({ defaultPrice: 17500 }); // Stored in cents
     });
 
     it("should return 401 if no token provided", async () => {
@@ -345,7 +345,7 @@ describe("Cleaner Clients Router - Pricing Endpoints", () => {
       const mockCleanerClient = {
         id: 1,
         cleanerId,
-        defaultPrice: 15000, // 150 dollars in cents
+        defaultPrice: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -354,10 +354,10 @@ describe("Cleaner Clients Router - Pricing Endpoints", () => {
       const res = await request(app)
         .patch("/api/v1/cleaner-clients/1/default-price")
         .set("Authorization", `Bearer ${token}`)
-        .send({ price: "175.50" }); // User sends dollars
+        .send({ price: "17550" }); // Price in cents as string ($175.50)
 
       expect(res.status).toBe(200);
-      expect(mockCleanerClient.update).toHaveBeenCalledWith({ defaultPrice: 17550 }); // 175.50 dollars = 17550 cents
+      expect(mockCleanerClient.update).toHaveBeenCalledWith({ defaultPrice: 17550 }); // Stored in cents (rounded)
     });
 
     it("should accept zero as a valid price", async () => {

@@ -49,7 +49,10 @@ jest.mock("stripe", () => {
 // Mock models
 jest.mock("../../models", () => ({
   User: {
-    findByPk: jest.fn(),
+    findByPk: jest.fn().mockImplementation((id) => {
+      if (id === 1) return Promise.resolve({ id: 1, email: "owner@example.com", type: "owner" });
+      return Promise.resolve(null);
+    }),
     findOne: jest.fn(),
   },
   UserAppointments: {
@@ -73,9 +76,18 @@ jest.mock("../../models", () => ({
   Payout: {
     findByPk: jest.fn(),
     findAll: jest.fn().mockResolvedValue([]),
+    update: jest.fn().mockResolvedValue([1]),
   },
   UserPendingRequests: {
     destroy: jest.fn().mockResolvedValue(0),
+  },
+  sequelize: {
+    transaction: jest.fn().mockImplementation(() => Promise.resolve({
+      LOCK: { UPDATE: 'UPDATE' },
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      finished: false,
+    })),
   },
 }));
 
@@ -159,7 +171,15 @@ describe("Payment Routes", () => {
     it("should create a payment intent with JWT token", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      UserHomes.findByPk.mockResolvedValue({ id: 1 });
+      // Mock home with all necessary properties for appointment creation
+      UserHomes.findByPk.mockResolvedValue({
+        id: 1,
+        towelsProvided: true,
+        sheetsProvided: false,
+        keyPadCode: "1234",
+        keyLocation: "Under mat",
+        cleanersNeeded: 2,
+      });
       UserAppointments.create.mockResolvedValue({
         id: 1,
         userId: 1,
@@ -178,6 +198,23 @@ describe("Payment Routes", () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("clientSecret");
       expect(res.body).toHaveProperty("appointmentId");
+
+      // Verify appointment is created with correct field names and price in cents
+      expect(UserAppointments.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 1,
+          homeId: 1,
+          date: "2025-01-15",
+          price: 15000, // Price should stay in cents, NOT be divided by 100
+          paid: false,
+          bringTowels: "no", // towelsProvided=true means we don't need to bring
+          bringSheets: "yes", // sheetsProvided=false means we need to bring
+          completed: false,
+          hasBeenAssigned: false,
+          employeesNeeded: 2,
+          timeToBeCompleted: "anytime",
+        })
+      );
     });
 
     it("should return 404 if home not found", async () => {
@@ -200,15 +237,18 @@ describe("Payment Routes", () => {
 
   describe("POST /capture and /capture-payment", () => {
     it("should capture payment for a valid appointment", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         hasBeenAssigned: true,
+        employeesAssigned: ["1"],
         paymentIntentId: "pi_test_123",
         update: jest.fn().mockResolvedValue(true),
       });
 
       const res = await request(app)
         .post("/api/v1/payments/capture")
+        .set("Authorization", `Bearer ${token}`)
         .send({ appointmentId: 1 });
 
       expect(res.status).toBe(200);
@@ -216,10 +256,12 @@ describe("Payment Routes", () => {
     });
 
     it("should return 404 if appointment not found", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
       UserAppointments.findByPk.mockResolvedValue(null);
 
       const res = await request(app)
         .post("/api/v1/payments/capture")
+        .set("Authorization", `Bearer ${token}`)
         .send({ appointmentId: 999 });
 
       expect(res.status).toBe(404);
@@ -227,14 +269,17 @@ describe("Payment Routes", () => {
     });
 
     it("should return 400 if no cleaner assigned", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         hasBeenAssigned: false,
+        employeesAssigned: ["1"],
         paymentIntentId: "pi_test_123",
       });
 
       const res = await request(app)
         .post("/api/v1/payments/capture")
+        .set("Authorization", `Bearer ${token}`)
         .send({ appointmentId: 1 });
 
       expect(res.status).toBe(400);
@@ -302,6 +347,7 @@ describe("Payment Routes", () => {
 
   describe("GET /history/:userId", () => {
     it("should return payment history for a user", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
       UserAppointments.findAll.mockResolvedValue([
         {
           id: 1,
@@ -315,7 +361,9 @@ describe("Payment Routes", () => {
         },
       ]);
 
-      const res = await request(app).get("/api/v1/payments/history/1");
+      const res = await request(app)
+        .get("/api/v1/payments/history/1")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("payments");
@@ -325,6 +373,7 @@ describe("Payment Routes", () => {
 
   describe("GET /earnings/:employeeId", () => {
     it("should return earnings for an employee", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
       UserAppointments.findAll.mockResolvedValue([
         {
           id: 1,
@@ -335,7 +384,9 @@ describe("Payment Routes", () => {
         },
       ]);
 
-      const res = await request(app).get("/api/v1/payments/earnings/1");
+      const res = await request(app)
+        .get("/api/v1/payments/earnings/1")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("totalEarnings");
@@ -346,11 +397,15 @@ describe("Payment Routes", () => {
 
   describe("GET /:homeId (appointments)", () => {
     it("should return appointments for a home", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+      UserHomes.findByPk.mockResolvedValue({ id: 1, userId: 1 });
       UserAppointments.findAll.mockResolvedValue([
         { id: 1, date: "2025-01-15", price: "150" },
       ]);
 
-      const res = await request(app).get("/api/v1/payments/1");
+      const res = await request(app)
+        .get("/api/v1/payments/1")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("appointments");
@@ -358,6 +413,12 @@ describe("Payment Routes", () => {
   });
 
   describe("Payment History Serialization", () => {
+    let ownerToken;
+
+    beforeAll(() => {
+      ownerToken = jwt.sign({ userId: 1 }, process.env.SESSION_SECRET || "test-secret");
+    });
+
     it("should return plain objects without Sequelize metadata for payment history", async () => {
       // When using raw: true, Sequelize returns plain objects without any Sequelize metadata
       // This mock simulates what raw: true actually returns
@@ -375,7 +436,9 @@ describe("Payment Routes", () => {
       ];
       UserAppointments.findAll.mockResolvedValue(mockRawResults);
 
-      const res = await request(app).get("/api/v1/payments/history/1");
+      const res = await request(app)
+        .get("/api/v1/payments/history/1")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.payments).toHaveLength(1);
@@ -408,7 +471,9 @@ describe("Payment Routes", () => {
       ];
       UserAppointments.findAll.mockResolvedValue(mockResults);
 
-      await request(app).get("/api/v1/payments/history/1");
+      await request(app)
+        .get("/api/v1/payments/history/1")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       // Verify raw: true was passed in the query options
       expect(UserAppointments.findAll).toHaveBeenCalledWith(
@@ -453,7 +518,9 @@ describe("Payment Routes", () => {
       ];
       UserAppointments.findAll.mockResolvedValue(mockAppointments);
 
-      const res = await request(app).get("/api/v1/payments/history/1");
+      const res = await request(app)
+        .get("/api/v1/payments/history/1")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.payments).toHaveLength(3);
@@ -479,7 +546,9 @@ describe("Payment Routes", () => {
       ];
       UserAppointments.findAll.mockResolvedValue(mockAppointments);
 
-      const res = await request(app).get("/api/v1/payments/history/1");
+      const res = await request(app)
+        .get("/api/v1/payments/history/1")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
       const payment = res.body.payments[0];
@@ -497,7 +566,9 @@ describe("Payment Routes", () => {
     it("should handle empty payment history", async () => {
       UserAppointments.findAll.mockResolvedValue([]);
 
-      const res = await request(app).get("/api/v1/payments/history/999");
+      const res = await request(app)
+        .get("/api/v1/payments/history/999")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.payments).toEqual([]);
@@ -506,7 +577,9 @@ describe("Payment Routes", () => {
     it("should handle database error gracefully", async () => {
       UserAppointments.findAll.mockRejectedValue(new Error("Database connection failed"));
 
-      const res = await request(app).get("/api/v1/payments/history/1");
+      const res = await request(app)
+        .get("/api/v1/payments/history/1")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(400);
       expect(res.body).toHaveProperty("error");
