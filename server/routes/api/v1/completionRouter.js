@@ -1124,6 +1124,8 @@ async function processPayoutAfterApproval(appointment) {
         }
 
         // Calculate amounts - price is already stored in cents (INTEGER)
+        // Use original price for cleaner payout if discount was applied
+        // Business decision: Platform absorbs the discount, cleaners aren't penalized
         const priceInCents = appointment.discountApplied && appointment.originalPrice
           ? appointment.originalPrice
           : appointment.price;

@@ -187,10 +187,11 @@ const EarningsChart = ({ appointments = [], currentUserId }) => {
     });
 
     // Calculate cleaner earnings (share of price, split among cleaners)
+    // Price is stored in cents, convert to dollars
     const calculateEarnings = (appt) => {
       const numCleaners = appt.employeesAssigned?.length || 1;
-      const price = parseFloat(appt.price) || 0;
-      return (price / numCleaners) * cleanerSharePercent;
+      const priceInCents = parseFloat(appt.price) || 0;
+      return ((priceInCents / numCleaners) * cleanerSharePercent) / 100;
     };
 
     // Group earnings by period

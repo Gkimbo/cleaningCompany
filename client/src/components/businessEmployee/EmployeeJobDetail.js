@@ -203,7 +203,8 @@ const EmployeeJobDetail = ({ state }) => {
   };
 
   const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
+    // Add T00:00:00 to treat date as local time, not UTC
+    const date = new Date(dateStr + "T00:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       month: "long",
@@ -217,6 +218,14 @@ const EmployeeJobDetail = ({ state }) => {
     const [hours, minutes] = timeStr.split(":");
     const h = parseInt(hours);
     return `${h > 12 ? h - 12 : h}:${minutes} ${h >= 12 ? "PM" : "AM"}`;
+  };
+
+  const getEstimatedDuration = (home) => {
+    if (!home) return 2;
+    const beds = parseInt(home.numBeds) || 2;
+    const baths = parseInt(home.numBaths) || 1;
+    // Formula: base 1hr + 0.25hr/bed + 0.5hr/bath, rounded to nearest half hour
+    return Math.ceil((1 + beds * 0.25 + baths * 0.5) * 2) / 2;
   };
 
   if (loading) {
@@ -295,7 +304,7 @@ const EmployeeJobDetail = ({ state }) => {
             <View style={styles.dateTimeInfo}>
               <Text style={styles.dateText}>{formatDate(appointment.date)}</Text>
               <Text style={styles.timeText}>
-                {formatTime(appointment.startTime)} - {appointment.duration || 2} hours
+                ~{getEstimatedDuration(home)} hours
               </Text>
             </View>
           </View>
@@ -309,8 +318,8 @@ const EmployeeJobDetail = ({ state }) => {
               <Text style={styles.payAmount}>
                 ${(job.payAmount / 100).toFixed(2)}
               </Text>
-              {job.payType === "hourly" && (
-                <Text style={styles.payType}>Hourly rate</Text>
+              {job.payBreakdown && (
+                <Text style={styles.payBreakdown}>{job.payBreakdown}</Text>
               )}
             </View>
             <View style={styles.payStatusBadge}>
@@ -691,9 +700,10 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.success[700],
   },
-  payType: {
-    fontSize: typography.fontSize.xs,
+  payBreakdown: {
+    fontSize: typography.fontSize.sm,
     color: colors.success[600],
+    marginTop: spacing.xs,
   },
   payStatusBadge: {
     backgroundColor: colors.success[100],

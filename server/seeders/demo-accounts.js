@@ -290,6 +290,47 @@ function calculateCleanerEarnings(totalPriceCents, numCleaners = 1) {
 	return Math.round((totalPriceCents * (1 - PRICING.multiCleanerPlatformFeePercent)) / numCleaners);
 }
 
+/**
+ * Calculate employee pay based on their pay configuration
+ * @param {Object} employee - BusinessEmployee record with payType, defaultHourlyRate, defaultJobRate, payRate
+ * @param {number} jobPriceCents - Job price in cents
+ * @param {number} numBeds - Number of bedrooms (for estimating duration)
+ * @param {number} numBaths - Number of bathrooms (for estimating duration)
+ * @returns {Object} { payAmount, payType }
+ */
+function calculateEmployeePay(employee, jobPriceCents, numBeds = 2, numBaths = 1) {
+	if (!employee) {
+		return { payAmount: 0, payType: "flat_rate" };
+	}
+
+	const payType = employee.payType || "hourly";
+
+	// Estimate job duration based on home size: base 1hr + 0.25hr/bed + 0.5hr/bath
+	const estimatedHours = Math.ceil((1 + (numBeds * 0.25) + (numBaths * 0.5)) * 2) / 2;
+
+	switch (payType) {
+		case "percentage":
+			const percentRate = parseFloat(employee.payRate) || 0;
+			return {
+				payAmount: Math.round((jobPriceCents * percentRate) / 100),
+				payType: "percentage",
+			};
+		case "per_job":
+		case "flat_rate":
+			return {
+				payAmount: employee.defaultJobRate || 0,
+				payType: "flat_rate",
+			};
+		case "hourly":
+		default:
+			const hourlyRate = employee.defaultHourlyRate || 0;
+			return {
+				payAmount: Math.round(hourlyRate * estimatedHours),
+				payType: "hourly",
+			};
+	}
+}
+
 async function createDemoAccounts() {
 	console.log("Starting demo account creation...\n");
 
@@ -1448,8 +1489,9 @@ async function createDemoAccounts() {
 					console.log("  - Updated BusinessEmployee with canViewJobEarnings");
 				}
 			}
-			// Store the BusinessEmployee ID for use in job assignments
+			// Store the BusinessEmployee ID and record for use in job assignments
 			createdAccounts.businessEmployeeId = businessEmployeeRecord.id;
+			createdAccounts.businessEmployeeRecord = businessEmployeeRecord;
 		} catch (error) {
 			console.error("  - Error linking employee:", error.message);
 		}
@@ -1524,16 +1566,24 @@ async function createDemoAccounts() {
 					});
 
 					if (!existingAssignment) {
-						// Create the job assignment
+						// Create the job assignment with proper pay calculation
 						const jobPriceCents = parseFloat(appointment.price);
+						const numBeds = parseInt(home.numBeds) || 3;
+						const numBaths = parseInt(home.numBaths) || 2;
+						const payCalc = calculateEmployeePay(
+							createdAccounts.businessEmployeeRecord,
+							jobPriceCents,
+							numBeds,
+							numBaths
+						);
 						await EmployeeJobAssignment.create({
 							businessOwnerId: createdAccounts.businessOwner.id,
 							businessEmployeeId: createdAccounts.businessEmployeeId,
 							appointmentId: appointment.id,
 							assignedBy: createdAccounts.businessOwner.id,
 							status: "assigned",
-							payType: "percentage",
-							payAmount: Math.round(jobPriceCents * 0.7), // 70% of job price (already in cents)
+							payType: payCalc.payType,
+							payAmount: payCalc.payAmount,
 						});
 						console.log(`  - Created job assignment for ${jobDate}`);
 					}
@@ -1704,15 +1754,21 @@ async function createDemoAccounts() {
 							isDemoAppointment: true,
 						});
 
-						// Create job assignment for past appointments
+						// Create job assignment for past appointments with proper pay calculation
+						const pastPayCalc = calculateEmployeePay(
+							createdAccounts.businessEmployeeRecord,
+							16000, // $160.00 in cents
+							parseInt(clientHome.numBeds) || 3,
+							parseInt(clientHome.numBaths) || 2
+						);
 						await EmployeeJobAssignment.create({
 							businessOwnerId: createdAccounts.businessOwner.id,
 							businessEmployeeId: createdAccounts.businessEmployeeId,
 							appointmentId: existingAppt.id,
 							assignedBy: createdAccounts.businessOwner.id,
 							status: "completed",
-							payType: "percentage",
-							payAmount: Math.round(16000 * 0.7), // 70% of $160.00 (16000 cents)
+							payType: pastPayCalc.payType,
+							payAmount: pastPayCalc.payAmount,
 							completedAt: new Date(pastDate),
 						});
 					}
@@ -1777,15 +1833,21 @@ async function createDemoAccounts() {
 							isDemoAppointment: true,
 						});
 
-						// Create job assignment for upcoming appointments
+						// Create job assignment for upcoming appointments with proper pay calculation
+						const upcomingPayCalc = calculateEmployeePay(
+							createdAccounts.businessEmployeeRecord,
+							price,
+							3, // numBeds
+							2  // numBaths
+						);
 						await EmployeeJobAssignment.create({
 							businessOwnerId: createdAccounts.businessOwner.id,
 							businessEmployeeId: createdAccounts.businessEmployeeId,
 							appointmentId: appointment.id,
 							assignedBy: createdAccounts.businessOwner.id,
 							status: "assigned",
-							payType: "percentage",
-							payAmount: Math.round(price * 0.7), // 70% of price (already in cents)
+							payType: upcomingPayCalc.payType,
+							payAmount: upcomingPayCalc.payAmount,
 						});
 					}
 				} catch (error) {

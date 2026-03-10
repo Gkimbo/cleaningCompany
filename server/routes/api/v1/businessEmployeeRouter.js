@@ -554,13 +554,32 @@ router.get("/my-earnings", async (req, res) => {
       },
       // Only include job breakdown if allowed
       jobs: req.employeeRecord.canViewJobEarnings
-        ? assignments.map((a) => ({
-            date: a.appointment.date,
-            payAmount: a.payAmount,
-            formattedPay: `$${(a.payAmount / 100).toFixed(2)}`,
-            status: a.payoutStatus,
-          }))
+        ? assignments.map((a) => {
+            const job = {
+              date: a.appointment.date,
+              payAmount: a.payAmount,
+              formattedPay: `$${(a.payAmount / 100).toFixed(2)}`,
+              status: a.payoutStatus,
+              payType: a.payType,
+              hoursWorked: a.hoursWorked ? parseFloat(a.hoursWorked) : null,
+            };
+            return job;
+          })
         : undefined,
+      // Include employee pay configuration for calculations
+      payConfig: {
+        payType: req.employeeRecord.payType,
+        hourlyRate: req.employeeRecord.defaultHourlyRate,
+        jobRate: req.employeeRecord.defaultJobRate,
+        percentRate: req.employeeRecord.payRate ? parseFloat(req.employeeRecord.payRate) : null,
+        formattedRate: req.employeeRecord.payType === "hourly" && req.employeeRecord.defaultHourlyRate
+          ? `$${(req.employeeRecord.defaultHourlyRate / 100).toFixed(2)}/hr`
+          : req.employeeRecord.payType === "per_job" && req.employeeRecord.defaultJobRate
+            ? `$${(req.employeeRecord.defaultJobRate / 100).toFixed(2)}/job`
+            : req.employeeRecord.payType === "percentage" && req.employeeRecord.payRate
+              ? `${parseFloat(req.employeeRecord.payRate).toFixed(0)}%`
+              : null,
+      },
     });
   } catch (error) {
     console.error("Error fetching earnings:", error);

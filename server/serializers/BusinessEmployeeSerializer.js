@@ -201,6 +201,16 @@ class BusinessEmployeeSerializer {
       ? this.serializeUser(rawBusinessOwner)
       : null;
 
+    // Format pay rate for display
+    let formattedPayRate = null;
+    if (data.payType === "hourly" && data.defaultHourlyRate) {
+      formattedPayRate = `$${(data.defaultHourlyRate / 100).toFixed(2)}/hour`;
+    } else if (data.payType === "per_job" && data.defaultJobRate) {
+      formattedPayRate = `$${(data.defaultJobRate / 100).toFixed(2)}/job`;
+    } else if (data.payType === "percentage" && data.payRate) {
+      formattedPayRate = `${parseFloat(data.payRate).toFixed(0)}%`;
+    }
+
     return {
       id: data.id,
       firstName: this.decryptField(data.firstName),
@@ -208,6 +218,11 @@ class BusinessEmployeeSerializer {
       email: this.decryptField(data.email),
       phone: this.decryptField(data.phone),
       status: data.status,
+      payType: data.payType,
+      defaultHourlyRate: data.defaultHourlyRate,
+      defaultJobRate: data.defaultJobRate,
+      payRate: data.payRate ? parseFloat(data.payRate) : null,
+      formattedPayRate,
       paymentMethod: data.paymentMethod,
       stripeConnectOnboarded: data.stripeConnectOnboarded,
       canViewClientDetails: data.canViewClientDetails,
