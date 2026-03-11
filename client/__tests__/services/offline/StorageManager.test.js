@@ -466,4 +466,200 @@ describe("StorageManager", () => {
       expect(recommendations).toHaveLength(0);
     });
   });
+
+  describe("getStorageStats - Clear Offline Data UI support", () => {
+    /**
+     * These tests ensure StorageManager provides the data needed by the
+     * Clear Offline Data feature in AccountSettings.
+     */
+
+    it("should return all fields needed by AccountSettings UI", async () => {
+      PhotoStorage.getStorageStats.mockResolvedValue({
+        totalSize: 10 * 1024 * 1024,
+        photoCount: 15,
+        formattedSize: "10 MB",
+      });
+
+      offlineJobsCollection.query.mockReturnValue(createMockQuery([{}, {}, {}], 3));
+      offlinePhotosCollection.query.mockReturnValue(createMockQuery([], 15));
+      offlineChecklistItemsCollection.query.mockReturnValue(createMockQuery([], 20));
+      syncQueueCollection.query.mockReturnValue(createMockQuery([], 5));
+      syncConflictsCollection.query.mockReturnValue(createMockQuery([], 0));
+
+      const stats = await StorageManager.getStorageStats();
+
+      // Fields used by AccountSettings
+      expect(stats).toHaveProperty("photoStorageFormatted");
+      expect(stats).toHaveProperty("totalPhotoCount");
+      expect(stats).toHaveProperty("jobCount");
+      expect(stats).toHaveProperty("pendingSyncCount");
+      expect(stats).toHaveProperty("health");
+      expect(stats).toHaveProperty("healthMessage");
+    });
+
+    it("should return formatted storage size for display", async () => {
+      PhotoStorage.getStorageStats.mockResolvedValue({
+        totalSize: 52428800, // 50 MB
+        photoCount: 25,
+        formattedSize: "50 MB",
+      });
+
+      const stats = await StorageManager.getStorageStats();
+
+      expect(stats.photoStorageFormatted).toBe("50 MB");
+    });
+
+    it("should return zero values when no data exists", async () => {
+      PhotoStorage.getStorageStats.mockResolvedValue({
+        totalSize: 0,
+        photoCount: 0,
+        formattedSize: "0 B",
+      });
+
+      offlineJobsCollection.query.mockReturnValue(createMockQuery([], 0));
+      offlinePhotosCollection.query.mockReturnValue(createMockQuery([], 0));
+      offlineChecklistItemsCollection.query.mockReturnValue(createMockQuery([], 0));
+      syncQueueCollection.query.mockReturnValue(createMockQuery([], 0));
+      syncConflictsCollection.query.mockReturnValue(createMockQuery([], 0));
+
+      const stats = await StorageManager.getStorageStats();
+
+      expect(stats.photoStorageBytes).toBe(0);
+      expect(stats.totalPhotoCount).toBe(0);
+      expect(stats.jobCount).toBe(0);
+      expect(stats.pendingSyncCount).toBe(0);
+      expect(stats.health).toBe("good");
+    });
+
+    it("should calculate health thresholds correctly", async () => {
+      // Test boundary conditions
+
+      // Just under warning threshold (99MB)
+      PhotoStorage.getStorageStats.mockResolvedValue({
+        totalSize: 99 * 1024 * 1024,
+        photoCount: 50,
+        formattedSize: "99 MB",
+      });
+
+      let stats = await StorageManager.getStorageStats();
+      expect(stats.health).toBe("good");
+
+      // At warning threshold (100MB)
+      PhotoStorage.getStorageStats.mockResolvedValue({
+        totalSize: 100 * 1024 * 1024,
+        photoCount: 50,
+        formattedSize: "100 MB",
+      });
+
+      stats = await StorageManager.getStorageStats();
+      expect(stats.health).toBe("warning");
+
+      // Just under critical threshold (199MB)
+      PhotoStorage.getStorageStats.mockResolvedValue({
+        totalSize: 199 * 1024 * 1024,
+        photoCount: 100,
+        formattedSize: "199 MB",
+      });
+
+      stats = await StorageManager.getStorageStats();
+      expect(stats.health).toBe("warning");
+
+      // At critical threshold (200MB)
+      PhotoStorage.getStorageStats.mockResolvedValue({
+        totalSize: 200 * 1024 * 1024,
+        photoCount: 100,
+        formattedSize: "200 MB",
+      });
+
+      stats = await StorageManager.getStorageStats();
+      expect(stats.health).toBe("critical");
+    });
+
+    it("should include health message with current size", async () => {
+      PhotoStorage.getStorageStats.mockResolvedValue({
+        totalSize: 52.4 * 1024 * 1024, // ~52MB
+        photoCount: 25,
+        formattedSize: "52.4 MB",
+      });
+
+      const stats = await StorageManager.getStorageStats();
+
+      expect(stats.healthMessage).toContain("52.4");
+      expect(stats.healthMessage.toLowerCase()).toContain("healthy");
+    });
+
+    it("should handle PhotoStorage errors gracefully", async () => {
+      PhotoStorage.getStorageStats.mockRejectedValue(new Error("File system error"));
+
+      const stats = await StorageManager.getStorageStats();
+
+      expect(stats.health).toBe("unknown");
+      expect(stats.error).toBe("File system error");
+      expect(stats.healthMessage).toBe("Unable to determine storage status");
+    });
+
+    it("should handle database query errors gracefully", async () => {
+      PhotoStorage.getStorageStats.mockResolvedValue({
+        totalSize: 0,
+        photoCount: 0,
+        formattedSize: "0 B",
+      });
+
+      offlineJobsCollection.query.mockReturnValue({
+        fetchCount: jest.fn().mockRejectedValue(new Error("Database error")),
+      });
+
+      const stats = await StorageManager.getStorageStats();
+
+      expect(stats.health).toBe("unknown");
+      expect(stats.error).toBeDefined();
+    });
+  });
+
+  describe("listener error handling", () => {
+    it("should not crash when listener throws an error", async () => {
+      const errorListener = jest.fn(() => {
+        throw new Error("Listener error");
+      });
+      const normalListener = jest.fn();
+
+      StorageManager.subscribe(errorListener);
+      StorageManager.subscribe(normalListener);
+
+      PhotoStorage.getStorageStats.mockResolvedValue({
+        totalSize: 0,
+        photoCount: 0,
+        formattedSize: "0 B",
+      });
+
+      // Should not throw
+      await expect(StorageManager.getStorageStats()).resolves.not.toThrow();
+
+      // Normal listener should still be called
+      expect(normalListener).toHaveBeenCalled();
+    });
+  });
+
+  describe("concurrent operations", () => {
+    it("should handle multiple concurrent getStorageStats calls", async () => {
+      PhotoStorage.getStorageStats.mockResolvedValue({
+        totalSize: 10 * 1024 * 1024,
+        photoCount: 10,
+        formattedSize: "10 MB",
+      });
+
+      // Make multiple concurrent calls
+      const results = await Promise.all([
+        StorageManager.getStorageStats(),
+        StorageManager.getStorageStats(),
+        StorageManager.getStorageStats(),
+      ]);
+
+      // All should return valid stats
+      results.forEach((stats) => {
+        expect(stats.health).toBeDefined();
+        expect(stats.photoStorageBytes).toBe(10 * 1024 * 1024);
+      });
+    });
+  });
 });

@@ -2,6 +2,49 @@
 import "@testing-library/react-native/extend-expect";
 import "react-native-gesture-handler/jestSetup";
 
+// Test configuration constants - use these in tests instead of hardcoding URLs
+export const TEST_API_BASE = "http://localhost:3000/api/v1";
+export const TEST_BASE_URL = "http://localhost:3000";
+export const TEST_SOCKET_URL = "http://localhost:3000";
+
+// Mock the config module to provide consistent URLs in tests
+jest.mock("./src/services/config", () => ({
+  API_BASE: "http://localhost:3000/api/v1",
+  SOCKET_URL: "http://localhost:3000",
+  BASE_URL: "http://localhost:3000",
+  WEB_HOST: "http://localhost:3000",
+  IS_PRODUCTION: false,
+  IS_DEVELOPMENT: true,
+  isOurServerUrl: (url) => {
+    if (!url) return false;
+    return (
+      url.includes("localhost:3000") ||
+      url.includes("127.0.0.1:3000") ||
+      url.includes("10.0.2.2:3000") ||
+      url.includes("kleanr.app")
+    );
+  },
+  ENVIRONMENT: "development",
+  default: {
+    API_BASE: "http://localhost:3000/api/v1",
+    SOCKET_URL: "http://localhost:3000",
+    BASE_URL: "http://localhost:3000",
+    WEB_HOST: "http://localhost:3000",
+    IS_PRODUCTION: false,
+    IS_DEVELOPMENT: true,
+    isOurServerUrl: (url) => {
+      if (!url) return false;
+      return (
+        url.includes("localhost:3000") ||
+        url.includes("127.0.0.1:3000") ||
+        url.includes("10.0.2.2:3000") ||
+        url.includes("kleanr.app")
+      );
+    },
+    ENVIRONMENT: "development",
+  },
+}));
+
 // Mock WatermelonDB SQLite adapter (native module not available in Jest)
 jest.mock("@nozbe/watermelondb/adapters/sqlite", () => ({
   default: jest.fn().mockImplementation(() => ({

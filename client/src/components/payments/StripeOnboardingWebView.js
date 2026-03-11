@@ -18,6 +18,7 @@ import {
   radius,
   typography,
 } from "../../services/styles/theme";
+import { isOurServerUrl } from "../../services/config";
 
 /**
  * StripeOnboardingWebView - Displays Stripe onboarding in an in-app WebView modal
@@ -62,12 +63,8 @@ const StripeOnboardingWebView = ({ visible, url, onClose, onComplete }) => {
   const isOurReturnUrl = (currentUrl) => {
     if (!currentUrl) return false;
 
-    // Only trigger for localhost (dev) or our production domain
-    const isOurDomain =
-      currentUrl.includes("localhost:3000") ||
-      currentUrl.includes("127.0.0.1:3000");
-
-    if (!isOurDomain) return false;
+    // Only trigger for our domain (localhost in dev, kleanr.app in production)
+    if (!isOurServerUrl(currentUrl)) return false;
 
     // Check for our specific return/refresh parameters
     return (

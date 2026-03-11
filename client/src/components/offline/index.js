@@ -4,4 +4,5 @@ export { default as SyncStatusIndicator } from "./SyncStatusIndicator";
 export { default as ManualSyncButton } from "./ManualSyncButton";
 export { default as OfflineModeToggle } from "./OfflineModeToggle";
 export { default as OfflineLimitWarning } from "./OfflineLimitWarning";
+export { default as LowStorageWarning } from "./LowStorageWarning";
 export { default as SyncFailedBanner } from "./SyncFailedBanner";

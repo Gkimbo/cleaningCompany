@@ -21,8 +21,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/v1";
+import { API_BASE } from "../../services/config";
 
 // Quick Action Card Component
 const QuickActionCard = ({ icon, label, sublabel, color, onPress, badge }) => (

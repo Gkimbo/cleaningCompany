@@ -140,7 +140,7 @@ import { ExitPreviewButton } from "../src/components/preview";
 
 // Offline Mode
 import { OfflineProvider } from "../src/services/offline/OfflineContext";
-import { OfflineBanner } from "../src/components/offline";
+import { OfflineBanner, LowStorageWarning } from "../src/components/offline";
 
 // Terms and Conditions
 import { TermsAcceptanceScreen } from "../src/components/terms";
@@ -312,6 +312,7 @@ export default function App() {
             <SafeAreaView style={appStyles.container}>
               <TopBar dispatch={dispatch} state={state} />
               <OfflineBanner />
+              <LowStorageWarning />
               <FrozenAccountWrapper state={state}>
               <Routes>
               <Route

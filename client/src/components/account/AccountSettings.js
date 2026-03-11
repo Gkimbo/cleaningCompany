@@ -17,6 +17,8 @@ import FetchData from "../../services/fetchRequests/fetchData";
 import OwnerDashboardService from "../../services/fetchRequests/OwnerDashboardService";
 import getCurrentUser from "../../services/fetchRequests/getCurrentUser";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
+import { resetDatabase, isOfflineAvailable } from "../../services/offline/database";
+import StorageManager from "../../services/offline/StorageManager";
 
 const AccountSettings = ({ state, dispatch }) => {
   const [username, setUsername] = useState(state.currentUser.user?.username || "");
@@ -55,6 +57,12 @@ const AccountSettings = ({ state, dispatch }) => {
   const [businessLogo, setBusinessLogo] = useState(state.businessLogo || null);
   const [savingLogo, setSavingLogo] = useState(false);
   const [logoResult, setLogoResult] = useState(null);
+
+  // Offline data storage settings
+  const [storageStats, setStorageStats] = useState(null);
+  const [loadingStorageStats, setLoadingStorageStats] = useState(false);
+  const [clearingOfflineData, setClearingOfflineData] = useState(false);
+  const [offlineDataResult, setOfflineDataResult] = useState(null);
 
   const isOwner = state.account === "owner";
   const isCleaner = state.account === "cleaner";
@@ -153,6 +161,25 @@ const AccountSettings = ({ state, dispatch }) => {
       fetchServiceArea();
     }
   }, [isCleaner, state.currentUser.token]);
+
+  // Fetch offline storage stats on mount
+  useEffect(() => {
+    if (isOfflineAvailable) {
+      fetchStorageStats();
+    }
+  }, []);
+
+  const fetchStorageStats = async () => {
+    setLoadingStorageStats(true);
+    try {
+      const stats = await StorageManager.getStorageStats();
+      setStorageStats(stats);
+    } catch (err) {
+      console.error("Failed to fetch storage stats:", err);
+    } finally {
+      setLoadingStorageStats(false);
+    }
+  };
 
   const fetchOwnerSettings = async () => {
     setLoadingOwnerSettings(true);
@@ -679,6 +706,50 @@ const AccountSettings = ({ state, dispatch }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleClearOfflineData = () => {
+    Alert.alert(
+      "Clear Offline Data",
+      "This will permanently delete all offline data stored on your device, including:\n\n" +
+      "• Cached jobs and assignments\n" +
+      "• Photos not yet uploaded\n" +
+      "• Pending sync operations\n" +
+      "• Offline messages\n\n" +
+      "This action cannot be undone. Make sure you have an internet connection to re-sync your data.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Clear All Data",
+          style: "destructive",
+          onPress: async () => {
+            setClearingOfflineData(true);
+            setOfflineDataResult(null);
+            try {
+              await resetDatabase();
+              setStorageStats(null);
+              setOfflineDataResult({
+                success: true,
+                message: "All offline data has been cleared successfully.",
+              });
+              // Refresh storage stats after clearing
+              setTimeout(() => fetchStorageStats(), 500);
+            } catch (err) {
+              console.error("Failed to clear offline data:", err);
+              setOfflineDataResult({
+                success: false,
+                error: "Failed to clear offline data. Please try again.",
+              });
+            } finally {
+              setClearingOfflineData(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -1232,6 +1303,112 @@ const AccountSettings = ({ state, dispatch }) => {
         </View>
       )}
 
+      {/* Offline Data Storage Section - Available for all users */}
+      {isOfflineAvailable && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Offline Data Storage</Text>
+          <Text style={styles.sectionDescription}>
+            The app stores data locally for offline use. You can clear this data to free up space on your device.
+          </Text>
+
+          {/* Storage Stats */}
+          {loadingStorageStats ? (
+            <ActivityIndicator size="small" color={colors.primary[600]} />
+          ) : storageStats ? (
+            <View style={styles.storageStatsBox}>
+              <View style={styles.storageStatRow}>
+                <Text style={styles.storageStatLabel}>Photos:</Text>
+                <Text style={styles.storageStatValue}>
+                  {storageStats.photoStorageFormatted || "0 B"} ({storageStats.totalPhotoCount || 0} files)
+                </Text>
+              </View>
+              <View style={styles.storageStatRow}>
+                <Text style={styles.storageStatLabel}>Cached Jobs:</Text>
+                <Text style={styles.storageStatValue}>{storageStats.jobCount || 0}</Text>
+              </View>
+              <View style={styles.storageStatRow}>
+                <Text style={styles.storageStatLabel}>Pending Sync:</Text>
+                <Text style={styles.storageStatValue}>{storageStats.pendingSyncCount || 0} operations</Text>
+              </View>
+              {storageStats.health && (
+                <View style={[
+                  styles.storageHealthBadge,
+                  storageStats.health === "good" && styles.storageHealthGood,
+                  storageStats.health === "warning" && styles.storageHealthWarning,
+                  storageStats.health === "critical" && styles.storageHealthCritical,
+                ]}>
+                  <Feather
+                    name={storageStats.health === "good" ? "check-circle" : "alert-circle"}
+                    size={14}
+                    color={
+                      storageStats.health === "good" ? colors.success[600] :
+                      storageStats.health === "warning" ? colors.warning[600] :
+                      colors.error[600]
+                    }
+                  />
+                  <Text style={[
+                    styles.storageHealthText,
+                    storageStats.health === "good" && styles.storageHealthTextGood,
+                    storageStats.health === "warning" && styles.storageHealthTextWarning,
+                    storageStats.health === "critical" && styles.storageHealthTextCritical,
+                  ]}>
+                    {storageStats.healthMessage}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : null}
+
+          {/* Warning Note */}
+          <View style={styles.offlineWarningNote}>
+            <Feather name="alert-triangle" size={16} color={colors.warning[600]} />
+            <Text style={styles.offlineWarningText}>
+              Clearing offline data will remove all cached information. Any unsynced changes will be lost permanently.
+            </Text>
+          </View>
+
+          {/* Clear Button */}
+          <Pressable
+            style={[
+              styles.button,
+              styles.dangerButton,
+              clearingOfflineData && styles.buttonDisabled,
+            ]}
+            onPress={handleClearOfflineData}
+            disabled={clearingOfflineData}
+          >
+            {clearingOfflineData ? (
+              <ActivityIndicator size="small" color={colors.neutral[0]} />
+            ) : (
+              <>
+                <Feather name="trash-2" size={16} color={colors.neutral[0]} style={{ marginRight: 8 }} />
+                <Text style={styles.dangerButtonText}>Clear All Offline Data</Text>
+              </>
+            )}
+          </Pressable>
+
+          {/* Result Message */}
+          {offlineDataResult && (
+            <View
+              style={[
+                styles.emailResultBox,
+                offlineDataResult.success ? styles.emailResultSuccess : styles.emailResultError,
+              ]}
+            >
+              <Text
+                style={
+                  offlineDataResult.success
+                    ? styles.emailResultSuccessText
+                    : styles.emailResultErrorText
+                }
+              >
+                {offlineDataResult.success ? offlineDataResult.message : offlineDataResult.error}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Security Tips */}
       <View style={styles.tipsSection}>
         <Text style={styles.tipsTitle}>Security Tips</Text>
@@ -1627,6 +1804,88 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
+  },
+
+  // Offline Data Storage Styles
+  storageStatsBox: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  storageStatRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
+  storageStatLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  storageStatValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  storageHealthBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+  },
+  storageHealthGood: {
+    backgroundColor: colors.success[50],
+  },
+  storageHealthWarning: {
+    backgroundColor: colors.warning[50],
+  },
+  storageHealthCritical: {
+    backgroundColor: colors.error[50],
+  },
+  storageHealthText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+  },
+  storageHealthTextGood: {
+    color: colors.success[700],
+  },
+  storageHealthTextWarning: {
+    color: colors.warning[700],
+  },
+  storageHealthTextCritical: {
+    color: colors.error[700],
+  },
+  offlineWarningNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    marginBottom: spacing.md,
+  },
+  offlineWarningText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[700],
+    lineHeight: 20,
+  },
+  dangerButton: {
+    backgroundColor: colors.error[600],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dangerButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
   },
 });
 
