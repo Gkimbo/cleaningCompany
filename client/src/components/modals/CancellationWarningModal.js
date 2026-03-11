@@ -10,6 +10,7 @@ import {
 import Icon from "react-native-vector-icons/FontAwesome";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { usePricing } from "../../context/PricingContext";
+import { formatCurrency } from "../../services/formatters";
 
 const CancellationWarningModal = ({
   visible,
@@ -110,7 +111,7 @@ const CancellationWarningModal = ({
                 </View>
                 <View style={styles.feeAmountRow}>
                   <Text style={styles.feeLabel}>Cancellation Fee</Text>
-                  <Text style={styles.feeAmount}>${cancellationFee}</Text>
+                  <Text style={styles.feeAmount}>{formatCurrency(cancellationFee)}</Text>
                 </View>
                 <Text style={styles.feeNote}>
                   This fee will be charged to your card on file immediately upon cancellation.
@@ -214,7 +215,7 @@ const CancellationWarningModal = ({
                 agreed && styles.checkboxLabelChecked
               ]}>
                 {showCancellationFeeWarning
-                  ? `I agree to pay the $${cancellationFee} cancellation fee`
+                  ? `I agree to pay the ${formatCurrency(cancellationFee)} cancellation fee`
                   : isWithinPenaltyWindow && discountApplied
                   ? `I understand I will only receive $${estimatedRefund} back (${refundPercent}% refund due to discount)`
                   : isWithinPenaltyWindow

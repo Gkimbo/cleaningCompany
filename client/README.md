@@ -5,7 +5,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/Tests-5897_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-5961_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
 
@@ -236,6 +236,10 @@ export const API_BASE = "http://localhost:3000/api/v1";
 | **Database Pricing** | All platform fees configured via database. Displays accurate fee breakdowns in earnings and payout screens. |
 | **IT Support System** | Users can submit technical support tickets with categories (app crashes, login issues, billing errors, security, data requests). Priority levels and status tracking. IT staff dashboard for ticket management. |
 | **Service Area Management** | Platform owners configure geographic restrictions for cleaners. City-based or radius-based modes. Visual configuration interface. |
+| **Account Freezing** | Frozen account banner and wrapper prevent access to platform features. Displays reason and contact information for appeals. |
+| **Verified Business Badge** | Display verified status for approved business owners. Builds trust with potential clients. |
+| **HR Staff Dashboard** | Manage suspicious activity reports, dispute resolution, and content moderation. Track reported messages and user warnings. |
+| **Custom Job Flows** | Business owners create custom job flows with specialized checklists. Assign flows to specific clients for tailored cleaning requirements. |
 
 ---
 
@@ -266,8 +270,19 @@ client/
 │   │   │   ├── JobAssignment.js
 │   │   │   ├── FinancialsScreen.js
 │   │   │   ├── PayrollScreen.js
-│   │   │   ├── TimesheetManagement.js
-│   │   │   └── BusinessOwnerCalendar.js
+│   │   │   ├── TimesheetScreen.js
+│   │   │   ├── BusinessOwnerCalendar.js
+│   │   │   ├── BusinessAnalyticsDashboard.js
+│   │   │   └── jobFlows/
+│   │   │       ├── JobFlowsList.js
+│   │   │       ├── FlowDetailScreen.js
+│   │   │       ├── ChecklistEditor.js
+│   │   │       └── CreateEditFlowModal.js
+│   │   │   └── profile/
+│   │   │       ├── DashboardOverview.js
+│   │   │       ├── MyClientsSection.js
+│   │   │       ├── MyTeamSection.js
+│   │   │       └── PayrollSection.js
 │   │   ├── calendarSync/         # iCal integration
 │   │   ├── cleaner/              # Cleaner dashboard
 │   │   │   ├── MyClientsPage.js
@@ -337,6 +352,16 @@ client/
 │   │   ├── tax/                  # Tax documents
 │   │   ├── terms/                # Terms & Conditions
 │   │   ├── tiles/                # Reusable UI tiles
+│   │   ├── shared/               # Shared components
+│   │   │   ├── FrozenAccountBanner.js
+│   │   │   ├── FrozenAccountWrapper.js
+│   │   │   ├── VerifiedBusinessBadge.js
+│   │   │   └── ITSupportForm.js
+│   │   ├── navBar/               # Navigation components (37 buttons)
+│   │   │   ├── TopBar.js
+│   │   │   ├── AccountSettingsButton.js
+│   │   │   ├── MessagesButton.js
+│   │   │   └── [35 more navigation buttons]
 │   │   └── userAuthentication/   # Login/registration
 │   │
 │   ├── context/
@@ -893,7 +918,7 @@ npm test -- CleaningChecklist.test.js
 | IT Employee Management | 40 | CRUD operations, password generation |
 | IT Services | 92 | ITDashboardService, ITDisputeService, ITManagementService |
 | Service Area | 24 | Configuration, validation, history |
-| **Total** | **5897** | 208 test suites |
+| **Total** | **5961** | 210 test suites |
 
 ---
 

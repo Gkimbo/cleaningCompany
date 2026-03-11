@@ -230,7 +230,7 @@ describe("BusinessOwnerDeclinedModal", () => {
     it("should call the marketplace endpoint when find cleaner is pressed", async () => {
       const mockResponse = {
         ok: true,
-        json: () => Promise.resolve({ confirmRequired: true, marketplacePrice: 200, currentPrice: 150, homeId: 1 }),
+        json: () => Promise.resolve({ confirmRequired: true, marketplacePrice: 20000, currentPrice: 15000, homeId: 1 }),
       };
       global.fetch.mockResolvedValueOnce(mockResponse);
 
@@ -293,8 +293,8 @@ describe("BusinessOwnerDeclinedModal", () => {
         ok: true,
         json: () => Promise.resolve({
           confirmRequired: true,
-          marketplacePrice: 200,
-          currentPrice: 150,
+          marketplacePrice: 20000,
+          currentPrice: 15000,
           homeId: 1,
         }),
       };
@@ -324,15 +324,15 @@ describe("BusinessOwnerDeclinedModal", () => {
         ok: true,
         json: () => Promise.resolve({
           confirmRequired: true,
-          marketplacePrice: 200,
-          currentPrice: 150,
+          marketplacePrice: 20000,
+          currentPrice: 15000,
           homeId: 1,
         }),
       };
       // Second response for confirm
       const confirmResponse = {
         ok: true,
-        json: () => Promise.resolve({ success: true, marketplacePrice: 200 }),
+        json: () => Promise.resolve({ success: true, marketplacePrice: 20000 }),
       };
 
       global.fetch
@@ -380,14 +380,14 @@ describe("BusinessOwnerDeclinedModal", () => {
         ok: true,
         json: () => Promise.resolve({
           confirmRequired: true,
-          marketplacePrice: 200,
-          currentPrice: 150,
+          marketplacePrice: 20000,
+          currentPrice: 15000,
           homeId: 1,
         }),
       };
       const confirmResponse = {
         ok: true,
-        json: () => Promise.resolve({ success: true, marketplacePrice: 200 }),
+        json: () => Promise.resolve({ success: true, marketplacePrice: 20000 }),
       };
 
       global.fetch

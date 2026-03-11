@@ -434,9 +434,9 @@ itSupportToolsRouter.get("/user/:id/billing", async (req, res) => {
         },
         recentBills: recentBills.map(b => ({
           id: b.id,
-          amount: b.totalDue / 100, // Convert cents to dollars
-          appointmentDue: b.appointmentDue / 100,
-          cancellationFee: b.cancellationFee / 100,
+          amount: b.totalDue != null ? b.totalDue / 100 : 0, // Convert cents to dollars
+          appointmentDue: b.appointmentDue != null ? b.appointmentDue / 100 : 0,
+          cancellationFee: b.cancellationFee != null ? b.cancellationFee / 100 : 0,
         })),
       },
     });
@@ -675,6 +675,452 @@ itSupportToolsRouter.get("/user/:id/app-info", async (req, res) => {
   } catch (error) {
     console.error("Error fetching app info:", error);
     return res.status(500).json({ error: "Failed to fetch app info" });
+  }
+});
+
+// ==================== UNFREEZE ACCOUNT ====================
+
+/**
+ * POST /api/v1/it-support/user/:id/unfreeze
+ * Unfreeze a frozen user account
+ */
+itSupportToolsRouter.post("/user/:id/unfreeze", rateLimitSensitiveAction("unfreeze"), async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const user = await User.findByPk(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.accountFrozen) {
+      return res.status(400).json({ error: "Account is not frozen" });
+    }
+
+    const previousReason = user.accountFrozenReason;
+
+    await user.update({
+      accountFrozen: false,
+      accountFrozenAt: null,
+      accountFrozenReason: null,
+      lockedUntil: null, // Also clear any lock
+      failedLoginAttempts: 0,
+    });
+
+    // Log to security audit
+    const { SecurityAuditLog } = require("../../../models");
+    await SecurityAuditLog.logEvent("ACCOUNT_UNFROZEN", {
+      userId: req.user.id,
+      targetUserId: user.id,
+      eventData: {
+        unfrozenBy: req.user.username,
+        reason: reason || "IT unfreeze request",
+        previousReason,
+      },
+      severity: "warning",
+    });
+
+    console.log(`✅ IT unfroze account for ${user.username} (by user ${req.user.id})`);
+
+    return res.status(200).json({
+      success: true,
+      message: `Account unfrozen successfully${reason ? `. Reason: ${reason}` : ""}`,
+    });
+  } catch (error) {
+    console.error("Error unfreezing account:", error);
+    return res.status(500).json({ error: "Failed to unfreeze account" });
+  }
+});
+
+// ==================== AUDIT LOG ACCESS ====================
+
+/**
+ * GET /api/v1/it-support/user/:id/audit-log
+ * Get security audit log for a specific user
+ */
+itSupportToolsRouter.get("/user/:id/audit-log", async (req, res) => {
+  try {
+    const { limit = 50, eventType, startDate, endDate } = req.query;
+    const { SecurityAuditLog } = require("../../../models");
+
+    const user = await User.findByPk(req.params.id, {
+      attributes: ["id", "username"],
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const where = {
+      [Op.or]: [
+        { userId: user.id },
+        { targetUserId: user.id },
+      ],
+    };
+
+    if (eventType) {
+      where.eventType = eventType;
+    }
+
+    if (startDate || endDate) {
+      where.occurredAt = {};
+      if (startDate) where.occurredAt[Op.gte] = new Date(startDate);
+      if (endDate) where.occurredAt[Op.lte] = new Date(endDate);
+    }
+
+    const logs = await SecurityAuditLog.findAll({
+      where,
+      order: [["occurredAt", "DESC"]],
+      limit: parseInt(limit),
+      attributes: ["id", "eventType", "userId", "targetUserId", "eventData", "severity", "success", "occurredAt"],
+    });
+
+    return res.status(200).json({
+      auditLog: logs,
+      userId: user.id,
+      username: user.username,
+    });
+  } catch (error) {
+    console.error("Error fetching audit log:", error);
+    return res.status(500).json({ error: "Failed to fetch audit log" });
+  }
+});
+
+// ==================== IT NOTES ON USERS ====================
+
+/**
+ * PATCH /api/v1/it-support/user/:id/it-notes
+ * Add or update IT notes on a user
+ */
+itSupportToolsRouter.patch("/user/:id/it-notes", async (req, res) => {
+  try {
+    const { notes } = req.body;
+    const user = await User.findByPk(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (notes === undefined) {
+      return res.status(400).json({ error: "Notes field is required" });
+    }
+
+    // Store IT notes in ownerPrivateNotes with a prefix to distinguish
+    const existingNotes = user.ownerPrivateNotes || "";
+    const itNotesMarker = "--- IT NOTES ---";
+    const ownerNotesMarker = "--- OWNER NOTES ---";
+
+    let ownerSection = "";
+    let newNotes = "";
+
+    // Parse existing notes to preserve owner notes
+    if (existingNotes.includes(ownerNotesMarker)) {
+      const parts = existingNotes.split(ownerNotesMarker);
+      ownerSection = ownerNotesMarker + (parts[1] || "");
+    } else if (!existingNotes.includes(itNotesMarker)) {
+      // Existing notes without markers are owner notes
+      ownerSection = existingNotes ? `${ownerNotesMarker}\n${existingNotes}` : "";
+    }
+
+    // Build new notes
+    if (notes) {
+      newNotes = `${itNotesMarker}\n[${new Date().toISOString()}] (${req.user.username}): ${notes}\n`;
+    }
+
+    await user.update({
+      ownerPrivateNotes: newNotes + ownerSection,
+    });
+
+    console.log(`✅ IT notes updated for ${user.username} (by user ${req.user.id})`);
+
+    return res.status(200).json({
+      success: true,
+      message: "IT notes updated",
+    });
+  } catch (error) {
+    console.error("Error updating IT notes:", error);
+    return res.status(500).json({ error: "Failed to update IT notes" });
+  }
+});
+
+/**
+ * GET /api/v1/it-support/user/:id/it-notes
+ * Get IT notes for a user
+ */
+itSupportToolsRouter.get("/user/:id/it-notes", async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id, {
+      attributes: ["id", "username", "ownerPrivateNotes"],
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const allNotes = user.ownerPrivateNotes || "";
+    const itNotesMarker = "--- IT NOTES ---";
+    const ownerNotesMarker = "--- OWNER NOTES ---";
+
+    let itNotes = "";
+    if (allNotes.includes(itNotesMarker)) {
+      const startIdx = allNotes.indexOf(itNotesMarker) + itNotesMarker.length;
+      const endIdx = allNotes.includes(ownerNotesMarker)
+        ? allNotes.indexOf(ownerNotesMarker)
+        : allNotes.length;
+      itNotes = allNotes.substring(startIdx, endIdx).trim();
+    }
+
+    return res.status(200).json({
+      userId: user.id,
+      username: user.username,
+      itNotes,
+    });
+  } catch (error) {
+    console.error("Error fetching IT notes:", error);
+    return res.status(500).json({ error: "Failed to fetch IT notes" });
+  }
+});
+
+// ==================== USER ACTIVITY TIMELINE ====================
+
+/**
+ * GET /api/v1/it-support/user/:id/activity
+ * Get comprehensive user activity timeline
+ */
+itSupportToolsRouter.get("/user/:id/activity", async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+    const userId = req.params.id;
+
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "username", "type", "createdAt"],
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Get recent appointments
+    const appointments = await UserAppointments.findAll({
+      where: { userId },
+      order: [["date", "DESC"]],
+      limit: parseInt(limit),
+      attributes: ["id", "date", "status", "price", "createdAt"],
+    });
+
+    // Get recent reviews
+    const reviewsGiven = await UserReviews.findAll({
+      where: { reviewerId: userId },
+      order: [["createdAt", "DESC"]],
+      limit: 5,
+      attributes: ["id", "rating", "createdAt"],
+    });
+
+    const reviewsReceived = await UserReviews.findAll({
+      where: { userId },
+      order: [["createdAt", "DESC"]],
+      limit: 5,
+      attributes: ["id", "rating", "createdAt"],
+    });
+
+    // Get recent security events
+    const { SecurityAuditLog } = require("../../../models");
+    const securityEvents = await SecurityAuditLog.findAll({
+      where: {
+        [Op.or]: [{ userId }, { targetUserId: userId }],
+      },
+      order: [["occurredAt", "DESC"]],
+      limit: 10,
+      attributes: ["id", "eventType", "severity", "occurredAt"],
+    });
+
+    // Build timeline
+    const timeline = [];
+
+    appointments.forEach(apt => {
+      timeline.push({
+        type: "appointment",
+        date: apt.date || apt.createdAt,
+        details: {
+          id: apt.id,
+          status: apt.status,
+          price: apt.price ? (apt.price / 100).toFixed(2) : null,
+        },
+      });
+    });
+
+    reviewsGiven.forEach(r => {
+      timeline.push({
+        type: "review_given",
+        date: r.createdAt,
+        details: { id: r.id, rating: r.rating },
+      });
+    });
+
+    reviewsReceived.forEach(r => {
+      timeline.push({
+        type: "review_received",
+        date: r.createdAt,
+        details: { id: r.id, rating: r.rating },
+      });
+    });
+
+    securityEvents.forEach(e => {
+      timeline.push({
+        type: "security",
+        date: e.occurredAt,
+        details: { eventType: e.eventType, severity: e.severity },
+      });
+    });
+
+    // Sort by date descending
+    timeline.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return res.status(200).json({
+      userId: user.id,
+      username: user.username,
+      accountType: user.type,
+      accountCreated: user.createdAt,
+      timeline: timeline.slice(0, parseInt(limit)),
+    });
+  } catch (error) {
+    console.error("Error fetching user activity:", error);
+    return res.status(500).json({ error: "Failed to fetch user activity" });
+  }
+});
+
+// ==================== BULK OPERATIONS ====================
+
+/**
+ * POST /api/v1/it-support/users/bulk-unlock
+ * Unlock multiple user accounts at once
+ */
+itSupportToolsRouter.post("/users/bulk-unlock", rateLimitSensitiveAction("bulk-unlock"), async (req, res) => {
+  try {
+    const { userIds } = req.body;
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: "userIds array is required" });
+    }
+
+    if (userIds.length > 50) {
+      return res.status(400).json({ error: "Maximum 50 users can be unlocked at once" });
+    }
+
+    // Convert all userIds to integers to ensure consistent comparison
+    const parsedUserIds = userIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+
+    if (parsedUserIds.length === 0) {
+      return res.status(400).json({ error: "No valid user IDs provided" });
+    }
+
+    const users = await User.findAll({
+      where: { id: { [Op.in]: parsedUserIds } },
+      attributes: ["id", "username", "lockedUntil", "failedLoginAttempts"],
+    });
+
+    const results = {
+      unlocked: [],
+      notFound: [],
+      notLocked: [],
+    };
+
+    // Find users not in results (compare integers to integers)
+    const foundIds = users.map(u => u.id);
+    parsedUserIds.forEach(id => {
+      if (!foundIds.includes(id)) {
+        results.notFound.push(id);
+      }
+    });
+
+    for (const user of users) {
+      const wasLocked = user.lockedUntil && new Date(user.lockedUntil) > new Date();
+      const hadAttempts = user.failedLoginAttempts > 0;
+
+      if (!wasLocked && !hadAttempts) {
+        results.notLocked.push({ id: user.id, username: user.username });
+        continue;
+      }
+
+      await user.update({
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      });
+
+      results.unlocked.push({ id: user.id, username: user.username });
+    }
+
+    // Log to security audit
+    const { SecurityAuditLog } = require("../../../models");
+    await SecurityAuditLog.logEvent("ADMIN_ACCOUNT_UPDATE", {
+      userId: req.user.id,
+      eventData: {
+        action: "bulk_unlock",
+        unlockedCount: results.unlocked.length,
+        userIds: results.unlocked.map(u => u.id),
+      },
+      severity: "warning",
+    });
+
+    console.log(`✅ IT bulk unlocked ${results.unlocked.length} accounts (by user ${req.user.id})`);
+
+    return res.status(200).json({
+      success: true,
+      message: `Unlocked ${results.unlocked.length} accounts`,
+      results,
+    });
+  } catch (error) {
+    console.error("Error in bulk unlock:", error);
+    return res.status(500).json({ error: "Failed to bulk unlock accounts" });
+  }
+});
+
+// ==================== STRIPE DASHBOARD LINK ====================
+
+/**
+ * GET /api/v1/it-support/user/:id/stripe-link
+ * Get Stripe dashboard link for a user
+ */
+itSupportToolsRouter.get("/user/:id/stripe-link", async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id, {
+      attributes: ["id", "username", "stripeCustomerId", "stripeAccountId"],
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const links = {};
+
+    // Customer dashboard link (for payments/billing)
+    if (user.stripeCustomerId) {
+      links.customerDashboard = `https://dashboard.stripe.com/customers/${user.stripeCustomerId}`;
+    }
+
+    // Connect account link (for cleaners who receive payouts)
+    if (user.stripeAccountId) {
+      links.connectAccount = `https://dashboard.stripe.com/connect/accounts/${user.stripeAccountId}`;
+    }
+
+    if (!links.customerDashboard && !links.connectAccount) {
+      return res.status(200).json({
+        userId: user.id,
+        username: user.username,
+        hasStripeAccount: false,
+        message: "User has no Stripe accounts",
+      });
+    }
+
+    return res.status(200).json({
+      userId: user.id,
+      username: user.username,
+      hasStripeAccount: true,
+      links,
+    });
+  } catch (error) {
+    console.error("Error generating Stripe link:", error);
+    return res.status(500).json({ error: "Failed to generate Stripe link" });
   }
 });
 

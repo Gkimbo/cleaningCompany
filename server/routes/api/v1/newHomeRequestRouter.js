@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../../../middleware/authenticatedToken");
 const NewHomeRequestService = require("../../../services/NewHomeRequestService");
+const EncryptionService = require("../../../services/EncryptionService");
 const { NewHomeRequest, UserHomes } = require("../../../models");
 
 /**
@@ -42,15 +43,15 @@ router.get("/pending", async (req, res) => {
         ? {
             id: request.home.id,
             nickName: request.home.nickName,
-            address: request.home.address,
-            city: request.home.city,
-            state: request.home.state,
+            address: EncryptionService.decrypt(request.home.address),
+            city: EncryptionService.decrypt(request.home.city),
+            state: EncryptionService.decrypt(request.home.state),
           }
         : null,
       client: request.client
         ? {
             id: request.client.id,
-            name: `${request.client.firstName} ${request.client.lastName}`.trim(),
+            name: `${EncryptionService.decrypt(request.client.firstName)} ${EncryptionService.decrypt(request.client.lastName)}`.trim(),
           }
         : null,
     }));
@@ -93,15 +94,15 @@ router.get("/", async (req, res) => {
         ? {
             id: request.home.id,
             nickName: request.home.nickName,
-            address: request.home.address,
-            city: request.home.city,
+            address: EncryptionService.decrypt(request.home.address),
+            city: EncryptionService.decrypt(request.home.city),
             isMarketplaceEnabled: request.home.isMarketplaceEnabled,
           }
         : null,
       businessOwner: request.businessOwner
         ? {
             id: request.businessOwner.id,
-            name: `${request.businessOwner.firstName} ${request.businessOwner.lastName}`.trim(),
+            name: `${EncryptionService.decrypt(request.businessOwner.firstName)} ${EncryptionService.decrypt(request.businessOwner.lastName)}`.trim(),
           }
         : null,
     }));

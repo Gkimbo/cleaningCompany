@@ -73,14 +73,14 @@ describe("PaymentMethodRemovalModal", () => {
       {
         id: 1,
         date: "2025-01-15",
-        price: 150,
+        price: 15000,
         daysUntil: 10,
         isWithinCancellationWindow: false,
         cancellationFee: 0,
         hasCleanerAssigned: false,
       },
     ],
-    totalToPrepay: 150,
+    totalToPrepay: 15000,
     totalCancellationFees: 0,
     options: {
       canPrepayAll: true,
@@ -92,9 +92,9 @@ describe("PaymentMethodRemovalModal", () => {
   const eligibilityWithFees = {
     ...defaultEligibilityData,
     outstandingFees: {
-      cancellationFee: 25,
+      cancellationFee: 2500,
       appointmentDue: 0,
-      totalDue: 25,
+      totalDue: 2500,
     },
     options: {
       ...defaultEligibilityData.options,
@@ -108,14 +108,14 @@ describe("PaymentMethodRemovalModal", () => {
       {
         id: 1,
         date: "2025-01-05",
-        price: 150,
+        price: 15000,
         daysUntil: 3,
         isWithinCancellationWindow: true,
-        cancellationFee: 25,
+        cancellationFee: 2500,
         hasCleanerAssigned: false,
       },
     ],
-    totalCancellationFees: 25,
+    totalCancellationFees: 2500,
   };
 
   describe("Modal Visibility", () => {
@@ -227,7 +227,7 @@ describe("PaymentMethodRemovalModal", () => {
         />
       );
 
-      expect(getByText("$25 fee if cancelled")).toBeTruthy();
+      expect(getByText("$25.00 fee if cancelled")).toBeTruthy();
     });
   });
 
@@ -271,8 +271,8 @@ describe("PaymentMethodRemovalModal", () => {
         ok: true,
         json: () => Promise.resolve({
           success: true,
-          capturedAppointments: [{ id: 1, amount: 150 }],
-          totalPrepaid: 150,
+          capturedAppointments: [{ id: 1, amount: 15000 }],
+          totalPrepaid: 15000,
           hasPaymentMethod: false,
         }),
       });
@@ -311,8 +311,8 @@ describe("PaymentMethodRemovalModal", () => {
         ok: true,
         json: () => Promise.resolve({
           success: true,
-          capturedAppointments: [{ id: 1, amount: 150 }],
-          totalPrepaid: 150,
+          capturedAppointments: [{ id: 1, amount: 15000 }],
+          totalPrepaid: 15000,
           hasPaymentMethod: false,
         }),
       });
@@ -395,8 +395,8 @@ describe("PaymentMethodRemovalModal", () => {
         json: () => Promise.resolve({
           success: true,
           cancelledAppointments: [{ id: 1 }],
-          totalCancellationFees: 25,
-          totalFeesPaid: 25,
+          totalCancellationFees: 2500,
+          totalFeesPaid: 2500,
           hasPaymentMethod: false,
         }),
       });
@@ -496,7 +496,7 @@ describe("PaymentMethodRemovalModal", () => {
           {
             id: 1,
             date: "2025-01-15",
-            price: 150,
+            price: 15000,
             daysUntil: 10,
             isWithinCancellationWindow: false,
             cancellationFee: 0,
@@ -504,13 +504,13 @@ describe("PaymentMethodRemovalModal", () => {
           {
             id: 2,
             date: "2025-01-20",
-            price: 200,
+            price: 20000,
             daysUntil: 15,
             isWithinCancellationWindow: false,
             cancellationFee: 0,
           },
         ],
-        totalToPrepay: 350,
+        totalToPrepay: 35000,
       };
 
       const { getByText } = render(
@@ -536,11 +536,11 @@ describe("PaymentMethodRemovalModal", () => {
       const combinedData = {
         ...defaultEligibilityData,
         outstandingFees: {
-          cancellationFee: 25,
+          cancellationFee: 2500,
           appointmentDue: 0,
-          totalDue: 25,
+          totalDue: 2500,
         },
-        totalToPrepay: 150,
+        totalToPrepay: 15000,
         options: {
           ...defaultEligibilityData.options,
           mustPayOutstandingFirst: true,

@@ -26,9 +26,9 @@ jest.mock("@expo/vector-icons", () => ({
 
 // Mock PricingContext
 const mockPricing = {
-  basePrice: 140,
-  extraBedBathFee: 15,
-  halfBathFee: 7,
+  basePrice: 14000,
+  extraBedBathFee: 1500,
+  halfBathFee: 700,
 };
 
 jest.mock("../../src/context/PricingContext", () => ({
@@ -38,7 +38,7 @@ jest.mock("../../src/context/PricingContext", () => ({
     // Simple calculation: base + extra for beds/baths above 1
     const extraBeds = Math.max(0, beds - 1);
     const extraBaths = Math.max(0, Math.floor(baths) - 1);
-    const halfBath = baths % 1 > 0 ? 7 : 0;
+    const halfBath = baths % 1 > 0 ? 700 : 0;
     return pricing.basePrice + (extraBeds + extraBaths) * pricing.extraBedBathFee + halfBath;
   },
 }));
@@ -57,7 +57,7 @@ describe("MyCleanerCard", () => {
 
   const mockRelationship = {
     id: 1,
-    defaultPrice: 150,
+    defaultPrice: 15000,
     defaultFrequency: "weekly",
     autoPayEnabled: true,
     since: "2024-01-15T00:00:00Z",
@@ -153,7 +153,7 @@ describe("MyCleanerCard", () => {
       const { getByText } = render(
         <MyCleanerCard
           cleaner={mockCleaner}
-          relationship={{ ...mockRelationship, defaultPrice: 150 }}
+          relationship={{ ...mockRelationship, defaultPrice: 15000 }}
           home={mockHome}
         />
       );
@@ -166,7 +166,7 @@ describe("MyCleanerCard", () => {
       const { queryByText } = render(
         <MyCleanerCard
           cleaner={mockCleaner}
-          relationship={{ ...mockRelationship, defaultPrice: 185 }}
+          relationship={{ ...mockRelationship, defaultPrice: 18500 }}
           home={mockHome}
         />
       );
@@ -178,7 +178,7 @@ describe("MyCleanerCard", () => {
       const { queryByText } = render(
         <MyCleanerCard
           cleaner={mockCleaner}
-          relationship={{ ...mockRelationship, defaultPrice: 200 }}
+          relationship={{ ...mockRelationship, defaultPrice: 20000 }}
           home={mockHome}
         />
       );

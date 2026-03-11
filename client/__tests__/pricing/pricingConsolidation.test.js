@@ -164,34 +164,34 @@ describe("calculateBasePrice helper", () => {
 
 describe("Default pricing values are correct (fallback values)", () => {
   it("should have correct base price", () => {
-    expect(defaultPricing.basePrice).toBe(150);
+    expect(defaultPricing.basePrice).toBe(15000);
   });
 
   it("should have correct extra bed/bath fee", () => {
-    expect(defaultPricing.extraBedBathFee).toBe(50);
+    expect(defaultPricing.extraBedBathFee).toBe(5000);
   });
 
   it("should have correct sheet fee per bed", () => {
-    expect(defaultPricing.linens.sheetFeePerBed).toBe(30);
+    expect(defaultPricing.linens.sheetFeePerBed).toBe(3000);
   });
 
   it("should have correct towel fee", () => {
-    expect(defaultPricing.linens.towelFee).toBe(5);
+    expect(defaultPricing.linens.towelFee).toBe(500);
   });
 
   it("should have correct face cloth fee", () => {
-    expect(defaultPricing.linens.faceClothFee).toBe(2);
+    expect(defaultPricing.linens.faceClothFee).toBe(200);
   });
 
   it("should have correct time window surcharges", () => {
     expect(defaultPricing.timeWindows.anytime.surcharge).toBe(0);
-    expect(defaultPricing.timeWindows["10-3"].surcharge).toBe(25);
-    expect(defaultPricing.timeWindows["11-4"].surcharge).toBe(25);
-    expect(defaultPricing.timeWindows["12-2"].surcharge).toBe(30);
+    expect(defaultPricing.timeWindows["10-3"].surcharge).toBe(2500);
+    expect(defaultPricing.timeWindows["11-4"].surcharge).toBe(2500);
+    expect(defaultPricing.timeWindows["12-2"].surcharge).toBe(3000);
   });
 
   it("should have correct cancellation settings", () => {
-    expect(defaultPricing.cancellation.fee).toBe(25);
+    expect(defaultPricing.cancellation.fee).toBe(2500);
     expect(defaultPricing.cancellation.windowDays).toBe(7);
     expect(defaultPricing.cancellation.homeownerPenaltyDays).toBe(3);
     expect(defaultPricing.cancellation.cleanerPenaltyDays).toBe(4);
@@ -207,7 +207,7 @@ describe("Linen price calculations use pricing config", () => {
   it("should calculate sheet price correctly", () => {
     const numBeds = 3;
     const sheetPrice = numBeds * defaultPricing.linens.sheetFeePerBed;
-    expect(sheetPrice).toBe(90); // 3 * $30
+    expect(sheetPrice).toBe(9000); // 3 * 3000 cents
   });
 
   it("should calculate towel price for default bathroom config", () => {
@@ -215,7 +215,7 @@ describe("Linen price calculations use pricing config", () => {
     const numBaths = 2;
     const { towelFee, faceClothFee } = defaultPricing.linens;
     const towelPrice = numBaths * (2 * towelFee + 1 * faceClothFee);
-    expect(towelPrice).toBe(24); // 2 * (2*$5 + 1*$2) = 2 * $12
+    expect(towelPrice).toBe(2400); // 2 * (2*500 + 1*200) = 2 * 1200 cents
   });
 
   it("should calculate custom towel configuration correctly", () => {
@@ -230,24 +230,24 @@ describe("Linen price calculations use pricing config", () => {
       return sum + bath.towels * towelFee + bath.faceCloths * faceClothFee;
     }, 0);
 
-    // Bath 1: 3*$5 + 2*$2 = $19
-    // Bath 2: 2*$5 + 1*$2 = $12
-    // Total: $31
-    expect(totalPrice).toBe(31);
+    // Bath 1: 3*500 + 2*200 = 1900 cents
+    // Bath 2: 2*500 + 1*200 = 1200 cents
+    // Total: 3100 cents
+    expect(totalPrice).toBe(3100);
   });
 });
 
 describe("Cancellation calculations use pricing config", () => {
   it("should calculate partial refund correctly", () => {
-    const appointmentPrice = 200;
+    const appointmentPrice = 20000;
     const refundPercentage = defaultPricing.cancellation.refundPercentage;
     const refund = appointmentPrice * refundPercentage;
 
-    expect(refund).toBe(100); // 50% of $200
+    expect(refund).toBe(10000); // 50% of 20000 cents
   });
 
   it("should calculate cleaner payout on cancellation correctly", () => {
-    const appointmentPrice = 200;
+    const appointmentPrice = 20000;
     const { refundPercentage } = defaultPricing.cancellation;
     const { feePercent } = defaultPricing.platform;
 
@@ -256,8 +256,8 @@ describe("Cancellation calculations use pricing config", () => {
     const platformFee = cleanerGross * feePercent; // 10% of cleaner portion
     const cleanerPayout = cleanerGross - platformFee;
 
-    expect(customerPortion).toBe(100);
-    expect(cleanerPayout).toBe(90); // $100 - $10 platform fee
+    expect(customerPortion).toBe(10000);
+    expect(cleanerPayout).toBe(9000); // 10000 - 1000 platform fee (in cents)
   });
 
   it("should check penalty window using config days", () => {
@@ -302,35 +302,35 @@ describe("Full appointment price calculation uses pricing config", () => {
     // Time surcharge
     total += pricing.timeWindows["10-3"].surcharge;
 
-    // Expected breakdown:
-    // Base: $150
-    // Extra beds (2): 2 * $50 = $100
-    // Extra baths (1): 1 * $50 = $50
-    // Sheets (3): 3 * $30 = $90
-    // Towels (2 baths): 2 * (2*$5 + 1*$2) = 2 * $12 = $24
-    // Time 10-3: $25
-    // Total: $150 + $100 + $50 + $90 + $24 + $25 = $439
+    // Expected breakdown (all in cents):
+    // Base: 15000
+    // Extra beds (2): 2 * 5000 = 10000
+    // Extra baths (1): 1 * 5000 = 5000
+    // Sheets (3): 3 * 3000 = 9000
+    // Towels (2 baths): 2 * (2*500 + 1*200) = 2 * 1200 = 2400
+    // Time 10-3: 2500
+    // Total: 15000 + 10000 + 5000 + 9000 + 2400 + 2500 = 43900
 
-    expect(total).toBe(439);
+    expect(total).toBe(43900);
   });
 });
 
 describe("Display strings should use pricing config values", () => {
   it("should format sheet price string correctly", () => {
     const { sheetFeePerBed } = defaultPricing.linens;
-    const priceString = `$${sheetFeePerBed}/bed`;
+    const priceString = `$${sheetFeePerBed / 100}/bed`;
     expect(priceString).toBe("$30/bed");
   });
 
   it("should format towel price string correctly", () => {
     const { towelFee } = defaultPricing.linens;
-    const priceString = `$${towelFee}/towel`;
+    const priceString = `$${towelFee / 100}/towel`;
     expect(priceString).toBe("$5/towel");
   });
 
   it("should format face cloth price string correctly", () => {
     const { faceClothFee } = defaultPricing.linens;
-    const priceString = `$${faceClothFee} each`;
+    const priceString = `$${faceClothFee / 100} each`;
     expect(priceString).toBe("$2 each");
   });
 

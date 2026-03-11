@@ -582,12 +582,30 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
       );
 
       // Update EmployeeJobAssignment payout status if business employee
+      // If direct payouts are enabled but employee doesn't have Stripe set up,
+      // keep status as "pending" so business owner knows to pay them manually
       if (isBusinessEmployee && employeeAssignment) {
-        await employeeAssignment.update({
-          payoutStatus: "paid",
-          payoutMethod: "business_owner",
-          businessOwnerPaidAmount: netAmount,
-        }, { transaction: tSuccess });
+        const directPayoutsEnabled = await EmployeeDirectPayoutService.isDirectPayoutEnabled(businessOwnerId);
+
+        if (directPayoutsEnabled && employeeAssignment.payAmount > 0) {
+          // Direct payouts enabled but we fell through to business owner
+          // This means employee doesn't have Stripe set up - keep as pending for manual payment
+          await employeeAssignment.update({
+            payoutStatus: "pending",
+            payoutMethod: "pending_manual",
+            businessOwnerPaidAmount: netAmount,
+          }, { transaction: tSuccess });
+          console.log(
+            `[PayoutHelpers] Employee ${employeeAssignment.businessEmployeeId} needs manual payment - Stripe not set up`
+          );
+        } else {
+          // Direct payouts not enabled - all goes to owner, mark as paid (owner handles payment)
+          await employeeAssignment.update({
+            payoutStatus: "paid",
+            payoutMethod: "business_owner",
+            businessOwnerPaidAmount: netAmount,
+          }, { transaction: tSuccess });
+        }
       }
 
       await tSuccess.commit();

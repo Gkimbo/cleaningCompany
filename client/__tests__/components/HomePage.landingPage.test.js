@@ -72,18 +72,18 @@ describe("HomePage Landing Page - Pricing Display", () => {
   describe("Database Pricing (Server Available)", () => {
     it("should display base price from database", async () => {
       const dbPricing = {
-        basePrice: 175,
-        extraBedBathFee: 60,
-        linens: { sheetFeePerBed: 35, towelFee: 7, faceClothFee: 3 },
+        basePrice: 17500,
+        extraBedBathFee: 6000,
+        linens: { sheetFeePerBed: 3500, towelFee: 700, faceClothFee: 300 },
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-          "10-3": { surcharge: 30, label: "10am - 3pm", description: "+$30" },
-          "11-4": { surcharge: 30, label: "11am - 4pm", description: "+$30" },
-          "12-2": { surcharge: 40, label: "12pm - 2pm", description: "+$40" },
+          "10-3": { surcharge: 3000, label: "10am - 3pm", description: "+$30" },
+          "11-4": { surcharge: 3000, label: "11am - 4pm", description: "+$30" },
+          "12-2": { surcharge: 4000, label: "12pm - 2pm", description: "+$40" },
         },
-        cancellation: { fee: 30, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
+        cancellation: { fee: 3000, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
         platform: { feePercent: 0.15 },
-        highVolumeFee: 60,
+        highVolumeFee: 6000,
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -101,18 +101,18 @@ describe("HomePage Landing Page - Pricing Display", () => {
 
     it("should display extra bed/bath fee from database", async () => {
       const dbPricing = {
-        basePrice: 175,
-        extraBedBathFee: 60,
-        linens: { sheetFeePerBed: 35, towelFee: 7, faceClothFee: 3 },
+        basePrice: 17500,
+        extraBedBathFee: 6000,
+        linens: { sheetFeePerBed: 3500, towelFee: 700, faceClothFee: 300 },
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-          "10-3": { surcharge: 30, label: "10am - 3pm", description: "+$30" },
-          "11-4": { surcharge: 30, label: "11am - 4pm", description: "+$30" },
-          "12-2": { surcharge: 40, label: "12pm - 2pm", description: "+$40" },
+          "10-3": { surcharge: 3000, label: "10am - 3pm", description: "+$30" },
+          "11-4": { surcharge: 3000, label: "11am - 4pm", description: "+$30" },
+          "12-2": { surcharge: 4000, label: "12pm - 2pm", description: "+$40" },
         },
-        cancellation: { fee: 30, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
+        cancellation: { fee: 3000, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
         platform: { feePercent: 0.15 },
-        highVolumeFee: 60,
+        highVolumeFee: 6000,
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -129,18 +129,18 @@ describe("HomePage Landing Page - Pricing Display", () => {
 
     it("should display linen pricing from database", async () => {
       const dbPricing = {
-        basePrice: 175,
-        extraBedBathFee: 60,
-        linens: { sheetFeePerBed: 35, towelFee: 7, faceClothFee: 3 },
+        basePrice: 17500,
+        extraBedBathFee: 6000,
+        linens: { sheetFeePerBed: 3500, towelFee: 700, faceClothFee: 300 },
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-          "10-3": { surcharge: 30, label: "10am - 3pm", description: "+$30" },
-          "11-4": { surcharge: 30, label: "11am - 4pm", description: "+$30" },
-          "12-2": { surcharge: 40, label: "12pm - 2pm", description: "+$40" },
+          "10-3": { surcharge: 3000, label: "10am - 3pm", description: "+$30" },
+          "11-4": { surcharge: 3000, label: "11am - 4pm", description: "+$30" },
+          "12-2": { surcharge: 4000, label: "12pm - 2pm", description: "+$40" },
         },
-        cancellation: { fee: 30, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
+        cancellation: { fee: 3000, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
         platform: { feePercent: 0.15 },
-        highVolumeFee: 60,
+        highVolumeFee: 6000,
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -159,18 +159,18 @@ describe("HomePage Landing Page - Pricing Display", () => {
     it("should NOT deduct platform fee from customer pricing", async () => {
       // Platform fee is 15%, but customer sees full $175, not $148.75
       const dbPricing = {
-        basePrice: 175,
-        extraBedBathFee: 60,
-        linens: { sheetFeePerBed: 35, towelFee: 7, faceClothFee: 3 },
+        basePrice: 17500,
+        extraBedBathFee: 6000,
+        linens: { sheetFeePerBed: 3500, towelFee: 700, faceClothFee: 300 },
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-          "10-3": { surcharge: 30, label: "10am - 3pm", description: "+$30" },
-          "11-4": { surcharge: 30, label: "11am - 4pm", description: "+$30" },
-          "12-2": { surcharge: 40, label: "12pm - 2pm", description: "+$40" },
+          "10-3": { surcharge: 3000, label: "10am - 3pm", description: "+$30" },
+          "11-4": { surcharge: 3000, label: "11am - 4pm", description: "+$30" },
+          "12-2": { surcharge: 4000, label: "12pm - 2pm", description: "+$40" },
         },
-        cancellation: { fee: 30, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
+        cancellation: { fee: 3000, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
         platform: { feePercent: 0.15 },
-        highVolumeFee: 60,
+        highVolumeFee: 6000,
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -199,8 +199,8 @@ describe("HomePage Landing Page - Pricing Display", () => {
       const { getByText } = renderHomePage();
 
       await waitFor(() => {
-        // Default base price is 150
-        expect(getByText(`${defaultPricing.basePrice}`)).toBeTruthy();
+        // Default base price is 15000 cents = $150
+        expect(getByText(`${defaultPricing.basePrice / 100}`)).toBeTruthy();
       });
     });
 
@@ -210,7 +210,7 @@ describe("HomePage Landing Page - Pricing Display", () => {
       const { getByText } = renderHomePage();
 
       await waitFor(() => {
-        expect(getByText(`+$${defaultPricing.extraBedBathFee} per additional bed or bath`)).toBeTruthy();
+        expect(getByText(`+$${defaultPricing.extraBedBathFee / 100} per additional bed or bath`)).toBeTruthy();
       });
     });
 
@@ -220,8 +220,8 @@ describe("HomePage Landing Page - Pricing Display", () => {
       const { getByText } = renderHomePage();
 
       await waitFor(() => {
-        expect(getByText(`Fresh sheets (+$${defaultPricing.linens.sheetFeePerBed}/bed)`)).toBeTruthy();
-        expect(getByText(`Fresh towels (+$${defaultPricing.linens.towelFee}/towel)`)).toBeTruthy();
+        expect(getByText(`Fresh sheets (+$${defaultPricing.linens.sheetFeePerBed / 100}/bed)`)).toBeTruthy();
+        expect(getByText(`Fresh towels (+$${defaultPricing.linens.towelFee / 100}/towel)`)).toBeTruthy();
       });
     });
 
@@ -231,7 +231,7 @@ describe("HomePage Landing Page - Pricing Display", () => {
       const { getByText } = renderHomePage();
 
       await waitFor(() => {
-        expect(getByText(`${defaultPricing.basePrice}`)).toBeTruthy();
+        expect(getByText(`${defaultPricing.basePrice / 100}`)).toBeTruthy();
       });
     });
   });
@@ -240,7 +240,7 @@ describe("HomePage Landing Page - Pricing Display", () => {
     it("should display 'Simple, Transparent Pricing' section header", async () => {
       PricingService.getCurrentPricing.mockResolvedValue({
         source: "database",
-        pricing: { ...defaultPricing, basePrice: 150 },
+        pricing: { ...defaultPricing, basePrice: 15000 },
       });
 
       const { getByText } = renderHomePage();
@@ -253,7 +253,7 @@ describe("HomePage Landing Page - Pricing Display", () => {
     it("should display 'No hidden fees, no surprises' message", async () => {
       PricingService.getCurrentPricing.mockResolvedValue({
         source: "database",
-        pricing: { ...defaultPricing, basePrice: 150 },
+        pricing: { ...defaultPricing, basePrice: 15000 },
       });
 
       const { getByText } = renderHomePage();
@@ -266,7 +266,7 @@ describe("HomePage Landing Page - Pricing Display", () => {
     it("should display 'Starting at' label above price", async () => {
       PricingService.getCurrentPricing.mockResolvedValue({
         source: "database",
-        pricing: { ...defaultPricing, basePrice: 150 },
+        pricing: { ...defaultPricing, basePrice: 15000 },
       });
 
       const { getByText } = renderHomePage();
@@ -279,7 +279,7 @@ describe("HomePage Landing Page - Pricing Display", () => {
     it("should display 'per cleaning' label below price", async () => {
       PricingService.getCurrentPricing.mockResolvedValue({
         source: "database",
-        pricing: { ...defaultPricing, basePrice: 150 },
+        pricing: { ...defaultPricing, basePrice: 15000 },
       });
 
       const { getByText } = renderHomePage();
@@ -292,7 +292,7 @@ describe("HomePage Landing Page - Pricing Display", () => {
     it("should display '1 bed / 1 bath base rate' item", async () => {
       PricingService.getCurrentPricing.mockResolvedValue({
         source: "database",
-        pricing: { ...defaultPricing, basePrice: 150 },
+        pricing: { ...defaultPricing, basePrice: 15000 },
       });
 
       const { getByText } = renderHomePage();
@@ -305,7 +305,7 @@ describe("HomePage Landing Page - Pricing Display", () => {
     it("should display scheduling info", async () => {
       PricingService.getCurrentPricing.mockResolvedValue({
         source: "database",
-        pricing: { ...defaultPricing, basePrice: 150 },
+        pricing: { ...defaultPricing, basePrice: 15000 },
       });
 
       const { getByText } = renderHomePage();
@@ -318,12 +318,12 @@ describe("HomePage Landing Page - Pricing Display", () => {
 
   describe("Dynamic Price Updates", () => {
     it("should reflect owner-updated pricing immediately", async () => {
-      // Simulate owner updating price from 150 to 200
+      // Simulate owner updating price from $150 to $200
       const updatedPricing = {
         ...defaultPricing,
-        basePrice: 200,
-        extraBedBathFee: 75,
-        linens: { sheetFeePerBed: 40, towelFee: 8, faceClothFee: 4 },
+        basePrice: 20000,
+        extraBedBathFee: 7500,
+        linens: { sheetFeePerBed: 4000, towelFee: 800, faceClothFee: 400 },
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({

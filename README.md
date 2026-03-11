@@ -6,7 +6,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-11261_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-11406_Passing-brightgreen?style=for-the-badge)
 
 **A comprehensive cleaning service marketplace platform connecting homeowners with professional cleaners and cleaning businesses**
 
@@ -240,6 +240,12 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | **Bi-Weekly Batch Payouts** | Business owners get paid immediately when jobs complete. Employees accumulate earnings and get paid every other Friday. Supports early payout trigger and immediate payout on termination. |
 | **Database-Driven Pricing** | All platform fees and pricing configurable via database (PricingConfig). Platform fee (10%), business owner fee (10%), large business fee (7%), multi-cleaner fee (13%), incentive percentages. Owner can adjust via admin dashboard. |
 | **Employee Pay Calculation** | Supports three pay types: hourly (rate × hours worked), percentage (% of job price), and flat/per-job (fixed amount). Pay calculated at job completion with full audit trail. |
+| **Custom Job Flows** | Business owners can create custom job flows with specialized checklists for different client types. Assign flows to specific clients for tailored service requirements. |
+| **Security Audit Logging** | Immutable audit trail for security-sensitive actions (password changes, login events, account freezes). IP address tracking and device type detection. |
+| **Account Freezing** | Accounts can be suspended with reason tracking. Frozen accounts cannot access platform features. HR/IT staff can freeze/unfreeze with audit logging. |
+| **Multi-Account Support** | Users can have multiple account types (homeowner + cleaner, business owner + employee) linked to the same email. Account selection during login. |
+| **2-Step Job Completion** | Cleaners submit job completion with photos/checklist. Homeowners approve within configurable window. Auto-approval after timeout with notification workflow. |
+| **Employee Bonuses** | Business owners can award bonuses to employees. Bonus tracking with reason and payment status. Includes in payroll calculations. |
 
 ---
 
@@ -270,7 +276,7 @@ React Native + Expo SDK 52
 
 ```
 Node.js + Express.js
-├── PostgreSQL + Sequelize  # Database & ORM (60 models)
+├── PostgreSQL + Sequelize  # Database & ORM (68 models)
 ├── Socket.io               # WebSocket server
 ├── Passport.js + JWT       # Authentication
 ├── Stripe API              # Payment processing
@@ -436,7 +442,7 @@ kleanr/
 │   └── package.json
 │
 ├── server/                          # Express.js API Server
-│   ├── routes/api/v1/               # 39 API routers
+│   ├── routes/api/v1/               # 46 API routers
 │   │   ├── appointmentsRouter.js    # Scheduling endpoints
 │   │   ├── businessEmployeeRouter.js # Employee management
 │   │   ├── businessOwnerRouter.js   # Business owner features
@@ -517,10 +523,10 @@ kleanr/
 ## Testing
 
 ```bash
-# Run all server tests (5364 tests)
+# Run all server tests (5445 tests)
 cd server && npm test
 
-# Run all client tests (5897 tests)
+# Run all client tests (5961 tests)
 cd client && npm test
 
 # Run specific test file
@@ -580,9 +586,9 @@ npm test -- --watch
 | IT Disputes | 67 | Submission, categories, priorities, status |
 | IT Management | 45 | CRUD operations, password generation |
 | Service Area | 56 | Config, validation, history, bulk recheck |
-| **Server Total** | **5364** | 212 test suites |
-| **Client Total** | **5897** | 208 test suites |
-| **Combined Total** | **11261** | 420 test suites |
+| **Server Total** | **5445** | 215 test suites |
+| **Client Total** | **5961** | 210 test suites |
+| **Combined Total** | **11406** | 425 test suites |
 
 ---
 
@@ -590,7 +596,7 @@ npm test -- --watch
 
 See [Server README](./server/README.md) for complete API documentation.
 
-### Endpoint Summary (39 Routers, 220+ Endpoints)
+### Endpoint Summary (46 Routers, 300+ Endpoints)
 
 | Category | Router | Key Endpoints |
 |----------|--------|---------------|
@@ -619,6 +625,15 @@ See [Server README](./server/README.md) for complete API documentation.
 | **IT Disputes** | itDisputeRouter | Submit, view, add info, categories |
 | **IT Support Tools** | itSupportToolsRouter | User search, account freeze/unfreeze |
 | **Service Areas** | serviceAreaRouter | Config, validation, history, bulk recheck |
+| **Completion** | completionRouter | 2-step completion submit, homeowner approval, auto-complete |
+| **Guest Not Left** | guestNotLeftRouter | Report, wait, will-return, cancel, resolved states |
+| **Applications** | applicationRouter | Cleaner applications, status tracking |
+| **User Info** | userInfoRouter | User details, homes CRUD, service area config |
+| **User Sessions** | userSessionsRouter | Login, logout, check-accounts, password reset |
+| **Billing** | billingRouter | Bill history, summary, payment processing |
+| **Notifications** | notificationsRouter | User notifications, read status |
+| **Push Notifications** | pushNotificationRouter | Token registration, send notifications |
+| **Checklists** | checklistRouter | Draft, publish, versions, templates |
 
 ---
 

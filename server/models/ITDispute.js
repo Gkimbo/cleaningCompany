@@ -119,6 +119,54 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       defaultValue: [],
     },
+    // Linked disputes (related tickets)
+    linkedDisputes: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+      comment: "Array of linked dispute IDs",
+    },
+    // Assignment history tracking
+    assignmentHistory: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+      comment: "Array of {assignedTo, assignedBy, assignedAt, unassignedAt}",
+    },
+    // Custom tags for categorization
+    tags: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+      comment: "Array of tag strings for custom categorization",
+    },
+    // Escalation tracking
+    escalatedTo: {
+      type: DataTypes.ENUM("hr", "owner", "external"),
+      allowNull: true,
+      comment: "Escalation target if dispute has been escalated",
+    },
+    escalatedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    escalatedBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: { model: "Users", key: "id" },
+      onUpdate: "CASCADE",
+      onDelete: "SET NULL",
+    },
+    escalationReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    escalationNotes: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+      comment: "Array of escalation notes/updates",
+    },
   });
 
   ITDispute.associate = (models) => {

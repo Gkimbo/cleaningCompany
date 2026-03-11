@@ -36,7 +36,7 @@ describe("ClientCard - Pricing Features", () => {
     id: 1,
     status: "active",
     clientId: 100,
-    defaultPrice: 175,
+    defaultPrice: 17500,
     defaultFrequency: "weekly",
     invitedName: "John Doe",
     invitedEmail: "john@example.com",
@@ -59,7 +59,7 @@ describe("ClientCard - Pricing Features", () => {
   const mockPendingClient = {
     id: 2,
     status: "pending_invite",
-    defaultPrice: 150,
+    defaultPrice: 15000,
     invitedName: "Jane Smith",
     invitedEmail: "jane@example.com",
     invitedAt: "2024-01-20T10:00:00Z",

@@ -3255,6 +3255,13 @@ router.get("/payouts/pending", async (req, res) => {
 
 /**
  * POST /payouts/:assignmentId/mark-paid-outside - Mark as paid outside platform
+ *
+ * Handles both:
+ * - "pending" assignments (direct payouts disabled or employee has no Stripe)
+ * - "pending_batch" assignments (queued for bi-weekly batch payout)
+ *
+ * For "pending_batch", also cancels the corresponding EmployeePendingPayout
+ * to prevent double payment.
  */
 router.post("/payouts/:assignmentId/mark-paid-outside", async (req, res) => {
   try {
@@ -3265,7 +3272,7 @@ router.post("/payouts/:assignmentId/mark-paid-outside", async (req, res) => {
         id: parseInt(req.params.assignmentId, 10),
         businessOwnerId: req.businessOwnerId,
         status: "completed",
-        payoutStatus: "pending",
+        payoutStatus: { [Op.in]: ["pending", "pending_batch"] },
       },
     });
 
@@ -3273,10 +3280,21 @@ router.post("/payouts/:assignmentId/mark-paid-outside", async (req, res) => {
       return res.status(404).json({ error: "Assignment not found or not eligible" });
     }
 
+    // If assignment was queued for bi-weekly batch, cancel the pending payout
+    if (assignment.payoutStatus === "pending_batch" && assignment.pendingPayoutId) {
+      const EmployeeBatchPayoutService = require("../../../services/EmployeeBatchPayoutService");
+      const cancelResult = await EmployeeBatchPayoutService.cancelPendingPayout(
+        assignment.id,
+        `Marked as paid outside platform by business owner: ${note || "No note provided"}`
+      );
+      console.log(`[BusinessOwner] Cancelled pending batch payout for assignment ${assignment.id}:`, cancelResult);
+    }
+
     await assignment.update({
       payoutStatus: "paid_outside_platform",
       paidOutsidePlatformAt: new Date(),
       paidOutsidePlatformNote: note,
+      pendingPayoutId: null, // Clear the reference
     });
 
     res.json({ message: "Marked as paid outside platform", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });

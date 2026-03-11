@@ -1577,7 +1577,12 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
         payout
       );
 
-      if (splitResult.payoutMethod === "split" || splitResult.payoutMethod === "direct_to_employee") {
+      // Check for successful split payout (immediate to owner + batched to employee)
+      // "batched_biweekly" = success: owner paid immediately, employee queued for bi-weekly batch
+      // "split" or "direct_to_employee" = legacy success values (kept for backwards compatibility)
+      if (splitResult.payoutMethod === "batched_biweekly" ||
+          splitResult.payoutMethod === "split" ||
+          splitResult.payoutMethod === "direct_to_employee") {
         // Update payout record with the business owner's portion
         await payout.update({
           stripeTransferId: splitResult.businessOwnerPayout?.transferId || splitResult.employeePayout?.transferId,
@@ -1601,6 +1606,7 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
           employeeTransferId: splitResult.employeePayout?.transferId,
           employeeAmount: splitResult.employeePayout?.amount,
           businessOwnerAmount: splitResult.businessOwnerPayout?.amount,
+          batchedForEmployee: splitResult.payoutMethod === "batched_biweekly",
         };
       }
       // Fall through to normal payout if split failed
@@ -1644,12 +1650,30 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
     );
 
     // Update EmployeeJobAssignment payout status if business employee
+    // If direct payouts are enabled but employee doesn't have Stripe set up,
+    // keep status as "pending" so business owner knows to pay them manually
     if (isBusinessEmployee && employeeAssignment) {
-      await employeeAssignment.update({
-        payoutStatus: "paid",
-        payoutMethod: "business_owner",
-        businessOwnerPaidAmount: netAmount,
-      });
+      const directPayoutsEnabled = await EmployeeDirectPayoutService.isDirectPayoutEnabled(businessOwnerId);
+
+      if (directPayoutsEnabled && employeeAssignment.payAmount > 0) {
+        // Direct payouts enabled but we fell through to business owner
+        // This means employee doesn't have Stripe set up - keep as pending for manual payment
+        await employeeAssignment.update({
+          payoutStatus: "pending",
+          payoutMethod: "pending_manual",
+          businessOwnerPaidAmount: netAmount,
+        });
+        console.log(
+          `[Completion] Employee ${employeeAssignment.businessEmployeeId} needs manual payment - Stripe not set up`
+        );
+      } else {
+        // Direct payouts not enabled - all goes to owner, mark as paid (owner handles payment)
+        await employeeAssignment.update({
+          payoutStatus: "paid",
+          payoutMethod: "business_owner",
+          businessOwnerPaidAmount: netAmount,
+        });
+      }
     }
 
     return {

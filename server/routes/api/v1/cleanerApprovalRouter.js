@@ -88,7 +88,7 @@ cleanerApprovalRouter.get("/my-requests", async (req, res) => {
                     address: EncryptionService.decrypt(r.appointment.home.address),
                     city: EncryptionService.decrypt(r.appointment.home.city),
                     state: EncryptionService.decrypt(r.appointment.home.state),
-                    zipcode: r.appointment.home.zipcode,
+                    zipcode: EncryptionService.decrypt(r.appointment.home.zipcode),
                     numBeds: r.appointment.home.numBeds,
                     numBaths: r.appointment.home.numBaths,
                     latitude: r.appointment.home.latitude,

@@ -52,16 +52,18 @@ import IncentivesService from "../../src/services/fetchRequests/IncentivesServic
 import { PricingProvider, defaultPricing } from "../../src/context/PricingContext";
 import CleanerApplicationForm from "../../src/components/admin/CleanerApplications/ApplicationForm";
 
-// Helper to calculate expected cleaner earnings
+// Helper to calculate expected cleaner earnings (returns dollars, not cents)
 const calculateCleanerEarnings = (pricing) => {
   const platformFeePercent = pricing.platform?.feePercent ?? defaultPricing.platform.feePercent;
-  const minPay = Math.round((pricing.basePrice ?? defaultPricing.basePrice) * (1 - platformFeePercent));
+  // Calculate in cents first
+  const minPayCents = Math.round((pricing.basePrice ?? defaultPricing.basePrice) * (1 - platformFeePercent));
   // Max pay uses 1 extra (matching the component - a 2bed/1bath scenario)
-  const maxPay = Math.round(
+  const maxPayCents = Math.round(
     ((pricing.basePrice ?? defaultPricing.basePrice) + (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee)) *
       (1 - platformFeePercent)
   );
-  return { minPay, maxPay };
+  // Convert to dollars for comparison with displayed values
+  return { minPay: Math.round(minPayCents / 100), maxPay: Math.round(maxPayCents / 100) };
 };
 
 // Test wrapper with required providers
@@ -86,18 +88,18 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
   describe("Database Pricing (Server Available)", () => {
     it("should display earnings with platform fee deducted", async () => {
       const dbPricing = {
-        basePrice: 150,
-        extraBedBathFee: 50,
-        linens: { sheetFeePerBed: 30, towelFee: 5, faceClothFee: 2 },
+        basePrice: 15000,
+        extraBedBathFee: 5000,
+        linens: { sheetFeePerBed: 3000, towelFee: 500, faceClothFee: 200 },
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-          "10-3": { surcharge: 25, label: "10am - 3pm", description: "+$25" },
-          "11-4": { surcharge: 25, label: "11am - 4pm", description: "+$25" },
-          "12-2": { surcharge: 30, label: "12pm - 2pm", description: "+$30" },
+          "10-3": { surcharge: 2500, label: "10am - 3pm", description: "+$25" },
+          "11-4": { surcharge: 2500, label: "11am - 4pm", description: "+$25" },
+          "12-2": { surcharge: 3000, label: "12pm - 2pm", description: "+$30" },
         },
-        cancellation: { fee: 25, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
+        cancellation: { fee: 2500, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
         platform: { feePercent: 0.1 }, // 10% platform fee
-        highVolumeFee: 50,
+        highVolumeFee: 5000,
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -106,7 +108,7 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
       });
 
       const { minPay, maxPay } = calculateCleanerEarnings(dbPricing);
-      // With 10% fee: min = 150 * 0.9 = 135, max = (150 + 50) * 0.9 = 180
+      // With 10% fee: min = 15000 * 0.9 = 13500, max = (15000 + 5000) * 0.9 = 18000
 
       const { getAllByText } = renderCleanerApplicationForm();
 
@@ -119,18 +121,18 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
 
     it("should correctly calculate earnings with 15% platform fee", async () => {
       const dbPricing = {
-        basePrice: 200,
-        extraBedBathFee: 60,
-        linens: { sheetFeePerBed: 35, towelFee: 7, faceClothFee: 3 },
+        basePrice: 20000,
+        extraBedBathFee: 6000,
+        linens: { sheetFeePerBed: 3500, towelFee: 700, faceClothFee: 300 },
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-          "10-3": { surcharge: 30, label: "10am - 3pm", description: "+$30" },
-          "11-4": { surcharge: 30, label: "11am - 4pm", description: "+$30" },
-          "12-2": { surcharge: 40, label: "12pm - 2pm", description: "+$40" },
+          "10-3": { surcharge: 3000, label: "10am - 3pm", description: "+$30" },
+          "11-4": { surcharge: 3000, label: "11am - 4pm", description: "+$30" },
+          "12-2": { surcharge: 4000, label: "12pm - 2pm", description: "+$40" },
         },
-        cancellation: { fee: 30, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
+        cancellation: { fee: 3000, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
         platform: { feePercent: 0.15 }, // 15% platform fee
-        highVolumeFee: 60,
+        highVolumeFee: 6000,
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -138,7 +140,7 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
         pricing: dbPricing,
       });
 
-      // With 15% fee: min = 200 * 0.85 = 170, max = (200 + 60) * 0.85 = 221
+      // With 15% fee: min = 20000 * 0.85 = 17000, max = (20000 + 6000) * 0.85 = 22100
       const { minPay, maxPay } = calculateCleanerEarnings(dbPricing);
 
       const { getAllByText } = renderCleanerApplicationForm();
@@ -150,18 +152,18 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
 
     it("should display earnings in benefit description", async () => {
       const dbPricing = {
-        basePrice: 150,
-        extraBedBathFee: 50,
-        linens: { sheetFeePerBed: 30, towelFee: 5, faceClothFee: 2 },
+        basePrice: 15000,
+        extraBedBathFee: 5000,
+        linens: { sheetFeePerBed: 3000, towelFee: 500, faceClothFee: 200 },
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-          "10-3": { surcharge: 25, label: "10am - 3pm", description: "+$25" },
-          "11-4": { surcharge: 25, label: "11am - 4pm", description: "+$25" },
-          "12-2": { surcharge: 30, label: "12pm - 2pm", description: "+$30" },
+          "10-3": { surcharge: 2500, label: "10am - 3pm", description: "+$25" },
+          "11-4": { surcharge: 2500, label: "11am - 4pm", description: "+$25" },
+          "12-2": { surcharge: 3000, label: "12pm - 2pm", description: "+$30" },
         },
-        cancellation: { fee: 25, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
+        cancellation: { fee: 2500, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
         platform: { feePercent: 0.1 },
-        highVolumeFee: 50,
+        highVolumeFee: 5000,
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -181,18 +183,18 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
 
     it("should display earnings disclaimer with correct range", async () => {
       const dbPricing = {
-        basePrice: 150,
-        extraBedBathFee: 50,
-        linens: { sheetFeePerBed: 30, towelFee: 5, faceClothFee: 2 },
+        basePrice: 15000,
+        extraBedBathFee: 5000,
+        linens: { sheetFeePerBed: 3000, towelFee: 500, faceClothFee: 200 },
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-          "10-3": { surcharge: 25, label: "10am - 3pm", description: "+$25" },
-          "11-4": { surcharge: 25, label: "11am - 4pm", description: "+$25" },
-          "12-2": { surcharge: 30, label: "12pm - 2pm", description: "+$30" },
+          "10-3": { surcharge: 2500, label: "10am - 3pm", description: "+$25" },
+          "11-4": { surcharge: 2500, label: "11am - 4pm", description: "+$25" },
+          "12-2": { surcharge: 3000, label: "12pm - 2pm", description: "+$30" },
         },
-        cancellation: { fee: 25, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
+        cancellation: { fee: 2500, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
         platform: { feePercent: 0.1 },
-        highVolumeFee: 50,
+        highVolumeFee: 5000,
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -240,14 +242,17 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
       PricingService.getCurrentPricing.mockResolvedValue({
         source: "database",
         pricing: {
-          basePrice: 175,
-          extraBedBathFee: 50,
+          basePrice: 17500,
+          extraBedBathFee: 5000,
         },
       });
 
       // Should fall back to default platform fee (0.1)
-      const minPay = Math.round(175 * (1 - defaultPricing.platform.feePercent));
-      const maxPay = Math.round((175 + 50) * (1 - defaultPricing.platform.feePercent));
+      // Calculate in cents first, then convert to dollars for display comparison
+      const minPayCents = Math.round(17500 * (1 - defaultPricing.platform.feePercent));
+      const maxPayCents = Math.round((17500 + 5000) * (1 - defaultPricing.platform.feePercent));
+      const minPay = Math.round(minPayCents / 100);
+      const maxPay = Math.round(maxPayCents / 100);
 
       const { getAllByText } = renderCleanerApplicationForm();
 
@@ -260,18 +265,18 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
   describe("Earnings Calculations", () => {
     it("should calculate weekly earnings correctly for full-time (3 houses/day)", async () => {
       const dbPricing = {
-        basePrice: 150,
-        extraBedBathFee: 50,
-        linens: { sheetFeePerBed: 30, towelFee: 5, faceClothFee: 2 },
+        basePrice: 15000,
+        extraBedBathFee: 5000,
+        linens: { sheetFeePerBed: 3000, towelFee: 500, faceClothFee: 200 },
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-          "10-3": { surcharge: 25, label: "10am - 3pm", description: "+$25" },
-          "11-4": { surcharge: 25, label: "11am - 4pm", description: "+$25" },
-          "12-2": { surcharge: 30, label: "12pm - 2pm", description: "+$30" },
+          "10-3": { surcharge: 2500, label: "10am - 3pm", description: "+$25" },
+          "11-4": { surcharge: 2500, label: "11am - 4pm", description: "+$25" },
+          "12-2": { surcharge: 3000, label: "12pm - 2pm", description: "+$30" },
         },
-        cancellation: { fee: 25, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
+        cancellation: { fee: 2500, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
         platform: { feePercent: 0.1 },
-        highVolumeFee: 50,
+        highVolumeFee: 5000,
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -336,7 +341,7 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
         pricing: highFeePricing,
       });
 
-      // With 20% fee: min = 150 * 0.8 = 120, max = (150 + 50) * 0.8 = 160
+      // With 20% fee: min = 15000 * 0.8 = 12000, max = (15000 + 5000) * 0.8 = 16000
       const { minPay, maxPay } = calculateCleanerEarnings(highFeePricing);
 
       const { getAllByText } = renderCleanerApplicationForm();
@@ -358,7 +363,7 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
         pricing: lowFeePricing,
       });
 
-      // With 5% fee: min = 150 * 0.95 = 142.5 -> 143, max = (150 + 50) * 0.95 = 190
+      // With 5% fee: min = 15000 * 0.95 = 14250, max = (15000 + 5000) * 0.95 = 19000
       const { minPay, maxPay } = calculateCleanerEarnings(lowFeePricing);
 
       const { getAllByText } = renderCleanerApplicationForm();
@@ -373,18 +378,18 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
     it("should reflect owner-updated pricing immediately", async () => {
       // Simulate owner updating prices
       const updatedPricing = {
-        basePrice: 200,
-        extraBedBathFee: 75,
-        linens: { sheetFeePerBed: 40, towelFee: 8, faceClothFee: 4 },
+        basePrice: 20000,
+        extraBedBathFee: 7500,
+        linens: { sheetFeePerBed: 4000, towelFee: 800, faceClothFee: 400 },
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-          "10-3": { surcharge: 30, label: "10am - 3pm", description: "+$30" },
-          "11-4": { surcharge: 30, label: "11am - 4pm", description: "+$30" },
-          "12-2": { surcharge: 40, label: "12pm - 2pm", description: "+$40" },
+          "10-3": { surcharge: 3000, label: "10am - 3pm", description: "+$30" },
+          "11-4": { surcharge: 3000, label: "11am - 4pm", description: "+$30" },
+          "12-2": { surcharge: 4000, label: "12pm - 2pm", description: "+$40" },
         },
-        cancellation: { fee: 30, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
+        cancellation: { fee: 3000, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
         platform: { feePercent: 0.1 },
-        highVolumeFee: 60,
+        highVolumeFee: 6000,
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -393,7 +398,7 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
       });
 
       const { minPay, maxPay } = calculateCleanerEarnings(updatedPricing);
-      // With 10% fee: min = 200 * 0.9 = 180, max = (200 + 75) * 0.9 = 248
+      // With 10% fee: min = 20000 * 0.9 = 18000, max = (20000 + 7500) * 0.9 = 24750
 
       const { getAllByText } = renderCleanerApplicationForm();
 
@@ -493,42 +498,42 @@ describe("Customer vs Cleaner Pricing Comparison", () => {
   it("should show DIFFERENT prices between customer and cleaner landing pages", async () => {
     // This test documents that customer sees full price, cleaner sees earnings after platform fee
     const pricing = {
-      basePrice: 150,
-      extraBedBathFee: 50,
-      linens: { sheetFeePerBed: 30, towelFee: 5, faceClothFee: 2 },
+      basePrice: 15000,
+      extraBedBathFee: 5000,
+      linens: { sheetFeePerBed: 3000, towelFee: 500, faceClothFee: 200 },
       timeWindows: {
         anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-        "10-3": { surcharge: 25, label: "10am - 3pm", description: "+$25" },
-        "11-4": { surcharge: 25, label: "11am - 4pm", description: "+$25" },
-        "12-2": { surcharge: 30, label: "12pm - 2pm", description: "+$30" },
+        "10-3": { surcharge: 2500, label: "10am - 3pm", description: "+$25" },
+        "11-4": { surcharge: 2500, label: "11am - 4pm", description: "+$25" },
+        "12-2": { surcharge: 3000, label: "12pm - 2pm", description: "+$30" },
       },
-      cancellation: { fee: 25, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
+      cancellation: { fee: 2500, windowDays: 7, homeownerPenaltyDays: 3, cleanerPenaltyDays: 4, refundPercentage: 0.5 },
       platform: { feePercent: 0.1 }, // 10% platform fee
-      highVolumeFee: 50,
+      highVolumeFee: 5000,
     };
 
-    // Customer sees: $150 (full price)
+    // Customer sees: $150 (full price in cents = 15000)
     const customerPrice = pricing.basePrice;
 
-    // Cleaner sees: $135 (price minus 10% platform fee)
+    // Cleaner sees: $135 (price minus 10% platform fee, in cents = 13500)
     const cleanerMinPay = Math.round(pricing.basePrice * (1 - pricing.platform.feePercent));
 
     // Verify they are DIFFERENT
     expect(customerPrice).not.toEqual(cleanerMinPay);
-    expect(customerPrice).toBe(150);
-    expect(cleanerMinPay).toBe(135);
+    expect(customerPrice).toBe(15000);
+    expect(cleanerMinPay).toBe(13500);
 
     // The difference is the platform fee
-    expect(customerPrice - cleanerMinPay).toBe(15); // 10% of $150
+    expect(customerPrice - cleanerMinPay).toBe(1500); // 10% of 15000 cents
   });
 
   it("should calculate platform fee correctly for various base prices", () => {
     const testCases = [
-      { basePrice: 100, feePercent: 0.1, expectedCleanerPay: 90 },
-      { basePrice: 150, feePercent: 0.1, expectedCleanerPay: 135 },
-      { basePrice: 200, feePercent: 0.1, expectedCleanerPay: 180 },
-      { basePrice: 150, feePercent: 0.15, expectedCleanerPay: 128 }, // 127.5 rounded
-      { basePrice: 150, feePercent: 0.05, expectedCleanerPay: 143 }, // 142.5 rounded
+      { basePrice: 10000, feePercent: 0.1, expectedCleanerPay: 9000 },
+      { basePrice: 15000, feePercent: 0.1, expectedCleanerPay: 13500 },
+      { basePrice: 20000, feePercent: 0.1, expectedCleanerPay: 18000 },
+      { basePrice: 15000, feePercent: 0.15, expectedCleanerPay: 12750 },
+      { basePrice: 15000, feePercent: 0.05, expectedCleanerPay: 14250 },
     ];
 
     testCases.forEach(({ basePrice, feePercent, expectedCleanerPay }) => {

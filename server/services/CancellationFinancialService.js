@@ -202,7 +202,10 @@ class CancellationFinancialService {
 		}
 
 		const cleanerCount = appointment.employeesAssigned?.length || 1;
-		const platformFeePercent = cleanerPayout.platformFeePercent || 10;
+		// platformFeePercent stored as decimal (e.g., 0.10 for 10%) - convert to display percentage
+		const platformFeePercent = cleanerPayout.platformFeePercent
+			? cleanerPayout.platformFeePercent * 100
+			: 10; // Display as 10 if not set (actual fee comes from PricingConfig)
 
 		return {
 			applicable: true,
@@ -227,6 +230,8 @@ class CancellationFinancialService {
 	 */
 	static buildPlatformSummary(totalCharged, cancellationFee, cleanerPayout, stripeDetails) {
 		const platformFee = cleanerPayout?.platformFee || 0;
+		// Stripe standard fees: 2.9% + $0.30 per transaction (as of 2024)
+		// Note: These are Stripe's fees, not configurable by platform owner
 		const stripeFees = stripeDetails?.stripeFees || Math.round(totalCharged * 0.029 + 30);
 
 		return {

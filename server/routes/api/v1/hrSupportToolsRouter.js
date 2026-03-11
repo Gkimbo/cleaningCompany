@@ -223,6 +223,19 @@ hrSupportToolsRouter.get("/user/:userId/profile", async (req, res) => {
       where: { userId: user.id },
     });
 
+    // Decrypt home addresses for display
+    const decryptedHomes = homes.map((home) => ({
+      id: home.id,
+      address: safeDecrypt(home.address),
+      city: safeDecrypt(home.city),
+      state: safeDecrypt(home.state),
+      zipcode: safeDecrypt(home.zipcode),
+      numBeds: home.numBeds,
+      numBaths: home.numBaths,
+      numHalfBaths: home.numHalfBaths,
+      nickName: home.nickName,
+    }));
+
     const profile = {
       id: user.id,
       username: user.username,
@@ -243,7 +256,7 @@ hrSupportToolsRouter.get("/user/:userId/profile", async (req, res) => {
         cancellationAppeals,
         reviewsReceived,
       },
-      homes,
+      homes: decryptedHomes,
       recentAppointments: appointments,
     };
 
@@ -341,10 +354,10 @@ hrSupportToolsRouter.get("/home/:homeId/details", async (req, res) => {
 
     const homeData = {
       id: home.id,
-      address: home.address,
-      city: home.city,
-      state: home.state,
-      zipcode: home.zipcode,
+      address: safeDecrypt(home.address),
+      city: safeDecrypt(home.city),
+      state: safeDecrypt(home.state),
+      zipcode: safeDecrypt(home.zipcode),
       numBeds: home.numBeds,
       numBaths: home.numBaths,
       numHalfBaths: home.numHalfBaths,
@@ -464,8 +477,8 @@ hrSupportToolsRouter.get("/cleaner/:cleanerId/claim-history", async (req, res) =
       status: c.status,
       originalSize: `${c.originalNumBeds}bd/${c.originalNumBaths}ba`,
       reportedSize: `${c.reportedNumBeds}bd/${c.reportedNumBaths}ba`,
-      priceDifference: c.priceDifference,
-      home: c.home ? `${c.home.address}, ${c.home.city}` : "Unknown",
+      priceDifference: c.priceDifference ? (c.priceDifference / 100).toFixed(2) : "0.00", // Convert cents to dollars
+      home: c.home ? `${safeDecrypt(c.home.address)}, ${safeDecrypt(c.home.city)}` : "Unknown",
       homeowner: c.homeowner ? `${safeDecrypt(c.homeowner.firstName)} ${safeDecrypt(c.homeowner.lastName)}` : "Unknown",
       createdAt: c.createdAt,
     }));
@@ -507,9 +520,21 @@ hrSupportToolsRouter.post("/user/:userId/mark-false-claim", async (req, res) => 
 
     if (type === "cleaner") {
       await user.increment("falseClaimCount");
+      await logHRAuditAction(req.user.id, "mark_false_claim", userId, {
+        type: "cleaner",
+        reason,
+        disputeId: disputeId || null,
+        newCount: (user.falseClaimCount || 0) + 1,
+      });
       console.log(`✅ False claim count incremented for cleaner ${userId} by HR ${req.user.id}. Reason: ${reason}`);
     } else if (type === "homeowner") {
       await user.increment("falseHomeSizeCount");
+      await logHRAuditAction(req.user.id, "mark_false_home_size", userId, {
+        type: "homeowner",
+        reason,
+        disputeId: disputeId || null,
+        newCount: (user.falseHomeSizeCount || 0) + 1,
+      });
       console.log(`✅ False home size count incremented for homeowner ${userId} by HR ${req.user.id}. Reason: ${reason}`);
     } else {
       return res.status(400).json({ error: "Invalid type. Must be 'cleaner' or 'homeowner'" });
@@ -615,10 +640,18 @@ hrSupportToolsRouter.get("/appointment/:appointmentId/details", async (req, res)
     }
 
     // Get related disputes
-    const homeSizeDisputes = await HomeSizeAdjustmentRequest.findAll({
+    const homeSizeDisputesRaw = await HomeSizeAdjustmentRequest.findAll({
       where: { appointmentId },
       attributes: ["id", "caseNumber", "status", "priceDifference"],
     });
+
+    // Convert priceDifference from cents to dollars
+    const homeSizeDisputes = homeSizeDisputesRaw.map((d) => ({
+      id: d.id,
+      caseNumber: d.caseNumber,
+      status: d.status,
+      priceDifference: d.priceDifference ? (d.priceDifference / 100).toFixed(2) : "0.00",
+    }));
 
     // Get related appeals
     let appeals = [];
@@ -657,7 +690,14 @@ hrSupportToolsRouter.get("/appointment/:appointmentId/details", async (req, res)
         name: `${safeDecrypt(appointment.user.firstName)} ${safeDecrypt(appointment.user.lastName)}`,
         type: appointment.user.type,
       } : null,
-      home: appointment.home,
+      home: appointment.home ? {
+        id: appointment.home.id,
+        address: safeDecrypt(appointment.home.address),
+        city: safeDecrypt(appointment.home.city),
+        state: safeDecrypt(appointment.home.state),
+        numBeds: appointment.home.numBeds,
+        numBaths: appointment.home.numBaths,
+      } : null,
       relatedDisputes: homeSizeDisputes,
       relatedAppeals: appeals,
       ledgerEntries,
@@ -685,17 +725,30 @@ hrSupportToolsRouter.post("/user/:userId/waive-penalty", async (req, res) => {
     }
 
     // Decrement the appropriate count
+    let previousCount = 0;
     if (penaltyType === "cancellation" && user.cancellationCount > 0) {
+      previousCount = user.cancellationCount;
       await user.decrement("cancellationCount");
     } else if (penaltyType === "lateCancellation" && user.lateCancellationCount > 0) {
+      previousCount = user.lateCancellationCount;
       await user.decrement("lateCancellationCount");
     } else if (penaltyType === "noShow" && user.noShowCount > 0) {
+      previousCount = user.noShowCount;
       await user.decrement("noShowCount");
     } else {
       return res.status(400).json({ error: "Invalid penalty type or no penalty to waive" });
     }
 
     await user.reload();
+
+    // Log audit action
+    await logHRAuditAction(req.user.id, "waive_penalty", userId, {
+      penaltyType,
+      reason,
+      appointmentId: appointmentId || null,
+      previousCount,
+      newCount: previousCount - 1,
+    });
 
     console.log(`✅ ${penaltyType} penalty waived for user ${userId} by HR ${req.user.id}. Reason: ${reason}`);
 
@@ -738,6 +791,12 @@ hrSupportToolsRouter.post("/user/:userId/reset-penalties", rateLimitSensitiveAct
       cancellationCount: 0,
       lateCancellationCount: 0,
       noShowCount: 0,
+    });
+
+    // Log audit action for this sensitive operation
+    await logHRAuditAction(req.user.id, "reset_all_penalties", userId, {
+      reason,
+      previousCounts: oldCounts,
     });
 
     console.log(`✅ All penalties reset for user ${userId} by HR ${req.user.id}. Previous: ${JSON.stringify(oldCounts)}. Reason: ${reason}`);
@@ -804,9 +863,10 @@ hrSupportToolsRouter.post("/user/:userId/send-notification", async (req, res) =>
 hrSupportToolsRouter.post("/user/:userId/issue-credit", rateLimitSensitiveAction("issue-credit"), async (req, res) => {
   try {
     const { userId } = req.params;
-    const { amount, reason, appointmentId } = req.body;
+    const { reason, appointmentId } = req.body;
+    const amount = parseFloat(req.body.amount);
 
-    if (!amount || amount <= 0) {
+    if (!amount || isNaN(amount) || amount <= 0) {
       return res.status(400).json({ error: "Amount must be a positive number" });
     }
 
@@ -877,16 +937,20 @@ hrSupportToolsRouter.get("/hr-staff", async (req, res) => {
     const hrStaff = await User.findAll({
       where: { type: { [Op.in]: ["humanResources", "owner"] } },
       attributes: ["id", "firstName", "lastName", "username", "type"],
-      order: [["firstName", "ASC"]],
     });
 
+    // Decrypt and then sort by firstName (can't sort encrypted fields in DB)
     const staff = hrStaff.map((s) => ({
       id: s.id,
       firstName: safeDecrypt(s.firstName),
       lastName: safeDecrypt(s.lastName),
       username: s.username,
       type: s.type,
-    }));
+    })).sort((a, b) => {
+      const nameA = (a.firstName || "").toLowerCase();
+      const nameB = (b.firstName || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
 
     return res.status(200).json({ hrStaff: staff });
   } catch (error) {
@@ -981,30 +1045,31 @@ hrSupportToolsRouter.post("/appeal/:appealId/resolve", async (req, res) => {
       closedAt: new Date(),
     });
 
-    // If waiving penalty, update user based on appeal category
+    // If waiving penalty, update user penalty counts
+    // Note: appeal.category contains the REASON (medical_emergency, etc.), not the penalty type
+    // We use contestingItems or the appointment's cancellation data to determine what to waive
     if (waivePenalty && appeal.appealerId) {
       const user = await User.findByPk(appeal.appealerId);
       if (user) {
-        // Determine which penalty to waive based on appeal category
-        const category = appeal.category;
-        if (category === "late_cancellation" && user.lateCancellationCount > 0) {
+        // Check what penalties the user actually has and waive the most recent/relevant one
+        // Priority: late cancellation > no-show > regular cancellation
+        let waived = false;
+        if (user.lateCancellationCount > 0) {
           await user.decrement("lateCancellationCount");
-          console.log(`✅ Late cancellation penalty waived for user ${user.id}`);
-        } else if (category === "no_show" && user.noShowCount > 0) {
+          console.log(`✅ Late cancellation penalty waived for user ${user.id} (appeal: ${appeal.caseNumber})`);
+          waived = true;
+        } else if (user.noShowCount > 0) {
           await user.decrement("noShowCount");
-          console.log(`✅ No-show penalty waived for user ${user.id}`);
-        } else if (category === "cancellation" && user.cancellationCount > 0) {
+          console.log(`✅ No-show penalty waived for user ${user.id} (appeal: ${appeal.caseNumber})`);
+          waived = true;
+        } else if (user.cancellationCount > 0) {
           await user.decrement("cancellationCount");
-          console.log(`✅ Cancellation penalty waived for user ${user.id}`);
-        } else {
-          // Fallback: try to waive any penalty that exists
-          if (user.lateCancellationCount > 0) {
-            await user.decrement("lateCancellationCount");
-          } else if (user.noShowCount > 0) {
-            await user.decrement("noShowCount");
-          } else if (user.cancellationCount > 0) {
-            await user.decrement("cancellationCount");
-          }
+          console.log(`✅ Cancellation penalty waived for user ${user.id} (appeal: ${appeal.caseNumber})`);
+          waived = true;
+        }
+
+        if (!waived) {
+          console.log(`⚠️ No penalty to waive for user ${user.id} (appeal: ${appeal.caseNumber})`);
         }
       }
     }

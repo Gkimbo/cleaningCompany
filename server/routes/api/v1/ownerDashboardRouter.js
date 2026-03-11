@@ -2886,8 +2886,8 @@ ownerDashboardRouter.get(
         id: a.id,
         date: a.date,
         homeAddress: a.home ? safeDecrypt(a.home.address) : null,
-        homeCity: a.home ? a.home.city : null,
-        homeState: a.home ? a.home.state : null,
+        homeCity: a.home ? safeDecrypt(a.home.city) : null,
+        homeState: a.home ? safeDecrypt(a.home.state) : null,
         status: a.completed ? "completed" : "incomplete",
         price: a.price || 0, // Return cents, frontend handles conversion
         rating: reviewMap[a.id] || null,

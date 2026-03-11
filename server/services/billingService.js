@@ -212,10 +212,14 @@ class BillingService {
 
     try {
       const pricing = await getPricingConfig();
-      // Base platform fee percentages from database config
-      const regularFeePercent = pricing.platform?.feePercent || 0.10;
-      const businessOwnerFeePercent = pricing.platform?.businessOwnerFeePercent || regularFeePercent;
-      const largeBusinessFeePercent = pricing.platform?.largeBusinessFeePercent || 0.07;
+      if (!pricing?.platform) {
+        console.error("[BillingService] CRITICAL: No pricing config found!");
+        throw new Error("Pricing configuration not available");
+      }
+      // Platform fee percentages from database config (PricingConfig)
+      const regularFeePercent = pricing.platform.feePercent;
+      const businessOwnerFeePercent = pricing.platform.businessOwnerFeePercent;
+      const largeBusinessFeePercent = pricing.platform.largeBusinessFeePercent;
 
       const cleanerIds = appointment.employeesAssigned || [];
       if (cleanerIds.length === 0) {

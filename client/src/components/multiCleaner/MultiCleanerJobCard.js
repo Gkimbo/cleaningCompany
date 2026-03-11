@@ -23,9 +23,9 @@ import {
 // Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (time) => {
   if (!time || time.toLowerCase() === "anytime") return "Anytime";
-  // Check if it's a numeric hours limit (e.g., "2.5", "3")
+  // Check if it's a numeric hours limit (e.g., "2.5", "3") - must be purely numeric
   const numericValue = parseFloat(time);
-  if (!isNaN(numericValue) && numericValue > 0 && numericValue <= 12) {
+  if (!isNaN(numericValue) && numericValue > 0 && numericValue <= 12 && /^\d+\.?\d*$/.test(time.trim())) {
     const unit = numericValue === 1 ? "hr" : "hrs";
     return `Within ${numericValue} ${unit}`;
   }

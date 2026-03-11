@@ -10,6 +10,7 @@ const GuestNotLeftService = require("../../../services/GuestNotLeftService");
 const EmployeeStripeConnectService = require("../../../services/EmployeeStripeConnectService");
 const BusinessEmployeeSerializer = require("../../../serializers/BusinessEmployeeSerializer");
 const EmployeeJobAssignmentSerializer = require("../../../serializers/EmployeeJobAssignmentSerializer");
+const EncryptionService = require("../../../services/EncryptionService");
 const { BusinessEmployee, EmployeeJobAssignment, User, JobPhoto, AppointmentJobFlow, sequelize } = require("../../../models");
 
 // =====================================
@@ -267,10 +268,11 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
     if (plainAssignment.appointment.home) {
       if (addressRestricted) {
         // Restrict address for marketplace jobs not yet within 24 hours
-        const fullAddress = plainAssignment.appointment.home.address;
-        const parts = fullAddress ? fullAddress.split(",") : [];
-        const generalArea = parts.length >= 2
-          ? parts[parts.length - 2].trim().split(" ")[0] + " area"
+        // Decrypt the address first before parsing
+        const decryptedAddress = EncryptionService.decrypt(plainAssignment.appointment.home.address);
+        const decryptedCity = EncryptionService.decrypt(plainAssignment.appointment.home.city);
+        const generalArea = decryptedCity
+          ? `${decryptedCity} area`
           : "Location confirmed";
 
         plainAssignment.appointment.home = {

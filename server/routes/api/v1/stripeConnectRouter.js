@@ -86,7 +86,11 @@ const DEFAULT_PLATFORM_FEE_PERCENT = 0.10;
 const getPlatformFeePercent = async () => {
   try {
     const config = await PricingConfig.getActive();
-    return config?.platformFeePercent || DEFAULT_PLATFORM_FEE_PERCENT;
+    if (!config) {
+      console.error("[StripeConnect] CRITICAL: No active PricingConfig found! Using emergency fallback fee. Please configure pricing.");
+      return DEFAULT_PLATFORM_FEE_PERCENT;
+    }
+    return parseFloat(config.platformFeePercent);
   } catch (error) {
     console.error("[StripeConnect] Error fetching platform fee, using default:", error.message);
     return DEFAULT_PLATFORM_FEE_PERCENT;

@@ -152,6 +152,71 @@ itDisputeRouter.post("/submit", rateLimitDisputeSubmission, async (req, res) => 
       attachments: attachments || [],
     });
 
+    // Check auto-assignment rules
+    let autoAssignedTo = null;
+    try {
+      const { ITAutoAssignmentRule } = require("../../../models");
+      const models = require("../../../models");
+
+      // Get active rules in priority order
+      const rules = await ITAutoAssignmentRule.findAll({
+        where: { isActive: true },
+        order: [["priority", "ASC"]],
+      });
+
+      // Create dispute object with reporter for rule matching
+      const disputeWithReporter = {
+        ...dispute.toJSON(),
+        reporter: { type: reporter.type },
+      };
+
+      // Find first matching rule
+      for (const rule of rules) {
+        if (rule.matchesDispute(disputeWithReporter)) {
+          const assigneeId = await rule.getNextAssignee(models);
+          if (assigneeId) {
+            // Verify assignee is valid
+            const assignee = await User.findByPk(assigneeId);
+            if (assignee && (assignee.type === "it" || assignee.type === "owner")) {
+              const isLocked = assignee.lockedUntil && new Date(assignee.lockedUntil) > new Date();
+              if (!isLocked && !assignee.accountFrozen) {
+                autoAssignedTo = assigneeId;
+
+                // Update dispute with assignment
+                await dispute.update({
+                  assignedTo: assigneeId,
+                  assignedAt: new Date(),
+                  status: "in_progress",
+                  assignmentHistory: [{
+                    assignedTo: assigneeId,
+                    assignedToUsername: assignee.username,
+                    assignedBy: null, // Auto-assigned
+                    assignedByUsername: "auto-assignment",
+                    assignedAt: new Date().toISOString(),
+                    unassignedAt: null,
+                    ruleId: rule.id,
+                    ruleName: rule.name,
+                  }],
+                });
+
+                // Update rule trigger count
+                await rule.update({
+                  triggerCount: rule.triggerCount + 1,
+                  lastTriggeredAt: new Date(),
+                });
+
+                console.log(`✅ IT dispute ${dispute.caseNumber} auto-assigned to ${assignee.username} via rule "${rule.name}"`);
+                break;
+              }
+            }
+          }
+        }
+      }
+    } catch (autoAssignError) {
+      // Don't fail dispute creation if auto-assignment fails
+      console.error("Auto-assignment check failed:", autoAssignError.message);
+    }
+
     // Get reporter's name for notifications
     const reporterFirstName = safeDecrypt(reporter.firstName) || reporter.username;
     const reporterLastName = safeDecrypt(reporter.lastName) || "";
@@ -161,7 +226,7 @@ itDisputeRouter.post("/submit", rateLimitDisputeSubmission, async (req, res) => 
     const itStaff = await User.findAll({ where: { type: "it" } });
 
     for (const staff of itStaff) {
-      // In-app notification
+      // In-app notification (push/email handled separately below to respect user preferences)
       await NotificationService.notifyUser({
         userId: staff.id,
         type: "it_dispute_submitted",
@@ -174,8 +239,8 @@ itDisputeRouter.post("/submit", rateLimitDisputeSubmission, async (req, res) => 
           priority: finalPriority,
         },
         actionRequired: true,
-        sendPush: true,
-        sendEmail: finalPriority === "critical" || finalPriority === "high",
+        sendPush: false, // Push sent separately to respect user notification preferences
+        sendEmail: false, // Email sent separately to respect user notification preferences
       });
 
       // Send email for high/critical priority
@@ -227,6 +292,8 @@ itDisputeRouter.post("/submit", rateLimitDisputeSubmission, async (req, res) => 
         priority: dispute.priority,
         submittedAt: dispute.submittedAt,
         slaDeadline: dispute.slaDeadline,
+        assignedTo: autoAssignedTo,
+        autoAssigned: autoAssignedTo !== null,
       },
     });
   } catch (error) {

@@ -225,9 +225,16 @@ class EmployeeBatchPayoutService {
     console.log(`[EmployeeBatchPayout] Starting bi-weekly payout processing for ${today.toISOString().split("T")[0]}`);
 
     // Find all pending payouts scheduled for today or earlier
+    // Also include failed payouts that can be retried (retryCount < 3)
     const duePayouts = await EmployeePendingPayout.findAll({
       where: {
-        status: "pending",
+        [Op.or]: [
+          { status: "pending" },
+          {
+            status: "failed",
+            retryCount: { [Op.lt]: 3 },
+          },
+        ],
         scheduledPayoutDate: {
           [Op.lte]: today,
         },
@@ -247,7 +254,9 @@ class EmployeeBatchPayoutService {
       return { processed: 0, success: 0, failed: 0, results: [] };
     }
 
-    console.log(`[EmployeeBatchPayout] Found ${duePayouts.length} pending payouts to process`);
+    const pendingCount = duePayouts.filter(p => p.status === "pending").length;
+    const retryCount = duePayouts.filter(p => p.status === "failed").length;
+    console.log(`[EmployeeBatchPayout] Found ${duePayouts.length} payouts to process (${pendingCount} pending, ${retryCount} retries)`);
 
     // Group by employee for batch processing
     const byEmployee = {};
@@ -323,11 +332,20 @@ class EmployeeBatchPayoutService {
 
       // Mark all payouts as failed
       for (const payout of payouts) {
+        const newRetryCount = payout.retryCount + 1;
         await payout.update({
           status: "failed",
           failureReason: "Employee has not set up Stripe Connect",
-          retryCount: payout.retryCount + 1,
+          retryCount: newRetryCount,
         });
+
+        // If max retries exhausted, revert assignment to "pending" for manual payment
+        if (newRetryCount >= 3) {
+          await EmployeeJobAssignment.update(
+            { payoutStatus: "pending", payoutMethod: "pending_manual" },
+            { where: { id: payout.employeeJobAssignmentId } }
+          );
+        }
       }
 
       return {
@@ -344,11 +362,20 @@ class EmployeeBatchPayoutService {
       console.log(`[EmployeeBatchPayout] Employee ${employeeId} has not completed Stripe onboarding`);
 
       for (const payout of payouts) {
+        const newRetryCount = payout.retryCount + 1;
         await payout.update({
           status: "failed",
           failureReason: "Employee has not completed Stripe onboarding",
-          retryCount: payout.retryCount + 1,
+          retryCount: newRetryCount,
         });
+
+        // If max retries exhausted, revert assignment to "pending" for manual payment
+        if (newRetryCount >= 3) {
+          await EmployeeJobAssignment.update(
+            { payoutStatus: "pending", payoutMethod: "pending_manual" },
+            { where: { id: payout.employeeJobAssignmentId } }
+          );
+        }
       }
 
       return {
@@ -430,11 +457,20 @@ class EmployeeBatchPayoutService {
 
       // Mark all as failed
       for (const payout of payouts) {
+        const newRetryCount = payout.retryCount + 1;
         await payout.update({
           status: "failed",
           failureReason,
-          retryCount: payout.retryCount + 1,
+          retryCount: newRetryCount,
         });
+
+        // If max retries exhausted, revert assignment to "pending" for manual payment
+        if (newRetryCount >= 3) {
+          await EmployeeJobAssignment.update(
+            { payoutStatus: "pending", payoutMethod: "pending_manual" },
+            { where: { id: payout.employeeJobAssignmentId } }
+          );
+        }
       }
 
       return {

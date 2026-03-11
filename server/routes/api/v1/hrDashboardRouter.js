@@ -382,12 +382,19 @@ hrDashboardRouter.get("/appeals/overview", verifyHROrOwner, async (req, res) => 
 
     let avgResolutionHours = null;
     if (closedAppeals.length > 0) {
-      const totalHours = closedAppeals.reduce((sum, appeal) => {
-        const submitted = new Date(appeal.submittedAt);
-        const closed = new Date(appeal.closedAt);
-        return sum + (closed - submitted) / (1000 * 60 * 60);
-      }, 0);
-      avgResolutionHours = Math.round(totalHours / closedAppeals.length);
+      // Filter out appeals with null dates to avoid NaN calculations
+      const validAppeals = closedAppeals.filter(
+        (appeal) => appeal.submittedAt && appeal.closedAt
+      );
+
+      if (validAppeals.length > 0) {
+        const totalHours = validAppeals.reduce((sum, appeal) => {
+          const submitted = new Date(appeal.submittedAt);
+          const closed = new Date(appeal.closedAt);
+          return sum + (closed - submitted) / (1000 * 60 * 60);
+        }, 0);
+        avgResolutionHours = Math.round(totalHours / validAppeals.length);
+      }
     }
 
     return res.json({
@@ -440,6 +447,12 @@ hrDashboardRouter.get("/appeals/sla-summary", verifyHROrOwner, async (req, res) 
     const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     pendingAppeals.forEach(appeal => {
+      // Handle null slaDeadline - appeals without a deadline go to onTrack
+      if (!appeal.slaDeadline) {
+        onTrack.push(appeal);
+        return;
+      }
+
       const deadline = new Date(appeal.slaDeadline);
       if (deadline < now) {
         breached.push(appeal);
@@ -507,7 +520,18 @@ hrDashboardRouter.get("/appeals/my-assigned", verifyHROrOwner, async (req, res) 
       order: [["slaDeadline", "ASC"]],
     });
 
-    return res.json({ appeals });
+    // Serialize appeals with decrypted PII
+    const serializedAppeals = appeals.map((appeal) => ({
+      ...appeal.toJSON(),
+      appealer: appeal.appealer ? {
+        id: appeal.appealer.id,
+        username: appeal.appealer.username,
+        firstName: safeDecrypt(appeal.appealer.firstName),
+        lastName: safeDecrypt(appeal.appealer.lastName),
+      } : null,
+    }));
+
+    return res.json({ appeals: serializedAppeals });
   } catch (error) {
     console.error("Error fetching assigned appeals:", error);
     return res.status(500).json({ error: "Failed to fetch assigned appeals" });

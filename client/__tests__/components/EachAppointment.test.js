@@ -83,7 +83,7 @@ const defaultProps = {
   id: 1,
   index: 0,
   date: "2025-02-15",
-  price: 150,
+  price: 15000, // $150.00 in cents
   bringSheets: "no",
   bringTowels: "no",
   keyPadCode: "",
@@ -194,9 +194,9 @@ describe("EachAppointment", () => {
   describe("Price display", () => {
     it("displays the price", () => {
       const { getByText } = renderWithProvider(
-        <EachAppointment {...defaultProps} price={200} />
+        <EachAppointment {...defaultProps} price={20000} /> // $200.00 in cents
       );
-      expect(getByText("$200")).toBeTruthy();
+      expect(getByText("$200.00")).toBeTruthy();
     });
 
     it("displays price label for active appointments", () => {

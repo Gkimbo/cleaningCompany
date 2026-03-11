@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-5364_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-5445_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -999,6 +999,24 @@ Handle situations when guests haven't left by checkout time:
 | `GET` | `/api/v1/service-areas/history` | Get config change history | Owner |
 | `POST` | `/api/v1/service-areas/recheck-all-homes` | Recheck all homes against config | Owner |
 
+### Support Tickets
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/support-tickets` | Create support ticket from conversation | Yes |
+| `GET` | `/api/v1/support-tickets` | Get all support tickets | Owner/HR |
+| `GET` | `/api/v1/support-tickets/:id` | Get ticket details | Owner/HR |
+| `PATCH` | `/api/v1/support-tickets/:id` | Update ticket status | Owner/HR |
+| `POST` | `/api/v1/support-tickets/:id/resolve` | Resolve ticket | Owner/HR |
+
+### Employee Bonuses
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/business-owner/employees/:id/bonus` | Award bonus to employee | Business Owner |
+| `GET` | `/api/v1/business-owner/employees/:id/bonuses` | Get employee bonus history | Business Owner |
+| `GET` | `/api/v1/business-employee/my-bonuses` | Get own bonus history | Employee |
+
 ### Employee Timesheets
 
 | Method | Endpoint | Description | Auth |
@@ -1023,7 +1041,7 @@ Handle situations when guests haven't left by checkout time:
 
 ## Database
 
-### Models (67 Total)
+### Models (68 Total)
 
 #### Core Models
 
@@ -1165,6 +1183,9 @@ Handle situations when guests haven't left by checkout time:
 |-------|-------------|
 | `ITDispute` | IT support tickets with category, priority, status, and resolution tracking |
 | `ServiceAreaConfig` | Geographic service area configuration (city-based or radius-based modes) |
+| `SecurityAuditLog` | Immutable security audit trail for password changes, login events, account freezes |
+| `SupportTicket` | Support tickets created from conversations with category and priority |
+| `EmployeeBonus` | Bonus tracking for employees with reason and payment status |
 
 ### Migrations
 
@@ -1766,7 +1787,7 @@ socket.on('mark_read', { conversationId, userId });
 ## Testing
 
 ```bash
-# Run all tests (5364 tests across 212 test suites)
+# Run all tests (5445 tests across 215 test suites)
 npm test
 
 # Run specific test file
@@ -1829,7 +1850,7 @@ npm test -- --watch
 | IT Support Tools | 34 | User search, account freeze/unfreeze |
 | IT Account Management | 56 | CRUD for IT staff, password generation |
 | Service Areas | 49 | Config, validation, history, bulk recheck |
-| **Total** | **5364** | 212 test suites |
+| **Total** | **5445** | 215 test suites |
 
 ---
 
@@ -1854,6 +1875,13 @@ npm test -- --watch
 - User reporting system for inappropriate content
 - Warning and account freeze capabilities
 - False report tracking
+
+### Security Audit Logging
+- Immutable audit trail for security-sensitive actions
+- Password change tracking with actor identification
+- Login event logging with IP address and device type
+- Account freeze/unfreeze actions with reasons
+- Failed login attempt tracking with lockout after 5 attempts (15 min cooldown)
 
 ---
 

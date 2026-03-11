@@ -150,8 +150,12 @@ class EmployeeJobAssignmentSerializer {
 
     if (includeDetails) {
       serialized.address = this.decryptUserField(data.address);
+      serialized.city = this.decryptUserField(data.city);
+      serialized.state = this.decryptUserField(data.state);
+      serialized.zipcode = this.decryptUserField(data.zipcode);
       serialized.keyPadCode = this.decryptUserField(data.keyPadCode);
       serialized.keyLocation = this.decryptUserField(data.keyLocation);
+      serialized.contact = this.decryptUserField(data.contact);
       serialized.notes = data.notes;
     }
 
