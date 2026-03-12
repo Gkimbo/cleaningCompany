@@ -387,7 +387,7 @@ const MarkPaidModal = ({ visible, payout, onClose, onConfirm, isSubmitting }) =>
               <View style={styles.modalSummaryRow}>
                 <Text style={styles.modalSummaryLabel}>Job Date</Text>
                 <Text style={styles.modalSummaryValue}>
-                  {new Date(payout.appointment?.date + "T12:00:00").toLocaleDateString()}
+                  {payout.appointment?.date ? new Date(payout.appointment.date + "T12:00:00").toLocaleDateString() : "—"}
                 </Text>
               </View>
             </View>
@@ -571,7 +571,7 @@ const EditHoursModal = ({ visible, payout, onClose, onSave, isSubmitting }) => {
               <View style={styles.modalSummaryRow}>
                 <Text style={styles.modalSummaryLabel}>Job Date</Text>
                 <Text style={styles.modalSummaryValue}>
-                  {new Date(payout.appointment?.date + "T12:00:00").toLocaleDateString()}
+                  {payout.appointment?.date ? new Date(payout.appointment.date + "T12:00:00").toLocaleDateString() : "—"}
                 </Text>
               </View>
               {hourlyRate && (

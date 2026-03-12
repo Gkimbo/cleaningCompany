@@ -135,6 +135,7 @@ const AppealsQueuePage = () => {
   };
 
   const formatTimeAgo = (dateString) => {
+    if (!dateString) return "—";
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now - date;

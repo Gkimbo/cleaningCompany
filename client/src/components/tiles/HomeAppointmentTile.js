@@ -164,12 +164,14 @@ const HomeAppointmentTile = ({
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const [year, month, day] = dateString.split("-").map(Number);
     const newDate = new Date(year, month - 1, day);
     return newDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   };
 
   const parseDate = (dateString) => {
+    if (!dateString) return new Date();
     const [year, month, day] = dateString.split("-").map(Number);
     return new Date(year, month - 1, day);
   };

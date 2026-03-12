@@ -118,6 +118,7 @@ const ConversationItem = ({ conversation, onPress }) => {
   };
 
   const formatTime = (dateStr) => {
+    if (!dateStr) return "—";
     const date = new Date(dateStr);
     const now = new Date();
     const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));

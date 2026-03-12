@@ -672,14 +672,14 @@ const MyRequestsCalendar = ({ state }) => {
                             {req.appointment?.home?.state}
                           </Text>
                           <Text style={styles.teamRequestDate}>
-                            {new Date(req.appointment?.date + "T12:00:00").toLocaleDateString(
+                            {req.appointment?.date ? new Date(req.appointment.date + "T12:00:00").toLocaleDateString(
                               "en-US",
                               {
                                 weekday: "short",
                                 month: "short",
                                 day: "numeric",
                               }
-                            )}
+                            ) : "—"}
                           </Text>
                           <View style={styles.teamRequestDetails}>
                             <Text style={styles.teamRequestDetail}>

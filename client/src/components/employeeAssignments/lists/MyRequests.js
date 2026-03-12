@@ -352,7 +352,7 @@ const MyRequests = ({ state }) => {
       return {
         ...request,
         type: "team",
-        sortDate: new Date(request.appointment?.date + "T12:00:00"),
+        sortDate: request.appointment?.date ? new Date(request.appointment.date + "T12:00:00") : new Date(),
         homeId: teamHomeId,
         distance,
         sortPrice: cleanerShare, // Sort by cleaner's share

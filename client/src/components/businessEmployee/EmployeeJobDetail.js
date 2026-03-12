@@ -316,7 +316,7 @@ const EmployeeJobDetail = ({ state }) => {
             <View style={styles.payCardContent}>
               <Text style={styles.payLabel}>Your Pay</Text>
               <Text style={styles.payAmount}>
-                ${(job.payAmount / 100).toFixed(2)}
+                ${((job.payAmount || 0) / 100).toFixed(2)}
               </Text>
               {job.payBreakdown && (
                 <Text style={styles.payBreakdown}>{job.payBreakdown}</Text>

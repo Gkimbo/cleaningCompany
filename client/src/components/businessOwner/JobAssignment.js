@@ -254,15 +254,15 @@ const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, pl
             styles.jobDateDay,
             ownerIsAssigned && styles.jobDateDaySelf,
           ]}>
-            {new Date(assignment.appointment?.date + "T12:00:00").getDate()}
+            {assignment.appointment?.date ? new Date(assignment.appointment.date + "T12:00:00").getDate() : "-"}
           </Text>
           <Text style={[
             styles.jobDateMonth,
             ownerIsAssigned && styles.jobDateMonthSelf,
           ]}>
-            {new Date(assignment.appointment?.date + "T12:00:00").toLocaleDateString("en-US", {
+            {assignment.appointment?.date ? new Date(assignment.appointment.date + "T12:00:00").toLocaleDateString("en-US", {
               month: "short",
-            })}
+            }) : ""}
           </Text>
         </View>
         <View style={styles.jobInfo}>
@@ -1263,7 +1263,8 @@ const JobAssignment = ({ state }) => {
               return acc;
             }, {})
           )
-            .sort((a, b) => new Date(a.appointment?.date) - new Date(b.appointment?.date))
+            .filter((a) => a.appointment?.date)
+            .sort((a, b) => new Date(a.appointment.date) - new Date(b.appointment.date))
             .map((assignment) => (
               <AssignedJobCard
                 key={assignment.appointmentId}

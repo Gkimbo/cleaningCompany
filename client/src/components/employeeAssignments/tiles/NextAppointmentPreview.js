@@ -28,6 +28,7 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
   });
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
     // Use noon to avoid timezone edge cases that could shift the day
     return new Date(dateString + "T12:00:00").toLocaleDateString(undefined, options);

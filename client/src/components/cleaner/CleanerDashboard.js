@@ -968,8 +968,8 @@ const CleanerDashboard = ({ state, dispatch }) => {
             <View style={styles.requestsList}>
               {/* Combine and sort all requests by date */}
               {[
-                ...pendingRequests.map((r) => ({ ...r, type: "solo", sortDate: new Date(r.date + "T12:00:00") })),
-                ...pendingMultiCleanerRequests.map((r) => ({ ...r, type: "team", sortDate: new Date(r.appointment?.date + "T12:00:00") })),
+                ...pendingRequests.filter((r) => r.date).map((r) => ({ ...r, type: "solo", sortDate: new Date(r.date + "T12:00:00") })),
+                ...pendingMultiCleanerRequests.filter((r) => r.appointment?.date).map((r) => ({ ...r, type: "team", sortDate: new Date(r.appointment.date + "T12:00:00") })),
               ]
                 .sort((a, b) => a.sortDate - b.sortDate)
                 .slice(0, 3)

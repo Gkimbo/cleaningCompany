@@ -267,7 +267,7 @@ const PreferredHomeCard = ({ home }) => (
       )}
     </View>
     <Text style={styles.homeDate}>
-      Since {new Date(home.setAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+      Since {home.setAt ? new Date(home.setAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "—"}
     </Text>
   </View>
 );

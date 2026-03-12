@@ -50,12 +50,13 @@ const AppointmentTile = ({
   }, []);
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const options = { weekday: "short", month: "short", day: "numeric", year: "numeric" };
-    return new Date(dateString).toLocaleDateString("en-US", options);
+    return new Date(dateString + "T12:00:00").toLocaleDateString("en-US", options);
   };
 
   const formatPrice = (priceValue) => {
-    return `$${(Number(priceValue) / 100).toFixed(2)}`;
+    return `$${((Number(priceValue) || 0) / 100).toFixed(2)}`;
   };
 
   const handleAppointmentPress = () => {

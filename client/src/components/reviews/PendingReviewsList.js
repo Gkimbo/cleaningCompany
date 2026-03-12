@@ -72,6 +72,7 @@ const PendingReviewsList = ({ state }) => {
   }, [fetchPendingReviews]);
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const date = new Date(dateString + "T12:00:00");
     const options = { weekday: "short", month: "short", day: "numeric" };
     return date.toLocaleDateString("en-US", options);

@@ -318,10 +318,10 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
           <View style={styles.pendingInfo}>
             <Feather name="send" size={12} color={colors.neutral[400]} />
             <Text style={styles.pendingText}>
-              Sent {new Date(client.invitedAt).toLocaleDateString("en-US", {
+              Sent {client.invitedAt ? new Date(client.invitedAt).toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
-              })}
+              }) : "—"}
             </Text>
           </View>
           <View style={styles.pendingActions}>

@@ -275,6 +275,7 @@ const CalendarComponent = ({
   }, [redirectToBill]);
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     // Use noon to avoid timezone edge cases that could shift the day
     const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {

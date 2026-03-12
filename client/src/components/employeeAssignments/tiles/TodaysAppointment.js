@@ -70,6 +70,7 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
   const [isCollapsed, setIsCollapsed] = useState(isSubmitted);
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
     // Use noon to avoid timezone edge cases that could shift the day
     return new Date(dateString + "T12:00:00").toLocaleDateString(undefined, options);

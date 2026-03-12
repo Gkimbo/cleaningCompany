@@ -87,6 +87,7 @@ const EmployeeAssignmentTile = ({
   const amount = (Number(price) / numCleaners) * cleanerSharePercent;
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     // Use noon to avoid timezone edge cases that could shift the day
     const dateObj = new Date(dateString + "T12:00:00");
     const options = { weekday: "short", month: "short", day: "numeric" };
