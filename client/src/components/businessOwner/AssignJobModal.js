@@ -26,7 +26,8 @@ import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerServ
  */
 const formatDate = (dateStr) => {
   if (!dateStr) return "";
-  const date = new Date(dateStr + "T00:00:00");
+  // Use noon to avoid timezone edge cases that could shift the day
+  const date = new Date(dateStr + "T12:00:00");
   return date.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",

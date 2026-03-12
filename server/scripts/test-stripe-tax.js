@@ -134,8 +134,8 @@ async function testEarningsSummaryLogic() {
   const taxYear = TEST_TAX_YEAR;
 
   // Simulate what the endpoint does
-  const start = new Date(`${taxYear}-01-01T00:00:00Z`);
-  const end = new Date(`${taxYear + 1}-01-01T00:00:00Z`);
+  const start = new Date(`${taxYear}-01-01T12:00:00Z`);
+  const end = new Date(`${taxYear + 1}-01-01T12:00:00Z`);
 
   const payments = await Payment.findAll({
     where: {
@@ -221,8 +221,8 @@ async function testBelowThreshold() {
     });
 
     // Test logic
-    const start = new Date(`${TEST_TAX_YEAR}-01-01T00:00:00Z`);
-    const end = new Date(`${TEST_TAX_YEAR + 1}-01-01T00:00:00Z`);
+    const start = new Date(`${TEST_TAX_YEAR}-01-01T12:00:00Z`);
+    const end = new Date(`${TEST_TAX_YEAR + 1}-01-01T12:00:00Z`);
 
     const payments = await Payment.findAll({
       where: {
@@ -275,8 +275,8 @@ async function testExactlyAtThreshold() {
       createdAt: new Date(`${TEST_TAX_YEAR}-06-15`),
     });
 
-    const start = new Date(`${TEST_TAX_YEAR}-01-01T00:00:00Z`);
-    const end = new Date(`${TEST_TAX_YEAR + 1}-01-01T00:00:00Z`);
+    const start = new Date(`${TEST_TAX_YEAR}-01-01T12:00:00Z`);
+    const end = new Date(`${TEST_TAX_YEAR + 1}-01-01T12:00:00Z`);
 
     const payments = await Payment.findAll({
       where: {
@@ -319,8 +319,8 @@ async function testNoPayments() {
       type: "cleaner",
     });
 
-    const start = new Date(`${TEST_TAX_YEAR}-01-01T00:00:00Z`);
-    const end = new Date(`${TEST_TAX_YEAR + 1}-01-01T00:00:00Z`);
+    const start = new Date(`${TEST_TAX_YEAR}-01-01T12:00:00Z`);
+    const end = new Date(`${TEST_TAX_YEAR + 1}-01-01T12:00:00Z`);
 
     const payments = await Payment.findAll({
       where: {
@@ -482,8 +482,8 @@ async function testPaymentStatusFiltering() {
     });
 
     // Only succeeded payments should be counted
-    const start = new Date(`${TEST_TAX_YEAR}-01-01T00:00:00Z`);
-    const end = new Date(`${TEST_TAX_YEAR + 1}-01-01T00:00:00Z`);
+    const start = new Date(`${TEST_TAX_YEAR}-01-01T12:00:00Z`);
+    const end = new Date(`${TEST_TAX_YEAR + 1}-01-01T12:00:00Z`);
 
     const succeededPayments = await Payment.findAll({
       where: {
@@ -567,8 +567,8 @@ async function testPaymentTypeFiltering() {
     });
 
     // Only payout type should be counted
-    const start = new Date(`${TEST_TAX_YEAR}-01-01T00:00:00Z`);
-    const end = new Date(`${TEST_TAX_YEAR + 1}-01-01T00:00:00Z`);
+    const start = new Date(`${TEST_TAX_YEAR}-01-01T12:00:00Z`);
+    const end = new Date(`${TEST_TAX_YEAR + 1}-01-01T12:00:00Z`);
 
     const payoutPayments = await Payment.findAll({
       where: {
@@ -632,8 +632,8 @@ async function testCrossYearFiltering() {
     });
 
     // Query for 2025 only
-    const start2025 = new Date("2025-01-01T00:00:00Z");
-    const end2025 = new Date("2026-01-01T00:00:00Z");
+    const start2025 = new Date("2025-01-01T12:00:00Z");
+    const end2025 = new Date("2026-01-01T12:00:00Z");
 
     const payments2025 = await Payment.findAll({
       where: {
@@ -650,8 +650,8 @@ async function testCrossYearFiltering() {
     logTest("2025 total is $500 (not $1500)", total2025 === 50000);
 
     // Query for 2024
-    const start2024 = new Date("2024-01-01T00:00:00Z");
-    const end2024 = new Date("2025-01-01T00:00:00Z");
+    const start2024 = new Date("2024-01-01T12:00:00Z");
+    const end2024 = new Date("2025-01-01T12:00:00Z");
 
     const payments2024 = await Payment.findAll({
       where: {

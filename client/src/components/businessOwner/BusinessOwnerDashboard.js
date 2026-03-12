@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
 import PaymentSetupBanner from "./PaymentSetupBanner";
+import { toLocalDateString } from "../../services/formatters";
 import {
   colors,
   spacing,
@@ -165,7 +166,8 @@ const PendingPayrollCard = ({ pendingPayroll, onPress, formatCurrency }) => {
 
   const formatPayoutDate = (dateStr) => {
     if (!dateStr) return null;
-    const date = new Date(dateStr);
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    const date = new Date(dateStr + "T12:00:00");
     const today = new Date();
     const diffDays = Math.ceil((date - today) / (1000 * 60 * 60 * 24));
 
@@ -382,7 +384,7 @@ const BusinessOwnerDashboard = ({ state }) => {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const formatDateKey = (date) => date.toISOString().split("T")[0];
+      const formatDateKey = (date) => toLocalDateString(date);
       const todayKey = formatDateKey(today);
       const tomorrowKey = formatDateKey(tomorrow);
 
@@ -403,8 +405,8 @@ const BusinessOwnerDashboard = ({ state }) => {
       const todayJobs = allJobs.filter((j) => j.date?.split("T")[0] === todayKey);
       const tomorrowJobs = allJobs.filter((j) => j.date?.split("T")[0] === tomorrowKey);
       const unassignedJobs = (calendarResult.unassignedJobs || []).filter((j) => {
-        const jobDate = new Date(j.date);
-        return jobDate >= today;
+        const jobDateStr = j.date?.split("T")[0] || j.date;
+        return jobDateStr >= todayKey;
       });
 
       setDashboardData({

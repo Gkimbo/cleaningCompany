@@ -149,7 +149,7 @@ const PayoutHistory = ({ state, dispatch }) => {
         const pastPayouts = allPayouts.filter((payout) => {
           const dateStr =
             payout.appointmentDate?.length === 10
-              ? payout.appointmentDate + "T00:00:00"
+              ? payout.appointmentDate + "T12:00:00"
               : payout.appointmentDate;
           const appointmentDate = new Date(dateStr);
           return appointmentDate <= today;
@@ -218,7 +218,7 @@ const PayoutHistory = ({ state, dispatch }) => {
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
     const dateStr =
-      dateString.length === 10 ? dateString + "T00:00:00" : dateString;
+      dateString.length === 10 ? dateString + "T12:00:00" : dateString;
     return new Date(dateStr).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -227,7 +227,8 @@ const PayoutHistory = ({ state, dispatch }) => {
   };
 
   const formatCurrency = (cents) => {
-    return `$${(cents / 100).toFixed(2)}`;
+    const amount = Number(cents) || 0;
+    return `$${(amount / 100).toFixed(2)}`;
   };
 
   if (isLoading) {

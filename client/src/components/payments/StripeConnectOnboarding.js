@@ -157,13 +157,13 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
     const day = parseInt(formData.dobDay);
     const year = parseInt(formData.dobYear);
 
-    if (!formData.dobMonth || month < 1 || month > 12) {
+    if (!formData.dobMonth || isNaN(month) || month < 1 || month > 12) {
       newErrors.dobMonth = "Valid month required";
     }
-    if (!formData.dobDay || day < 1 || day > 31) {
+    if (!formData.dobDay || isNaN(day) || day < 1 || day > 31) {
       newErrors.dobDay = "Valid day required";
     }
-    if (!formData.dobYear || year < 1900 || year > new Date().getFullYear() - 18) {
+    if (!formData.dobYear || isNaN(year) || year < 1900 || year > new Date().getFullYear() - 18) {
       newErrors.dobYear = "Must be 18 or older";
     }
 

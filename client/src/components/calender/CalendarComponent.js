@@ -5,7 +5,7 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { useNavigate } from "react-router-native";
 import { usePricing, getTimeWindowSurcharge, getTimeWindowLabel, isLastMinuteBooking } from "../../context/PricingContext";
-import { formatCurrency } from "../../services/formatters";
+import { formatCurrency, toLocalDateString, parseDateString, getTodayString } from "../../services/formatters";
 
 const CalendarComponent = ({
   onDatesSelected,
@@ -109,11 +109,10 @@ const CalendarComponent = ({
   };
 
   const handleDateSelect = (date) => {
-    const currentDate = new Date();
-    const selectedDate = new Date(date.dateString);
+    const todayString = toLocalDateString(new Date());
 
-    // Check if date is in the past
-    if (selectedDate < currentDate) {
+    // Check if date is in the past (compare YYYY-MM-DD strings)
+    if (date.dateString < todayString) {
       setError("Cannot book appointments in the past.");
       return;
     }
@@ -194,8 +193,8 @@ const CalendarComponent = ({
   };
 
   const isDateDisabled = (date) => {
-    const currentDate = new Date();
-    return new Date(date.dateString) < currentDate;
+    const todayString = toLocalDateString(new Date());
+    return date.dateString < todayString;
   };
 
   const isDateBooked = (date) => {
@@ -233,7 +232,7 @@ const CalendarComponent = ({
 
   const handleRemoveBooking = (date) => {
     const currentDate = new Date();
-    const selectedDate = new Date(date.dateString);
+    const selectedDate = parseDateString(date.dateString);
     const appointment = getAppointmentDetails(date);
 
     const isWithinWeek =
@@ -243,7 +242,7 @@ const CalendarComponent = ({
     setAppointmentToCancel(appointment);
 
     if (isWithinWeek) {
-      setCancellationFee(pricing.cancellation.fee);
+      setCancellationFee(pricing?.cancellation?.fee || 0);
     } else {
       setCancellationFee(0);
     }
@@ -276,7 +275,8 @@ const CalendarComponent = ({
   }, [redirectToBill]);
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       month: "long",
@@ -383,7 +383,7 @@ const CalendarComponent = ({
 
   const selectedCount = Object.keys(selectedDates).length;
   const totalPrice = Object.values(selectedDates).reduce((sum, d) => sum + d.price, 0);
-  const bookedCount = appointments.filter(a => new Date(a.date) >= new Date()).length;
+  const bookedCount = appointments.filter(a => a.date >= getTodayString()).length;
 
   return (
     <View style={styles.wrapper}>
@@ -464,7 +464,7 @@ const CalendarComponent = ({
         </View>
 
         <Calendar
-          current={currentMonth.toISOString().split("T")[0]}
+          current={toLocalDateString(currentMonth)}
           onMonthChange={handleMonthChange}
           renderArrow={(direction) => (
             <View style={styles.arrowButton}>
@@ -496,7 +496,7 @@ const CalendarComponent = ({
 
             <View style={styles.selectedDatesList}>
               {Object.keys(selectedDates).sort().map((dateStr) => {
-                const dateObj = new Date(dateStr + "T00:00:00");
+                const dateObj = new Date(dateStr + "T12:00:00");
                 const formatted = dateObj.toLocaleDateString("en-US", {
                   weekday: "short",
                   month: "short",

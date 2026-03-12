@@ -22,7 +22,8 @@ const HomeownerAdjustmentNotification = ({ adjustment, token, onResponse, onDism
 
   const formatDate = (dateString) => {
     const options = { weekday: "short", month: "short", day: "numeric" };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    return new Date(dateString + "T12:00:00").toLocaleDateString(undefined, options);
   };
 
   const handleViewDetails = () => {

@@ -29,7 +29,8 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
 
   const formatDate = (dateString) => {
     const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
-    return new Date(dateString + "T00:00:00").toLocaleDateString(undefined, options);
+    // Use noon to avoid timezone edge cases that could shift the day
+    return new Date(dateString + "T12:00:00").toLocaleDateString(undefined, options);
   };
 
   // Calculate estimated cleaning time based on home size and number of cleaners

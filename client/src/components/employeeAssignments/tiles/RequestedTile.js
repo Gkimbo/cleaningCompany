@@ -44,10 +44,11 @@ const RequestedTile = ({
   const [linensExpanded, setLinensExpanded] = useState(false);
 
   const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
-  const amount = Number(price) * cleanerSharePercent;
+  const amount = (Number(price) || 0) * cleanerSharePercent;
 
   const formatDate = (dateString) => {
-    const dateObj = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const dateObj = new Date(dateString + "T12:00:00");
     const options = { weekday: "short", month: "short", day: "numeric" };
     return dateObj.toLocaleDateString(undefined, options);
   };

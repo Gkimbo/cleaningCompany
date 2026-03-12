@@ -303,7 +303,7 @@ const AddEmployeeModal = ({
   const existingTeamPay = (recalculatedExistingPay || 0) / 100;
   const newEmployeePay = selectedEmployee ? (selectedEmployee.calculatedPay || 0) / 100 : 0;
   const totalEmployeePay = existingTeamPay + newEmployeePay;
-  const projectedProfit = jobPrice - platformFee - totalEmployeePay;
+  const projectedProfit = (jobPrice || 0) - (platformFee || 0) - totalEmployeePay;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -609,7 +609,7 @@ const AssignmentDetail = ({ state }) => {
   };
 
   const formatDate = (dateStr) => {
-    const date = new Date(dateStr + "T00:00:00");
+    const date = new Date(dateStr + "T12:00:00");
     return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   };
 
@@ -649,7 +649,7 @@ const AssignmentDetail = ({ state }) => {
   const home = appointment.home || {};
   const client = home.user || {};
   const employee = assignment.employee || {};
-  const isToday = appointment.date && new Date(appointment.date + "T00:00:00").toDateString() === new Date().toDateString();
+  const isToday = appointment.date && new Date(appointment.date + "T12:00:00").toDateString() === new Date().toDateString();
   const existingEmployeeIds = allAssignments.map((a) => a.businessEmployeeId).filter(Boolean);
 
   // Calculate financials
@@ -682,10 +682,10 @@ const AssignmentDetail = ({ state }) => {
           <View style={styles.heroDateSection}>
             <View style={styles.heroDateBadge}>
               <Text style={styles.heroDateDay}>
-                {appointment.date ? new Date(appointment.date + "T00:00:00").getDate() : "-"}
+                {appointment.date ? new Date(appointment.date + "T12:00:00").getDate() : "-"}
               </Text>
               <Text style={styles.heroDateMonth}>
-                {appointment.date ? new Date(appointment.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" }).toUpperCase() : ""}
+                {appointment.date ? new Date(appointment.date + "T12:00:00").toLocaleDateString("en-US", { month: "short" }).toUpperCase() : ""}
               </Text>
             </View>
             <View style={styles.heroDateInfo}>

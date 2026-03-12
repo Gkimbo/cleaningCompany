@@ -203,8 +203,8 @@ const EmployeeJobDetail = ({ state }) => {
   };
 
   const formatDate = (dateStr) => {
-    // Add T00:00:00 to treat date as local time, not UTC
-    const date = new Date(dateStr + "T00:00:00");
+    // Add T12:00:00 to treat date as local time, not UTC
+    const date = new Date(dateStr + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       month: "long",
@@ -258,7 +258,7 @@ const EmployeeJobDetail = ({ state }) => {
   const hasCoWorkers = coWorkers.length > 0;
 
   // Check if job is today
-  const isToday = new Date(appointment.date + "T00:00:00").toDateString() === new Date().toDateString();
+  const isToday = new Date(appointment.date + "T12:00:00").toDateString() === new Date().toDateString();
 
   return (
     <View style={styles.container}>
@@ -295,10 +295,10 @@ const EmployeeJobDetail = ({ state }) => {
           <View style={styles.dateTimeHeader}>
             <View style={styles.dateBadge}>
               <Text style={styles.dateBadgeDay}>
-                {new Date(appointment.date + "T00:00:00").getDate()}
+                {new Date(appointment.date + "T12:00:00").getDate()}
               </Text>
               <Text style={styles.dateBadgeMonth}>
-                {new Date(appointment.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+                {new Date(appointment.date + "T12:00:00").toLocaleDateString("en-US", { month: "short" })}
               </Text>
             </View>
             <View style={styles.dateTimeInfo}>

@@ -88,7 +88,7 @@ const HomeRequestsModal = ({ visible, homeId, token, onClose, onRequestUpdate })
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    const date = new Date(dateString + "T12:00:00");
     const options = {
       weekday: "long",
       month: "short",
@@ -100,7 +100,7 @@ const HomeRequestsModal = ({ visible, homeId, token, onClose, onRequestUpdate })
 
   const getAverageRating = (reviews) => {
     if (!reviews || reviews.length === 0) return 0;
-    const totalRating = reviews.reduce((sum, review) => sum + review.review, 0);
+    const totalRating = reviews.reduce((sum, review) => sum + (review.review || 0), 0);
     return totalRating / reviews.length;
   };
 
@@ -137,9 +137,9 @@ const HomeRequestsModal = ({ visible, homeId, token, onClose, onRequestUpdate })
       }
       groups[date].push(req);
     });
-    // Sort by date
+    // Sort by date (use noon to avoid timezone issues with YYYY-MM-DD strings)
     return Object.entries(groups).sort(
-      (a, b) => new Date(a[0]) - new Date(b[0])
+      (a, b) => new Date(a[0] + "T12:00:00") - new Date(b[0] + "T12:00:00")
     );
   }, [requests]);
 

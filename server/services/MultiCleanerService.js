@@ -10,6 +10,7 @@ const {
   calculateScheduledEndTime,
   getAutoCompleteConfig,
 } = require("./cron/AutoCompleteMonitor");
+const TimezoneService = require("./TimezoneService");
 
 class MultiCleanerService {
   /**
@@ -884,7 +885,7 @@ class MultiCleanerService {
           as: "appointment",
           where: {
             date: {
-              [Op.lte]: urgentDate.toISOString().split("T")[0],
+              [Op.lte]: TimezoneService.formatDateInTimezone(urgentDate),
             },
           },
         },
@@ -915,7 +916,7 @@ class MultiCleanerService {
           as: "appointment",
           where: {
             date: {
-              [Op.lte]: warningDate.toISOString().split("T")[0],
+              [Op.lte]: TimezoneService.formatDateInTimezone(warningDate),
             },
           },
         },

@@ -19,6 +19,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { toLocalDateString } from "../../services/formatters";
 import ExportModal from "./ExportModal";
 import TaxFormsSection from "../tax/TaxFormsSection";
 import useSafeNavigation from "../../hooks/useSafeNavigation";
@@ -203,8 +204,8 @@ const FinancialsScreen = ({ state }) => {
 
       const result = await BusinessOwnerService.getFinancials(
         state.currentUser.token,
-        startDate.toISOString().split("T")[0],
-        endDate.toISOString().split("T")[0]
+        toLocalDateString(startDate),
+        toLocalDateString(endDate)
       );
 
       setFinancials(result.financials || {});

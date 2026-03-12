@@ -18,6 +18,7 @@ const ClientJobFlowAssignmentSerializer = require("../../../serializers/ClientJo
 const CustomJobFlowChecklistSerializer = require("../../../serializers/CustomJobFlowChecklistSerializer");
 const TimesheetSerializer = require("../../../serializers/TimesheetSerializer");
 const EncryptionService = require("../../../services/EncryptionService");
+const TimezoneService = require("../../../services/TimezoneService");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { UserAppointments, UserHomes, User, Payout, CleanerClient, sequelize, EmployeeJobAssignment, BusinessEmployee, RecurringSchedule, PricingConfig, UserCleanerAppointments } = require("../../../models");
@@ -38,10 +39,10 @@ const FINANCIAL_CONSTANTS = {
   DEFAULT_CLEANER_PAYOUT_PERCENT: 0.80, // 80%
 };
 
-// Helper function for date formatting (YYYY-MM-DD)
+// Helper function for date formatting (YYYY-MM-DD) - timezone-safe
 const formatDateYMD = (date) => {
   const d = date instanceof Date ? date : new Date(date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return TimezoneService.formatDateInTimezone(d);
 };
 
 // Helper function to convert dollars to cents
@@ -606,8 +607,8 @@ router.get("/assignments", async (req, res) => {
   try {
     const { startDate, endDate, status } = req.query;
 
-    const start = startDate || new Date().toISOString().split("T")[0];
-    const end = endDate || new Date(Date.now() + TIME_CONSTANTS.MS_IN_MONTH).toISOString().split("T")[0];
+    const start = startDate || TimezoneService.getTodayInTimezone();
+    const end = endDate || formatDateYMD(new Date(Date.now() + TIME_CONSTANTS.MS_IN_MONTH));
 
     const assignments = await EmployeeJobAssignmentService.getUpcomingAssignments(
       req.businessOwnerId,
@@ -2290,8 +2291,8 @@ router.get("/calendar", async (req, res) => {
     const targetMonth = month ? parseInt(month, 10) - 1 : now.getMonth();
     const targetYear = year ? parseInt(year, 10) : now.getFullYear();
 
-    const startDate = new Date(targetYear, targetMonth, 1).toISOString().split("T")[0];
-    const endDate = new Date(targetYear, targetMonth + 1, 0).toISOString().split("T")[0];
+    const startDate = formatDateYMD(new Date(targetYear, targetMonth, 1));
+    const endDate = formatDateYMD(new Date(targetYear, targetMonth + 1, 0));
 
     // Get all assigned jobs
     const assignments = await EmployeeJobAssignmentService.getUpcomingAssignments(
@@ -2656,8 +2657,8 @@ router.get("/financials", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const now = new Date();
-    const start = startDate || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const end = endDate || now.toISOString().split("T")[0];
+    const start = startDate || formatDateYMD(new Date(now.getFullYear(), now.getMonth(), 1));
+    const end = endDate || TimezoneService.getTodayInTimezone();
 
     const financials = await PayCalculatorService.getFinancialSummary(
       req.businessOwnerId,
@@ -2679,8 +2680,8 @@ router.get("/payroll-summary", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const now = new Date();
-    const start = startDate || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const end = endDate || now.toISOString().split("T")[0];
+    const start = startDate || formatDateYMD(new Date(now.getFullYear(), now.getMonth(), 1));
+    const end = endDate || TimezoneService.getTodayInTimezone();
 
     const payroll = await PayCalculatorService.getPayrollSummary(
       req.businessOwnerId,
@@ -2702,7 +2703,7 @@ router.get("/payroll/history", async (req, res) => {
   try {
     // Bounds checking for limit parameter
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
-    const thirtyDaysAgo = new Date(Date.now() - TIME_CONSTANTS.MS_IN_MONTH).toISOString().split("T")[0];
+    const thirtyDaysAgo = formatDateYMD(new Date(Date.now() - TIME_CONSTANTS.MS_IN_MONTH));
 
     const paidAssignments = await EmployeeJobAssignment.findAll({
       where: {
@@ -2894,8 +2895,8 @@ router.get("/timesheet", async (req, res) => {
     const defaultEnd = new Date(defaultStart);
     defaultEnd.setDate(defaultStart.getDate() + 6);
 
-    const start = startDate || defaultStart.toISOString().split("T")[0];
-    const end = endDate || defaultEnd.toISOString().split("T")[0];
+    const start = startDate || formatDateYMD(defaultStart);
+    const end = endDate || formatDateYMD(defaultEnd);
 
     const timesheetData = await EmployeeJobAssignmentService.getTimesheetData(
       req.businessOwnerId,
@@ -2957,8 +2958,8 @@ router.get("/employees/:employeeId/hours", async (req, res) => {
     const defaultStart = new Date(now);
     defaultStart.setDate(now.getDate() - 30);
 
-    const start = startDate || defaultStart.toISOString().split("T")[0];
-    const end = endDate || now.toISOString().split("T")[0];
+    const start = startDate || formatDateYMD(defaultStart);
+    const end = endDate || TimezoneService.getTodayInTimezone();
 
     const hoursDetail = await EmployeeJobAssignmentService.getEmployeeHoursDetail(
       req.businessOwnerId,
@@ -4151,7 +4152,7 @@ router.get("/team-for-job", async (req, res) => {
     );
 
     // Parse job date for availability check
-    const date = new Date(jobDate + "T00:00:00");
+    const date = new Date(jobDate + "T12:00:00");
     const dayOfWeek = date.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
 
     // Check availability for each employee

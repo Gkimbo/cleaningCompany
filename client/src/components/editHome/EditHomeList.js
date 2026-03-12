@@ -12,6 +12,7 @@ import FetchData from "../../services/fetchRequests/fetchData";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
 import { usePricing } from "../../context/PricingContext";
+import { parseDateString } from "../../services/formatters";
 
 const EditHomeList = ({ state, dispatch }) => {
   const navigate = useNavigate();
@@ -41,7 +42,7 @@ const EditHomeList = ({ state, dispatch }) => {
 
     if (appointments?.appointments) {
       appointments.appointments.forEach((appt) => {
-        const date = new Date(appt.date);
+        const date = parseDateString(appt.date);
         if (date.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000 &&
             date.getTime() - currentDate.getTime() >= 0) {
           fee += cancellationFeePerAppt;

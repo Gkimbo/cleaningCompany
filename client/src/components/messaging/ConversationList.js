@@ -291,7 +291,7 @@ const ConversationList = () => {
       }
     }
     if (conversation.appointment) {
-      const date = new Date(conversation.appointment.date);
+      const date = new Date(conversation.appointment.date + "T12:00:00");
       return `Appt - ${date.toLocaleDateString([], {
         month: "short",
         day: "numeric",

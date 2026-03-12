@@ -22,7 +22,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
-import { formatCurrency } from "../../services/formatters";
+import { formatCurrency, parseDateString } from "../../services/formatters";
 import EditClientHomeModal from "./EditClientHomeModal";
 import BookForClientModal from "./BookForClientModal";
 import SetupRecurringModal from "./SetupRecurringModal";
@@ -254,7 +254,7 @@ const StatusBadge = ({ status }) => {
 const AppointmentCard = ({ appointment, homes }) => {
   const [expanded, setExpanded] = useState(false);
 
-  const date = new Date(appointment.date);
+  const date = parseDateString(appointment.date);
   const formattedDate = date.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",

@@ -41,7 +41,8 @@ const PendingBookingModal = ({ visible, booking, onClose, onActionComplete }) =>
   }, [visible]);
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",

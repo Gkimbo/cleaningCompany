@@ -9,6 +9,7 @@ const models = require("../../../models");
 const { User } = models;
 const BillingService = require("../../../services/BillingService");
 const EncryptionService = require("../../../services/EncryptionService");
+const TimezoneService = require("../../../services/TimezoneService");
 
 const billingRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -187,7 +188,7 @@ billingRouter.get("/summary", verifyUser, async (req, res) => {
     });
 
     // Get upcoming appointments count
-    const today = new Date().toISOString().split("T")[0];
+    const today = TimezoneService.getTodayInTimezone();
     const upcomingAppointments = await UserAppointments.count({
       where: {
         userId: req.user.id,
@@ -203,7 +204,7 @@ billingRouter.get("/summary", verifyUser, async (req, res) => {
       where: {
         userId: req.user.id,
         completed: true,
-        date: { [Op.gte]: firstOfMonth.toISOString().split("T")[0] },
+        date: { [Op.gte]: TimezoneService.formatDateInTimezone(firstOfMonth) },
       },
     });
 

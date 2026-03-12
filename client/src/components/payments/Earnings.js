@@ -140,8 +140,8 @@ const Earnings = ({ state, dispatch }) => {
       const myAppointments = allAppointments
         .filter((appt) => !appt.completed)
         .sort((a, b) => {
-          const dateA = new Date(a.date + "T00:00:00");
-          const dateB = new Date(b.date + "T00:00:00");
+          const dateA = new Date(a.date + "T12:00:00");
+          const dateB = new Date(b.date + "T12:00:00");
           return dateA - dateB;
         });
       setAssignedAppointments(myAppointments);
@@ -187,9 +187,8 @@ const Earnings = ({ state, dispatch }) => {
 
   const isAppointmentToday = (appt) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const apptDate = new Date(appt.date + "T00:00:00");
-    return apptDate.getTime() === today.getTime();
+    const apptDate = parseLocalDate(appt.date);
+    return apptDate.toDateString() === today.toDateString();
   };
 
   const checkJobStatuses = async () => {
@@ -305,8 +304,8 @@ const Earnings = ({ state, dispatch }) => {
       .map((appt) => ({ ...appt, jobType: "solo" })),
     ...confirmedMultiCleanerJobs.map((job) => ({ ...job, jobType: "team" })),
   ].sort((a, b) => {
-    const dateA = new Date(a.date + "T00:00:00");
-    const dateB = new Date(b.date + "T00:00:00");
+    const dateA = new Date(a.date + "T12:00:00");
+    const dateB = new Date(b.date + "T12:00:00");
     return dateA - dateB;
   });
 
@@ -580,7 +579,7 @@ const Earnings = ({ state, dispatch }) => {
                 <View style={styles.appointmentContent}>
                   <View style={styles.appointmentLeft}>
                     <Text style={styles.appointmentDate}>
-                      {new Date(appt.date + "T00:00:00").toLocaleDateString("en-US", {
+                      {new Date(appt.date + "T12:00:00").toLocaleDateString("en-US", {
                         weekday: "short",
                         month: "short",
                         day: "numeric",

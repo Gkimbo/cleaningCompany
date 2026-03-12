@@ -11,6 +11,7 @@ import CompactJobCard from "./CompactJobCard";
 import NavigationConnector from "./NavigationConnector";
 import { calculateRouteTotal } from "../../utils/distanceUtils";
 import { usePricing } from "../../context/PricingContext";
+import { getTodayString } from "../../services/formatters";
 
 const STORAGE_KEY_PREFIX = "cleaner_job_order_";
 
@@ -31,8 +32,7 @@ const TodaysJobsList = ({
 
   // Get today's date string for storage key
   const getTodayKey = () => {
-    const today = new Date();
-    return `${STORAGE_KEY_PREFIX}${today.toISOString().split("T")[0]}`;
+    return `${STORAGE_KEY_PREFIX}${getTodayString()}`;
   };
 
   // Calculate payout for an appointment (returns cents for use with formatCurrency)
@@ -114,8 +114,12 @@ const TodaysJobsList = ({
       const today = new Date();
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
-      const todayStr = today.toISOString().split("T")[0];
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
+      // Use local date strings to avoid timezone issues
+      const todayStr = getTodayString();
+      const yesterdayYear = yesterday.getFullYear();
+      const yesterdayMonth = String(yesterday.getMonth() + 1).padStart(2, "0");
+      const yesterdayDay = String(yesterday.getDate()).padStart(2, "0");
+      const yesterdayStr = `${yesterdayYear}-${yesterdayMonth}-${yesterdayDay}`;
 
       const keysToDelete = orderKeys.filter((k) => {
         const dateStr = k.replace(STORAGE_KEY_PREFIX, "");

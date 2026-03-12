@@ -12,6 +12,7 @@ const {
 } = require("../../models");
 const NotificationService = require("../NotificationService");
 const EncryptionService = require("../EncryptionService");
+const TimezoneService = require("../TimezoneService");
 
 /**
  * Process unassigned appointment reminders
@@ -27,11 +28,11 @@ async function processUnassignedReminders(io = null) {
     // Calculate date range: today through 4 days from now
     const today = new Date(now);
     today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split("T")[0];
+    const todayStr = TimezoneService.formatDateInTimezone(today);
 
     const fourDaysFromNow = new Date(today);
     fourDaysFromNow.setDate(fourDaysFromNow.getDate() + 4);
-    const fourDaysFromNowStr = fourDaysFromNow.toISOString().split("T")[0];
+    const fourDaysFromNowStr = TimezoneService.formatDateInTimezone(fourDaysFromNow);
 
     // Start of today for checking if we already sent a reminder today
     const startOfToday = new Date(today);
@@ -88,8 +89,8 @@ async function processUnassignedReminders(io = null) {
         }
 
         // Calculate days until the appointment
-        // Parse as local time by appending T00:00:00 to avoid UTC interpretation
-        const appointmentDate = new Date(appointment.date + "T00:00:00");
+        // Use noon to avoid timezone edge cases that could shift the day
+        const appointmentDate = new Date(appointment.date + "T12:00:00");
         const daysUntil = Math.round((appointmentDate - today) / (1000 * 60 * 60 * 24));
 
         // Get client name (decrypt if encrypted)

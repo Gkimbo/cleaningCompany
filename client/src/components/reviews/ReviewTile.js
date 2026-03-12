@@ -142,7 +142,7 @@ const ReviewTile = ({
 
       <View style={styles.ratingContainer}>
         <View style={styles.starsRow}>{renderStars(rating, 20)}</View>
-        <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+        <Text style={styles.ratingText}>{(rating || 0).toFixed(1)}</Text>
       </View>
 
       {comment && <Text style={styles.commentText}>{comment}</Text>}

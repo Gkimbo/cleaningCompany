@@ -34,7 +34,8 @@ const PendingClientResponseCard = ({
   );
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -190,7 +191,7 @@ const PendingClientResponseCard = ({
               {appointment.clientSuggestedDates.map((date, index) => (
                 <View key={index} style={styles.suggestedDateChip}>
                   <Text style={styles.suggestedDateText}>
-                    {new Date(date).toLocaleDateString("en-US", {
+                    {new Date(date.includes("T") ? date : date + "T12:00:00").toLocaleDateString("en-US", {
                       weekday: "short",
                       month: "short",
                       day: "numeric",

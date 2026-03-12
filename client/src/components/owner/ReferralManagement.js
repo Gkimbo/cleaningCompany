@@ -186,7 +186,9 @@ const ReferralManagement = ({ state }) => {
   };
 
   const formatCentsAsDollars = (cents) => {
-    return (parseInt(cents) / 100).toFixed(2);
+    const parsed = parseInt(cents);
+    if (isNaN(parsed)) return "0.00";
+    return (parsed / 100).toFixed(2);
   };
 
   const renderProgramSection = (title, description, icon, enabled, enabledField, children) => (

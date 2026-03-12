@@ -2,6 +2,7 @@ const { UserHomes, User, UserAppointments, UserBills, MultiCleanerJob } = requir
 const bcrypt = require("bcrypt");
 const { getPricingConfig, getCleanersNeeded } = require("../config/businessConfig");
 const HomeClass = require("./HomeClass");
+const TimezoneService = require("./TimezoneService");
 
 class UserInfoClass {
   static async addHomeToDB({
@@ -41,6 +42,13 @@ class UserInfoClass {
       zipcode
     );
 
+    // Determine timezone from coordinates (with state fallback)
+    const timezone = TimezoneService.getTimezoneForHome({
+      latitude,
+      longitude,
+      state,
+    });
+
     const newHome = await UserHomes.create({
       userId,
       nickName,
@@ -70,6 +78,7 @@ class UserInfoClass {
       bathroomConfigurations,
       latitude,
       longitude,
+      timezone,
     });
     return newHome;
   }
@@ -120,11 +129,18 @@ class UserInfoClass {
 
     let latitude = existingHome.latitude;
     let longitude = existingHome.longitude;
+    let timezone = existingHome.timezone;
 
     if (addressChanged) {
       const coords = await HomeClass.geocodeAddress(address, city, state, zipcode);
       latitude = coords.latitude;
       longitude = coords.longitude;
+      // Recalculate timezone based on new coordinates
+      timezone = TimezoneService.getTimezoneForHome({
+        latitude,
+        longitude,
+        state,
+      });
     }
 
     await existingHome.update({
@@ -155,6 +171,7 @@ class UserInfoClass {
       bathroomConfigurations,
       latitude,
       longitude,
+      timezone,
     });
 
     return existingHome;

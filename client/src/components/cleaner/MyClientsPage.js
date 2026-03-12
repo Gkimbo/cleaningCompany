@@ -365,8 +365,8 @@ const MyClientsPage = ({ state }) => {
           if (
             record.nextAppointment &&
             (!existing.nextAppointment ||
-              new Date(record.nextAppointment.date) <
-                new Date(existing.nextAppointment.date))
+              new Date(record.nextAppointment.date + "T12:00:00") <
+                new Date(existing.nextAppointment.date + "T12:00:00"))
           ) {
             existing.nextAppointment = record.nextAppointment;
           }

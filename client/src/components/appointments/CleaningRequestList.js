@@ -21,6 +21,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import RequestResponseTile from "./tiles/RequestResponseTile";
+import { getTodayString } from "../../services/formatters";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -65,7 +66,7 @@ const CleaningRequestList = ({ state, dispatch }) => {
   // Calculate stats
   const pendingCount = appointmentArray.filter((a) => !a.hasBeenAssigned).length;
   const upcomingCount = appointmentArray.filter(
-    (a) => new Date(a.date) >= new Date(new Date().toDateString())
+    (a) => a.date >= getTodayString()
   ).length;
 
   // Fetch user ID
@@ -151,9 +152,9 @@ const CleaningRequestList = ({ state, dispatch }) => {
     return [...mapped].sort((a, b) => {
       switch (sortOption) {
         case "dateNewest":
-          return new Date(a.date) - new Date(b.date);
+          return new Date(a.date + "T12:00:00") - new Date(b.date + "T12:00:00");
         case "dateOldest":
-          return new Date(b.date) - new Date(a.date);
+          return new Date(b.date + "T12:00:00") - new Date(a.date + "T12:00:00");
         case "priceLow":
           return (Number(a.price) || 0) - (Number(b.price) || 0);
         case "priceHigh":

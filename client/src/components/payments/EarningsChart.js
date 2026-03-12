@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { usePricing } from "../../context/PricingContext";
+import { toLocalDateString, parseDateString } from "../../services/formatters";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -169,7 +170,7 @@ const EarningsChart = ({ appointments = [], currentUserId }) => {
       // All time - find earliest appointment
       if (cleanerAppointments.length > 0) {
         startDate = new Date(
-          Math.min(...cleanerAppointments.map((a) => new Date(a.date).getTime()))
+          Math.min(...cleanerAppointments.map((a) => parseDateString(a.date).getTime()))
         );
       } else {
         startDate = new Date(now);
@@ -182,7 +183,7 @@ const EarningsChart = ({ appointments = [], currentUserId }) => {
 
     // Filter appointments within range
     const filteredAppointments = cleanerAppointments.filter((appt) => {
-      const apptDate = new Date(appt.date);
+      const apptDate = parseDateString(appt.date);
       return apptDate >= startDate && apptDate <= now;
     });
 
@@ -203,7 +204,7 @@ const EarningsChart = ({ appointments = [], currentUserId }) => {
       for (let i = 6; i >= 0; i--) {
         const date = new Date(now);
         date.setDate(date.getDate() - i);
-        const key = date.toISOString().split("T")[0];
+        const key = toLocalDateString(date);
         earnings[key] = 0;
       }
       filteredAppointments.forEach((appt) => {
@@ -213,7 +214,7 @@ const EarningsChart = ({ appointments = [], currentUserId }) => {
         }
       });
       labels = Object.keys(earnings).map((d) => {
-        const date = new Date(d);
+        const date = parseDateString(d);
         return date.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 2);
       });
     } else if (range.days <= 30) {
@@ -223,14 +224,14 @@ const EarningsChart = ({ appointments = [], currentUserId }) => {
         date.setDate(date.getDate() - i * 7);
         const weekStart = new Date(date);
         weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        const key = weekStart.toISOString().split("T")[0];
+        const key = toLocalDateString(weekStart);
         earnings[key] = 0;
       }
       filteredAppointments.forEach((appt) => {
-        const apptDate = new Date(appt.date);
+        const apptDate = parseDateString(appt.date);
         const weekStart = new Date(apptDate);
         weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        const key = weekStart.toISOString().split("T")[0];
+        const key = toLocalDateString(weekStart);
         if (earnings.hasOwnProperty(key)) {
           earnings[key] += calculateEarnings(appt);
         }
@@ -246,7 +247,7 @@ const EarningsChart = ({ appointments = [], currentUserId }) => {
         earnings[key] = 0;
       }
       filteredAppointments.forEach((appt) => {
-        const apptDate = new Date(appt.date);
+        const apptDate = parseDateString(appt.date);
         const key = `${apptDate.getFullYear()}-${String(apptDate.getMonth() + 1).padStart(2, "0")}`;
         if (earnings.hasOwnProperty(key)) {
           earnings[key] += calculateEarnings(appt);
@@ -268,7 +269,7 @@ const EarningsChart = ({ appointments = [], currentUserId }) => {
         earnings[key] = 0;
       }
       filteredAppointments.forEach((appt) => {
-        const apptDate = new Date(appt.date);
+        const apptDate = parseDateString(appt.date);
         const quarter = Math.floor(apptDate.getMonth() / 3);
         const key = `${apptDate.getFullYear()}-Q${quarter + 1}`;
         if (earnings.hasOwnProperty(key)) {

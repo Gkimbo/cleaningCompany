@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from "rea
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { colors, spacing, radius, typography, shadows } from "../../../services/styles/theme";
-import { formatCurrency } from "../../../services/formatters";
+import { formatCurrency, getTodayString, parseDateString } from "../../../services/formatters";
 import BusinessOwnerService from "../../../services/fetchRequests/BusinessOwnerService";
 
 const PaymentCard = ({ appointment, onMarkPaid, onSendReminder }) => {
@@ -12,11 +12,16 @@ const PaymentCard = ({ appointment, onMarkPaid, onSendReminder }) => {
   // Format date
   const formatDate = (dateStr) => {
     if (!dateStr) return "Unknown date";
-    const date = new Date(dateStr);
+    const todayStr = getTodayString();
+
+    if (dateStr === todayStr) return "Today";
+
+    // Calculate days difference using parsed dates
+    const date = parseDateString(dateStr);
     const today = new Date();
+    today.setHours(12, 0, 0, 0); // Normalize to noon
     const diffDays = Math.floor((today - date) / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) return "Today";
     if (diffDays === 1) return "Yesterday";
     if (diffDays > 1 && diffDays <= 7) return `${diffDays} days ago`;
     if (diffDays > 7) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? "s" : ""} ago`;
@@ -29,9 +34,8 @@ const PaymentCard = ({ appointment, onMarkPaid, onSendReminder }) => {
 
   const isOverdue = () => {
     if (!appointment.date) return false;
-    const apptDate = new Date(appointment.date);
-    const today = new Date();
-    return apptDate < today && appointment.paymentStatus !== "paid";
+    const todayStr = getTodayString();
+    return appointment.date < todayStr && appointment.paymentStatus !== "paid";
   };
 
   const clientName = appointment.clientName || "Unknown Client";
@@ -168,10 +172,8 @@ const ClientPaymentsSection = ({ state, onRefresh }) => {
 
   // Calculate totals
   const totalUnpaid = unpaidAppointments.reduce((sum, a) => sum + (a.price || 0), 0);
-  const overdueCount = unpaidAppointments.filter(a => {
-    const apptDate = new Date(a.date);
-    return apptDate < new Date();
-  }).length;
+  const todayStr = getTodayString();
+  const overdueCount = unpaidAppointments.filter(a => a.date < todayStr).length;
 
   // Show only first 4 appointments
   const displayedAppointments = unpaidAppointments.slice(0, 4);

@@ -187,6 +187,12 @@ module.exports = (sequelize, DataTypes) => {
 			defaultValue: false,
 			comment: "When true, this home is visible on marketplace for cleaners to pick up jobs",
 		},
+		// Timezone derived from coordinates for accurate date handling
+		timezone: {
+			type: DataTypes.STRING(50),
+			allowNull: true,
+			comment: "IANA timezone identifier (e.g., America/New_York)",
+		},
 	});
 
 	// Helper function to encrypt PII fields

@@ -9,7 +9,8 @@ const PendingBookingCard = ({ booking, onPress, onAccept, onDecline }) => {
 
   // Format date for display
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    const date = new Date(dateString + "T12:00:00");
     const options = { weekday: "long", month: "short", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
   };

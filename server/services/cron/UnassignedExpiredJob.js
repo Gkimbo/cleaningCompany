@@ -7,6 +7,7 @@
 const { Op } = require("sequelize");
 const { UserAppointments, User, UserHomes } = require("../../models");
 const NotificationService = require("../NotificationService");
+const TimezoneService = require("../TimezoneService");
 const Email = require("../sendNotifications/EmailClass");
 const PushNotification = require("../sendNotifications/PushNotificationClass");
 const EncryptionService = require("../EncryptionService");
@@ -26,7 +27,7 @@ async function processExpiredUnassignedAppointments(io = null) {
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     yesterday.setHours(23, 59, 59, 999);
-    const yesterdayStr = yesterday.toISOString().split("T")[0];
+    const yesterdayStr = TimezoneService.formatDateInTimezone(yesterday);
 
     console.log(
       `[UnassignedExpiredJob] Checking for unassigned appointments on or before ${yesterdayStr}`

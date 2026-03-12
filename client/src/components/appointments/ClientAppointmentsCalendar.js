@@ -19,6 +19,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { getTodayString } from "../../services/formatters";
 
 const ClientAppointmentsCalendar = ({ state, dispatch }) => {
   const [allAppointments, setAllAppointments] = useState([]);
@@ -77,33 +78,29 @@ const ClientAppointmentsCalendar = ({ state, dispatch }) => {
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
-  // Calculate date values
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const sevenDaysFromNow = new Date(today);
+  // Calculate date values - use YYYY-MM-DD strings for timezone-safe comparisons
+  const todayString = getTodayString();
+  const sevenDaysFromNow = new Date();
   sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+  const sevenDaysString = `${sevenDaysFromNow.getFullYear()}-${String(sevenDaysFromNow.getMonth() + 1).padStart(2, '0')}-${String(sevenDaysFromNow.getDate()).padStart(2, '0')}`;
 
-  // Filter calculations
+  // Filter calculations - compare YYYY-MM-DD strings directly
   const totalAppointments = allAppointments.length;
   const upcomingAppointments = allAppointments.filter((apt) => {
-    const aptDate = new Date(apt.date);
-    return aptDate >= today && aptDate <= sevenDaysFromNow && !apt.completed;
+    return apt.date >= todayString && apt.date <= sevenDaysString && !apt.completed;
   }).length;
   const assignedAppointments = allAppointments.filter(
     (apt) => apt.hasBeenAssigned && !apt.completed
   ).length;
   const unassignedAppointments = allAppointments.filter((apt) => {
-    const aptDate = new Date(apt.date);
-    return aptDate >= today && !apt.hasBeenAssigned && !apt.completed;
+    return apt.date >= todayString && !apt.hasBeenAssigned && !apt.completed;
   }).length;
   const withRequestsAppointments = allAppointments.filter((apt) => {
-    const aptDate = new Date(apt.date);
-    return aptDate >= today && !apt.completed && apt.pendingRequestCount > 0;
+    return apt.date >= todayString && !apt.completed && apt.pendingRequestCount > 0;
   }).length;
   const noRequestsAppointments = allAppointments.filter((apt) => {
-    const aptDate = new Date(apt.date);
     return (
-      aptDate >= today &&
+      apt.date >= todayString &&
       !apt.completed &&
       !apt.hasBeenAssigned &&
       (!apt.pendingRequestCount || apt.pendingRequestCount === 0)
@@ -115,26 +112,22 @@ const ClientAppointmentsCalendar = ({ state, dispatch }) => {
     switch (activeFilter) {
       case "next7days":
         return allAppointments.filter((apt) => {
-          const aptDate = new Date(apt.date);
-          return aptDate >= today && aptDate <= sevenDaysFromNow && !apt.completed;
+          return apt.date >= todayString && apt.date <= sevenDaysString && !apt.completed;
         });
       case "assigned":
         return allAppointments.filter((apt) => apt.hasBeenAssigned && !apt.completed);
       case "unassigned":
         return allAppointments.filter((apt) => {
-          const aptDate = new Date(apt.date);
-          return aptDate >= today && !apt.hasBeenAssigned && !apt.completed;
+          return apt.date >= todayString && !apt.hasBeenAssigned && !apt.completed;
         });
       case "withRequests":
         return allAppointments.filter((apt) => {
-          const aptDate = new Date(apt.date);
-          return aptDate >= today && !apt.completed && apt.pendingRequestCount > 0;
+          return apt.date >= todayString && !apt.completed && apt.pendingRequestCount > 0;
         });
       case "noRequests":
         return allAppointments.filter((apt) => {
-          const aptDate = new Date(apt.date);
           return (
-            aptDate >= today &&
+            apt.date >= todayString &&
             !apt.completed &&
             !apt.hasBeenAssigned &&
             (!apt.pendingRequestCount || apt.pendingRequestCount === 0)
@@ -144,7 +137,7 @@ const ClientAppointmentsCalendar = ({ state, dispatch }) => {
       default:
         return allAppointments;
     }
-  }, [activeFilter, allAppointments, today, sevenDaysFromNow]);
+  }, [activeFilter, allAppointments, todayString, sevenDaysString]);
 
   const filteredAppointments = getFilteredAppointments();
 
@@ -184,7 +177,8 @@ const ClientAppointmentsCalendar = ({ state, dispatch }) => {
   // Format selected date for display
   const formatSelectedDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateString + "T12:00:00");
     const options = { weekday: "long", month: "long", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
   };
@@ -218,9 +212,8 @@ const ClientAppointmentsCalendar = ({ state, dispatch }) => {
   // Calendar day render
   const renderDay = useCallback(
     ({ date }) => {
-      const dayDate = new Date(date.dateString);
-      const isPast = dayDate < today;
-      const isToday = date.dateString === today.toISOString().split("T")[0];
+      const isPast = date.dateString < todayString;
+      const isToday = date.dateString === todayString;
 
       const appointmentsOnDay = filteredAppointments.filter(
         (a) => a.date === date.dateString
@@ -281,7 +274,7 @@ const ClientAppointmentsCalendar = ({ state, dispatch }) => {
         </Pressable>
       );
     },
-    [filteredAppointments, selectedDate, handleDateSelect, today]
+    [filteredAppointments, selectedDate, handleDateSelect, todayString]
   );
 
   const selectedDateAppointments = selectedDate
@@ -449,7 +442,7 @@ const ClientAppointmentsCalendar = ({ state, dispatch }) => {
         {/* Calendar Card */}
         <View style={styles.calendarCard}>
           <Calendar
-            current={new Date().toISOString().split("T")[0]}
+            current={getTodayString()}
             onDayPress={handleDateSelect}
             dayComponent={renderDay}
             renderArrow={(direction) => (

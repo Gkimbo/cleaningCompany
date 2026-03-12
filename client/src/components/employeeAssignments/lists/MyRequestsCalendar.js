@@ -40,6 +40,7 @@ import { usePricing } from "../../../context/PricingContext";
 import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
 
 import useSafeNavigation from "../../../hooks/useSafeNavigation";
+import { toLocalDateString, getTodayString } from "../../../services/formatters";
 // Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (time) => {
   if (!time || time.toLowerCase() === "anytime") return "Anytime";
@@ -146,7 +147,7 @@ const MyRequestsCalendar = ({ state }) => {
 
         const now = new Date();
         const isUpcoming = (item) =>
-          new Date(item.date + "T00:00:00") >= new Date(now.toDateString());
+          new Date(item.date + "T12:00:00") >= new Date(now.toDateString());
 
         setRequests((res.requested || []).filter(isUpcoming));
         setUserId(user.user.id);
@@ -363,7 +364,8 @@ const MyRequestsCalendar = ({ state }) => {
 
   const formatSelectedDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateString + "T12:00:00");
     const options = { weekday: "long", month: "long", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
   };
@@ -390,9 +392,8 @@ const MyRequestsCalendar = ({ state }) => {
   // Calendar day render
   const renderDay = useCallback(
     ({ date }) => {
-      const today = new Date();
-      const dayDate = new Date(date.dateString);
-      const isPast = dayDate < new Date(today.toDateString());
+      const todayString = getTodayString();
+      const isPast = date.dateString < todayString;
 
       const soloCount = requests.filter(
         (r) => r.date === date.dateString
@@ -512,7 +513,7 @@ const MyRequestsCalendar = ({ state }) => {
         {/* Calendar */}
         <View style={styles.calendarContainer}>
           <Calendar
-            current={new Date().toISOString().split("T")[0]}
+            current={toLocalDateString(new Date())}
             onDayPress={handleDateSelect}
             dayComponent={renderDay}
             renderArrow={(direction) => (
@@ -671,7 +672,7 @@ const MyRequestsCalendar = ({ state }) => {
                             {req.appointment?.home?.state}
                           </Text>
                           <Text style={styles.teamRequestDate}>
-                            {new Date(req.appointment?.date + "T00:00:00").toLocaleDateString(
+                            {new Date(req.appointment?.date + "T12:00:00").toLocaleDateString(
                               "en-US",
                               {
                                 weekday: "short",

@@ -27,6 +27,7 @@ const NotificationService = require("../NotificationService");
 const Email = require("../sendNotifications/EmailClass");
 const PushNotification = require("../sendNotifications/PushNotificationClass");
 const EncryptionService = require("../EncryptionService");
+const TimezoneService = require("../TimezoneService");
 
 // Helper to safely decrypt a field
 const safeDecrypt = (value) => {
@@ -52,8 +53,8 @@ async function processPausedAppointmentCancellations(io = null) {
   try {
     // Calculate 7 days from now
     const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const todayStr = now.toISOString().split("T")[0];
-    const sevenDaysStr = sevenDaysFromNow.toISOString().split("T")[0];
+    const todayStr = TimezoneService.getTodayInTimezone();
+    const sevenDaysStr = TimezoneService.formatDateInTimezone(sevenDaysFromNow);
 
     console.log(
       `[PausedAppointmentCancellationJob] Checking for paused appointments between ${todayStr} and ${sevenDaysStr}`

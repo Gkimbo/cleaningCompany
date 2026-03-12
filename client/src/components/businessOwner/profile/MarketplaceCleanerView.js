@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { colors, spacing, radius, typography, shadows } from "../../../services/styles/theme";
 import { formatCurrency } from "../../../services/formatters";
-import { parseLocalDate } from "../../../utils/dateUtils";
+import { parseLocalDate, isFutureOrToday } from "../../../utils/dateUtils";
 import { usePricing } from "../../../context/PricingContext";
 import FetchData from "../../../services/fetchRequests/fetchData";
 
@@ -138,9 +138,8 @@ const MarketplaceCleanerView = ({ state }) => {
         "/api/v1/users/appointments/employee",
         state?.currentUser?.token
       );
-      const now = new Date();
       const upcoming = (response?.requested || []).filter(
-        (item) => new Date(item.date) >= new Date(now.toDateString())
+        (item) => isFutureOrToday(item.date)
       );
       setPendingRequests(upcoming);
     } catch (error) {

@@ -143,9 +143,9 @@ const TeamStatsSummary = ({ employees }) => {
     return sum + revenue;
   }, 0);
 
-  const avgRating = employees.reduce((sum, emp) => sum + (emp.avgRating || 0), 0) / employees.length;
+  const avgRating = employees.length > 0 ? employees.reduce((sum, emp) => sum + (emp.avgRating || 0), 0) / employees.length : 0;
   const totalJobs = employees.reduce((sum, emp) => sum + (emp.jobsCompleted || 0), 0);
-  const avgCompletion = employees.reduce((sum, emp) => sum + (emp.completionRate || 0), 0) / employees.length;
+  const avgCompletion = employees.length > 0 ? employees.reduce((sum, emp) => sum + (emp.completionRate || 0), 0) / employees.length : 0;
 
   return (
     <View style={styles.teamStatsSummary}>

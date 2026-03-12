@@ -100,7 +100,8 @@ const FilterChip = ({ label, active, onPress, onClear }) => (
 const PayoutItem = ({ payout, selected, onToggle, onMarkPaid, onEditHours, highlighted }) => {
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    return new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -214,7 +215,8 @@ const PayoutItem = ({ payout, selected, onToggle, onMarkPaid, onEditHours, highl
 const BonusItem = ({ bonus, onMarkPaid, onCancel }) => {
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    return new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -385,7 +387,7 @@ const MarkPaidModal = ({ visible, payout, onClose, onConfirm, isSubmitting }) =>
               <View style={styles.modalSummaryRow}>
                 <Text style={styles.modalSummaryLabel}>Job Date</Text>
                 <Text style={styles.modalSummaryValue}>
-                  {new Date(payout.appointment?.date + "T00:00:00").toLocaleDateString()}
+                  {new Date(payout.appointment?.date + "T12:00:00").toLocaleDateString()}
                 </Text>
               </View>
             </View>
@@ -569,7 +571,7 @@ const EditHoursModal = ({ visible, payout, onClose, onSave, isSubmitting }) => {
               <View style={styles.modalSummaryRow}>
                 <Text style={styles.modalSummaryLabel}>Job Date</Text>
                 <Text style={styles.modalSummaryValue}>
-                  {new Date(payout.appointment?.date + "T00:00:00").toLocaleDateString()}
+                  {new Date(payout.appointment?.date + "T12:00:00").toLocaleDateString()}
                 </Text>
               </View>
               {hourlyRate && (

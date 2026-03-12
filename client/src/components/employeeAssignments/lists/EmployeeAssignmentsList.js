@@ -214,8 +214,8 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     });
 
     const sortFn = {
-      dateNewest: (a, b) => new Date(a.date) - new Date(b.date),
-      dateOldest: (a, b) => new Date(b.date) - new Date(a.date),
+      dateNewest: (a, b) => new Date(a.date + "T12:00:00") - new Date(b.date + "T12:00:00"),
+      dateOldest: (a, b) => new Date(b.date + "T12:00:00") - new Date(a.date + "T12:00:00"),
       distanceClosest: (a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity),
       distanceFurthest: (a, b) => (b.distance ?? 0) - (a.distance ?? 0),
       priceLow: (a, b) => (Number(a.price) || 0) - (Number(b.price) || 0),

@@ -20,6 +20,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { toLocalDateString } from "../../services/formatters";
 
 // Payout Status Colors
 const PAYOUT_STATUS_COLORS = {
@@ -46,7 +47,8 @@ const EarningRow = ({ job, payConfig }) => {
   const statusInfo = PAYOUT_STATUS_COLORS[job.status] || PAYOUT_STATUS_COLORS.pending;
 
   const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    const date = new Date(dateStr + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -60,7 +62,7 @@ const EarningRow = ({ job, payConfig }) => {
     if (payConfig.payType === "hourly" && job.hoursWorked && payConfig.hourlyRate) {
       const hourlyRate = payConfig.hourlyRate / 100;
       return `${job.hoursWorked} hrs @ $${hourlyRate.toFixed(2)}/hr`;
-    } else if (payConfig.payType === "percentage" && payConfig.percentRate) {
+    } else if (payConfig.payType === "percentage" && payConfig.percentRate && job.payAmount) {
       // For percentage, calculate the original job price from pay amount
       const originalPrice = (job.payAmount / 100) / (payConfig.percentRate / 100);
       return `${payConfig.percentRate.toFixed(0)}% of $${originalPrice.toFixed(0)}`;
@@ -172,7 +174,7 @@ const PayRateCard = ({ profile }) => {
 // Upcoming Job Row Component
 const UpcomingJobRow = ({ job, onPress }) => {
   const formatDate = (dateStr) => {
-    const date = new Date(dateStr + "T00:00:00");
+    const date = new Date(dateStr + "T12:00:00");
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -280,8 +282,8 @@ const EmployeeEarnings = ({ state }) => {
     }
 
     return {
-      startDate: startDate.toISOString().split("T")[0],
-      endDate: endDate.toISOString().split("T")[0],
+      startDate: toLocalDateString(startDate),
+      endDate: toLocalDateString(endDate),
     };
   };
 

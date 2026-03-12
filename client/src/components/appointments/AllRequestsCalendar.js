@@ -22,6 +22,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import RequestResponseTile from "./tiles/RequestResponseTile";
+import { getTodayString } from "../../services/formatters";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -67,7 +68,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
   // Calculate stats
   const totalRequests = appointmentArray.length;
   const upcomingCount = appointmentArray.filter(
-    (a) => new Date(a.date) >= new Date(new Date().toDateString())
+    (a) => a.date >= getTodayString()
   ).length;
 
   // Fetch user
@@ -159,9 +160,9 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
       return [...list].sort((a, b) => {
         switch (sortOption) {
           case "dateNewest":
-            return new Date(a.date) - new Date(b.date);
+            return new Date(a.date + "T12:00:00") - new Date(b.date + "T12:00:00");
           case "dateOldest":
-            return new Date(b.date) - new Date(a.date);
+            return new Date(b.date + "T12:00:00") - new Date(a.date + "T12:00:00");
           case "priceLow":
             return (Number(a.price) || 0) - (Number(b.price) || 0);
           case "priceHigh":
@@ -201,7 +202,8 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
 
   const formatSelectedDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateString + "T12:00:00");
     const options = { weekday: "long", month: "long", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
   };
@@ -212,9 +214,8 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
   // Calendar day render
   const renderDay = useCallback(
     ({ date }) => {
-      const today = new Date();
-      const dayDate = new Date(date.dateString);
-      const isPast = dayDate < new Date(today.toDateString());
+      const todayString = getTodayString();
+      const isPast = date.dateString < todayString;
 
       const requestCount = appointmentArray.filter(
         (a) => a.date === date.dateString
@@ -325,7 +326,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
         {/* Calendar */}
         <View style={styles.calendarContainer}>
           <Calendar
-            current={new Date().toISOString().split("T")[0]}
+            current={getTodayString()}
             onDayPress={handleDateSelect}
             dayComponent={renderDay}
             renderArrow={(direction) => (

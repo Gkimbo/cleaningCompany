@@ -27,7 +27,8 @@ class HomeSerializer {
 		"cleanSheetsLocation",
 		"dirtySheetsLocation",
 		"cleanTowelsLocation",
-		"dirtyTowelsLocation"
+		"dirtyTowelsLocation",
+		"timezone"
 	];
 
 	// Fields that are encrypted in the database

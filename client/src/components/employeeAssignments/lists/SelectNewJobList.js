@@ -45,6 +45,7 @@ import {
 import { usePricing } from "../../../context/PricingContext";
 import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
 import { useOffline } from "../../../services/offline/OfflineContext";
+import { getTodayString } from "../../../services/formatters";
 
 // Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (time) => {
@@ -209,8 +210,8 @@ const SelectNewJobList = ({ state }) => {
           getCurrentUser(state.currentUser.token),
         ]);
 
-        const now = new Date();
-        const isUpcoming = (item) => new Date(item.date) >= now;
+        const todayStr = getTodayString();
+        const isUpcoming = (item) => item.date >= todayStr;
 
         // Filter out jobs that have already been assigned to anyone (including yourself)
         // Those should only show on the "My Jobs" page
@@ -1017,8 +1018,8 @@ const SelectNewJobList = ({ state }) => {
       distanceFurthest: (a, b) => (b.distance ?? 0) - (a.distance ?? 0),
       priceLow: (a, b) => (Number(a.price) || 0) - (Number(b.price) || 0),
       priceHigh: (a, b) => (Number(b.price) || 0) - (Number(a.price) || 0),
-      dateNewest: (a, b) => new Date(a.date) - new Date(b.date),
-      dateOldest: (a, b) => new Date(b.date) - new Date(a.date),
+      dateNewest: (a, b) => new Date(a.date + "T12:00:00") - new Date(b.date + "T12:00:00"),
+      dateOldest: (a, b) => new Date(b.date + "T12:00:00") - new Date(a.date + "T12:00:00"),
     };
 
     return [...processed].sort((a, b) => {
@@ -1447,7 +1448,7 @@ const SelectNewJobList = ({ state }) => {
                             </Text>
                             <Text style={styles.multiCleanerRequestDate}>
                               {new Date(
-                                request.appointment?.date + "T00:00:00"
+                                request.appointment?.date + "T12:00:00"
                               ).toLocaleDateString("en-US", {
                                 weekday: "short",
                                 month: "short",

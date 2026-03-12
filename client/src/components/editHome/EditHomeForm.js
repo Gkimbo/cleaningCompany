@@ -28,6 +28,7 @@ import {
   typography,
 } from "../../services/styles/theme";
 import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
+import { parseDateString } from "../../services/formatters";
 import PreferredCleanersSection from "./PreferredCleanersSection";
 
 const STEPS = {
@@ -389,7 +390,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 
     if (appointments?.appointments) {
       appointments.appointments.forEach((appt) => {
-        const date = new Date(appt.date);
+        const date = parseDateString(appt.date);
         if (
           date.getTime() - currentDate.getTime() <= cancellation.windowDays * 24 * 60 * 60 * 1000 &&
           date.getTime() - currentDate.getTime() >= 0

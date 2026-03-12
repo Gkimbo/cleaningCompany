@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
 import useSafeNavigation from "../../hooks/useSafeNavigation";
+import { toLocalDateString } from "../../services/formatters";
 import {
   colors,
   spacing,
@@ -450,7 +451,7 @@ const BusinessOwnerCalendar = ({ state }) => {
   };
 
   const formatDateKey = (date) => {
-    return date.toISOString().split("T")[0];
+    return toLocalDateString(date);
   };
 
   const getJobsForDate = (date) => {

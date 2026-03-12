@@ -39,6 +39,7 @@ const { Notification } = require("../../../models");
 const CancellationAuditService = require("../../../services/CancellationAuditService");
 const CancellationFinancialService = require("../../../services/CancellationFinancialService");
 const JobLedgerService = require("../../../services/JobLedgerService");
+const TimezoneService = require("../../../services/TimezoneService");
 const {
   calculateScheduledEndTime,
   getAutoCompleteConfig,
@@ -3945,7 +3946,7 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
             model: UserAppointments,
             as: "appointment",
             where: {
-              date: { [Op.gte]: today.toISOString().split('T')[0] },
+              date: { [Op.gte]: TimezoneService.getTodayInTimezone() },
               completed: false,
             },
           }],

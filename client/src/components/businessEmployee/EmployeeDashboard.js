@@ -140,8 +140,8 @@ const TodayJobCard = ({ job, onStart, onComplete, onView, isStarting, isCompleti
 // Upcoming Job Card Component
 const UpcomingJobCard = ({ job, onPress }) => {
   const getDateInfo = (dateStr) => {
-    // Add T00:00:00 to treat date as local time, not UTC
-    const date = new Date(dateStr + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateStr + "T12:00:00");
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -431,10 +431,10 @@ const EmployeeDashboard = ({ state }) => {
   // Get today's jobs
   const today = new Date().toDateString();
   const todaysJobs = jobs.filter(
-    (job) => new Date(job.appointment?.date + "T00:00:00").toDateString() === today
+    (job) => new Date(job.appointment?.date + "T12:00:00").toDateString() === today
   );
   const upcomingJobs = jobs.filter(
-    (job) => new Date(job.appointment?.date + "T00:00:00").toDateString() !== today
+    (job) => new Date(job.appointment?.date + "T12:00:00").toDateString() !== today
   );
 
   // Count in-progress jobs
@@ -682,7 +682,8 @@ const getGreeting = () => {
 
 // Helper function for payout date
 const formatPayoutDate = (dateStr) => {
-  const date = new Date(dateStr);
+  // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+  const date = new Date(dateStr + "T12:00:00");
   const today = new Date();
   const diffDays = Math.ceil((date - today) / (1000 * 60 * 60 * 24));
 

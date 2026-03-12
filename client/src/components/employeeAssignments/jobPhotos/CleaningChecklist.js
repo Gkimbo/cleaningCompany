@@ -306,7 +306,7 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
     (status) => status === "na"
   ).length;
   const doneTasks = completedTasks + naTasks;
-  const progressPercent = Math.round((doneTasks / totalTasks) * 100);
+  const progressPercent = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
   useEffect(() => {
     if (onProgressUpdate) {

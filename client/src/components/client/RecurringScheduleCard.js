@@ -14,7 +14,8 @@ const RecurringScheduleCard = ({ schedules, onViewAll, onPauseSchedule }) => {
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -113,7 +114,7 @@ const RecurringScheduleCard = ({ schedules, onViewAll, onPauseSchedule }) => {
               <View style={styles.detailRow}>
                 <Feather name="dollar-sign" size={14} color={colors.text.tertiary} />
                 <Text style={styles.detailText}>
-                  ${(parseFloat(schedule.price) / 100).toFixed(2)} per cleaning
+                  ${((parseFloat(schedule.price) || 0) / 100).toFixed(2)} per cleaning
                 </Text>
               </View>
             </View>

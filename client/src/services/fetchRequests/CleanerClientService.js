@@ -601,6 +601,30 @@ class CleanerClientService {
   }
 
   /**
+   * Cancel a pending booking request that was sent to a client
+   * @param {string} token - Auth token
+   * @param {number} appointmentId - Appointment ID to cancel
+   * @returns {Object} { success, message, error }
+   */
+  static async cancelBookingRequest(token, appointmentId) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/cleaner-clients/pending-client-responses/${appointmentId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      return await response.json();
+    } catch (error) {
+      console.error("Error cancelling booking request:", error);
+      return { success: false, error: "Failed to cancel booking request" };
+    }
+  }
+
+  /**
    * Get platform price for a client's home
    * @param {string} token - Auth token
    * @param {number} cleanerClientId - CleanerClient relationship ID

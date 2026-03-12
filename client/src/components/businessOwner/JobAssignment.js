@@ -34,7 +34,8 @@ const STATUS_COLORS = {
 // Unassigned Job Card
 const UnassignedJobCard = ({ job, onAssign }) => {
   const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    const date = new Date(dateStr + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -53,9 +54,9 @@ const UnassignedJobCard = ({ job, onAssign }) => {
     <View style={styles.jobCard}>
       <View style={styles.jobCardHeader}>
         <View style={styles.jobDateBadge}>
-          <Text style={styles.jobDateDay}>{new Date(job.date + "T00:00:00").getDate()}</Text>
+          <Text style={styles.jobDateDay}>{new Date(job.date + "T12:00:00").getDate()}</Text>
           <Text style={styles.jobDateMonth}>
-            {new Date(job.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+            {new Date(job.date + "T12:00:00").toLocaleDateString("en-US", { month: "short" })}
           </Text>
         </View>
         <View style={styles.jobInfo}>
@@ -253,13 +254,13 @@ const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, pl
             styles.jobDateDay,
             ownerIsAssigned && styles.jobDateDaySelf,
           ]}>
-            {new Date(assignment.appointment?.date + "T00:00:00").getDate()}
+            {new Date(assignment.appointment?.date + "T12:00:00").getDate()}
           </Text>
           <Text style={[
             styles.jobDateMonth,
             ownerIsAssigned && styles.jobDateMonthSelf,
           ]}>
-            {new Date(assignment.appointment?.date + "T00:00:00").toLocaleDateString("en-US", {
+            {new Date(assignment.appointment?.date + "T12:00:00").toLocaleDateString("en-US", {
               month: "short",
             })}
           </Text>
@@ -605,10 +606,10 @@ const AssignModal = ({
             <View style={styles.assignJobCard}>
               <View style={styles.assignJobCardDate}>
                 <Text style={styles.assignJobCardDay}>
-                  {new Date(job.date + "T00:00:00").getDate()}
+                  {new Date(job.date + "T12:00:00").getDate()}
                 </Text>
                 <Text style={styles.assignJobCardMonth}>
-                  {new Date(job.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+                  {new Date(job.date + "T12:00:00").toLocaleDateString("en-US", { month: "short" })}
                 </Text>
               </View>
               <View style={styles.assignJobCardInfo}>

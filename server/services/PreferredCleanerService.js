@@ -6,6 +6,7 @@
 const Email = require("./sendNotifications/EmailClass");
 const PushNotification = require("./sendNotifications/PushNotificationClass");
 const EncryptionService = require("./EncryptionService");
+const TimezoneService = require("./TimezoneService");
 
 // Helper to decrypt home fields
 const decryptHomeField = (value) => {
@@ -332,7 +333,7 @@ class PreferredCleanerService {
     const { UserAppointments, UserHomes, User, CleanerClient } = models;
     const { Op } = require("sequelize");
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = TimezoneService.getTodayInTimezone();
 
     // Get all homes where this cleaner is the preferred cleaner
     const homes = await UserHomes.findAll({

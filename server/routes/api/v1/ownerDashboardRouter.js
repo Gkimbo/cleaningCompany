@@ -36,6 +36,7 @@ const PushNotification = require("../../../services/sendNotifications/PushNotifi
 const NotificationService = require("../../../services/NotificationService");
 const LastMinuteNotificationService = require("../../../services/LastMinuteNotificationService");
 const HomeownerFreezeService = require("../../../services/HomeownerFreezeService");
+const TimezoneService = require("../../../services/TimezoneService");
 const rateLimit = require("express-rate-limit");
 
 // Stricter rate limiter for financial endpoints (withdrawals)
@@ -1328,7 +1329,7 @@ ownerDashboardRouter.get(
             isDemoAppointment: { [Op.ne]: true },
             [Op.or]: [
               { completed: true },
-              { date: { [Op.lt]: now.toISOString().split("T")[0] } },
+              { date: { [Op.lt]: TimezoneService.getTodayInTimezone() } },
             ],
           },
         });
@@ -1345,7 +1346,7 @@ ownerDashboardRouter.get(
 
         // Get per-cleaner stats using a single aggregated query (avoid N+1)
         const cleanerIds = cleaners.map(c => c.id.toString());
-        const today = now.toISOString().split("T")[0];
+        const today = TimezoneService.getTodayInTimezone();
 
         // Single query to get completed and assigned counts for all cleaners
         const cleanerStatsRaw = await sequelize.query(
@@ -2216,7 +2217,7 @@ ownerDashboardRouter.post(
           model: UserAppointments,
           as: "appointment",
           where: {
-            date: { [Op.gte]: today.toISOString().split('T')[0] },
+            date: { [Op.gte]: TimezoneService.getTodayInTimezone() },
             completed: false,
           },
         }],

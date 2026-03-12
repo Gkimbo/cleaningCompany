@@ -23,6 +23,7 @@ import {
   spacing,
   typography,
 } from "../services/styles/theme";
+import { getTodayString } from "../services/formatters";
 import { EmployeeDashboard } from "./businessEmployee";
 import BusinessOwnerProfile from "./businessOwner/BusinessOwnerProfile";
 import CleanerDashboard from "./cleaner/CleanerDashboard";
@@ -130,17 +131,16 @@ const HomePage = ({ state, dispatch }) => {
   let upcomingPayment = 0;
 
   const sortedAppointments = state.appointments.sort(
-    (a, b) => new Date(a.date) - new Date(b.date)
+    (a, b) => a.date.localeCompare(b.date)
   );
 
   const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
+  const todayStr = getTodayString();
   sortedAppointments.forEach((appointment, index) => {
     const correctedAmount = Number(appointment.price) * cleanerSharePercent;
     upcomingPayment += correctedAmount;
-    const today = new Date();
-    const appointmentDate = new Date(appointment.date);
 
-    if (appointmentDate.toDateString() === today.toDateString()) {
+    if (appointment.date === todayStr) {
       foundToday = true;
       todaysAppointment = (
         <TodaysAppointment
@@ -175,7 +175,7 @@ const HomePage = ({ state, dispatch }) => {
           </View>
         );
       }
-    } else if (!nextAppointment && appointmentDate > today) {
+    } else if (!nextAppointment && appointment.date > todayStr) {
       nextAppointment = (
         <View style={{ marginVertical: 15 }}>
           <NextAppointment appointment={appointment} />

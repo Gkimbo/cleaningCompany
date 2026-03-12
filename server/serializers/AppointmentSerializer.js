@@ -191,6 +191,8 @@ class AppointmentSerializer {
 						// Include home location for distance calculations
 						latitude: home.latitude,
 						longitude: home.longitude,
+						// Include home timezone for date handling
+						timezone: home.timezone || "America/New_York",
 					};
 				}
 

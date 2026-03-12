@@ -307,7 +307,7 @@ describe("Bi-Weekly Payout Frontend Services", () => {
 
     it("should handle date strings in response", async () => {
       const mockResponse = {
-        nextPayoutDate: "2024-01-19T00:00:00.000Z",
+        nextPayoutDate: "2024-01-19T12:00:00.000Z",
         pendingAmount: 5000,
         payouts: [],
         formatted: { pendingAmount: "$50.00" },
@@ -320,7 +320,7 @@ describe("Bi-Weekly Payout Frontend Services", () => {
 
       const result = await BusinessEmployeeService.getPendingEarnings("test-token");
 
-      expect(result.nextPayoutDate).toBe("2024-01-19T00:00:00.000Z");
+      expect(result.nextPayoutDate).toBe("2024-01-19T12:00:00.000Z");
     });
   });
 });

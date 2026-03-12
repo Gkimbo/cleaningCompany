@@ -29,6 +29,7 @@ const EncryptionService = require("../../../services/EncryptionService");
 const NotificationService = require("../../../services/NotificationService");
 const CleanerClientSerializer = require("../../../serializers/CleanerClientSerializer");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
+const TimezoneService = require("../../../services/TimezoneService");
 
 const cleanerClientsRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -446,8 +447,10 @@ const verifyHomeowner = async (req, res, next) => {
     const decoded = jwt.verify(token, secretKey);
     const user = await User.findByPk(decoded.userId);
 
-    // In this codebase, homeowners have type: null
-    if (!user || user.type !== null) {
+    // Homeowners can have type: null, "homeowner", or undefined
+    // Reject cleaner, owner, businessEmployee types
+    const restrictedTypes = ["cleaner", "owner", "businessEmployee", "itEmployee"];
+    if (!user || restrictedTypes.includes(user.type)) {
       return res.status(403).json({ error: "Homeowner access required" });
     }
 
@@ -527,7 +530,7 @@ cleanerClientsRouter.get("/pending-client-responses", verifyCleaner, async (req,
   try {
     const cleanerId = req.user.id;
     const { Op } = require("sequelize");
-    const today = new Date().toISOString().split("T")[0];
+    const today = TimezoneService.getTodayInTimezone();
 
     // Get appointments booked by this cleaner that need client response
     const appointments = await UserAppointments.findAll({
@@ -615,6 +618,63 @@ cleanerClientsRouter.get("/pending-client-responses", verifyCleaner, async (req,
   }
 });
 
+/**
+ * DELETE /pending-client-responses/:appointmentId
+ * Cancel a pending booking request that was sent to a client
+ * This allows cleaners to cancel bookings before the client responds
+ * MUST be defined before /:id routes
+ */
+cleanerClientsRouter.delete("/pending-client-responses/:appointmentId", verifyCleaner, async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const cleanerId = req.user.id;
+
+    // Find the appointment
+    const appointment = await UserAppointments.findOne({
+      where: {
+        id: appointmentId,
+        bookedByCleanerId: cleanerId,
+        // Only allow cancellation of pending/declined/expired requests
+        [Op.or]: [
+          { clientResponse: null },
+          { clientResponse: "declined" },
+          { clientResponse: "expired" },
+        ],
+      },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Booking request not found or already processed" });
+    }
+
+    // Delete related records
+    await UserCleanerAppointments.destroy({
+      where: { appointmentId: appointment.id },
+    });
+
+    await EmployeeJobAssignment.destroy({
+      where: { appointmentId: appointment.id },
+    });
+
+    await Payout.destroy({
+      where: { appointmentId: appointment.id },
+    });
+
+    // Delete the appointment
+    await appointment.destroy();
+
+    console.log(`[CancelBookingRequest] Cleaner ${cleanerId} cancelled booking request ${appointmentId}`);
+
+    res.json({
+      success: true,
+      message: "Booking request cancelled successfully",
+    });
+  } catch (err) {
+    console.error("Error cancelling booking request:", err);
+    res.status(500).json({ error: "Failed to cancel booking request" });
+  }
+});
+
 // =====================
 // PARAMETERIZED ID ROUTES
 // These must come AFTER all specific string routes like /invitations, /my-cleaner, /pending-client-responses
@@ -675,7 +735,7 @@ cleanerClientsRouter.get("/:id", verifyCleaner, async (req, res) => {
 cleanerClientsRouter.get("/:id/full", verifyCleaner, async (req, res) => {
   try {
     const { id } = req.params;
-    const today = new Date().toISOString().split("T")[0];
+    const today = TimezoneService.getTodayInTimezone();
 
     const cleanerClient = await CleanerClient.findOne({
       where: {
@@ -1042,7 +1102,7 @@ cleanerClientsRouter.delete("/:id", verifyCleaner, async (req, res) => {
       // Note: Paid appointments are skipped and require manual cancellation
       let totalCancelledAppointments = 0;
       let totalSkippedPaid = 0;
-      const today = new Date().toISOString().split("T")[0];
+      const today = TimezoneService.getTodayInTimezone();
 
       for (const schedule of schedules) {
         // Find future uncompleted unpaid appointments for this schedule

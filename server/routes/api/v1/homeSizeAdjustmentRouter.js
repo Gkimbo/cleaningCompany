@@ -17,6 +17,7 @@ const AnalyticsService = require("../../../services/AnalyticsService");
 const NotificationService = require("../../../services/NotificationService");
 const { recordPaymentTransaction } = require("./paymentRouter");
 const HomeSizeAdjustmentSerializer = require("../../../serializers/HomeSizeAdjustmentSerializer");
+const TimezoneService = require("../../../services/TimezoneService");
 
 const homeSizeAdjustmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -509,7 +510,7 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
       });
 
       // Update ALL future/current appointments for this home with recalculated prices
-      const today = new Date().toISOString().split('T')[0];
+      const today = TimezoneService.getTodayInTimezone();
       const futureAppointments = await UserAppointments.findAll({
         where: {
           homeId: request.homeId,
@@ -769,7 +770,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
       });
 
       // Update ALL future/current appointments for this home with recalculated prices
-      const today = new Date().toISOString().split('T')[0];
+      const today = TimezoneService.getTodayInTimezone();
       const futureAppointments = await UserAppointments.findAll({
         where: {
           homeId: request.homeId,

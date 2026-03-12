@@ -185,6 +185,23 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
       return;
     }
 
+    // Validate price if provided
+    if (customPrice && customPrice.trim()) {
+      const priceValue = parseFloat(customPrice);
+      if (isNaN(priceValue) || priceValue < 0) {
+        Alert.alert("Error", "Please enter a valid price");
+        return;
+      }
+      if (priceValue < 50) {
+        Alert.alert("Error", "Minimum price is $50");
+        return;
+      }
+      if (priceValue > 10000) {
+        Alert.alert("Error", "Price cannot exceed $10,000");
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       const bookingData = {
@@ -427,7 +444,7 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
                 >
                   <Feather name="trending-up" size={14} color={colors.primary[600]} />
                   <Text style={styles.platformPriceButtonText}>
-                    Use Platform Price: ${(platformPriceData.platformPrice / 100).toFixed(0)}
+                    Use Platform Price: ${((platformPriceData.platformPrice || 0) / 100).toFixed(0)}
                   </Text>
                   <Text style={styles.platformPriceBreakdown}>
                     ({platformPriceData.numBeds} bed, {platformPriceData.numBaths} bath)

@@ -23,6 +23,7 @@ import {
   typography,
   shadows,
 } from "../../../services/styles/theme";
+import { toLocalDateString, getTodayString } from "../../../services/formatters";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -218,15 +219,16 @@ const MyAppointmentsCalendar = ({ state }) => {
 
   const formatSelectedDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateString + "T12:00:00");
     const options = { weekday: "long", month: "long", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
   };
 
   // Calculate stats
-  const now = new Date();
+  const todayString = getTodayString();
   const upcomingAppointments = appointments.filter(
-    (a) => new Date(a.date) >= new Date(now.toDateString()) && !a.completed
+    (a) => a.date >= todayString && !a.completed
   );
   const upcomingCount = upcomingAppointments.length;
   const completedCount = appointments.filter((a) => a.completed).length;
@@ -237,9 +239,8 @@ const MyAppointmentsCalendar = ({ state }) => {
   // Calendar day render
   const renderDay = useCallback(
     ({ date }) => {
-      const today = new Date();
-      const dayDate = new Date(date.dateString);
-      const isPast = dayDate < new Date(today.toDateString());
+      const todayString = getTodayString();
+      const isPast = date.dateString < todayString;
 
       const dayAppointments = appointments.filter((a) => a.date === date.dateString);
       const appointmentCount = dayAppointments.length;
@@ -359,7 +360,7 @@ const MyAppointmentsCalendar = ({ state }) => {
         {/* Calendar */}
         <View style={styles.calendarContainer}>
           <Calendar
-            current={new Date().toISOString().split("T")[0]}
+            current={toLocalDateString(new Date())}
             onDayPress={handleDateSelect}
             dayComponent={renderDay}
             renderArrow={(direction) => (

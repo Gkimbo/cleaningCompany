@@ -25,6 +25,7 @@ const AnalyticsService = require("./AnalyticsService");
 const NotificationService = require("./NotificationService");
 const { calculateDistance } = require("../utils/geoUtils");
 const EncryptionService = require("./EncryptionService");
+const TimezoneService = require("./TimezoneService");
 
 class EmployeeJobAssignmentService {
   /**
@@ -593,8 +594,8 @@ class EmployeeJobAssignmentService {
         if (appointment && !appointment.completed && !appointment.wasCancelled) {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
-          // Parse as local time by appending T00:00:00 to avoid UTC interpretation
-          const appointmentDate = new Date(appointment.date + "T00:00:00");
+          // Use noon to avoid timezone edge cases that could shift the day
+          const appointmentDate = new Date(appointment.date + "T12:00:00");
           const daysUntil = Math.round((appointmentDate - today) / (1000 * 60 * 60 * 24));
 
           // Only create notification if appointment is within 4 days
@@ -697,7 +698,7 @@ class EmployeeJobAssignmentService {
       if (appointment && !appointment.completed && !appointment.wasCancelled) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const appointmentDate = new Date(appointment.date + "T00:00:00");
+        const appointmentDate = new Date(appointment.date + "T12:00:00");
         const daysUntil = Math.round((appointmentDate - today) / (1000 * 60 * 60 * 24));
 
         if (daysUntil >= 0 && daysUntil <= 4) {
@@ -1563,7 +1564,7 @@ class EmployeeJobAssignmentService {
       wasCancelled: { [Op.ne]: true },
     };
     if (upcoming) {
-      appointmentWhere.date = { [Op.gte]: new Date().toISOString().split("T")[0] };
+      appointmentWhere.date = { [Op.gte]: TimezoneService.getTodayInTimezone() };
     }
 
     const assignments = await EmployeeJobAssignment.findAll({
@@ -1908,19 +1909,19 @@ class EmployeeJobAssignmentService {
    */
   static async getEmployeeWorkloadData(businessOwnerId) {
     const now = new Date();
-    const today = now.toISOString().split("T")[0];
+    const today = TimezoneService.getTodayInTimezone();
 
     // Calculate date ranges
     const dayOfWeek = now.getDay();
     const weekStart = new Date(now);
     weekStart.setDate(now.getDate() - dayOfWeek);
-    const weekStartStr = weekStart.toISOString().split("T")[0];
+    const weekStartStr = TimezoneService.formatDateInTimezone(weekStart);
 
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthStartStr = monthStart.toISOString().split("T")[0];
+    const monthStartStr = TimezoneService.formatDateInTimezone(monthStart);
 
     const yearStart = new Date(now.getFullYear(), 0, 1);
-    const yearStartStr = yearStart.toISOString().split("T")[0];
+    const yearStartStr = TimezoneService.formatDateInTimezone(yearStart);
 
     // Get all active employees with their employment start date
     const employees = await BusinessEmployee.findAll({
@@ -2077,7 +2078,7 @@ class EmployeeJobAssignmentService {
    * @returns {Promise<Array>} Array of unassigned appointments
    */
   static async getUnassignedJobs(businessOwnerId) {
-    const today = new Date().toISOString().split("T")[0];
+    const today = TimezoneService.getTodayInTimezone();
 
     const unassignedJobs = await UserAppointments.findAll({
       where: {
@@ -2137,14 +2138,14 @@ class EmployeeJobAssignmentService {
       const dayOfWeek = date.getDay();
       const sunday = new Date(date);
       sunday.setDate(date.getDate() - dayOfWeek);
-      const weekKey = sunday.toISOString().split("T")[0];
+      const weekKey = TimezoneService.formatDateInTimezone(sunday);
 
       if (!weekMap.has(weekKey)) {
         const saturday = new Date(sunday);
         saturday.setDate(sunday.getDate() + 6);
         weekMap.set(weekKey, {
           weekStart: weekKey,
-          weekEnd: saturday.toISOString().split("T")[0],
+          weekEnd: TimezoneService.formatDateInTimezone(saturday),
           hours: 0,
           pay: 0,
           jobCount: 0,

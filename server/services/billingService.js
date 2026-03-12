@@ -5,6 +5,7 @@
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const { notifyInitialPaymentFailure } = require("./cron/PaymentRetryMonitor");
+const TimezoneService = require("./TimezoneService");
 
 class BillingService {
   /**
@@ -553,7 +554,7 @@ class BillingService {
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysOverdue);
-    const cutoffDateStr = cutoffDate.toISOString().split("T")[0];
+    const cutoffDateStr = TimezoneService.formatDateInTimezone(cutoffDate);
 
     try {
       const appointments = await UserAppointments.findAll({

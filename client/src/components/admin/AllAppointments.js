@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
+import { parseDateString, getTodayString } from "../../services/formatters";
 
 const AllAppointments = ({ state }) => {
   const [allAppointments, setAllAppointments] = useState([]);
@@ -92,7 +93,7 @@ const AllAppointments = ({ state }) => {
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    const date = parseDateString(dateString);
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -114,15 +115,16 @@ const AllAppointments = ({ state }) => {
     return { color: colors.error[500], label: "Needs Staff", bgColor: colors.error[100] };
   };
 
+  const todayStr = getTodayString();
   const sortedAppointments = [...allAppointments].sort(
-    (a, b) => new Date(a.date) - new Date(b.date)
+    (a, b) => a.date.localeCompare(b.date)
   );
 
   const upcomingAppointments = sortedAppointments.filter(
-    (apt) => new Date(apt.date) >= new Date().setHours(0, 0, 0, 0)
+    (apt) => apt.date >= todayStr
   );
   const pastAppointments = sortedAppointments.filter(
-    (apt) => new Date(apt.date) < new Date().setHours(0, 0, 0, 0)
+    (apt) => apt.date < todayStr
   );
 
   const AppointmentCard = ({ appointment }) => {

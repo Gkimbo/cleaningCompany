@@ -36,6 +36,7 @@ import {
 } from "../../../services/styles/theme";
 import { usePricing } from "../../../context/PricingContext";
 import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
+import { getTodayString } from "../../../services/formatters";
 
 // Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (time) => {
@@ -127,9 +128,8 @@ const MyRequests = ({ state }) => {
           getCurrentUser(state?.currentUser?.token),
         ]);
 
-        const now = new Date();
-        const isUpcoming = (item) =>
-          new Date(item.date) >= new Date(now.toDateString());
+        const todayStr = getTodayString();
+        const isUpcoming = (item) => item.date >= todayStr;
 
         setAllRequests((response?.requested || []).filter(isUpcoming));
         setUserId(userResponse?.user?.id || null);
@@ -317,7 +317,7 @@ const MyRequests = ({ state }) => {
       return {
         ...appointment,
         type: "solo",
-        sortDate: new Date(appointment.date + "T00:00:00"),
+        sortDate: new Date(appointment.date + "T12:00:00"),
         distance,
         // Normalize price for sorting
         sortPrice: Number(appointment.price) || 0,
@@ -352,7 +352,7 @@ const MyRequests = ({ state }) => {
       return {
         ...request,
         type: "team",
-        sortDate: new Date(request.appointment?.date + "T00:00:00"),
+        sortDate: new Date(request.appointment?.date + "T12:00:00"),
         homeId: teamHomeId,
         distance,
         sortPrice: cleanerShare, // Sort by cleaner's share
@@ -553,7 +553,7 @@ const MyRequests = ({ state }) => {
                         </Text>
                         <Text style={styles.multiCleanerRequestDate}>
                           {new Date(
-                            request.appointment?.date + "T00:00:00"
+                            request.appointment?.date + "T12:00:00"
                           ).toLocaleDateString("en-US", {
                             weekday: "short",
                             month: "short",

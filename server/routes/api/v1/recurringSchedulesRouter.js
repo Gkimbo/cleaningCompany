@@ -24,6 +24,7 @@ const EncryptionService = require("../../../services/EncryptionService");
 const { getPricingConfig } = require("../../../config/businessConfig");
 const RecurringScheduleSerializer = require("../../../serializers/RecurringScheduleSerializer");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
+const TimezoneService = require("../../../services/TimezoneService");
 
 const recurringSchedulesRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -59,85 +60,113 @@ const verifyCleaner = async (req, res, next) => {
  * @returns {Object} { deleted: number, skippedPaid: number }
  */
 async function deleteFutureAppointments(scheduleId) {
-  const today = new Date().toISOString().split("T")[0];
+  const { sequelize } = models;
 
-  // Find all future uncompleted appointments for this schedule
-  // Exclude cancelled appointments as they've already been processed
-  // Exclude paid appointments - they require manual cancellation with refund
-  const appointmentsToDelete = await UserAppointments.findAll({
-    where: {
-      recurringScheduleId: scheduleId,
-      date: { [Op.gt]: today },
-      completed: false,
-      wasCancelled: { [Op.ne]: true },
-      paid: { [Op.ne]: true },
-    },
-    attributes: ["id", "userId", "price"],
-  });
-
-  // Also count paid appointments that couldn't be deleted
-  const paidAppointments = await UserAppointments.findAll({
-    where: {
-      recurringScheduleId: scheduleId,
-      date: { [Op.gt]: today },
-      completed: false,
-      wasCancelled: { [Op.ne]: true },
-      paid: true,
-    },
-    attributes: ["id"],
-  });
-  const skippedPaidCount = paidAppointments.length;
-
-  if (appointmentsToDelete.length === 0) {
-    return { deleted: 0, skippedPaid: skippedPaidCount };
+  // Use transaction if available (may not be in test environment with mocked models)
+  let transaction = null;
+  if (sequelize && typeof sequelize.transaction === 'function') {
+    transaction = await sequelize.transaction();
   }
 
-  const appointmentIds = appointmentsToDelete.map(a => a.id);
+  try {
+    const today = TimezoneService.getTodayInTimezone();
+    const txnOpts = transaction ? { transaction } : {};
 
-  // Group appointments by userId to batch UserBills updates
-  const userBillAdjustments = {};
-  for (const appt of appointmentsToDelete) {
-    // appt.price is already in cents (INTEGER)
-    const priceCents = appt.price || 0;
-    if (!userBillAdjustments[appt.userId]) {
-      userBillAdjustments[appt.userId] = 0;
+    // Find all future uncompleted appointments for this schedule
+    // Exclude cancelled appointments as they've already been processed
+    // Exclude paid appointments - they require manual cancellation with refund
+    const appointmentsToDelete = await UserAppointments.findAll({
+      where: {
+        recurringScheduleId: scheduleId,
+        date: { [Op.gt]: today },
+        completed: false,
+        wasCancelled: { [Op.ne]: true },
+        paid: { [Op.ne]: true },
+      },
+      attributes: ["id", "userId", "price"],
+      ...txnOpts,
+    });
+
+    // Also count paid appointments that couldn't be deleted
+    const paidAppointments = await UserAppointments.findAll({
+      where: {
+        recurringScheduleId: scheduleId,
+        date: { [Op.gt]: today },
+        completed: false,
+        wasCancelled: { [Op.ne]: true },
+        paid: true,
+      },
+      attributes: ["id"],
+      ...txnOpts,
+    });
+    const skippedPaidCount = paidAppointments.length;
+
+    if (appointmentsToDelete.length === 0) {
+      if (transaction) await transaction.commit();
+      return { deleted: 0, skippedPaid: skippedPaidCount };
     }
-    userBillAdjustments[appt.userId] += priceCents;
-  }
 
-  // Delete related records first to avoid foreign key constraint errors
-  await UserCleanerAppointments.destroy({
-    where: { appointmentId: { [Op.in]: appointmentIds } },
-  });
+    const appointmentIds = appointmentsToDelete.map(a => a.id);
 
-  await EmployeeJobAssignment.destroy({
-    where: { appointmentId: { [Op.in]: appointmentIds } },
-  });
-
-  // Delete Payout records for these appointments
-  await Payout.destroy({
-    where: { appointmentId: { [Op.in]: appointmentIds } },
-  });
-
-  // Adjust UserBills for each affected user
-  for (const [userId, totalToSubtract] of Object.entries(userBillAdjustments)) {
-    const userBill = await UserBills.findOne({ where: { userId } });
-    if (userBill && totalToSubtract > 0) {
-      const newAppointmentDue = Math.max(0, parseFloat(userBill.appointmentDue || 0) - totalToSubtract);
-      const newTotalDue = Math.max(0, parseFloat(userBill.totalDue || 0) - totalToSubtract);
-      await userBill.update({
-        appointmentDue: newAppointmentDue,
-        totalDue: newTotalDue,
-      });
+    // Group appointments by userId to batch UserBills updates
+    const userBillAdjustments = {};
+    for (const appt of appointmentsToDelete) {
+      // appt.price is already in cents (INTEGER)
+      const priceCents = appt.price || 0;
+      if (!userBillAdjustments[appt.userId]) {
+        userBillAdjustments[appt.userId] = 0;
+      }
+      userBillAdjustments[appt.userId] += priceCents;
     }
+
+    // Delete related records first to avoid foreign key constraint errors
+    await UserCleanerAppointments.destroy({
+      where: { appointmentId: { [Op.in]: appointmentIds } },
+      ...txnOpts,
+    });
+
+    await EmployeeJobAssignment.destroy({
+      where: { appointmentId: { [Op.in]: appointmentIds } },
+      ...txnOpts,
+    });
+
+    // Delete Payout records for these appointments
+    await Payout.destroy({
+      where: { appointmentId: { [Op.in]: appointmentIds } },
+      ...txnOpts,
+    });
+
+    // Adjust UserBills for each affected user (use usersId field, not userId)
+    for (const [usersId, totalToSubtract] of Object.entries(userBillAdjustments)) {
+      const userBill = await UserBills.findOne({ where: { usersId }, ...txnOpts });
+      if (userBill && totalToSubtract > 0) {
+        const newAppointmentDue = Math.max(0, parseFloat(userBill.appointmentDue || 0) - totalToSubtract);
+        const newTotalDue = Math.max(0, parseFloat(userBill.totalDue || 0) - totalToSubtract);
+        const updateData = {
+          appointmentDue: newAppointmentDue,
+          totalDue: newTotalDue,
+        };
+        // Only pass transaction options if we have a transaction
+        if (transaction) {
+          await userBill.update(updateData, { transaction });
+        } else {
+          await userBill.update(updateData);
+        }
+      }
+    }
+
+    // Now delete the appointments
+    await UserAppointments.destroy({
+      where: { id: { [Op.in]: appointmentIds } },
+      ...txnOpts,
+    });
+
+    if (transaction) await transaction.commit();
+    return { deleted: appointmentIds.length, skippedPaid: skippedPaidCount };
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    throw error;
   }
-
-  // Now delete the appointments
-  await UserAppointments.destroy({
-    where: { id: { [Op.in]: appointmentIds } },
-  });
-
-  return { deleted: appointmentIds.length, skippedPaid: skippedPaidCount };
 }
 
 /**
@@ -260,7 +289,7 @@ async function generateAppointmentsForSchedule(schedule, daysAhead = 84) {
         completed: false,
         paid: false,
         hasBeenAssigned: true,
-        employeesAssigned: [schedule.cleanerId.toString()],
+        employeesAssigned: [schedule.cleanerId], // Store as integer for type consistency
         employeesNeeded: home.cleanersNeeded || 1,
         timeToBeCompleted: schedule.timeWindow || "anytime",
         bringSheets: home.bringSheets || "no",
@@ -584,8 +613,10 @@ const verifyHomeowner = async (req, res, next) => {
     const decoded = jwt.verify(token, secretKey);
     const user = await User.findByPk(decoded.userId);
 
-    // In this codebase, homeowners have type: null
-    if (!user || user.type !== null) {
+    // Homeowners can have type: null, "homeowner", or undefined
+    // Reject cleaner, owner, businessEmployee types
+    const restrictedTypes = ["cleaner", "owner", "businessEmployee", "itEmployee"];
+    if (!user || restrictedTypes.includes(user.type)) {
       return res.status(403).json({ error: "Homeowner access required" });
     }
 
@@ -688,7 +719,7 @@ recurringSchedulesRouter.get("/:id", verifyCleaner, async (req, res) => {
           model: UserAppointments,
           as: "appointments",
           where: {
-            date: { [Op.gte]: new Date().toISOString().split("T")[0] },
+            date: { [Op.gte]: TimezoneService.getTodayInTimezone() },
           },
           required: false,
           order: [["date", "ASC"]],
@@ -773,7 +804,7 @@ recurringSchedulesRouter.patch("/:id", verifyCleaner, async (req, res) => {
       const nextScheduled = schedule.calculateNextDate(new Date());
       if (nextScheduled) {
         await schedule.update({
-          nextScheduledDate: nextScheduled.toISOString().split("T")[0],
+          nextScheduledDate: TimezoneService.formatDateInTimezone(nextScheduled),
         });
       }
     }

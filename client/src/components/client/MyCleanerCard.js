@@ -27,7 +27,11 @@ const MyCleanerCard = ({ cleaner, relationship, home, onMessage, onViewProfile }
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
+    // Only add noon suffix for YYYY-MM-DD strings (no 'T' present)
+    // Full ISO timestamps can be parsed directly
+    const date = dateString.includes("T")
+      ? new Date(dateString)
+      : new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
   };
 

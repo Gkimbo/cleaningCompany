@@ -33,7 +33,7 @@ const STATUS_COLORS = {
 const JobCard = ({ job, onStart, onComplete, onViewDetails, isStarting, isCompleting }) => {
   const statusInfo = STATUS_COLORS[job.status] || STATUS_COLORS.assigned;
 
-  const jobDate = new Date(job.appointment?.date + "T00:00:00");
+  const jobDate = new Date(job.appointment?.date + "T12:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 

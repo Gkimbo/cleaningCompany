@@ -22,6 +22,7 @@ const { getPricingConfig } = require("../../config/businessConfig");
 const EncryptionService = require("../EncryptionService");
 const Email = require("../sendNotifications/EmailClass");
 const PushNotification = require("../sendNotifications/PushNotificationClass");
+const TimezoneService = require("../TimezoneService");
 
 /**
  * Process jobs that need urgent fill notifications (7 days out)
@@ -36,7 +37,7 @@ async function processUrgentFillNotifications(io = null) {
 
   const urgentDate = new Date();
   urgentDate.setDate(urgentDate.getDate() + urgentDays);
-  const urgentDateStr = urgentDate.toISOString().split("T")[0];
+  const urgentDateStr = TimezoneService.formatDateInTimezone(urgentDate);
 
   // Time threshold for resending notifications (6 hours ago)
   const resendThreshold = new Date();
@@ -170,7 +171,7 @@ async function processFinalWarnings(io = null) {
 
   const warningDate = new Date();
   warningDate.setDate(warningDate.getDate() + finalDays);
-  const warningDateStr = warningDate.toISOString().split("T")[0];
+  const warningDateStr = TimezoneService.formatDateInTimezone(warningDate);
 
   const jobs = await MultiCleanerJob.findAll({
     where: {
@@ -251,7 +252,7 @@ async function processFinalWarnings(io = null) {
 async function processSoloCompletionOffers(io = null) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split("T")[0];
+  const tomorrowStr = TimezoneService.formatDateInTimezone(tomorrow);
 
   const jobs = await MultiCleanerJob.findAll({
     where: {
@@ -480,7 +481,7 @@ async function processEdgeCaseDecisions(io = null) {
 
   const decisionDate = new Date();
   decisionDate.setDate(decisionDate.getDate() + decisionDays);
-  const decisionDateStr = decisionDate.toISOString().split("T")[0];
+  const decisionDateStr = TimezoneService.formatDateInTimezone(decisionDate);
 
   // Find edge case jobs that need decision notifications:
   // - Status is partially_filled

@@ -11,6 +11,7 @@ const EmployeeStripeConnectService = require("../../../services/EmployeeStripeCo
 const BusinessEmployeeSerializer = require("../../../serializers/BusinessEmployeeSerializer");
 const EmployeeJobAssignmentSerializer = require("../../../serializers/EmployeeJobAssignmentSerializer");
 const EncryptionService = require("../../../services/EncryptionService");
+const TimezoneService = require("../../../services/TimezoneService");
 const { BusinessEmployee, EmployeeJobAssignment, User, JobPhoto, AppointmentJobFlow, sequelize } = require("../../../models");
 
 // =====================================
@@ -507,8 +508,8 @@ router.get("/my-earnings", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const now = new Date();
-    const start = startDate || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const end = endDate || now.toISOString().split("T")[0];
+    const start = startDate || TimezoneService.formatDateInTimezone(new Date(now.getFullYear(), now.getMonth(), 1));
+    const end = endDate || TimezoneService.getTodayInTimezone();
 
     // Get completed assignments
     const assignments = await EmployeeJobAssignment.findAll({

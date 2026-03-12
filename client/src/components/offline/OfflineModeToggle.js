@@ -69,7 +69,7 @@ export default function OfflineModeToggle({ style }) {
       const result = await StorageManager.runCleanup();
       await loadStats();
 
-      const totalCleaned = result.cleanedJobs + result.cleanedPhotos + result.cleanedSyncQueue;
+      const totalCleaned = (result.cleanedJobs || 0) + (result.cleanedPhotos || 0) + (result.cleanedSyncQueue || 0);
       if (totalCleaned > 0) {
         setLastAction({ success: true, message: `Cleaned ${totalCleaned} items` });
       } else {

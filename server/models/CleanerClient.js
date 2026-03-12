@@ -112,6 +112,21 @@ module.exports = (sequelize, DataTypes) => {
     },
   });
 
+  // Helper function to check if a value appears to be already encrypted
+  // Encrypted format is "iv:ciphertext" where both are hex strings
+  // IV is exactly 32 hex chars (16 bytes), ciphertext varies but is also hex
+  const isAlreadyEncrypted = (value) => {
+    if (!value || typeof value !== "string") return false;
+    const parts = value.split(":");
+    if (parts.length !== 2) return false;
+    const [iv, ciphertext] = parts;
+    // IV should be exactly 32 hex characters
+    if (iv.length !== 32) return false;
+    // Both parts should only contain hex characters
+    const hexRegex = /^[0-9a-fA-F]+$/;
+    return hexRegex.test(iv) && hexRegex.test(ciphertext) && ciphertext.length > 0;
+  };
+
   // Helper function to encrypt PII fields
   const encryptPIIFields = (record) => {
     PII_FIELDS.forEach((field) => {
@@ -124,7 +139,7 @@ module.exports = (sequelize, DataTypes) => {
           value = String(value);
         }
         // Only encrypt if not already encrypted
-        if (!value.includes(":") || value.split(":").length !== 2) {
+        if (!isAlreadyEncrypted(value)) {
           record[field] = EncryptionService.encrypt(value);
         }
       }

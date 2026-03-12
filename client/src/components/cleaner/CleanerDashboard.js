@@ -329,7 +329,7 @@ const PendingRequestCard = ({ request, onPress, distance }) => {
     }
   }, [request.homeId]);
 
-  const appointmentDate = new Date(request.date + "T00:00:00");
+  const appointmentDate = new Date(request.date + "T12:00:00");
 
   const formatDate = (date) => {
     const options = { weekday: "short", month: "short", day: "numeric" };
@@ -630,7 +630,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
         today.setHours(0, 0, 0, 0);
         const upcomingRequests = (requestsResponse.requested || []).filter(
           (req) => {
-            const reqDate = new Date(req.date + "T00:00:00");
+            const reqDate = new Date(req.date + "T12:00:00");
             return reqDate >= today;
           }
         );
@@ -968,8 +968,8 @@ const CleanerDashboard = ({ state, dispatch }) => {
             <View style={styles.requestsList}>
               {/* Combine and sort all requests by date */}
               {[
-                ...pendingRequests.map((r) => ({ ...r, type: "solo", sortDate: new Date(r.date + "T00:00:00") })),
-                ...pendingMultiCleanerRequests.map((r) => ({ ...r, type: "team", sortDate: new Date(r.appointment?.date + "T00:00:00") })),
+                ...pendingRequests.map((r) => ({ ...r, type: "solo", sortDate: new Date(r.date + "T12:00:00") })),
+                ...pendingMultiCleanerRequests.map((r) => ({ ...r, type: "team", sortDate: new Date(r.appointment?.date + "T12:00:00") })),
               ]
                 .sort((a, b) => a.sortDate - b.sortDate)
                 .slice(0, 3)
@@ -995,7 +995,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
                         </View>
                         <View style={styles.teamRequestDateRow}>
                           <Text style={styles.teamRequestDatePrimary}>
-                            {new Date(request.appointment?.date + "T00:00:00").toLocaleDateString("en-US", {
+                            {new Date(request.appointment?.date + "T12:00:00").toLocaleDateString("en-US", {
                               weekday: "short",
                               month: "short",
                               day: "numeric",
@@ -1003,7 +1003,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
                           </Text>
                           <Text style={styles.teamRequestRelativeTime}>
                             {(() => {
-                              const apptDate = new Date(request.appointment?.date + "T00:00:00");
+                              const apptDate = new Date(request.appointment?.date + "T12:00:00");
                               const now = new Date();
                               now.setHours(0, 0, 0, 0);
                               const diffDays = Math.ceil((apptDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));

@@ -87,7 +87,8 @@ const EmployeeAssignmentTile = ({
   const amount = (Number(price) / numCleaners) * cleanerSharePercent;
 
   const formatDate = (dateString) => {
-    const dateObj = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const dateObj = new Date(dateString + "T12:00:00");
     const options = { weekday: "short", month: "short", day: "numeric" };
     return dateObj.toLocaleDateString(undefined, options);
   };
@@ -95,7 +96,8 @@ const EmployeeAssignmentTile = ({
   const getDateStatus = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const appointmentDate = new Date(date + "T00:00:00");
+    // Use noon to avoid timezone edge cases
+    const appointmentDate = new Date(date + "T12:00:00");
     const diffTime = appointmentDate - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -126,9 +128,9 @@ const EmployeeAssignmentTile = ({
 
   const isToday = () => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const appointmentDate = new Date(date + "T00:00:00");
-    return appointmentDate.getTime() === today.getTime();
+    // Use noon to avoid timezone edge cases
+    const appointmentDate = new Date(date + "T12:00:00");
+    return appointmentDate.toDateString() === today.toDateString();
   };
 
   const isWithin48Hours = () => {
@@ -245,7 +247,7 @@ const EmployeeAssignmentTile = ({
     if (completed) return colors.success[500];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const appointmentDate = new Date(date + "T00:00:00");
+    const appointmentDate = new Date(date + "T12:00:00");
     const diffTime = appointmentDate - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 

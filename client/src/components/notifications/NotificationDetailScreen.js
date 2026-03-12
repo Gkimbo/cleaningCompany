@@ -312,7 +312,7 @@ const NotificationDetailScreen = () => {
                 <View style={styles.detailContent}>
                   <Text style={styles.detailLabel}>Date</Text>
                   <Text style={styles.detailValue}>
-                    {new Date(notification.data.date + "T00:00:00").toLocaleDateString("en-US", {
+                    {new Date(notification.data.date + "T12:00:00").toLocaleDateString("en-US", {
                       weekday: "long",
                       month: "long",
                       day: "numeric",
