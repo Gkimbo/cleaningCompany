@@ -17,7 +17,8 @@ const {
 } = require("../models");
 
 // Anchor date for bi-weekly calculations (a known payout Friday)
-const BIWEEKLY_ANCHOR = new Date("2024-01-05");
+// Use explicit local time to avoid timezone issues with date string parsing
+const BIWEEKLY_ANCHOR = new Date(2024, 0, 5); // January 5, 2024
 
 class EmployeeBatchPayoutService {
   /**

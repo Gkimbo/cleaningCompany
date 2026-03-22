@@ -96,11 +96,12 @@ router.post("/invite/:token/accept-with-signup", async (req, res) => {
 
     const uppercaseCount = (password.match(/[A-Z]/g) || []).length;
     const lowercaseCount = (password.match(/[a-z]/g) || []).length;
+    const numberCount = (password.match(/\d/g) || []).length;
     const specialCharCount = (password.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/g) || []).length;
 
-    if (uppercaseCount < 2 || lowercaseCount < 2 || specialCharCount < 2) {
+    if (uppercaseCount < 2 || lowercaseCount < 2 || numberCount < 1 || specialCharCount < 2) {
       return res.status(400).json({
-        error: "Password must contain at least 2 uppercase letters, 2 lowercase letters, and 2 special characters",
+        error: "Password must contain at least 2 uppercase letters, 2 lowercase letters, 1 number, and 2 special characters",
       });
     }
 
@@ -332,12 +333,12 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
       ],
     });
 
-    // Format co-workers list
+    // Format co-workers list - only include phone if employee has permission to view client details
     jobData.coWorkers = coWorkerAssignments.map((cw) => ({
       id: cw.employee?.id,
       firstName: cw.employee?.firstName,
       lastName: cw.employee?.lastName,
-      phone: cw.employee?.phone,
+      ...(canViewDetails && cw.employee?.phone ? { phone: cw.employee.phone } : {}),
     }));
 
     // Add current employee info
@@ -538,8 +539,9 @@ router.get("/my-earnings", async (req, res) => {
       (a) => a.payoutStatus === "paid" || a.payoutStatus === "paid_outside_platform"
     ).length;
     const pendingCount = jobCount - paidCount;
+    // Include null/undefined payoutStatus as pending (jobs not yet processed)
     const pendingAmount = assignments
-      .filter((a) => a.payoutStatus === "pending")
+      .filter((a) => a.payoutStatus === "pending" || a.payoutStatus === "pending_batch" || !a.payoutStatus)
       .reduce((sum, a) => sum + a.payAmount, 0);
 
     res.json({
@@ -558,10 +560,11 @@ router.get("/my-earnings", async (req, res) => {
       // Only include job breakdown if allowed
       jobs: req.employeeRecord.canViewJobEarnings
         ? assignments.map((a) => {
+            const payAmount = a.payAmount || 0;
             const job = {
               date: a.appointment.date,
-              payAmount: a.payAmount,
-              formattedPay: `$${(a.payAmount / 100).toFixed(2)}`,
+              payAmount: payAmount,
+              formattedPay: `$${(payAmount / 100).toFixed(2)}`,
               status: a.payoutStatus,
               payType: a.payType,
               hoursWorked: a.hoursWorked ? parseFloat(a.hoursWorked) : null,
@@ -569,20 +572,8 @@ router.get("/my-earnings", async (req, res) => {
             return job;
           })
         : undefined,
-      // Include employee pay configuration for calculations
-      payConfig: {
-        payType: req.employeeRecord.payType,
-        hourlyRate: req.employeeRecord.defaultHourlyRate,
-        jobRate: req.employeeRecord.defaultJobRate,
-        percentRate: req.employeeRecord.payRate ? parseFloat(req.employeeRecord.payRate) : null,
-        formattedRate: req.employeeRecord.payType === "hourly" && req.employeeRecord.defaultHourlyRate
-          ? `$${(req.employeeRecord.defaultHourlyRate / 100).toFixed(2)}/hr`
-          : req.employeeRecord.payType === "per_job" && req.employeeRecord.defaultJobRate
-            ? `$${(req.employeeRecord.defaultJobRate / 100).toFixed(2)}/job`
-            : req.employeeRecord.payType === "percentage" && req.employeeRecord.payRate
-              ? `${parseFloat(req.employeeRecord.payRate).toFixed(0)}%`
-              : null,
-      },
+      // Pay type only (not rates) - employees see their actual pay per job, not the formula
+      payType: req.employeeRecord.payType,
     });
   } catch (error) {
     console.error("Error fetching earnings:", error);
@@ -716,17 +707,20 @@ router.post("/stripe-connect/onboard", async (req, res) => {
  *
  * Called by Stripe after employee completes onboarding.
  * Redirects to app with success/failure status.
+ * Uses authenticated employee's ID - ignores any employeeId in query params for security.
  */
 router.get("/stripe-connect/onboarding-complete", async (req, res) => {
-  const { employeeId } = req.query;
-
   try {
-    if (!employeeId) {
-      return res.redirect("keanr://stripe-onboarding?status=error&message=Missing+employee+ID");
+    // Use authenticated employee's ID from middleware, not query params
+    // This prevents attackers from completing onboarding for other employees
+    const authenticatedEmployeeId = req.employeeRecord?.id;
+
+    if (!authenticatedEmployeeId) {
+      return res.redirect("keanr://stripe-onboarding?status=error&message=Authentication+required");
     }
 
     const result = await EmployeeStripeConnectService.completeOnboarding(
-      parseInt(employeeId, 10)
+      authenticatedEmployeeId
     );
 
     if (result.onboarded && result.payoutsEnabled) {
@@ -751,18 +745,21 @@ router.get("/stripe-connect/onboarding-complete", async (req, res) => {
  *
  * Called when onboarding link expires or user navigates away.
  * Generates a new onboarding link.
+ * Uses authenticated employee's ID - ignores any employeeId in query params for security.
  */
 router.get("/stripe-connect/onboarding-refresh", async (req, res) => {
-  const { employeeId } = req.query;
-
   try {
-    if (!employeeId) {
-      return res.status(400).json({ error: "Missing employee ID" });
+    // Use authenticated employee's ID from middleware, not query params
+    // This prevents attackers from generating onboarding links for other employees
+    const authenticatedEmployeeId = req.employeeRecord?.id;
+
+    if (!authenticatedEmployeeId) {
+      return res.redirect("keanr://stripe-onboarding?status=error&message=Authentication+required");
     }
 
     const baseUrl = getBaseUrl(req);
     const linkResult = await EmployeeStripeConnectService.generateOnboardingLink(
-      parseInt(employeeId, 10),
+      authenticatedEmployeeId,
       baseUrl
     );
 

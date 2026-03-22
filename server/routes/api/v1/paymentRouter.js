@@ -4,8 +4,11 @@
 
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2025-11-17.clover",
+});
 const cron = require("node-cron");
+const rateLimit = require("express-rate-limit");
 const {
   User,
   UserAppointments,
@@ -22,6 +25,7 @@ const {
   CleanerJobCompletion,
   EmployeeJobAssignment,
   BusinessEmployee,
+  StripeWebhookEvent,
   sequelize,
 } = require("../../../models");
 const MultiCleanerPricingService = require("../../../services/MultiCleanerPricingService");
@@ -40,6 +44,118 @@ const { notifyInitialPaymentFailure } = require("../../../services/cron/PaymentR
 
 const paymentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
+
+// ============================================================================
+// RATE LIMITERS - Protect payment endpoints from abuse
+// ============================================================================
+
+/**
+ * Standard payment rate limiter
+ * Used for: creating payment intents, capturing payments
+ * Limit: 30 requests per 15 minutes per user/IP
+ */
+const paymentRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30,
+  message: { error: "Too many payment requests. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Rate limit by user ID from JWT if available, otherwise by IP
+    try {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith("Bearer ")) {
+        const token = authHeader.split(" ")[1];
+        const decoded = jwt.verify(token, secretKey);
+        return `user_${decoded.userId}`;
+      }
+    } catch {
+      // Fall through to IP-based limiting
+    }
+    return req.ip || "unknown";
+  },
+  skip: (req) => {
+    // Skip rate limiting in test environment
+    return process.env.NODE_ENV === "test";
+  },
+});
+
+/**
+ * Strict rate limiter for sensitive operations
+ * Used for: refunds, payment method removal, high-value operations
+ * Limit: 10 requests per 15 minutes per user/IP
+ */
+const strictPaymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: "Too many sensitive payment operations. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith("Bearer ")) {
+        const token = authHeader.split(" ")[1];
+        const decoded = jwt.verify(token, secretKey);
+        return `user_${decoded.userId}`;
+      }
+    } catch {
+      // Fall through to IP-based limiting
+    }
+    return req.ip || "unknown";
+  },
+  skip: (req) => {
+    return process.env.NODE_ENV === "test";
+  },
+});
+
+/**
+ * Very strict rate limiter for payout operations
+ * Used for: triggering payouts, multi-cleaner payouts
+ * Limit: 5 requests per 15 minutes per user/IP
+ */
+const payoutRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: { error: "Too many payout requests. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith("Bearer ")) {
+        const token = authHeader.split(" ")[1];
+        const decoded = jwt.verify(token, secretKey);
+        return `user_${decoded.userId}`;
+      }
+    } catch {
+      // Fall through to IP-based limiting
+    }
+    return req.ip || "unknown";
+  },
+  skip: (req) => {
+    return process.env.NODE_ENV === "test";
+  },
+});
+
+// ============================================================================
+// HELPER: Validate Stripe payment method ID format
+// ============================================================================
+/**
+ * Validates that a payment method ID has the correct Stripe format.
+ * Stripe payment method IDs start with "pm_" followed by alphanumeric characters.
+ *
+ * @param {string} paymentMethodId - The payment method ID to validate
+ * @returns {boolean} - True if valid format
+ */
+const isValidPaymentMethodId = (paymentMethodId) => {
+  if (!paymentMethodId || typeof paymentMethodId !== "string") {
+    return false;
+  }
+  // Stripe payment method IDs: pm_ followed by alphanumeric chars (typically 24+, but allow shorter for flexibility)
+  // Must start with pm_ and have at least some alphanumeric characters
+  return /^pm_[a-zA-Z0-9]{4,}$/.test(paymentMethodId);
+};
 
 // ============================================================================
 // HELPER: Validate early completion timing
@@ -207,11 +323,8 @@ if (!process.env.STRIPE_SECRET_KEY || !process.env.SESSION_SECRET) {
  * ------------------------------------------------------
  */
 paymentRouter.get("/config", (req, res) => {
-  const key = process.env.STRIPE_PUBLISHABLE_KEY;
-  console.log("Stripe publishable key loaded:", key ? `${key.substring(0, 12)}...${key.substring(key.length - 4)}` : "NOT SET");
-  console.log("Key length:", key ? key.length : 0);
   res.json({
-    publishableKey: key,
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
   });
 });
 
@@ -224,6 +337,11 @@ paymentRouter.get("/config", (req, res) => {
 paymentRouter.get("/history/:userId", async (req, res) => {
   const { userId } = req.params;
   const requestedUserId = parseInt(userId, 10);
+
+  // Validate userId is a valid integer
+  if (isNaN(requestedUserId) || requestedUserId <= 0) {
+    return res.status(400).json({ error: "Invalid user ID" });
+  }
 
   // Authorization check
   const authHeader = req.headers.authorization;
@@ -285,6 +403,11 @@ paymentRouter.get("/history/:userId", async (req, res) => {
 paymentRouter.get("/earnings/:employeeId", async (req, res) => {
   const { employeeId } = req.params;
   const cleanerIdInt = parseInt(employeeId, 10);
+
+  // Validate employeeId is a valid integer
+  if (isNaN(cleanerIdInt) || cleanerIdInt <= 0) {
+    return res.status(400).json({ error: "Invalid employee ID" });
+  }
 
   // Authorization check
   const authHeader = req.headers.authorization;
@@ -416,7 +539,7 @@ paymentRouter.get("/payment-method-status", async (req, res) => {
     const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    console.log(`[Payment] Fetching payment methods for user ${userId}, stripeCustomerId: ${user.stripeCustomerId}`);
+    console.log(`[Payment] Fetching payment methods for user ${userId}`);
 
     let paymentMethods = [];
     let hasValidPaymentMethod = user.hasPaymentMethod;
@@ -428,7 +551,7 @@ paymentRouter.get("/payment-method-status", async (req, res) => {
           customer: user.stripeCustomerId,
           type: "card",
         });
-        console.log(`[Payment] Found ${methods.data.length} payment methods for customer ${user.stripeCustomerId}`);
+        console.log(`[Payment] Found ${methods.data.length} payment methods for user ${userId}`);
 
         paymentMethods = methods.data.map((pm) => ({
           id: pm.id,
@@ -453,7 +576,7 @@ paymentRouter.get("/payment-method-status", async (req, res) => {
         }
       }
     } else {
-      console.log(`[Payment] User ${userId} has no stripeCustomerId`);
+      console.log(`[Payment] User ${userId} has no payment customer configured`);
       // For demo accounts without stripeCustomerId, trust the database flag
       if (user.isDemoAccount && user.hasPaymentMethod) {
         hasValidPaymentMethod = true;
@@ -697,6 +820,11 @@ paymentRouter.get("/removal-eligibility/:paymentMethodId", async (req, res) => {
     return res.status(401).json({ error: "Authorization required" });
   }
 
+  // Validate payment method ID format
+  if (!isValidPaymentMethodId(paymentMethodId)) {
+    return res.status(400).json({ error: "Invalid payment method ID format" });
+  }
+
   try {
     const token = authHeader.split(" ")[1];
     const decodedToken = jwt.verify(token, secretKey);
@@ -710,6 +838,12 @@ paymentRouter.get("/removal-eligibility/:paymentMethodId", async (req, res) => {
       customer: user.stripeCustomerId,
       type: "card",
     });
+
+    // SECURITY: Verify the payment method belongs to this user
+    const paymentMethodBelongsToUser = methods.data.some(m => m.id === paymentMethodId);
+    if (!paymentMethodBelongsToUser) {
+      return res.status(403).json({ error: "Payment method does not belong to this user" });
+    }
 
     const paymentMethodCount = methods.data.length;
     const isLastPaymentMethod = paymentMethodCount === 1;
@@ -809,12 +943,17 @@ paymentRouter.get("/removal-eligibility/:paymentMethodId", async (req, res) => {
  * Remove a payment method
  * Now includes eligibility checks for last payment method
  */
-paymentRouter.delete("/payment-method/:paymentMethodId", async (req, res) => {
+paymentRouter.delete("/payment-method/:paymentMethodId", strictPaymentLimiter, async (req, res) => {
   const { paymentMethodId } = req.params;
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Authorization required" });
+  }
+
+  // Validate payment method ID format
+  if (!isValidPaymentMethodId(paymentMethodId)) {
+    return res.status(400).json({ error: "Invalid payment method ID format" });
   }
 
   try {
@@ -830,6 +969,12 @@ paymentRouter.delete("/payment-method/:paymentMethodId", async (req, res) => {
       customer: user.stripeCustomerId,
       type: "card",
     });
+
+    // SECURITY: Verify the payment method belongs to this user
+    const paymentMethodBelongsToUser = methods.data.some(m => m.id === paymentMethodId);
+    if (!paymentMethodBelongsToUser) {
+      return res.status(403).json({ error: "Payment method does not belong to this user" });
+    }
 
     const isLastPaymentMethod = methods.data.length === 1;
 
@@ -902,7 +1047,7 @@ paymentRouter.delete("/payment-method/:paymentMethodId", async (req, res) => {
  * Prepay all appointments and remove payment method
  * Used when client wants to prepay all booked appointments before removing their card
  */
-paymentRouter.post("/prepay-all-and-remove", async (req, res) => {
+paymentRouter.post("/prepay-all-and-remove", strictPaymentLimiter, async (req, res) => {
   const { paymentMethodId } = req.body;
   const authHeader = req.headers.authorization;
 
@@ -914,6 +1059,11 @@ paymentRouter.post("/prepay-all-and-remove", async (req, res) => {
     return res.status(400).json({ error: "Payment method ID required" });
   }
 
+  // Validate payment method ID format
+  if (!isValidPaymentMethodId(paymentMethodId)) {
+    return res.status(400).json({ error: "Invalid payment method ID format" });
+  }
+
   try {
     const token = authHeader.split(" ")[1];
     const decodedToken = jwt.verify(token, secretKey);
@@ -921,6 +1071,16 @@ paymentRouter.post("/prepay-all-and-remove", async (req, res) => {
 
     const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
+
+    // SECURITY: Verify the payment method belongs to this user
+    const userPaymentMethods = await stripe.paymentMethods.list({
+      customer: user.stripeCustomerId,
+      type: "card",
+    });
+    const paymentMethodBelongsToUser = userPaymentMethods.data.some(m => m.id === paymentMethodId);
+    if (!paymentMethodBelongsToUser) {
+      return res.status(403).json({ error: "Payment method does not belong to this user" });
+    }
 
     // Step 1: Pay any outstanding fees first
     const userBill = await UserBills.findOne({ where: { userId } });
@@ -1071,7 +1231,8 @@ paymentRouter.post("/prepay-all-and-remove", async (req, res) => {
     });
   } catch (error) {
     console.error("[Prepay & Remove] Error:", error);
-    return res.status(500).json({ error: error.message || "Failed to process prepayment" });
+    // Don't leak internal error details to client
+    return res.status(500).json({ error: "Failed to process prepayment. Please try again." });
   }
 });
 
@@ -1080,7 +1241,7 @@ paymentRouter.post("/prepay-all-and-remove", async (req, res) => {
  * Used when client wants to cancel all booked appointments before removing their card
  * Cancellation fees apply for appointments within 7 days
  */
-paymentRouter.post("/cancel-all-and-remove", async (req, res) => {
+paymentRouter.post("/cancel-all-and-remove", strictPaymentLimiter, async (req, res) => {
   const { paymentMethodId, acknowledgedCancellationFees } = req.body;
   const authHeader = req.headers.authorization;
 
@@ -1090,6 +1251,11 @@ paymentRouter.post("/cancel-all-and-remove", async (req, res) => {
 
   if (!paymentMethodId) {
     return res.status(400).json({ error: "Payment method ID required" });
+  }
+
+  // Validate payment method ID format
+  if (!isValidPaymentMethodId(paymentMethodId)) {
+    return res.status(400).json({ error: "Invalid payment method ID format" });
   }
 
   if (!acknowledgedCancellationFees) {
@@ -1103,6 +1269,16 @@ paymentRouter.post("/cancel-all-and-remove", async (req, res) => {
 
     const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
+
+    // SECURITY: Verify the payment method belongs to this user
+    const userPaymentMethods = await stripe.paymentMethods.list({
+      customer: user.stripeCustomerId,
+      type: "card",
+    });
+    const paymentMethodBelongsToUser = userPaymentMethods.data.some(m => m.id === paymentMethodId);
+    if (!paymentMethodBelongsToUser) {
+      return res.status(403).json({ error: "Payment method does not belong to this user" });
+    }
 
     // Get pricing config
     const pricingConfig = await getPricingConfig();
@@ -1266,7 +1442,8 @@ paymentRouter.post("/cancel-all-and-remove", async (req, res) => {
     });
   } catch (error) {
     console.error("[Cancel & Remove] Error:", error);
-    return res.status(500).json({ error: error.message || "Failed to process cancellation" });
+    // Don't leak internal error details to client
+    return res.status(500).json({ error: "Failed to process cancellation. Please try again." });
   }
 });
 
@@ -1276,8 +1453,33 @@ paymentRouter.post("/cancel-all-and-remove", async (req, res) => {
  * Used when booking an appointment
  * ------------------------------------------------------
  */
-paymentRouter.post("/create-payment-intent", async (req, res) => {
+paymentRouter.post("/create-payment-intent", paymentRateLimiter, async (req, res) => {
   const { token, homeId, amount, appointmentDate } = req.body;
+
+  // ============================================================================
+  // INPUT VALIDATION - Amount
+  // Validate amount is a positive integer within reasonable bounds
+  // ============================================================================
+  if (amount === undefined || amount === null) {
+    return res.status(400).json({ error: "Amount is required" });
+  }
+
+  const amountInt = parseInt(amount, 10);
+  if (isNaN(amountInt) || amountInt !== Number(amount)) {
+    return res.status(400).json({ error: "Amount must be an integer (in cents)" });
+  }
+
+  // Minimum $10.00 (1000 cents), Maximum $10,000.00 (1000000 cents)
+  const MIN_AMOUNT_CENTS = 1000;
+  const MAX_AMOUNT_CENTS = 1000000;
+
+  if (amountInt < MIN_AMOUNT_CENTS) {
+    return res.status(400).json({ error: `Amount must be at least $${(MIN_AMOUNT_CENTS / 100).toFixed(2)}` });
+  }
+
+  if (amountInt > MAX_AMOUNT_CENTS) {
+    return res.status(400).json({ error: `Amount cannot exceed $${(MAX_AMOUNT_CENTS / 100).toFixed(2)}` });
+  }
 
   try {
     const decodedToken = jwt.verify(token, secretKey);
@@ -1298,9 +1500,27 @@ paymentRouter.post("/create-payment-intent", async (req, res) => {
     const home = await UserHomes.findByPk(homeId);
     if (!home) return res.status(404).json({ error: "Home not found" });
 
+    // Validate amount against home's base price if available
+    // Allow up to 3x the base price to account for add-ons, but flag manipulation attempts
+    if (home.price) {
+      const basePriceCents = Math.round(parseFloat(home.price) * 100);
+      const maxAllowedAmount = basePriceCents * 3; // Allow up to 3x for add-ons
+      const minAllowedAmount = Math.round(basePriceCents * 0.5); // At least 50% of base price
+
+      if (amountInt < minAllowedAmount) {
+        console.warn(`[Payment] Amount below minimum threshold for home ${homeId}`);
+        return res.status(400).json({ error: "Amount is below the minimum for this home" });
+      }
+
+      if (amountInt > maxAllowedAmount) {
+        console.warn(`[Payment] Amount exceeds maximum threshold for home ${homeId}`);
+        return res.status(400).json({ error: "Amount exceeds the maximum for this home" });
+      }
+    }
+
     // Create Stripe payment intent (authorization only)
     const paymentIntent = await stripe.paymentIntents.create({
-      amount, // in cents
+      amount: amountInt, // in cents - validated
       currency: "usd",
       capture_method: "manual",
       metadata: { userId, homeId },
@@ -1312,7 +1532,7 @@ paymentRouter.post("/create-payment-intent", async (req, res) => {
       userId,
       homeId,
       date: appointmentDate,
-      price: amount, // Keep in cents (e.g., 15000 = $150.00) - DO NOT divide by 100
+      price: amountInt, // Keep in cents (e.g., 15000 = $150.00) - validated integer
       paid: false,
       bringTowels: home.towelsProvided ? "no" : "yes",
       bringSheets: home.sheetsProvided ? "no" : "yes",
@@ -1330,7 +1550,7 @@ paymentRouter.post("/create-payment-intent", async (req, res) => {
     await recordPaymentTransaction({
       type: "authorization",
       status: "pending",
-      amount,
+      amount: amountInt,
       userId,
       appointmentId: appointment.id,
       stripePaymentIntentId: paymentIntent.id,
@@ -1351,18 +1571,56 @@ paymentRouter.post("/create-payment-intent", async (req, res) => {
 /**
  * ------------------------------------------------------
  * 3️⃣ Simple Payment Intent for Mobile App
- * Used by React Native Bill.js (no JWT)
+ * Used by React Native Bill.js
  * ------------------------------------------------------
  */
-paymentRouter.post("/create-intent", async (req, res) => {
+paymentRouter.post("/create-intent", paymentRateLimiter, async (req, res) => {
   const { amount, email } = req.body;
+
+  // ============================================================================
+  // AUTHENTICATION - Require valid JWT token
+  // ============================================================================
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  let decoded;
+  try {
+    const token = authHeader.split(" ")[1];
+    decoded = jwt.verify(token, secretKey);
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  // Verify user exists
+  const user = await User.findByPk(decoded.userId);
+  if (!user) {
+    return res.status(401).json({ error: "User not found" });
+  }
+
+  // Validate amount - must be positive integer within reasonable bounds
+  // Min: $1 (100 cents), Max: $10,000 (1000000 cents) for bill payments
+  const MIN_AMOUNT_CENTS = 100;
+  const MAX_AMOUNT_CENTS = 1000000;
+
+  if (!amount || typeof amount !== "number" || !Number.isInteger(amount)) {
+    return res.status(400).json({ error: "Amount must be a valid integer in cents" });
+  }
+
+  if (amount < MIN_AMOUNT_CENTS || amount > MAX_AMOUNT_CENTS) {
+    return res.status(400).json({ error: "Amount must be between $1.00 and $10,000.00" });
+  }
 
   try {
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: "usd",
       automatic_payment_methods: { enabled: true },
-      receipt_email: email,
+      receipt_email: email || user.email,
+      metadata: {
+        userId: decoded.userId,
+      },
     });
 
     res.json({ clientSecret: paymentIntent.client_secret });
@@ -1378,27 +1636,39 @@ paymentRouter.post("/create-intent", async (req, res) => {
  * Uses the customer's saved payment method to pay their bill
  * ------------------------------------------------------
  */
-paymentRouter.post("/pay-bill", async (req, res) => {
-  console.log("[Pay Bill] Request received:", { amount: req.body.amount });
-
+paymentRouter.post("/pay-bill", paymentRateLimiter, async (req, res) => {
   const { amount } = req.body; // amount in cents
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
-    console.log("[Pay Bill] No authorization header");
     return res.status(401).json({ error: "Authorization required" });
   }
 
-  if (!amount || amount <= 0) {
-    console.log("[Pay Bill] Invalid amount:", amount);
-    return res.status(400).json({ error: "Invalid amount" });
+  // Strict amount validation - must be a positive integer
+  if (amount === undefined || amount === null) {
+    return res.status(400).json({ error: "Amount is required" });
+  }
+
+  // Reject non-numeric types and ensure it's an integer
+  if (typeof amount !== "number" || !Number.isInteger(amount)) {
+    return res.status(400).json({ error: "Amount must be an integer (in cents)" });
+  }
+
+  if (amount <= 0) {
+    return res.status(400).json({ error: "Amount must be positive" });
+  }
+
+  // Reasonable bounds: $1 minimum, $50,000 maximum for bill payments
+  const MAX_BILL_PAYMENT_CENTS = 5000000;
+  if (amount > MAX_BILL_PAYMENT_CENTS) {
+    return res.status(400).json({ error: "Amount exceeds maximum allowed" });
   }
 
   try {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, secretKey);
     const userId = decoded.userId;
-    console.log("[Pay Bill] User ID:", userId, "Amount (cents):", amount);
+    console.log("[Pay Bill] Processing bill payment request");
 
     const user = await User.findByPk(userId);
     if (!user) {
@@ -1504,9 +1774,11 @@ paymentRouter.post("/pay-bill", async (req, res) => {
   } catch (error) {
     console.error("[Pay Bill] Error:", error);
 
-    // Handle Stripe card errors
+    // Handle Stripe card errors - use generic message to avoid leaking card details
     if (error.type === "StripeCardError") {
-      return res.status(400).json({ error: error.message || "Your card was declined." });
+      // Log the actual error for debugging but return generic message to client
+      console.error("[Pay Bill] Stripe card error details:", error.code, error.decline_code);
+      return res.status(400).json({ error: "Your card was declined. Please check your card details or try a different payment method." });
     }
 
     if (error.name === "JsonWebTokenError") {
@@ -1537,13 +1809,43 @@ paymentRouter.post("/record-bill-payment", async (req, res) => {
     const decoded = jwt.verify(token, secretKey);
     const userId = decoded.userId;
 
+    // Validate paymentIntentId is provided
+    if (!paymentIntentId || typeof paymentIntentId !== "string") {
+      return res.status(400).json({ error: "Valid payment intent ID is required" });
+    }
+
+    // Verify the payment intent belongs to this user
+    try {
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+      // Check that the payment intent metadata matches this user
+      if (paymentIntent.metadata?.userId !== String(userId)) {
+        console.warn(`[Bill Payment] User ${userId} tried to use payment intent ${paymentIntentId} belonging to user ${paymentIntent.metadata?.userId}`);
+        return res.status(403).json({ error: "This payment does not belong to you" });
+      }
+
+      // Verify the payment was actually successful
+      if (paymentIntent.status !== "succeeded") {
+        return res.status(400).json({ error: "Payment has not been completed" });
+      }
+
+      // Verify the amount matches what was actually charged
+      if (paymentIntent.amount !== amount) {
+        console.warn(`[Bill Payment] Amount mismatch: user ${userId} claimed ${amount} but payment intent was ${paymentIntent.amount}`);
+        return res.status(400).json({ error: "Amount does not match payment" });
+      }
+    } catch (stripeError) {
+      console.error("[Bill Payment] Stripe verification error:", stripeError.message);
+      return res.status(400).json({ error: "Invalid payment intent" });
+    }
+
     // Find the user's bill
     const bill = await UserBills.findOne({ where: { userId } });
     if (!bill) {
       return res.status(404).json({ error: "Bill not found" });
     }
 
-    // Amount is in cents from frontend, convert to dollars for bill (stored in dollars)
+    // Use verified amount from Stripe (in cents), convert to dollars for bill
     const paymentAmountDollars = amount / 100;
 
     // Get current values
@@ -1687,9 +1989,13 @@ async function processMultiCleanerPayouts(appointment, multiCleanerJob) {
           transaction: t,
         });
 
-        if (payout && payout.status === "completed") {
+        // Check if already paid OR currently being processed (prevents race condition)
+        if (payout && (payout.status === "completed" || payout.status === "processing")) {
           await t.commit();
-          results.push({ cleanerId, status: "already_paid" });
+          results.push({
+            cleanerId,
+            status: payout.status === "completed" ? "already_paid" : "in_progress"
+          });
           continue;
         }
 
@@ -1723,7 +2029,7 @@ async function processMultiCleanerPayouts(appointment, multiCleanerJob) {
             applicableFeePercent = businessOwnerFeePercent;
           }
 
-          console.log(`[MultiCleanerPayout] Cleaner ${cleanerId} is business employee of owner ${businessOwnerId}, using ${applicableFeePercent * 100}% fee`);
+          console.log(`[MultiCleanerPayout] Processing business employee payout with discounted fee`);
         }
 
         // Get the payout recipient's Stripe Connect account
@@ -1754,7 +2060,7 @@ async function processMultiCleanerPayouts(appointment, multiCleanerJob) {
         if (isBusinessEmployee) {
           // Recalculate with business owner fee instead of multi-cleaner fee
           // Business owners get reduced platform fees as a volume/partnership benefit
-          const cleanerAssignments = roomAssignments.filter(a => a.cleanerId == cleanerId);
+          const cleanerAssignments = roomAssignments.filter(a => String(a.cleanerId) === String(cleanerId));
           const totalEffort = roomAssignments.reduce((sum, a) => sum + (a.estimatedMinutes || 0), 0);
           const cleanerEffort = cleanerAssignments.reduce((sum, a) => sum + (a.estimatedMinutes || 0), 0);
 
@@ -1780,7 +2086,7 @@ async function processMultiCleanerPayouts(appointment, multiCleanerJob) {
           // Use standard multi-cleaner earnings breakdown
           // Try multiple matching strategies since earnings may be keyed by cleanerId or cleanerSlotIndex
           let cleanerEarning = earningsBreakdown.cleanerEarnings.find(
-            (e) => e.cleanerId == cleanerId
+            (e) => String(e.cleanerId) === String(cleanerId)
           );
 
           // If no match by cleanerId, try matching by index position
@@ -1790,7 +2096,7 @@ async function processMultiCleanerPayouts(appointment, multiCleanerJob) {
             if (completionIndex >= 0 && completionIndex < earningsBreakdown.cleanerEarnings.length) {
               // Check if earnings are indexed (cleanerIndex matches position)
               const earningByIndex = earningsBreakdown.cleanerEarnings.find(
-                (e) => e.cleanerIndex === completionIndex || e.cleanerId == completionIndex
+                (e) => e.cleanerIndex === completionIndex || String(e.cleanerId) === String(completionIndex)
               );
               if (earningByIndex) {
                 cleanerEarning = earningByIndex;
@@ -1880,7 +2186,9 @@ async function processMultiCleanerPayouts(appointment, multiCleanerJob) {
 
         let transfer;
         try {
-          transfer = await stripe.transfers.create(transferParams);
+          // Use idempotency key to prevent duplicate transfers on retry
+          const idempotencyKey = `transfer-mc-${appointment.id}-${cleanerId}-${payout.id}`;
+          transfer = await stripe.transfers.create(transferParams, { idempotencyKey });
         } catch (stripeError) {
           // Stripe transfer failed - update payout status to failed in a new transaction
           const tFailed = await sequelize.transaction();
@@ -2099,7 +2407,9 @@ async function processCleanerPayoutWithAmount(cleanerId, appointment, netAmount,
 
     let transfer;
     try {
-      transfer = await stripe.transfers.create(transferParams);
+      // Use idempotency key to prevent duplicate transfers on retry
+      const idempotencyKey = `transfer-pwa-${appointment.id}-${cleanerId}-${payout.id}`;
+      transfer = await stripe.transfers.create(transferParams, { idempotencyKey });
     } catch (stripeError) {
       // Stripe transfer failed - update payout status to failed
       const tFailed = await sequelize.transaction();
@@ -2294,7 +2604,9 @@ async function processCleanerPayouts(appointment) {
 
       let transfer;
       try {
-        transfer = await stripe.transfers.create(transferParams);
+        // Use idempotency key to prevent duplicate transfers on retry
+        const idempotencyKey = `transfer-batch-${appointment.id}-${cleanerId}-${payout.id}`;
+        transfer = await stripe.transfers.create(transferParams, { idempotencyKey });
       } catch (stripeError) {
         // Stripe transfer failed - update payout status
         const tFailed = await sequelize.transaction();
@@ -2430,7 +2742,7 @@ async function processCleanerPayouts(appointment) {
  * Uses row-level locking to prevent race conditions and ensure atomicity
  * ------------------------------------------------------
  */
-paymentRouter.post("/capture-payment", async (req, res) => {
+paymentRouter.post("/capture-payment", paymentRateLimiter, async (req, res) => {
   const { appointmentId } = req.body;
 
   // Authorization check
@@ -2542,8 +2854,7 @@ paymentRouter.post("/capture-payment", async (req, res) => {
 
       console.error("Stripe capture error:", stripeError);
       return res.status(400).json({
-        error: "Payment capture failed",
-        stripeError: stripeError.message,
+        error: "Payment capture failed. Please try again or contact support.",
       });
     }
 
@@ -2580,8 +2891,6 @@ paymentRouter.post("/capture-payment", async (req, res) => {
           capturedBy: decoded.userId,
           capturedByType: requestingUser.type,
           capturedAt: new Date().toISOString(),
-          ipAddress: req.ip || req.headers["x-forwarded-for"] || "unknown",
-          userAgent: req.headers["user-agent"] || "unknown",
         },
         transaction: tFinal,
       });
@@ -2651,10 +2960,60 @@ paymentRouter.post("/complete-job", async (req, res) => {
   const NotificationService = require("../../../services/NotificationService");
   const { PricingConfig } = require("../../../models");
 
+  // ============================================================================
+  // AUTHENTICATION & AUTHORIZATION
+  // Only assigned cleaners or owners can mark jobs complete
+  // ============================================================================
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  let decoded;
   try {
-    const appointment = await UserAppointments.findByPk(appointmentId);
+    const token = authHeader.split(" ")[1];
+    decoded = jwt.verify(token, secretKey);
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  const requestingUser = await User.findByPk(decoded.userId);
+  if (!requestingUser) {
+    return res.status(401).json({ error: "User not found" });
+  }
+
+  // Validate appointmentId
+  if (!appointmentId) {
+    return res.status(400).json({ error: "Appointment ID is required" });
+  }
+
+  const appointmentIdInt = parseInt(appointmentId, 10);
+  if (isNaN(appointmentIdInt) || appointmentIdInt <= 0) {
+    return res.status(400).json({ error: "Invalid appointment ID" });
+  }
+
+  try {
+    const appointment = await UserAppointments.findByPk(appointmentIdInt);
     if (!appointment)
       return res.status(404).json({ error: "Appointment not found" });
+
+    // Authorization: Must be assigned cleaner or owner
+    const isOwner = requestingUser.type === "owner";
+    const isAssignedCleaner = appointment.employeesAssigned &&
+      (appointment.employeesAssigned.includes(String(decoded.userId)) ||
+       appointment.employeesAssigned.includes(decoded.userId));
+
+    // If cleanerId is provided, verify it matches the requesting user (unless owner)
+    const effectiveCleanerId = cleanerId || decoded.userId;
+    const isRequestingOwnCompletion = String(effectiveCleanerId) === String(decoded.userId);
+
+    if (!isOwner && !isAssignedCleaner) {
+      return res.status(403).json({ error: "Not authorized to complete this job" });
+    }
+
+    if (!isOwner && !isRequestingOwnCompletion) {
+      return res.status(403).json({ error: "Cleaners can only complete their own assignments" });
+    }
 
     // Check if appointment is paused or cancelled
     if (appointment.isPaused) {
@@ -2892,7 +3251,7 @@ paymentRouter.post("/complete-job", async (req, res) => {
 });
 
 // Alias for frontend compatibility
-paymentRouter.post("/capture", async (req, res) => {
+paymentRouter.post("/capture", paymentRateLimiter, async (req, res) => {
   const { appointmentId } = req.body;
 
   // Authorization check
@@ -3026,8 +3385,6 @@ paymentRouter.post("/capture", async (req, res) => {
           capturedBy: decoded.userId,
           capturedByType: requestingUser.type,
           capturedAt: new Date().toISOString(),
-          ipAddress: req.ip || req.headers["x-forwarded-for"] || "unknown",
-          userAgent: req.headers["user-agent"] || "unknown",
           endpoint: "/capture",
         },
         transaction: tFinal,
@@ -3063,7 +3420,7 @@ paymentRouter.post("/capture", async (req, res) => {
  * POST /retry-payment
  * Allows homeowner to manually retry a failed payment capture
  */
-paymentRouter.post("/retry-payment", async (req, res) => {
+paymentRouter.post("/retry-payment", paymentRateLimiter, async (req, res) => {
   const { appointmentId } = req.body;
   const authHeader = req.headers.authorization;
 
@@ -3246,12 +3603,11 @@ paymentRouter.post("/retry-payment", async (req, res) => {
     }
     console.error("[Retry Payment] Error:", error);
 
-    // Check if it's a Stripe error
+    // Check if it's a Stripe error - use generic message to avoid leaking card details
     if (error.type === "StripeCardError" || error.type === "StripeInvalidRequestError") {
+      console.error("[Retry Payment] Stripe error details:", error.code, error.decline_code);
       return res.status(400).json({
-        error: "Payment failed",
-        message: error.message,
-        code: error.code
+        error: "Payment failed. Please check your card details or try a different payment method."
       });
     }
 
@@ -3269,7 +3625,7 @@ paymentRouter.post("/retry-payment", async (req, res) => {
  * Captures payment early and marks as manually paid
  * ------------------------------------------------------
  */
-paymentRouter.post("/pre-pay", async (req, res) => {
+paymentRouter.post("/pre-pay", paymentRateLimiter, async (req, res) => {
   const { appointmentId } = req.body;
   const authHeader = req.headers.authorization;
 
@@ -3397,8 +3753,10 @@ paymentRouter.post("/pre-pay", async (req, res) => {
     });
   } catch (error) {
     console.error("Pre-pay error:", error);
+    // Use generic message to avoid leaking card details
     if (error.type === "StripeCardError") {
-      return res.status(400).json({ error: error.message });
+      console.error("[Pre-pay] Stripe card error details:", error.code, error.decline_code);
+      return res.status(400).json({ error: "Your card was declined. Please check your card details or try a different payment method." });
     }
     return res.status(400).json({ error: "Payment failed. Please try again." });
   }
@@ -3410,7 +3768,7 @@ paymentRouter.post("/pre-pay", async (req, res) => {
  * Allows customers to select and pay for multiple upcoming appointments
  * ------------------------------------------------------
  */
-paymentRouter.post("/pre-pay-batch", async (req, res) => {
+paymentRouter.post("/pre-pay-batch", paymentRateLimiter, async (req, res) => {
   const { appointmentIds } = req.body;
   const authHeader = req.headers.authorization;
 
@@ -3524,9 +3882,13 @@ paymentRouter.post("/pre-pay-batch", async (req, res) => {
       }
     } catch (err) {
       console.error(`Batch pre-pay error for appointment ${appointmentId}:`, err);
+      // Use generic message to avoid leaking card details
+      if (err.type === "StripeCardError") {
+        console.error(`[Batch Pre-pay] Stripe card error details:`, err.code, err.decline_code);
+      }
       results.failed.push({
         id: appointmentId,
-        error: err.type === "StripeCardError" ? err.message : "Payment failed"
+        error: "Payment failed"
       });
       results.failedCount++;
     }
@@ -4033,7 +4395,7 @@ paymentRouter.post("/run-daily-check", async (req, res) => {
 
     // Verify user is an owner
     const user = await User.findByPk(userId);
-    if (!user || user.role !== "owner") {
+    if (!user || user.type !== "owner") {
       return res.status(403).json({ error: "Owner access required" });
     }
 
@@ -4403,18 +4765,56 @@ paymentRouter.post("/run-review-reminder", async (req, res) => {
  * ------------------------------------------------------
  * 6️⃣ Cancel or Refund Payment
  * Includes payout reversal when cleaners have already been paid
+ * IMPORTANT: Only owners can cancel/refund payments
  * ------------------------------------------------------
  */
 const handleCancelOrRefund = async (req, res) => {
   const { appointmentId, skipPayoutReversal = false } = req.body;
   const { Op } = require("sequelize");
 
+  // ============================================================================
+  // AUTHENTICATION & AUTHORIZATION
+  // Only owners can cancel/refund payments to prevent unauthorized refunds
+  // ============================================================================
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  let decoded;
+  try {
+    const token = authHeader.split(" ")[1];
+    decoded = jwt.verify(token, secretKey);
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  const requestingUser = await User.findByPk(decoded.userId);
+  if (!requestingUser) {
+    return res.status(401).json({ error: "User not found" });
+  }
+
+  // Only owners can process refunds/cancellations
+  if (requestingUser.type !== "owner") {
+    return res.status(403).json({ error: "Only owners can cancel or refund payments" });
+  }
+
+  // Validate appointmentId
+  if (!appointmentId) {
+    return res.status(400).json({ error: "Appointment ID is required" });
+  }
+
+  const appointmentIdInt = parseInt(appointmentId, 10);
+  if (isNaN(appointmentIdInt) || appointmentIdInt <= 0) {
+    return res.status(400).json({ error: "Invalid appointment ID" });
+  }
+
   // Use transaction with row-level locking to prevent race conditions
   const t = await sequelize.transaction();
 
   try {
     // Fetch appointment with exclusive lock
-    const appointment = await UserAppointments.findByPk(appointmentId, {
+    const appointment = await UserAppointments.findByPk(appointmentIdInt, {
       lock: t.LOCK.UPDATE,
       transaction: t,
     });
@@ -4669,12 +5069,13 @@ const handleCancelOrRefund = async (req, res) => {
   }
 };
 
-paymentRouter.post("/cancel-or-refund", handleCancelOrRefund);
-paymentRouter.post("/refund", handleCancelOrRefund);
+paymentRouter.post("/cancel-or-refund", strictPaymentLimiter, handleCancelOrRefund);
+paymentRouter.post("/refund", strictPaymentLimiter, handleCancelOrRefund);
 
 /**
  * ------------------------------------------------------
  * 7️⃣ Stripe Webhook — Handle Payment Events
+ * With idempotency/deduplication to prevent duplicate processing
  * ------------------------------------------------------
  */
 paymentRouter.post(
@@ -4683,65 +5084,149 @@ paymentRouter.post(
   async (req, res) => {
     const sig = req.headers["stripe-signature"];
 
+    // Validate webhook secret is configured
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      console.error("[PaymentWebhook] CRITICAL: STRIPE_WEBHOOK_SECRET not configured");
+      return res.status(500).json({
+        error: "Webhook secret not configured",
+        code: "WEBHOOK_SECRET_MISSING",
+      });
+    }
+
+    let event;
     try {
-      const event = stripe.webhooks.constructEvent(
+      event = stripe.webhooks.constructEvent(
         req.body,
         sig,
         process.env.STRIPE_WEBHOOK_SECRET
       );
+    } catch (err) {
+      console.error("[PaymentWebhook] Signature verification failed");
+      return res.status(400).json({ error: "Webhook signature verification failed" });
+    }
+
+    // Validate event timestamp to prevent replay attacks (reject events older than 5 minutes)
+    const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000; // 5 minutes
+    const eventAgeMs = Date.now() - (event.created * 1000);
+    if (eventAgeMs > MAX_WEBHOOK_AGE_MS) {
+      console.warn(`[PaymentWebhook] Rejected stale event ${event.id} (age: ${Math.round(eventAgeMs / 1000)}s)`);
+      return res.status(400).json({ error: "Event too old", code: "STALE_EVENT" });
+    }
+
+    // Attempt to claim this event for processing (prevents duplicate processing)
+    const webhookRecord = await StripeWebhookEvent.claimEvent(event, "payments");
+    if (!webhookRecord) {
+      // Event already processed or being processed
+      console.log(`[PaymentWebhook] Event ${event.id} already processed, skipping`);
+      return res.json({ received: true, duplicate: true });
+    }
+
+    try {
+      let relatedEntityType = null;
+      let relatedEntityId = null;
 
       switch (event.type) {
-        case "payment_intent.succeeded":
+        case "payment_intent.succeeded": {
           const paymentIntent = event.data.object;
-          console.log(`PaymentIntent succeeded: ${paymentIntent.id}`);
+          console.log(`[PaymentWebhook] PaymentIntent succeeded: ${paymentIntent.id}`);
 
-          const appointment = await UserAppointments.findOne({
-            where: { paymentIntentId: paymentIntent.id },
-          });
-          if (appointment) {
-            await appointment.update({
-              paymentStatus: "succeeded",
-              paid: true,
-              amountPaid: paymentIntent.amount
+          // Use transaction with row-level locking to prevent race conditions
+          await sequelize.transaction(async (t) => {
+            const appointment = await UserAppointments.findOne({
+              where: { paymentIntentId: paymentIntent.id },
+              lock: t.LOCK.UPDATE,
+              transaction: t,
             });
-          }
-          break;
 
-        case "payment_intent.payment_failed":
+            if (appointment) {
+              // Only update if not already in succeeded state (idempotent)
+              if (appointment.paymentStatus !== "succeeded") {
+                await appointment.update({
+                  paymentStatus: "succeeded",
+                  paid: true,
+                  amountPaid: paymentIntent.amount,
+                }, { transaction: t });
+              }
+              relatedEntityType = "appointment";
+              relatedEntityId = appointment.id;
+            }
+          });
+          break;
+        }
+
+        case "payment_intent.payment_failed": {
           const failedIntent = event.data.object;
-          console.error(`Payment failed: ${failedIntent.id}`);
+          console.error(`[PaymentWebhook] Payment failed: ${failedIntent.id}`);
 
-          const failedAppointment = await UserAppointments.findOne({
-            where: { paymentIntentId: failedIntent.id },
-          });
-          if (failedAppointment) {
-            await failedAppointment.update({ paymentStatus: "failed" });
-          }
-          break;
-
-        case "charge.refunded":
-          const refund = event.data.object;
-          console.log(`Charge refunded: ${refund.payment_intent}`);
-
-          const refundedAppointment = await UserAppointments.findOne({
-            where: { paymentIntentId: refund.payment_intent },
-          });
-          if (refundedAppointment) {
-            await refundedAppointment.update({
-              paymentStatus: "refunded",
-              paid: false
+          await sequelize.transaction(async (t) => {
+            const failedAppointment = await UserAppointments.findOne({
+              where: { paymentIntentId: failedIntent.id },
+              lock: t.LOCK.UPDATE,
+              transaction: t,
             });
-          }
+
+            if (failedAppointment) {
+              // Only update if not already marked as failed
+              if (failedAppointment.paymentStatus !== "failed") {
+                await failedAppointment.update({
+                  paymentStatus: "failed",
+                }, { transaction: t });
+              }
+              relatedEntityType = "appointment";
+              relatedEntityId = failedAppointment.id;
+            }
+          });
           break;
+        }
+
+        case "charge.refunded": {
+          const charge = event.data.object;
+          console.log(`[PaymentWebhook] Charge refunded: ${charge.payment_intent}`);
+
+          await sequelize.transaction(async (t) => {
+            const refundedAppointment = await UserAppointments.findOne({
+              where: { paymentIntentId: charge.payment_intent },
+              lock: t.LOCK.UPDATE,
+              transaction: t,
+            });
+
+            if (refundedAppointment) {
+              // Check if fully refunded
+              const isFullRefund = charge.amount_refunded >= charge.amount;
+              if (isFullRefund) {
+                await refundedAppointment.update({
+                  paymentStatus: "refunded",
+                  paid: false,
+                }, { transaction: t });
+              } else {
+                // Partial refund - keep as paid but update refund amount
+                await refundedAppointment.update({
+                  refundAmount: (refundedAppointment.refundAmount || 0) + charge.amount_refunded,
+                }, { transaction: t });
+              }
+              relatedEntityType = "appointment";
+              relatedEntityId = refundedAppointment.id;
+            }
+          });
+          break;
+        }
 
         default:
-          console.log(`Unhandled event type ${event.type}`);
+          console.log(`[PaymentWebhook] Unhandled event type: ${event.type}`);
+          await StripeWebhookEvent.markSkipped(event.id, `Unhandled event type: ${event.type}`);
+          return res.json({ received: true });
       }
 
+      // Mark event as successfully processed
+      await StripeWebhookEvent.markCompleted(event.id, relatedEntityType, relatedEntityId);
       res.json({ received: true });
+
     } catch (err) {
-      console.error("Webhook signature verification failed:", err.message);
-      res.status(400).send(`Webhook Error: ${err.message}`);
+      console.error(`[PaymentWebhook] Error processing event ${event.id}:`, err);
+      await StripeWebhookEvent.markFailed(event.id, err.message);
+      // Still return 200 to prevent Stripe from retrying indefinitely
+      // The error is logged and can be investigated
+      res.json({ received: true, error: true });
     }
   }
 );
@@ -4752,8 +5237,48 @@ paymentRouter.post(
  * Used when a cleaner completes their portion of a job
  * ------------------------------------------------------
  */
-paymentRouter.post("/multi-cleaner/partial-payout", async (req, res) => {
+paymentRouter.post("/multi-cleaner/partial-payout", payoutRateLimiter, async (req, res) => {
   const { appointmentId, cleanerId } = req.body;
+
+  // ============================================================================
+  // AUTHENTICATION & AUTHORIZATION
+  // Only assigned cleaners (for their own payout) or owners can trigger payouts
+  // ============================================================================
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  let decoded;
+  try {
+    const token = authHeader.split(" ")[1];
+    decoded = jwt.verify(token, secretKey);
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  const requestingUser = await User.findByPk(decoded.userId);
+  if (!requestingUser) {
+    return res.status(401).json({ error: "User not found" });
+  }
+
+  // Validate cleanerId
+  if (!cleanerId) {
+    return res.status(400).json({ error: "Cleaner ID is required" });
+  }
+
+  const cleanerIdInt = parseInt(cleanerId, 10);
+  if (isNaN(cleanerIdInt) || cleanerIdInt <= 0) {
+    return res.status(400).json({ error: "Invalid cleaner ID" });
+  }
+
+  // Authorization: Must be owner OR the cleaner requesting their own payout
+  const isOwner = requestingUser.type === "owner";
+  const isOwnPayout = decoded.userId === cleanerIdInt;
+
+  if (!isOwner && !isOwnPayout) {
+    return res.status(403).json({ error: "Not authorized to process this payout" });
+  }
 
   try {
     const appointment = await UserAppointments.findByPk(appointmentId);
@@ -4825,7 +5350,7 @@ paymentRouter.post("/multi-cleaner/partial-payout", async (req, res) => {
     );
 
     const cleanerEarning = earningsBreakdown.cleanerEarnings.find(
-      (e) => e.cleanerId == cleanerId
+      (e) => String(e.cleanerId) === String(cleanerId)
     );
 
     if (!cleanerEarning) {
@@ -4887,7 +5412,9 @@ paymentRouter.post("/multi-cleaner/partial-payout", async (req, res) => {
       transferParams.source_transaction = chargeId;
     }
 
-    const transfer = await stripe.transfers.create(transferParams);
+    // Use idempotency key to prevent duplicate transfers on retry
+    const idempotencyKey = `transfer-partial-${appointmentId}-${cleanerId}-${payout.id}`;
+    const transfer = await stripe.transfers.create(transferParams, { idempotencyKey });
 
     await payout.update({
       stripeTransferId: transfer.id,
@@ -4937,8 +5464,48 @@ paymentRouter.post("/multi-cleaner/partial-payout", async (req, res) => {
  * Used when one cleaner takes over the full job after dropout
  * ------------------------------------------------------
  */
-paymentRouter.post("/multi-cleaner/solo-completion-payout", async (req, res) => {
+paymentRouter.post("/multi-cleaner/solo-completion-payout", payoutRateLimiter, async (req, res) => {
   const { appointmentId, cleanerId } = req.body;
+
+  // ============================================================================
+  // AUTHENTICATION & AUTHORIZATION
+  // Only assigned cleaners (for their own payout) or owners can trigger payouts
+  // ============================================================================
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  let decoded;
+  try {
+    const token = authHeader.split(" ")[1];
+    decoded = jwt.verify(token, secretKey);
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  const requestingUser = await User.findByPk(decoded.userId);
+  if (!requestingUser) {
+    return res.status(401).json({ error: "User not found" });
+  }
+
+  // Validate cleanerId
+  if (!cleanerId) {
+    return res.status(400).json({ error: "Cleaner ID is required" });
+  }
+
+  const cleanerIdInt = parseInt(cleanerId, 10);
+  if (isNaN(cleanerIdInt) || cleanerIdInt <= 0) {
+    return res.status(400).json({ error: "Invalid cleaner ID" });
+  }
+
+  // Authorization: Must be owner OR the cleaner requesting their own payout
+  const isOwner = requestingUser.type === "owner";
+  const isOwnPayout = decoded.userId === cleanerIdInt;
+
+  if (!isOwner && !isOwnPayout) {
+    return res.status(403).json({ error: "Not authorized to process this payout" });
+  }
 
   try {
     const appointment = await UserAppointments.findByPk(appointmentId);
@@ -5037,7 +5604,9 @@ paymentRouter.post("/multi-cleaner/solo-completion-payout", async (req, res) => 
       transferParams.source_transaction = chargeId;
     }
 
-    const transfer = await stripe.transfers.create(transferParams);
+    // Use idempotency key to prevent duplicate transfers on retry
+    const idempotencyKey = `transfer-solo-${appointmentId}-${cleanerId}-${payout.id}`;
+    const transfer = await stripe.transfers.create(transferParams, { idempotencyKey });
 
     await payout.update({
       stripeTransferId: transfer.id,
@@ -5095,6 +5664,11 @@ paymentRouter.get("/multi-cleaner/earnings/:multiCleanerJobId", async (req, res)
   const { multiCleanerJobId } = req.params;
   const jobIdInt = parseInt(multiCleanerJobId, 10);
 
+  // Validate jobId is a valid integer
+  if (isNaN(jobIdInt) || jobIdInt <= 0) {
+    return res.status(400).json({ error: "Invalid job ID" });
+  }
+
   // Authorization check
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -5148,6 +5722,11 @@ paymentRouter.get("/multi-cleaner/earnings/:multiCleanerJobId", async (req, res)
 paymentRouter.get("/:homeId", async (req, res) => {
   const { homeId } = req.params;
   const homeIdInt = parseInt(homeId, 10);
+
+  // Validate homeId is a valid integer
+  if (isNaN(homeIdInt) || homeIdInt <= 0) {
+    return res.status(400).json({ error: "Invalid home ID" });
+  }
 
   // Authorization check
   const authHeader = req.headers.authorization;

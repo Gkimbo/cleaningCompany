@@ -279,8 +279,10 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
     try {
       const res = await fetch(`${API_BASE}/stripe-connect/dashboard-link`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: state.currentUser.token }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.currentUser.token}`,
+        },
       });
       const data = await res.json();
 

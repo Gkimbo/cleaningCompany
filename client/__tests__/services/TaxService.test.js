@@ -1,14 +1,22 @@
-// TaxService API tests
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
 
-// Mock fetch globally
-global.fetch = jest.fn();
+import HttpClient from "../../src/services/HttpClient";
 
 // Import after mocking
 const TaxService = require("../../src/services/fetchRequests/TaxService").default;
 
 describe("TaxService", () => {
   const mockToken = "test_token_123";
-  const baseURL = "http://localhost:3000";
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -23,29 +31,20 @@ describe("TaxService", () => {
         requires1099: true,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await TaxService.getEarnings(mockToken, 2024);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${baseURL}/api/v1/tax/earnings/2024`,
-        {
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        }
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/tax/earnings/2024", { token: mockToken });
       expect(result.taxYear).toBe(2024);
       expect(result.totalEarningsCents).toBe(150000);
     });
 
     it("should handle error response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ code: "NOT_FOUND", message: "User not found" }),
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
+        code: "NOT_FOUND",
+        message: "User not found",
       });
 
       const result = await TaxService.getEarnings(mockToken, 2024);
@@ -55,12 +54,11 @@ describe("TaxService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false });
 
       const result = await TaxService.getEarnings(mockToken, 2024);
 
       expect(result.error).toBe(true);
-      expect(result.message).toBe("Network error");
     });
   });
 
@@ -73,20 +71,13 @@ describe("TaxService", () => {
         will1099BeIssued: true,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await TaxService.getCleanerTaxSummary(mockToken, 2024);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${baseURL}/api/v1/tax/contractor/tax-summary/2024`,
-        {
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/tax/contractor/tax-summary/2024",
+        { token: mockToken }
       );
       expect(result.taxYear).toBe(2024);
     });
@@ -99,21 +90,11 @@ describe("TaxService", () => {
         expiresAt: "2025-01-15T12:00:00Z",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await TaxService.getDashboardLink(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${baseURL}/api/v1/tax/dashboard-link`,
-        {
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        }
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/tax/dashboard-link", { token: mockToken });
       expect(result.url).toContain("stripe.com");
     });
   });
@@ -127,21 +108,11 @@ describe("TaxService", () => {
         canReceive1099: true,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await TaxService.getTaxStatus(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${baseURL}/api/v1/tax/status`,
-        {
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        }
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/tax/status", { token: mockToken });
       expect(result.stripeConnected).toBe(true);
     });
   });
@@ -154,20 +125,13 @@ describe("TaxService", () => {
         platformFeeCents: 50000,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await TaxService.getPlatformIncomeSummary(mockToken, 2024);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${baseURL}/api/v1/tax/platform/income-summary/2024`,
-        {
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/tax/platform/income-summary/2024",
+        { token: mockToken }
       );
       expect(result.taxYear).toBe(2024);
     });
@@ -181,28 +145,22 @@ describe("TaxService", () => {
         estimatedTax: 2500,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await TaxService.getQuarterlyTax(mockToken, 2024, 1);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${baseURL}/api/v1/tax/platform/quarterly-tax/2024/1`,
-        {
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/tax/platform/quarterly-tax/2024/1",
+        { token: mockToken }
       );
       expect(result.quarter).toBe(1);
     });
 
     it("should handle invalid quarter", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: true, code: "INVALID_QUARTER", message: "Invalid quarter" }),
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
+        code: "INVALID_QUARTER",
+        message: "Invalid quarter",
       });
 
       const result = await TaxService.getQuarterlyTax(mockToken, 2024, 5);
@@ -222,20 +180,13 @@ describe("TaxService", () => {
         ],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await TaxService.getTaxDeadlines(mockToken, 2024);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${baseURL}/api/v1/tax/platform/deadlines/2024`,
-        {
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/tax/platform/deadlines/2024",
+        { token: mockToken }
       );
       expect(result.deadlines).toHaveLength(2);
     });

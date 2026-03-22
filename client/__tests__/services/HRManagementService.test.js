@@ -1,7 +1,16 @@
-import HRManagementService from "../../src/services/fetchRequests/HRManagementService";
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
 
-// Mock global fetch
-global.fetch = jest.fn();
+import HttpClient from "../../src/services/HttpClient";
+import HRManagementService from "../../src/services/fetchRequests/HRManagementService";
 
 describe("HRManagementService", () => {
   const mockToken = "test-owner-token";
@@ -35,28 +44,20 @@ describe("HRManagementService", () => {
     };
 
     it("should fetch HR staff successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockHRStaff,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockHRStaff);
 
       const result = await HRManagementService.getHRStaff(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/users/hr-staff"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/users/hr-staff",
+        { token: mockToken }
       );
       expect(result.hrStaff).toHaveLength(2);
       expect(result.hrStaff[0].firstName).toBe("Jane");
     });
 
     it("should return fallback on API error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Server error" });
 
       const result = await HRManagementService.getHRStaff(mockToken);
 
@@ -64,7 +65,7 @@ describe("HRManagementService", () => {
     });
 
     it("should return fallback on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await HRManagementService.getHRStaff(mockToken);
 
@@ -72,10 +73,7 @@ describe("HRManagementService", () => {
     });
 
     it("should return fallback on 403 Forbidden", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Forbidden" });
 
       const result = await HRManagementService.getHRStaff(mockToken);
 
@@ -83,10 +81,7 @@ describe("HRManagementService", () => {
     });
 
     it("should include all employee details in response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockHRStaff,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockHRStaff);
 
       const result = await HRManagementService.getHRStaff(mockToken);
 
@@ -121,23 +116,14 @@ describe("HRManagementService", () => {
     };
 
     it("should create HR employee successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockCreatedUser,
-      });
+      HttpClient.post.mockResolvedValueOnce(mockCreatedUser);
 
       const result = await HRManagementService.createHREmployee(mockToken, newEmployeeData);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/users/new-hr"),
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(newEmployeeData),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/users/new-hr",
+        newEmployeeData,
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.user).toBeDefined();
@@ -145,10 +131,7 @@ describe("HRManagementService", () => {
     });
 
     it("should handle validation error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Password must contain special character" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Password must contain special character" });
 
       const result = await HRManagementService.createHREmployee(mockToken, {
         ...newEmployeeData,
@@ -160,11 +143,7 @@ describe("HRManagementService", () => {
     });
 
     it("should handle duplicate email error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 409,
-        json: async () => ({ error: "Email already exists" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Email already exists" });
 
       const result = await HRManagementService.createHREmployee(mockToken, newEmployeeData);
 
@@ -173,11 +152,7 @@ describe("HRManagementService", () => {
     });
 
     it("should handle duplicate username error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 410,
-        json: async () => ({ error: "Username already exists" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Username already exists" });
 
       const result = await HRManagementService.createHREmployee(mockToken, newEmployeeData);
 
@@ -186,20 +161,16 @@ describe("HRManagementService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await HRManagementService.createHREmployee(mockToken, newEmployeeData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
     });
 
     it("should handle server error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: async () => ({ error: "Internal server error" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Internal server error" });
 
       const result = await HRManagementService.createHREmployee(mockToken, newEmployeeData);
 
@@ -208,11 +179,7 @@ describe("HRManagementService", () => {
     });
 
     it("should provide default error message when none returned", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        json: async () => ({}),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false });
 
       const result = await HRManagementService.createHREmployee(mockToken, newEmployeeData);
 
@@ -240,35 +207,23 @@ describe("HRManagementService", () => {
     };
 
     it("should update HR employee successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockUpdatedUser,
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockUpdatedUser);
 
       const result = await HRManagementService.updateHREmployee(mockToken, 10, updateData);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/users/hr-staff/10"),
-        expect.objectContaining({
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(updateData),
-        })
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/users/hr-staff/10",
+        updateData,
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.message).toBe("HR employee updated successfully");
     });
 
     it("should handle partial updates", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          message: "HR employee updated successfully",
-          user: { id: 10, firstName: "OnlyFirst" },
-        }),
+      HttpClient.patch.mockResolvedValueOnce({
+        message: "HR employee updated successfully",
+        user: { id: 10, firstName: "OnlyFirst" },
       });
 
       const result = await HRManagementService.updateHREmployee(mockToken, 10, {
@@ -276,20 +231,15 @@ describe("HRManagementService", () => {
       });
 
       expect(result.success).toBe(true);
-      expect(fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: JSON.stringify({ firstName: "OnlyFirst" }),
-        })
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/users/hr-staff/10",
+        { firstName: "OnlyFirst" },
+        { token: mockToken }
       );
     });
 
     it("should handle employee not found error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        json: async () => ({ error: "HR employee not found" }),
-      });
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "HR employee not found" });
 
       const result = await HRManagementService.updateHREmployee(mockToken, 999, updateData);
 
@@ -298,11 +248,7 @@ describe("HRManagementService", () => {
     });
 
     it("should handle email conflict error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 409,
-        json: async () => ({ error: "Email is already in use" }),
-      });
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Email is already in use" });
 
       const result = await HRManagementService.updateHREmployee(mockToken, 10, updateData);
 
@@ -311,11 +257,7 @@ describe("HRManagementService", () => {
     });
 
     it("should handle invalid email format error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        json: async () => ({ error: "Please provide a valid email address" }),
-      });
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Please provide a valid email address" });
 
       const result = await HRManagementService.updateHREmployee(mockToken, 10, {
         email: "invalid-email",
@@ -326,20 +268,16 @@ describe("HRManagementService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await HRManagementService.updateHREmployee(mockToken, 10, updateData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
     });
 
     it("should provide default error message when none returned", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: async () => ({}),
-      });
+      HttpClient.patch.mockResolvedValueOnce({ success: false });
 
       const result = await HRManagementService.updateHREmployee(mockToken, 10, updateData);
 
@@ -350,30 +288,20 @@ describe("HRManagementService", () => {
 
   describe("deleteHREmployee", () => {
     it("should delete HR employee successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ message: "HR employee removed successfully" }),
-      });
+      HttpClient.delete.mockResolvedValueOnce({ message: "HR employee removed successfully" });
 
       const result = await HRManagementService.deleteHREmployee(mockToken, 10);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/users/hr-staff/10"),
-        expect.objectContaining({
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.delete).toHaveBeenCalledWith(
+        "/users/hr-staff/10",
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.message).toBe("HR employee removed successfully");
     });
 
     it("should handle employee not found error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-        json: async () => ({ error: "HR employee not found" }),
-      });
+      HttpClient.delete.mockResolvedValueOnce({ success: false, error: "HR employee not found" });
 
       const result = await HRManagementService.deleteHREmployee(mockToken, 999);
 
@@ -382,11 +310,7 @@ describe("HRManagementService", () => {
     });
 
     it("should handle non-HR user error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        json: async () => ({ error: "User is not an HR employee" }),
-      });
+      HttpClient.delete.mockResolvedValueOnce({ success: false, error: "User is not an HR employee" });
 
       const result = await HRManagementService.deleteHREmployee(mockToken, 10);
 
@@ -395,11 +319,7 @@ describe("HRManagementService", () => {
     });
 
     it("should handle authorization error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-        json: async () => ({ error: "Only owner can remove HR staff" }),
-      });
+      HttpClient.delete.mockResolvedValueOnce({ success: false, error: "Only owner can remove HR staff" });
 
       const result = await HRManagementService.deleteHREmployee(mockToken, 10);
 
@@ -408,20 +328,16 @@ describe("HRManagementService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.delete.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await HRManagementService.deleteHREmployee(mockToken, 10);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
     });
 
     it("should provide default error message when none returned", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: async () => ({}),
-      });
+      HttpClient.delete.mockResolvedValueOnce({ success: false });
 
       const result = await HRManagementService.deleteHREmployee(mockToken, 10);
 
@@ -434,10 +350,7 @@ describe("HRManagementService", () => {
     it("should log warning on API error", async () => {
       const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Forbidden" });
 
       await HRManagementService.getHRStaff(mockToken);
 
@@ -448,7 +361,7 @@ describe("HRManagementService", () => {
     it("should log warning on network error", async () => {
       const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
-      global.fetch.mockRejectedValueOnce(new Error("Connection refused"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Connection refused" });
 
       await HRManagementService.getHRStaff(mockToken);
 
@@ -458,90 +371,66 @@ describe("HRManagementService", () => {
   });
 
   describe("Authorization header", () => {
-    it("should include Bearer token in all GET requests", async () => {
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ hrStaff: [] }),
-      });
+    it("should include token in all GET requests", async () => {
+      HttpClient.get.mockResolvedValue({ hrStaff: [] });
 
       await HRManagementService.getHRStaff(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/users/hr-staff",
+        { token: mockToken }
       );
     });
 
-    it("should include Bearer token and Content-Type in POST requests", async () => {
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ user: {} }),
-      });
+    it("should include token in POST requests", async () => {
+      HttpClient.post.mockResolvedValue({ user: {} });
 
       await HRManagementService.createHREmployee(mockToken, {});
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-            "Content-Type": "application/json",
-          },
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/users/new-hr",
+        {},
+        { token: mockToken }
       );
     });
 
-    it("should include Bearer token and Content-Type in PATCH requests", async () => {
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ user: {} }),
-      });
+    it("should include token in PATCH requests", async () => {
+      HttpClient.patch.mockResolvedValue({ user: {} });
 
       await HRManagementService.updateHREmployee(mockToken, 10, {});
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-            "Content-Type": "application/json",
-          },
-        })
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/users/hr-staff/10",
+        {},
+        { token: mockToken }
       );
     });
 
-    it("should include Bearer token in DELETE requests", async () => {
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ message: "Deleted" }),
-      });
+    it("should include token in DELETE requests", async () => {
+      HttpClient.delete.mockResolvedValue({ message: "Deleted" });
 
       await HRManagementService.deleteHREmployee(mockToken, 10);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.delete).toHaveBeenCalledWith(
+        "/users/hr-staff/10",
+        { token: mockToken }
       );
     });
   });
 
   describe("URL construction", () => {
     beforeEach(() => {
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({}),
-      });
+      HttpClient.get.mockResolvedValue({});
+      HttpClient.post.mockResolvedValue({});
+      HttpClient.patch.mockResolvedValue({});
+      HttpClient.delete.mockResolvedValue({});
     });
 
     it("should construct correct URL for getHRStaff", async () => {
       await HRManagementService.getHRStaff(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/users/hr-staff"),
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/users/hr-staff",
         expect.any(Object)
       );
     });
@@ -549,8 +438,9 @@ describe("HRManagementService", () => {
     it("should construct correct URL for createHREmployee", async () => {
       await HRManagementService.createHREmployee(mockToken, {});
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/users/new-hr"),
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/users/new-hr",
+        expect.any(Object),
         expect.any(Object)
       );
     });
@@ -558,8 +448,9 @@ describe("HRManagementService", () => {
     it("should construct correct URL for updateHREmployee with ID", async () => {
       await HRManagementService.updateHREmployee(mockToken, 42, {});
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/users/hr-staff/42"),
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/users/hr-staff/42",
+        expect.any(Object),
         expect.any(Object)
       );
     });
@@ -567,8 +458,8 @@ describe("HRManagementService", () => {
     it("should construct correct URL for deleteHREmployee with ID", async () => {
       await HRManagementService.deleteHREmployee(mockToken, 99);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/users/hr-staff/99"),
+      expect(HttpClient.delete).toHaveBeenCalledWith(
+        "/users/hr-staff/99",
         expect.any(Object)
       );
     });

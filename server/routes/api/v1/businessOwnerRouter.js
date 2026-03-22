@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const rateLimit = require("express-rate-limit");
 const verifyBusinessOwner = require("../../../middleware/verifyBusinessOwner");
 const BusinessEmployeeService = require("../../../services/BusinessEmployeeService");
 const EmployeeJobAssignmentService = require("../../../services/EmployeeJobAssignmentService");
@@ -37,7 +38,17 @@ const FINANCIAL_CONSTANTS = {
   CENTS_PER_DOLLAR: 100,
   DEFAULT_BUSINESS_OWNER_FEE_PERCENT: 0.10, // 10%
   DEFAULT_CLEANER_PAYOUT_PERCENT: 0.80, // 80%
+  MAX_PAY_AMOUNT_CENTS: 10000000, // $100,000 max per job (sanity check)
 };
+
+// Rate limiter for employee invite endpoint - prevent bulk invitation spam
+const employeeInviteLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // Max 20 invitations per hour per IP
+  message: { error: "Too many employee invitations, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Helper function for date formatting (YYYY-MM-DD) - timezone-safe
 const formatDateYMD = (date) => {
@@ -158,7 +169,31 @@ router.use(verifyBusinessOwner);
 router.get("/employees", async (req, res) => {
   try {
     const { status } = req.query;
-    const statusFilter = status ? status.split(",") : undefined;
+    let statusFilter = undefined;
+
+    // Validate status filter against whitelist
+    if (status && typeof status === "string" && status.trim() !== "") {
+      const validStatuses = ["active", "inactive", "pending_invite", "terminated", "declined"];
+      const requestedStatuses = status.split(",")
+        .map(s => s.trim().toLowerCase())
+        .filter(s => s.length > 0); // Remove empty strings
+
+      // Reject if no valid statuses provided after parsing
+      if (requestedStatuses.length === 0) {
+        return res.status(400).json({
+          error: "Invalid status filter format"
+        });
+      }
+
+      const invalidStatuses = requestedStatuses.filter(s => !validStatuses.includes(s));
+
+      if (invalidStatuses.length > 0) {
+        return res.status(400).json({
+          error: `Invalid status filter. Valid values: ${validStatuses.join(", ")}`
+        });
+      }
+      statusFilter = requestedStatuses;
+    }
 
     const employees = await BusinessEmployeeService.getEmployeesByBusinessOwner(
       req.businessOwnerId,
@@ -196,6 +231,21 @@ router.get("/employees/for-job/:appointmentId", async (req, res) => {
     });
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify the business owner has access to this appointment
+    // Either they booked it or they have an employee assigned to it
+    const hasAccess = appointment.bookedByCleanerId === req.businessOwnerId;
+    if (!hasAccess) {
+      const hasEmployeeAssigned = await EmployeeJobAssignment.findOne({
+        where: {
+          appointmentId: appointmentId,
+          businessOwnerId: req.businessOwnerId,
+        },
+      });
+      if (!hasEmployeeAssigned) {
+        return res.status(403).json({ error: "Not authorized to access this appointment" });
+      }
     }
 
     const jobPriceInCents = appointment.price || 0; // Already stored in cents
@@ -306,12 +356,34 @@ router.get("/employees/for-job/:appointmentId", async (req, res) => {
 /**
  * POST /employees/invite - Invite a new employee
  */
-router.post("/employees/invite", async (req, res) => {
+router.post("/employees/invite", employeeInviteLimiter, async (req, res) => {
   try {
     const { firstName, lastName, email, phone, defaultHourlyRate, paymentMethod, notes } = req.body;
 
     if (!firstName || !lastName || !email) {
       return res.status(400).json({ error: "First name, last name, and email are required" });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+
+    // Validate phone format if provided (basic check for digits and common separators)
+    if (phone) {
+      const phoneDigits = phone.replace(/[\s\-\(\)\+\.]/g, "");
+      if (phoneDigits.length < 10 || phoneDigits.length > 15 || !/^\d+$/.test(phoneDigits)) {
+        return res.status(400).json({ error: "Invalid phone number format" });
+      }
+    }
+
+    // Validate pay rates if provided
+    if (defaultHourlyRate !== undefined && defaultHourlyRate !== null) {
+      const rate = parseInt(defaultHourlyRate, 10);
+      if (isNaN(rate) || rate < 0) {
+        return res.status(400).json({ error: "Hourly rate must be a non-negative number" });
+      }
     }
 
     const employee = await BusinessEmployeeService.inviteEmployee(req.businessOwnerId, {
@@ -638,13 +710,25 @@ router.post("/assignments", async (req, res) => {
     let validatedPayAmount = 0;
     if (payAmount !== undefined && payAmount !== null) {
       const parsedPayAmount = parseFloat(payAmount);
-      if (isNaN(parsedPayAmount)) {
+      if (isNaN(parsedPayAmount) || !isFinite(parsedPayAmount)) {
         return res.status(400).json({ error: "Pay amount must be a valid number" });
       }
       if (parsedPayAmount < 0) {
         return res.status(400).json({ error: "Pay amount cannot be negative" });
       }
+      // Max bounds check to prevent unreasonable values
+      if (parsedPayAmount > FINANCIAL_CONSTANTS.MAX_PAY_AMOUNT_CENTS) {
+        return res.status(400).json({ error: "Pay amount exceeds maximum allowed value" });
+      }
+      // Ensure integer precision (cents)
       validatedPayAmount = Math.round(parsedPayAmount);
+    }
+
+    // Reject $0 pay assignments - employee rates must be configured
+    if (validatedPayAmount === 0) {
+      return res.status(400).json({
+        error: "Pay amount cannot be $0. Please configure employee pay rates or specify a pay amount."
+      });
     }
 
     const io = req.app.get("io");
@@ -666,9 +750,17 @@ router.post("/assignments", async (req, res) => {
  */
 router.get("/assignments/:assignmentId", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
-        id: parseInt(req.params.assignmentId, 10),
+        id: assignmentId,
         businessOwnerId: req.businessOwnerId,
       },
       include: [
@@ -797,9 +889,17 @@ router.get("/assignments/:assignmentId", async (req, res) => {
  */
 router.delete("/assignments/:assignmentId", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const io = req.app.get("io");
     await EmployeeJobAssignmentService.unassignFromJob(
-      parseInt(req.params.assignmentId, 10),
+      assignmentId,
       req.businessOwnerId,
       io
     );
@@ -817,9 +917,17 @@ router.delete("/assignments/:assignmentId", async (req, res) => {
  */
 router.delete("/appointments/:appointmentId/assignments", async (req, res) => {
   try {
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.appointmentId,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
+
     const io = req.app.get("io");
     const result = await EmployeeJobAssignmentService.bulkUnassignFromJob(
-      parseInt(req.params.appointmentId, 10),
+      appointmentId,
       req.businessOwnerId,
       io
     );
@@ -836,15 +944,31 @@ router.delete("/appointments/:appointmentId/assignments", async (req, res) => {
  */
 router.post("/assignments/:assignmentId/reassign", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const { newEmployeeId } = req.body;
 
     if (!newEmployeeId) {
       return res.status(400).json({ error: "New employee ID is required" });
     }
 
-    const assignment = await EmployeeJobAssignmentService.reassignJob(
-      parseInt(req.params.assignmentId, 10),
+    const { value: parsedNewEmployeeId, error: newEmployeeIdError } = parseIntParam(
       newEmployeeId,
+      "newEmployeeId"
+    );
+    if (newEmployeeIdError) {
+      return res.status(400).json({ error: newEmployeeIdError });
+    }
+
+    const assignment = await EmployeeJobAssignmentService.reassignJob(
+      assignmentId,
+      parsedNewEmployeeId,
       req.businessOwnerId
     );
 
@@ -860,10 +984,18 @@ router.post("/assignments/:assignmentId/reassign", async (req, res) => {
  */
 router.post("/self-assign/:appointmentId", async (req, res) => {
   try {
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.appointmentId,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
+
     const io = req.app.get("io");
     const assignment = await EmployeeJobAssignmentService.assignSelfToJob(
       req.businessOwnerId,
-      parseInt(req.params.appointmentId, 10),
+      appointmentId,
       io
     );
 
@@ -1322,7 +1454,13 @@ router.get("/all-jobs", async (req, res) => {
  */
 router.get("/my-jobs/:appointmentId", async (req, res) => {
   try {
-    const appointmentId = parseInt(req.params.appointmentId, 10);
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.appointmentId,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
 
     // Get list of client IDs for this business owner
     const clientRelationships = await CleanerClient.findAll({
@@ -1649,29 +1787,40 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
  */
 router.put("/assignments/:assignmentId/pay", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const { newPayAmount, reason } = req.body;
 
     if (newPayAmount === undefined || newPayAmount === null) {
       return res.status(400).json({ error: "New pay amount is required" });
     }
 
-    // Validate pay amount is a valid positive number
-    const parsedPayAmount = parseFloat(newPayAmount);
-    if (isNaN(parsedPayAmount)) {
-      return res.status(400).json({ error: "Pay amount must be a valid number" });
+    // Validate pay amount is an integer (cents) - no floats allowed for precision
+    const parsedPayAmount = parseInt(newPayAmount, 10);
+    if (isNaN(parsedPayAmount) || !isFinite(parsedPayAmount)) {
+      return res.status(400).json({ error: "Pay amount must be a valid integer (in cents)" });
+    }
+    if (String(newPayAmount).includes(".")) {
+      return res.status(400).json({ error: "Pay amount must be an integer (in cents). Do not include decimal places." });
     }
     if (parsedPayAmount < 0) {
       return res.status(400).json({ error: "Pay amount cannot be negative" });
     }
-    // Maximum sanity check - $10,000 per job assignment (1,000,000 cents)
-    if (parsedPayAmount > 1000000) {
-      return res.status(400).json({ error: "Pay amount exceeds maximum allowed ($10,000)" });
+    // Maximum sanity check
+    if (parsedPayAmount > FINANCIAL_CONSTANTS.MAX_PAY_AMOUNT_CENTS) {
+      return res.status(400).json({ error: "Pay amount exceeds maximum allowed value" });
     }
 
     const assignment = await EmployeeJobAssignmentService.updateJobPay(
-      parseInt(req.params.assignmentId, 10),
+      assignmentId,
       req.businessOwnerId,
-      { newPayAmount: Math.round(parsedPayAmount), reason }
+      { newPayAmount: parsedPayAmount, reason }
     );
 
     res.json({ message: "Pay updated", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
@@ -1687,8 +1836,16 @@ router.put("/assignments/:assignmentId/pay", async (req, res) => {
  */
 router.post("/assignments/:assignmentId/recalculate-pay", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const assignment = await EmployeeJobAssignmentService.recalculatePay(
-      parseInt(req.params.assignmentId, 10),
+      assignmentId,
       req.businessOwnerId
     );
 
@@ -1707,13 +1864,25 @@ router.post("/assignments/:assignmentId/recalculate-pay", async (req, res) => {
  */
 router.get("/assignments/:assignmentId/pay-history", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const history = await EmployeeJobAssignmentService.getPayChangeHistory(
-      parseInt(req.params.assignmentId, 10)
+      assignmentId,
+      req.businessOwnerId
     );
 
     res.json({ history: EmployeeJobAssignmentSerializer.serializePayHistoryArray(history) });
   } catch (error) {
     console.error("Error fetching pay history:", error);
+    if (error.message === "Assignment not found or unauthorized") {
+      return res.status(404).json({ error: error.message });
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -1724,6 +1893,14 @@ router.get("/assignments/:assignmentId/pay-history", async (req, res) => {
  */
 router.put("/assignments/:assignmentId/hours", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const { hoursWorked } = req.body;
 
     const parsedHours = parseFloat(hoursWorked);
@@ -1738,7 +1915,7 @@ router.put("/assignments/:assignmentId/hours", async (req, res) => {
     }
 
     const assignment = await EmployeeJobAssignmentService.updateHoursWorked(
-      parseInt(req.params.assignmentId, 10),
+      assignmentId,
       req.businessOwnerId,
       parsedHours
     );
@@ -1760,9 +1937,28 @@ router.post("/calculate-pay", async (req, res) => {
   try {
     const { appointmentId, employeePayAmount } = req.body;
 
+    if (!appointmentId) {
+      return res.status(400).json({ error: "Appointment ID is required" });
+    }
+
     const appointment = await UserAppointments.findByPk(appointmentId);
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify the business owner has access to this appointment
+    // Either they booked it or they have an employee assigned to it
+    const hasAccess = appointment.bookedByCleanerId === req.businessOwnerId;
+    if (!hasAccess) {
+      const hasEmployeeAssigned = await EmployeeJobAssignment.findOne({
+        where: {
+          appointmentId: appointmentId,
+          businessOwnerId: req.businessOwnerId,
+        },
+      });
+      if (!hasEmployeeAssigned) {
+        return res.status(403).json({ error: "Not authorized to access this appointment" });
+      }
     }
 
     const financials = await PayCalculatorService.calculateJobFinancials(
@@ -1784,9 +1980,21 @@ router.post("/validate-pay", async (req, res) => {
   try {
     const { employeePayAmount, jobTotal } = req.body;
 
+    // Validate input parameters
+    const parsedPayAmount = parseFloat(employeePayAmount);
+    const parsedJobTotal = parseFloat(jobTotal);
+
+    if (isNaN(parsedPayAmount) || isNaN(parsedJobTotal)) {
+      return res.status(400).json({ error: "Invalid pay amount or job total" });
+    }
+
+    if (parsedPayAmount < 0 || parsedJobTotal < 0) {
+      return res.status(400).json({ error: "Pay amounts cannot be negative" });
+    }
+
     const validation = await PayCalculatorService.validatePayAmount(
-      employeePayAmount,
-      jobTotal
+      parsedPayAmount,
+      parsedJobTotal
     );
 
     res.json(validation);
@@ -1801,12 +2009,32 @@ router.post("/validate-pay", async (req, res) => {
  */
 router.get("/suggested-pay/:appointmentId", async (req, res) => {
   try {
-    const appointment = await UserAppointments.findByPk(req.params.appointmentId, {
+    const appointmentId = parseInt(req.params.appointmentId, 10);
+    if (isNaN(appointmentId)) {
+      return res.status(400).json({ error: "Invalid appointment ID" });
+    }
+
+    const appointment = await UserAppointments.findByPk(appointmentId, {
       include: [{ model: UserHomes, as: "home" }],
     });
 
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify the business owner has access to this appointment
+    const hasAccess = appointment.bookedByCleanerId === req.businessOwnerId;
+    if (!hasAccess) {
+      // Check if they have an employee assigned to this appointment
+      const hasEmployeeAssigned = await EmployeeJobAssignment.findOne({
+        where: {
+          appointmentId: appointmentId,
+          businessOwnerId: req.businessOwnerId,
+        },
+      });
+      if (!hasEmployeeAssigned) {
+        return res.status(403).json({ error: "Not authorized to access this appointment" });
+      }
     }
 
     const suggestions = await PayCalculatorService.calculateSuggestedPay(appointment);
@@ -2781,7 +3009,13 @@ router.post("/payroll/early-payout/:employeeId", async (req, res) => {
     const EmployeeBatchPayoutService = require("../../../services/EmployeeBatchPayoutService");
     const { BusinessEmployee } = require("../../../models");
 
-    const employeeId = parseInt(req.params.employeeId, 10);
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
 
     // Verify the employee belongs to this business owner
     const employee = await BusinessEmployee.findOne({
@@ -2951,6 +3185,14 @@ router.get("/unassigned-jobs", async (req, res) => {
  */
 router.get("/employees/:employeeId/hours", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const { startDate, endDate } = req.query;
     const now = new Date();
 
@@ -2963,7 +3205,7 @@ router.get("/employees/:employeeId/hours", async (req, res) => {
 
     const hoursDetail = await EmployeeJobAssignmentService.getEmployeeHoursDetail(
       req.businessOwnerId,
-      parseInt(req.params.employeeId, 10),
+      employeeId,
       start,
       end
     );
@@ -3203,6 +3445,21 @@ router.put("/verification/profile", async (req, res) => {
   try {
     const { businessDescription, businessHighlightOptIn } = req.body;
 
+    // Validate businessDescription length
+    if (businessDescription !== undefined && businessDescription !== null) {
+      if (typeof businessDescription !== "string") {
+        return res.status(400).json({ error: "Business description must be a string" });
+      }
+      if (businessDescription.length > 1000) {
+        return res.status(400).json({ error: "Business description must be 1000 characters or less" });
+      }
+    }
+
+    // Validate businessHighlightOptIn type
+    if (businessHighlightOptIn !== undefined && typeof businessHighlightOptIn !== "boolean") {
+      return res.status(400).json({ error: "businessHighlightOptIn must be a boolean" });
+    }
+
     const result = await BusinessVerificationService.updateBusinessProfile(
       req.businessOwnerId,
       { businessDescription, businessHighlightOptIn }
@@ -3266,11 +3523,19 @@ router.get("/payouts/pending", async (req, res) => {
  */
 router.post("/payouts/:assignmentId/mark-paid-outside", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const { note } = req.body;
 
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
-        id: parseInt(req.params.assignmentId, 10),
+        id: assignmentId,
         businessOwnerId: req.businessOwnerId,
         status: "completed",
         payoutStatus: { [Op.in]: ["pending", "pending_batch"] },
@@ -3318,14 +3583,26 @@ router.post("/bonuses", async (req, res) => {
   try {
     const { employeeId, amount, reason } = req.body;
 
-    if (!employeeId || !amount) {
+    if (!employeeId || amount === undefined || amount === null) {
       return res.status(400).json({ error: "employeeId and amount are required" });
+    }
+
+    // Validate amount
+    const parsedAmount = parseInt(amount, 10);
+    if (isNaN(parsedAmount)) {
+      return res.status(400).json({ error: "Invalid bonus amount" });
+    }
+    if (parsedAmount <= 0) {
+      return res.status(400).json({ error: "Bonus amount must be greater than 0" });
+    }
+    if (parsedAmount > 1000000) { // Max $10,000
+      return res.status(400).json({ error: "Bonus amount cannot exceed $10,000" });
     }
 
     const bonus = await EmployeeBonusService.createBonus(
       req.businessOwnerId,
       parseInt(employeeId, 10),
-      parseInt(amount, 10),
+      parsedAmount,
       reason
     );
 
@@ -3390,10 +3667,18 @@ router.get("/bonuses/summary", async (req, res) => {
  */
 router.put("/bonuses/:id/paid", async (req, res) => {
   try {
+    const { value: bonusId, error: bonusIdError } = parseIntParam(
+      req.params.id,
+      "bonusId"
+    );
+    if (bonusIdError) {
+      return res.status(400).json({ error: bonusIdError });
+    }
+
     const { note } = req.body;
 
     const bonus = await EmployeeBonusService.markBonusPaid(
-      parseInt(req.params.id, 10),
+      bonusId,
       req.businessOwnerId,
       note
     );
@@ -3410,8 +3695,16 @@ router.put("/bonuses/:id/paid", async (req, res) => {
  */
 router.delete("/bonuses/:id", async (req, res) => {
   try {
+    const { value: bonusId, error: bonusIdError } = parseIntParam(
+      req.params.id,
+      "bonusId"
+    );
+    if (bonusIdError) {
+      return res.status(400).json({ error: bonusIdError });
+    }
+
     const result = await EmployeeBonusService.cancelBonus(
-      parseInt(req.params.id, 10),
+      bonusId,
       req.businessOwnerId
     );
 
@@ -3500,7 +3793,13 @@ router.get("/client-payments", async (req, res) => {
  */
 router.post("/appointments/:id/mark-paid", async (req, res) => {
   try {
-    const appointmentId = parseInt(req.params.id, 10);
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.id,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
 
     const appointment = await UserAppointments.findOne({
       where: {
@@ -3530,7 +3829,13 @@ router.post("/appointments/:id/mark-paid", async (req, res) => {
  */
 router.post("/appointments/:id/send-reminder", async (req, res) => {
   try {
-    const appointmentId = parseInt(req.params.id, 10);
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.id,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
 
     const appointment = await UserAppointments.findOne({
       where: {
@@ -3836,8 +4141,13 @@ router.get("/job-flows/assignments", async (req, res) => {
  */
 router.get("/job-flows/:flowId", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const flow = await CustomJobFlowService.getFlowById(
-      parseInt(req.params.flowId, 10),
+      flowId,
       req.businessOwnerId
     );
 
@@ -3853,8 +4163,13 @@ router.get("/job-flows/:flowId", async (req, res) => {
  */
 router.put("/job-flows/:flowId", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const flow = await CustomJobFlowService.updateFlow(
-      parseInt(req.params.flowId, 10),
+      flowId,
       req.businessOwnerId,
       req.body
     );
@@ -3871,17 +4186,22 @@ router.put("/job-flows/:flowId", async (req, res) => {
  */
 router.delete("/job-flows/:flowId", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const { permanent } = req.query;
 
     if (permanent === "true") {
       await CustomJobFlowService.deleteFlow(
-        parseInt(req.params.flowId, 10),
+        flowId,
         req.businessOwnerId
       );
       res.json({ message: "Job flow deleted permanently" });
     } else {
       const flow = await CustomJobFlowService.archiveFlow(
-        parseInt(req.params.flowId, 10),
+        flowId,
         req.businessOwnerId
       );
       res.json({ message: "Job flow archived", flow: CustomJobFlowSerializer.serializeOne(flow) });
@@ -3897,9 +4217,14 @@ router.delete("/job-flows/:flowId", async (req, res) => {
  */
 router.post("/job-flows/:flowId/set-default", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const flow = await CustomJobFlowService.setDefaultFlow(
       req.businessOwnerId,
-      parseInt(req.params.flowId, 10)
+      flowId
     );
 
     res.json({ message: "Default flow updated", flow: CustomJobFlowSerializer.serializeOne(flow) });
@@ -3931,8 +4256,13 @@ router.post("/job-flows/clear-default", async (req, res) => {
  */
 router.get("/job-flows/:flowId/checklist", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const flow = await CustomJobFlowService.getFlowById(
-      parseInt(req.params.flowId, 10),
+      flowId,
       req.businessOwnerId
     );
 
@@ -3948,6 +4278,11 @@ router.get("/job-flows/:flowId/checklist", async (req, res) => {
  */
 router.post("/job-flows/:flowId/checklist", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const { sections } = req.body;
 
     if (!sections || !Array.isArray(sections)) {
@@ -3955,7 +4290,7 @@ router.post("/job-flows/:flowId/checklist", async (req, res) => {
     }
 
     const checklist = await CustomJobFlowService.createChecklistFromScratch(
-      parseInt(req.params.flowId, 10),
+      flowId,
       req.businessOwnerId,
       { sections }
     );
@@ -3972,6 +4307,11 @@ router.post("/job-flows/:flowId/checklist", async (req, res) => {
  */
 router.put("/job-flows/:flowId/checklist", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const { sections } = req.body;
 
     if (!sections || !Array.isArray(sections)) {
@@ -3979,7 +4319,7 @@ router.put("/job-flows/:flowId/checklist", async (req, res) => {
     }
 
     const checklist = await CustomJobFlowService.updateChecklist(
-      parseInt(req.params.flowId, 10),
+      flowId,
       req.businessOwnerId,
       { sections }
     );
@@ -3996,8 +4336,16 @@ router.put("/job-flows/:flowId/checklist", async (req, res) => {
  */
 router.delete("/job-flows/:flowId/checklist", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(
+      req.params.flowId,
+      "flowId"
+    );
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     await CustomJobFlowService.deleteChecklist(
-      parseInt(req.params.flowId, 10),
+      flowId,
       req.businessOwnerId
     );
 
@@ -4013,10 +4361,18 @@ router.delete("/job-flows/:flowId/checklist", async (req, res) => {
  */
 router.post("/job-flows/:flowId/checklist/fork-platform", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(
+      req.params.flowId,
+      "flowId"
+    );
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const { versionId } = req.body;
 
     const checklist = await CustomJobFlowService.forkPlatformChecklist(
-      parseInt(req.params.flowId, 10),
+      flowId,
       req.businessOwnerId,
       versionId
     );
@@ -4033,10 +4389,18 @@ router.post("/job-flows/:flowId/checklist/fork-platform", async (req, res) => {
  */
 router.put("/job-flows/:flowId/checklist/items/:itemId/notes", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(
+      req.params.flowId,
+      "flowId"
+    );
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const { notes } = req.body;
 
     const checklist = await CustomJobFlowService.addItemNotes(
-      parseInt(req.params.flowId, 10),
+      flowId,
       req.businessOwnerId,
       req.params.itemId,
       notes
@@ -4058,6 +4422,14 @@ router.put("/job-flows/:flowId/checklist/items/:itemId/notes", async (req, res) 
  */
 router.post("/job-flows/assignments/client/:clientId", async (req, res) => {
   try {
+    const { value: clientId, error: clientIdError } = parseIntParam(
+      req.params.clientId,
+      "clientId"
+    );
+    if (clientIdError) {
+      return res.status(400).json({ error: clientIdError });
+    }
+
     const { flowId } = req.body;
 
     if (!flowId) {
@@ -4066,7 +4438,7 @@ router.post("/job-flows/assignments/client/:clientId", async (req, res) => {
 
     const assignment = await CustomJobFlowService.assignFlowToClient(
       req.businessOwnerId,
-      parseInt(req.params.clientId, 10),
+      clientId,
       flowId
     );
 
@@ -4082,6 +4454,14 @@ router.post("/job-flows/assignments/client/:clientId", async (req, res) => {
  */
 router.post("/job-flows/assignments/home/:homeId", async (req, res) => {
   try {
+    const { value: homeId, error: homeIdError } = parseIntParam(
+      req.params.homeId,
+      "homeId"
+    );
+    if (homeIdError) {
+      return res.status(400).json({ error: homeIdError });
+    }
+
     const { flowId } = req.body;
 
     if (!flowId) {
@@ -4090,7 +4470,7 @@ router.post("/job-flows/assignments/home/:homeId", async (req, res) => {
 
     const assignment = await CustomJobFlowService.assignFlowToHome(
       req.businessOwnerId,
-      parseInt(req.params.homeId, 10),
+      homeId,
       flowId
     );
 
@@ -4106,8 +4486,16 @@ router.post("/job-flows/assignments/home/:homeId", async (req, res) => {
  */
 router.delete("/job-flows/assignments/:assignmentId", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     await CustomJobFlowService.removeFlowAssignment(
-      parseInt(req.params.assignmentId, 10),
+      assignmentId,
       req.businessOwnerId
     );
 

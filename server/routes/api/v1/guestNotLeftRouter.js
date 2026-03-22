@@ -438,7 +438,7 @@ router.get("/pending", authenticateToken, async (req, res) => {
 router.get("/stats/cleaner/:cleanerId", authenticateToken, async (req, res) => {
 	try {
 		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
-		if (!user || !["owner", "hr"].includes(user.type)) {
+		if (!user || !["owner", "humanResources"].includes(user.type)) {
 			return res.status(403).json({
 				success: false,
 				error: "Only HR or Owner can view cleaner stats",
@@ -481,7 +481,7 @@ router.get("/stats/cleaner/:cleanerId", authenticateToken, async (req, res) => {
 router.get("/stats/home/:homeId", authenticateToken, async (req, res) => {
 	try {
 		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
-		if (!user || !["owner", "hr"].includes(user.type)) {
+		if (!user || !["owner", "humanResources"].includes(user.type)) {
 			return res.status(403).json({
 				success: false,
 				error: "Only HR or Owner can view home stats",
@@ -542,7 +542,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
 		const currentUser = await User.findByPk(req.userId, { attributes: ["id", "type"] });
 		const isReporter = report.reportedBy === req.userId;
 		const isHomeowner = appointment && appointment.userId === req.userId;
-		const isOwnerOrHR = currentUser && ["owner", "hr"].includes(currentUser.type);
+		const isOwnerOrHR = currentUser && ["owner", "humanResources"].includes(currentUser.type);
 
 		if (!isReporter && !isHomeowner && !isOwnerOrHR) {
 			return res.status(403).json({

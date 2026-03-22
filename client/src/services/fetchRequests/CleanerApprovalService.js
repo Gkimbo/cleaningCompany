@@ -1,4 +1,4 @@
-import { API_BASE } from "../config";
+import HttpClient from "../HttpClient";
 
 /**
  * CleanerApprovalService - Client-side service for homeowner approval of cleaners
@@ -11,21 +11,14 @@ class CleanerApprovalService {
    * @returns {Object} { requests: Array }
    */
   static async getPendingRequests(token) {
-    try {
-      const response = await fetch(`${API_BASE}/cleaner-approval/pending`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        console.warn(`[CleanerApproval] Failed to fetch: ${response.status}`);
-        return { requests: [] };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching pending requests:", error);
+    const result = await HttpClient.get("/cleaner-approval/pending", { token });
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[CleanerApproval] getPendingRequests failed:", result.error);
       return { requests: [] };
     }
+
+    return result;
   }
 
   /**
@@ -35,24 +28,14 @@ class CleanerApprovalService {
    * @returns {Object} { requests: Array }
    */
   static async getRequestsForAppointment(token, appointmentId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/cleaner-approval/appointment/${appointmentId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        console.warn(`[CleanerApproval] Failed to fetch: ${response.status}`);
-        return { requests: [] };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching appointment requests:", error);
+    const result = await HttpClient.get(`/cleaner-approval/appointment/${appointmentId}`, { token });
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[CleanerApproval] getRequestsForAppointment failed:", result.error);
       return { requests: [] };
     }
+
+    return result;
   }
 
   /**
@@ -62,21 +45,14 @@ class CleanerApprovalService {
    * @returns {Object} { success, message, error }
    */
   static async approveRequest(token, requestId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/cleaner-approval/${requestId}/approve`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      console.error("Error approving request:", error);
-      return { success: false, error: "Failed to approve request" };
+    const result = await HttpClient.post(`/cleaner-approval/${requestId}/approve`, {}, { token });
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[CleanerApproval] approveRequest failed:", result.error);
+      return { success: false, error: result.error || "Failed to approve request" };
     }
+
+    return result;
   }
 
   /**
@@ -87,23 +63,18 @@ class CleanerApprovalService {
    * @returns {Object} { success, message, error }
    */
   static async declineRequest(token, requestId, reason = null) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/cleaner-approval/${requestId}/decline`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ reason }),
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      console.error("Error declining request:", error);
-      return { success: false, error: "Failed to decline request" };
+    const result = await HttpClient.post(
+      `/cleaner-approval/${requestId}/decline`,
+      { reason },
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[CleanerApproval] declineRequest failed:", result.error);
+      return { success: false, error: result.error || "Failed to decline request" };
     }
+
+    return result;
   }
 }
 

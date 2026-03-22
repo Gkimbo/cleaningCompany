@@ -1,93 +1,59 @@
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class ITManagementService {
   static async getITStaff(token) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/users/it-staff`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const result = await HttpClient.get("/users/it-staff", { token, useBaseUrl: true });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        return { success: false, error: errorData.error || "Failed to fetch IT staff" };
-      }
-
-      const data = await response.json();
-      return { success: true, itStaff: data.itStaff || [] };
-    } catch (error) {
-      console.error("[ITManagement] getITStaff failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITManagementService] getITStaff failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, itStaff: result.itStaff || [] };
   }
 
   static async createITEmployee(token, employeeData) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/users/new-it`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(employeeData),
-      });
+    const result = await HttpClient.post(
+      "/users/new-it",
+      employeeData,
+      { token, useBaseUrl: true }
+    );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: data.error || "Failed to create IT employee" };
-      }
-
-      return { success: true, user: data.user };
-    } catch (error) {
-      console.error("[ITManagement] createITEmployee failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITManagementService] createITEmployee failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, user: result.user };
   }
 
   static async updateITEmployee(token, employeeId, updates) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/users/it-staff/${employeeId}`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(updates),
-      });
+    const result = await HttpClient.patch(
+      `/users/it-staff/${employeeId}`,
+      updates,
+      { token, useBaseUrl: true }
+    );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: data.error || "Failed to update IT employee" };
-      }
-
-      return { success: true, user: data.user, message: data.message };
-    } catch (error) {
-      console.error("[ITManagement] updateITEmployee failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITManagementService] updateITEmployee failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, user: result.user, message: result.message };
   }
 
   static async removeITEmployee(token, employeeId) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/users/it-staff/${employeeId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const result = await HttpClient.delete(
+      `/users/it-staff/${employeeId}`,
+      { token, useBaseUrl: true }
+    );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: data.error || "Failed to remove IT employee" };
-      }
-
-      return { success: true, message: data.message };
-    } catch (error) {
-      console.error("[ITManagement] removeITEmployee failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITManagementService] removeITEmployee failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, message: result.message };
   }
 
   // Generate a secure random password

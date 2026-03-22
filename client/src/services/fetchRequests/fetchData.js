@@ -1,1411 +1,777 @@
 /* eslint-disable no-console */
-import { API_BASE } from "../config";
-import AuthEventService from "../AuthEventService";
-
-// Remove /api/v1 suffix since individual routes include it
-const baseURL = API_BASE.replace("/api/v1", "");
-
-// Helper to check if response is a 401 (token expired/unauthorized)
-const handleAuthError = (response) => {
-  if (response.status === 401) {
-    AuthEventService.handleTokenExpired();
-    return true;
-  }
-  return false;
-};
+import HttpClient from "../HttpClient";
 
 class FetchData {
   static async get(url, user) {
-    try {
-      const response = await fetch(baseURL + url, {
-        headers: {
-          Authorization: `Bearer ${user}`,
-        },
-      });
+    // Note: url should include /api/v1 prefix since this is a generic helper
+    const result = await HttpClient.request(url.replace("/api/v1", ""), { method: "GET" }, { token: user, useFullUrl: true });
 
-      if (handleAuthError(response)) {
+    if (result.success === false) {
+      if (result.status === 401) {
         throw new Error("Session expired");
       }
-
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+      throw new Error("No data received");
     }
+
+    return result;
   }
 
   static async post(url, data, token) {
-    try {
-      const response = await fetch(baseURL + url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
+    // Note: url should include /api/v1 prefix since this is a generic helper
+    const result = await HttpClient.post(url.replace("/api/v1", ""), data, { token });
 
-      if (handleAuthError(response)) {
+    if (result.success === false) {
+      if (result.status === 401) {
         throw new Error("Session expired");
       }
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        throw new Error(responseData.error || "Request failed");
-      }
-
-      return responseData;
-    } catch (error) {
-      throw error;
+      throw new Error(result.error || "Request failed");
     }
+
+    return result;
   }
 
   static async getHome(id) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/employee-info/home/${id}`
-      );
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+    const result = await HttpClient.get(`/employee-info/home/${id}`, { skipAuth: true });
+
+    if (result.success === false) {
+      throw new Error("No data received");
     }
+
+    return result;
   }
+
   static async getLatAndLong(id) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/employee-info/home/LL/${id}`
-      );
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+    const result = await HttpClient.get(`/employee-info/home/LL/${id}`, { skipAuth: true });
+
+    if (result.success === false) {
+      throw new Error("No data received");
     }
+
+    return result;
   }
 
   static async getEmployeesWorking() {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/employee-info/employeeSchedule`
-      );
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+    const result = await HttpClient.get("/employee-info/employeeSchedule", { skipAuth: true });
+
+    if (result.success === false) {
+      throw new Error("No data received");
     }
+
+    return result;
   }
 
   static async getApplicationsFromBackend(token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/applications/all-applications`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (handleAuthError(response)) {
+    const result = await HttpClient.get("/applications/all-applications", { token });
+
+    if (result.success === false) {
+      if (result.status === 401) {
         throw new Error("Session expired");
       }
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+      throw new Error("No data received");
     }
+
+    return result;
   }
 
   static async login(loginData) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/user-sessions/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: loginData.userName,
-          password: loginData.password,
-          accountType: loginData.accountType || undefined,
-        }),
-      });
+    const result = await HttpClient.post(
+      "/user-sessions/login",
+      {
+        username: loginData.userName,
+        password: loginData.password,
+        accountType: loginData.accountType || undefined,
+      },
+      { skipAuth: true }
+    );
 
-      // Handle 300 - Multiple accounts require selection
-      if (response.status === 300) {
-        const data = await response.json();
-        return {
-          requiresAccountSelection: true,
-          accountOptions: data.accountOptions,
-          message: data.message,
-        };
-      }
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          return "Invalid password";
-        } else if (response.status === 404) {
-          return "No account found with that email or username.";
-        } else if (response.status === 423) {
-          const data = await response.json();
-          return data.error || "Account temporarily locked";
-        } else {
-          throw new Error("Failed to login");
-        }
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+    // Handle 300 - Multiple accounts require selection
+    if (result.status === 300) {
+      return {
+        requiresAccountSelection: true,
+        accountOptions: result.accountOptions,
+        message: result.message,
+      };
     }
+
+    if (result.success === false) {
+      if (result.status === 401) {
+        return "Invalid password";
+      } else if (result.status === 404) {
+        return "No account found with that email or username.";
+      } else if (result.status === 423) {
+        return result.error || "Account temporarily locked";
+      } else {
+        throw new Error("Failed to login");
+      }
+    }
+
+    return result;
   }
 
   static async checkAccountsByEmail(email) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/user-sessions/check-accounts?email=${encodeURIComponent(email)}`
-      );
+    const result = await HttpClient.get(
+      `/user-sessions/check-accounts?email=${encodeURIComponent(email)}`,
+      { skipAuth: true }
+    );
 
-      if (!response.ok) {
-        return { multipleAccounts: false };
-      }
-
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error checking accounts by email:", error);
+    if (result.success === false) {
       return { multipleAccounts: false };
     }
+
+    return result;
   }
 
   static async makeNewUser(data) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/users", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          firstName: data.firstName,
-          lastName: data.lastName,
-          username: data.userName,
-          password: data.password,
-          email: data.email,
-        }),
-      });
-      if (!response.ok) {
-        if (response.status === 409) {
-          return "An account already has this email";
-        } else if (response.status === 410) {
-          return "Username already exists";
-        } else {
-          throw new Error("Failed to create user");
-        }
+    const result = await HttpClient.post(
+      "/users",
+      {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        username: data.userName,
+        password: data.password,
+        email: data.email,
+      },
+      { skipAuth: true }
+    );
+
+    if (result.success === false) {
+      if (result.status === 409) {
+        return "An account already has this email";
+      } else if (result.status === 410) {
+        return "Username already exists";
+      } else {
+        throw new Error("Failed to create user");
       }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
     }
+
+    return result;
   }
 
   static async makeNewEmployee(data) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/users/new-employee", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: data.userName,
-          password: data.password,
-          email: data.email,
-          type: data.type,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          phone: data.phone,
-        }),
-      });
-      if (!response.ok) {
-        if (response.status === 409) {
-          return "An account already has this email";
-        } else if (response.status === 410) {
-          return "Username already exists";
-        } else {
-          throw new Error("Failed to create user");
-        }
+    const result = await HttpClient.post(
+      "/users/new-employee",
+      {
+        username: data.userName,
+        password: data.password,
+        email: data.email,
+        type: data.type,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phone: data.phone,
+      },
+      { skipAuth: true }
+    );
+
+    if (result.success === false) {
+      if (result.status === 409) {
+        return "An account already has this email";
+      } else if (result.status === 410) {
+        return "Username already exists";
+      } else {
+        throw new Error("Failed to create user");
       }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
     }
+
+    return result;
   }
-  
+
   static async editEmployee(data) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/users/employee", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: data.id,
-          username: data.userName,
-          password: data.password,
-          email: data.email,
-          type: data.type,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          phone: data.phone,
-        }),
-      });
-      if (!response.ok) {
-        if (response.status === 409) {
-          return "An account already has this email";
-        } else if (response.status === 410) {
-          return "Username already exists";
-        } else {
-          throw new Error("Failed to create user");
-        }
+    const result = await HttpClient.patch(
+      "/users/employee",
+      {
+        id: data.id,
+        username: data.userName,
+        password: data.password,
+        email: data.email,
+        type: data.type,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phone: data.phone,
+      },
+      { skipAuth: true }
+    );
+
+    if (result.success === false) {
+      if (result.status === 409) {
+        return "An account already has this email";
+      } else if (result.status === 410) {
+        return "Username already exists";
+      } else {
+        throw new Error("Failed to create user");
       }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
     }
+
+    return result;
   }
 
   static async updateTimestamp(data) {
-    try {
-      const response = await fetch(
-        baseURL + "/api/v1/user-info/collect-rewards",
-        {
-          method: "post",
-          body: JSON.stringify(data),
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (!response.ok) {
-        if (response.status === 401) {
-          const responseData = await response.json();
-          return responseData;
-        }
-        const error = new Error(`${response.status}(${response.statusText})`);
-        throw error;
+    const result = await HttpClient.post("/user-info/collect-rewards", data, { skipAuth: true });
+
+    if (result.success === false) {
+      if (result.status === 401) {
+        return result;
       }
-      const responseData = await response.json();
-      return responseData;
-    } catch (err) {
-      return err;
+      throw new Error(`${result.status}(${result.statusText || "Error"})`);
     }
+
+    return result;
   }
+
   static async addHomeInfo(data) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/user-info/home", {
-        method: "post",
-        body: JSON.stringify(data),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        if (response.status === 400) {
-          const responseData = await response.json();
-          return responseData;
-        }
-        const error = new Error(`${response.status}(${response.statusText})`);
-        throw error;
+    const result = await HttpClient.post("/user-info/home", data, { skipAuth: true });
+
+    if (result.success === false) {
+      if (result.status === 400) {
+        return result;
       }
-      const responseData = await response.json();
-      return responseData;
-    } catch (err) {
-      return err;
+      throw new Error(`${result.status}(${result.statusText || "Error"})`);
     }
+
+    return result;
   }
 
   static async editHomeInfo(data) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/user-info/home", {
-        method: "PATCH",
-        body: JSON.stringify(data),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        if (response.status === 400) {
-          const responseData = await response.json();
-          return responseData;
-        }
-        const error = new Error(`${response.status}(${response.statusText})`);
-        throw error;
+    const result = await HttpClient.patch("/user-info/home", data, { skipAuth: true });
+
+    if (result.success === false) {
+      if (result.status === 400) {
+        return result;
       }
-      const responseData = await response.json();
-      return responseData;
-    } catch (err) {
-      return err;
+      throw new Error(`${result.status}(${result.statusText || "Error"})`);
     }
+
+    return result;
   }
 
   static async completeHomeSetup(homeId, data, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/user-info/home/${homeId}/complete-setup`,
-        {
-          method: "PATCH",
-          body: JSON.stringify(data),
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.patch(`/user-info/home/${homeId}/complete-setup`, data, { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to complete home setup" };
-      }
-
-      return responseData;
-    } catch (err) {
-      console.error("Error completing home setup:", err);
-      return { error: "Failed to complete home setup" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to complete home setup" };
     }
+
+    return result;
   }
 
   static async deleteHome(id) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/user-info/home", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error("Failed to delete");
-      }
+    const result = await HttpClient.delete("/user-info/home", { skipAuth: true, body: { id } });
 
-      const responseData = await response.json();
-      return true;
-    } catch (error) {
-      return error;
+    if (result.success === false) {
+      throw new Error("Failed to delete");
     }
+
+    return true;
   }
+
   static async deleteEmployee(id, token) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/users/employee", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          id,
-        }),
-      });
+    const result = await HttpClient.delete("/users/employee", { token, body: { id } });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to delete employee" };
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error("Error deleting employee:", error);
-      return { error: "Failed to delete employee" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to delete employee" };
     }
+
+    return { success: true };
   }
 
   static async addEmployeeShiftsInfo(data) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/employee-info/shifts", {
-        method: "post",
-        body: JSON.stringify(data),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        if (response.status === 400) {
-          const responseData = await response.json();
-          return responseData;
-        }
-        const error = new Error(`${response.status}(${response.statusText})`);
-        throw error;
+    const result = await HttpClient.post("/employee-info/shifts", data, { skipAuth: true });
+
+    if (result.success === false) {
+      if (result.status === 400) {
+        return result;
       }
-      const responseData = await response.json();
-      return responseData;
-    } catch (err) {
-      return err;
+      throw new Error(`${result.status}(${result.statusText || "Error"})`);
     }
+
+    return result;
   }
 
   static async getBookingInfo(appointmentId, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/appointments/booking-info/${appointmentId}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.get(`/appointments/booking-info/${appointmentId}`, { token });
 
-      if (handleAuthError(response)) {
+    if (result.success === false) {
+      if (result.status === 401) {
         return { error: "Session expired" };
       }
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to get booking info" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error getting booking info:", error);
-      return { error: "Failed to get booking info" };
+      return { error: result.error || "Failed to get booking info" };
     }
+
+    return result;
   }
 
   static async addEmployee(id, appointmentId, acknowledged = false) {
-    try {
-      const response = await fetch(
-        baseURL + "/api/v1/appointments/request-employee",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id,
-            appointmentId,
-            acknowledged,
-          }),
-        }
-      );
+    const result = await HttpClient.patch(
+      "/appointments/request-employee",
+      { id, appointmentId, acknowledged },
+      { skipAuth: true }
+    );
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return {
-          error: responseData.error || "Failed to request appointment",
-          requiresAcknowledgment: responseData.requiresAcknowledgment,
-          isLargeHome: responseData.isLargeHome,
-          hasTimeConstraint: responseData.hasTimeConstraint,
-          requiresStripeSetup: responseData.requiresStripeSetup,
-          stripeAccountStatus: responseData.stripeAccountStatus,
-          message: responseData.message,
-        };
-      }
-
+    if (result.success === false) {
       return {
-        success: true,
-        message: responseData.message,
-        directBooking: responseData.directBooking || false,
+        error: result.error || "Failed to request appointment",
+        requiresAcknowledgment: result.requiresAcknowledgment,
+        isLargeHome: result.isLargeHome,
+        hasTimeConstraint: result.hasTimeConstraint,
+        requiresStripeSetup: result.requiresStripeSetup,
+        stripeAccountStatus: result.stripeAccountStatus,
+        message: result.message,
       };
-    } catch (error) {
-      console.error("Error requesting appointment:", error);
-      return { error: "Failed to request appointment" };
     }
+
+    return {
+      success: true,
+      message: result.message,
+      directBooking: result.directBooking || false,
+    };
   }
 
   static async removeEmployee(id, appointmentId) {
-    try {
-      const response = await fetch(
-        baseURL + "/api/v1/appointments/remove-employee",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id,
-            appointmentId,
-          }),
-        }
-      );
-      if (!response.ok) {
-        throw new Error("Failed to delete");
-      }
+    const result = await HttpClient.patch(
+      "/appointments/remove-employee",
+      { id, appointmentId },
+      { skipAuth: true }
+    );
 
-      const responseData = await response.json();
-      return true;
-    } catch (error) {
-      return error;
+    if (result.success === false) {
+      throw new Error("Failed to delete");
     }
+
+    return true;
   }
 
   static async removeRequest(id, appointmentId) {
-    try {
-      const response = await fetch(
-        baseURL + "/api/v1/appointments/remove-request",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id,
-            appointmentId,
-          }),
-        }
-      );
-      if (!response.ok) {
-        throw new Error("Failed to delete");
-      }
+    const result = await HttpClient.patch(
+      "/appointments/remove-request",
+      { id, appointmentId },
+      { skipAuth: true }
+    );
 
-      const responseData = await response.json();
-      return true;
-    } catch (error) {
-      return error;
+    if (result.success === false) {
+      throw new Error("Failed to delete");
     }
+
+    return true;
   }
 
   static async approveRequest(requestId, approve) {
-    const response = await fetch(
-      baseURL + "/api/v1/appointments/approve-request",
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          requestId,
-          approve,
-        }),
-      }
+    const result = await HttpClient.patch(
+      "/appointments/approve-request",
+      { requestId, approve },
+      { skipAuth: true }
     );
 
     // Handle 409 Conflict - another cleaner already assigned
-    if (response.status === 409) {
-      const conflictData = await response.json();
-      return { conflict: true, ...conflictData };
+    if (result.status === 409) {
+      return { conflict: true, ...result };
     }
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to approve request");
+    if (result.success === false) {
+      throw new Error(result.error || "Failed to approve request");
     }
-    const responseData = await response.json();
-    return responseData;
+
+    return result;
   }
 
   static async switchCleaner(appointmentId, newCleanerId, requestId) {
-    const response = await fetch(
-      baseURL + "/api/v1/appointments/switch-cleaner",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          appointmentId,
-          newCleanerId,
-          requestId,
-        }),
-      }
+    const result = await HttpClient.post(
+      "/appointments/switch-cleaner",
+      { appointmentId, newCleanerId, requestId },
+      { skipAuth: true }
     );
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to switch cleaner");
+    if (result.success === false) {
+      throw new Error(result.error || "Failed to switch cleaner");
     }
 
-    const responseData = await response.json();
-    return responseData;
+    return result;
   }
 
   static async denyRequest(id, appointmentId) {
-    const response = await fetch(
-      baseURL + "/api/v1/appointments/deny-request",
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id,
-          appointmentId,
-        }),
-      }
+    const result = await HttpClient.patch(
+      "/appointments/deny-request",
+      { id, appointmentId },
+      { skipAuth: true }
     );
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to deny request");
+
+    if (result.success === false) {
+      throw new Error(result.error || "Failed to deny request");
     }
 
-    const responseData = await response.json();
-    return responseData;
+    return result;
   }
 
   static async undoRequest(id, appointmentId) {
-    try {
-      const response = await fetch(
-        baseURL + "/api/v1/appointments/undo-request-choice",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id,
-            appointmentId,
-          }),
-        }
-      );
-      if (!response.ok) {
-        throw new Error("Failed to delete");
-      }
+    const result = await HttpClient.patch(
+      "/appointments/undo-request-choice",
+      { id, appointmentId },
+      { skipAuth: true }
+    );
 
-      const responseData = await response.json();
-      console.log(responseData);
-      return true;
-    } catch (error) {
-      return error;
+    if (result.success === false) {
+      throw new Error("Failed to delete");
     }
+
+    if (__DEV__) console.log(result);
+    return true;
   }
 
   static async updateUsername(token, username) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/users/update-username", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ username }),
-      });
+    const result = await HttpClient.patch("/users/update-username", { username }, { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to update username" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error updating username:", error);
-      return { error: "Failed to update username" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to update username" };
     }
+
+    return result;
   }
 
   static async updatePassword(token, currentPassword, newPassword) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/users/update-password", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
+    const result = await HttpClient.patch(
+      "/users/update-password",
+      { currentPassword, newPassword },
+      { token }
+    );
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to update password" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error updating password:", error);
-      return { error: "Failed to update password" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to update password" };
     }
+
+    return result;
   }
 
   static async updateEmail(token, email) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/users/update-email", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ email }),
-      });
+    const result = await HttpClient.patch("/users/update-email", { email }, { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to update email" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error updating email:", error);
-      return { error: "Failed to update email" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to update email" };
     }
+
+    return result;
   }
 
   static async updatePhone(token, phone) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/users/update-phone", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ phone }),
-      });
+    const result = await HttpClient.patch("/users/update-phone", { phone }, { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to update phone number" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error updating phone:", error);
-      return { error: "Failed to update phone number" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to update phone number" };
     }
+
+    return result;
   }
 
   static async upgradeToBusinessOwner(token, businessName = null, yearsInBusiness = null) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/users/upgrade-to-business", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ businessName, yearsInBusiness }),
-      });
+    const result = await HttpClient.patch(
+      "/users/upgrade-to-business",
+      { businessName, yearsInBusiness },
+      { token }
+    );
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to upgrade account" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error upgrading to business owner:", error);
-      return { error: "Failed to upgrade account" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to upgrade account" };
     }
+
+    return result;
   }
 
   static async forgotUsername(email) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/user-sessions/forgot-username", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
+    const result = await HttpClient.post(
+      "/user-sessions/forgot-username",
+      { email },
+      { skipAuth: true }
+    );
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to process request" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error in forgot username:", error);
-      return { error: "Failed to process request. Please try again." };
+    if (result.success === false) {
+      return { error: result.error || "Failed to process request" };
     }
+
+    return result;
   }
 
   static async forgotPassword(email) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/user-sessions/forgot-password", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
+    const result = await HttpClient.post(
+      "/user-sessions/forgot-password",
+      { email },
+      { skipAuth: true }
+    );
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to process request" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error in forgot password:", error);
-      return { error: "Failed to process request. Please try again." };
+    if (result.success === false) {
+      return { error: result.error || "Failed to process request" };
     }
+
+    return result;
   }
 
   static async getRequestCountsByHome(token) {
     if (!token) {
       return { requestCountsByHome: {} };
     }
-    try {
-      const response = await fetch(baseURL + "/api/v1/appointments/requests-by-home", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
 
-      if (handleAuthError(response)) {
+    const result = await HttpClient.get("/appointments/requests-by-home", { token });
+
+    if (result.success === false) {
+      if (result.status === 401) {
         return { requestCountsByHome: {} };
       }
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch request counts");
-      }
-
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching request counts:", error);
+      if (__DEV__) console.error("Error fetching request counts:", result.error);
       return { requestCountsByHome: {} };
     }
+
+    return result;
   }
 
   static async getRequestsForHome(token, homeId) {
     if (!token) {
       return { requests: [] };
     }
-    try {
-      const response = await fetch(baseURL + `/api/v1/appointments/requests-for-home/${homeId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch requests for home");
-      }
+    const result = await HttpClient.get(`/appointments/requests-for-home/${homeId}`, { token });
 
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching requests for home:", error);
+    if (result.success === false) {
+      if (__DEV__) console.error("Error fetching requests for home:", result.error);
       return { requests: [] };
     }
+
+    return result;
   }
 
   static async getCleanerProfile(cleanerId) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/employee-info/cleaner/${cleanerId}`);
+    const result = await HttpClient.get(`/employee-info/cleaner/${cleanerId}`, { skipAuth: true });
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch cleaner profile");
-      }
-
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching cleaner profile:", error);
+    if (result.success === false) {
+      if (__DEV__) console.error("Error fetching cleaner profile:", result.error);
       return { cleaner: null };
     }
+
+    return result;
   }
 
   // Get staffing configuration (includes minCleanersForAssignment)
   static async getStaffingConfig() {
-    try {
-      const response = await fetch(baseURL + "/api/v1/pricing/current");
+    const result = await HttpClient.get("/pricing/current", { skipAuth: true });
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch config");
-      }
-
-      const responseData = await response.json();
-      return responseData.staffing || { minCleanersForAssignment: 1 };
-    } catch (error) {
-      console.error("Error fetching staffing config:", error);
+    if (result.success === false) {
+      if (__DEV__) console.error("Error fetching staffing config:", result.error);
       // Return default if fetch fails
       return { minCleanersForAssignment: 1 };
     }
+
+    return result.staffing || { minCleanersForAssignment: 1 };
   }
 
   // Cancellation API methods
   static async getCancellationInfo(appointmentId, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/appointments/cancellation-info/${appointmentId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.get(`/appointments/cancellation-info/${appointmentId}`, { token });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        return { error: errorData.error || "Failed to get cancellation info" };
-      }
-
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error getting cancellation info:", error);
-      return { error: "Failed to get cancellation info" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to get cancellation info" };
     }
+
+    return result;
   }
 
   static async cancelAsHomeowner(appointmentId, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/appointments/${appointmentId}/cancel-homeowner`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.post(`/appointments/${appointmentId}/cancel-homeowner`, {}, { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to cancel appointment" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error cancelling appointment as homeowner:", error);
-      return { error: "Failed to cancel appointment" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to cancel appointment" };
     }
+
+    return result;
   }
 
   static async cancelAsCleaner(appointmentId, token, acknowledged = false) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/appointments/${appointmentId}/cancel-cleaner`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ acknowledged }),
-        }
-      );
+    const result = await HttpClient.post(
+      `/appointments/${appointmentId}/cancel-cleaner`,
+      { acknowledged },
+      { token }
+    );
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return {
-          error: responseData.error || "Failed to cancel job",
-          requiresAcknowledgment: responseData.requiresAcknowledgment,
-          message: responseData.message,
-        };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error cancelling job as cleaner:", error);
-      return { error: "Failed to cancel job" };
+    if (result.success === false) {
+      return {
+        error: result.error || "Failed to cancel job",
+        requiresAcknowledgment: result.requiresAcknowledgment,
+        message: result.message,
+      };
     }
+
+    return result;
   }
 
   // Home Size Adjustment API methods
   static async createHomeSizeAdjustment(token, data) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/home-size-adjustment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
+    const result = await HttpClient.post("/home-size-adjustment", data, { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to create adjustment request" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error creating home size adjustment:", error);
-      return { error: "Failed to create adjustment request" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to create adjustment request" };
     }
+
+    return result;
   }
 
   static async getPendingAdjustments(token) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/home-size-adjustment/pending", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    const result = await HttpClient.get("/home-size-adjustment/pending", { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to fetch adjustments" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching pending adjustments:", error);
-      return { error: "Failed to fetch adjustments" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to fetch adjustments" };
     }
+
+    return result;
   }
 
   static async getAdjustmentDetails(token, adjustmentId) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/home-size-adjustment/${adjustmentId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.get(`/home-size-adjustment/${adjustmentId}`, { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to fetch adjustment details" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching adjustment details:", error);
-      return { error: "Failed to fetch adjustment details" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to fetch adjustment details" };
     }
+
+    return result;
   }
 
   static async respondToAdjustment(token, adjustmentId, approved, homeownerResponse = null) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/home-size-adjustment/${adjustmentId}/homeowner-response`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ approved, homeownerResponse }),
-        }
-      );
+    const result = await HttpClient.post(
+      `/home-size-adjustment/${adjustmentId}/homeowner-response`,
+      { approved, homeownerResponse },
+      { token }
+    );
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to respond to adjustment" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error responding to adjustment:", error);
-      return { error: "Failed to respond to adjustment" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to respond to adjustment" };
     }
+
+    return result;
   }
 
   static async ownerResolveAdjustment(token, adjustmentId, data) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/home-size-adjustment/${adjustmentId}/owner-resolve`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(data),
-        }
-      );
+    const result = await HttpClient.post(
+      `/home-size-adjustment/${adjustmentId}/owner-resolve`,
+      data,
+      { token }
+    );
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to resolve adjustment" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error resolving adjustment:", error);
-      return { error: "Failed to resolve adjustment" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to resolve adjustment" };
     }
+
+    return result;
   }
 
   static async getAdjustmentHistory(token, homeId) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/home-size-adjustment/history/${homeId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.get(`/home-size-adjustment/history/${homeId}`, { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to fetch adjustment history" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching adjustment history:", error);
-      return { error: "Failed to fetch adjustment history" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to fetch adjustment history" };
     }
+
+    return result;
   }
 
   // Service Area methods for cleaners
   static async getServiceArea(token) {
-    try {
-      const url = baseURL + "/api/v1/user-info/service-area";
-      console.log("[getServiceArea] Fetching:", url);
+    const result = await HttpClient.get("/user-info/service-area", { token });
 
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const responseText = await response.text();
-      console.log("[getServiceArea] Response status:", response.status);
-      console.log("[getServiceArea] Response body:", responseText.substring(0, 200));
-
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error("[getServiceArea] JSON parse error. Response was:", responseText.substring(0, 500));
-        return { error: "Invalid response from server" };
-      }
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to fetch service area" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching service area:", error);
-      return { error: "Failed to fetch service area" };
+    if (__DEV__) {
+      console.log("[getServiceArea] Result:", result);
     }
+
+    if (result.success === false) {
+      return { error: result.error || "Failed to fetch service area" };
+    }
+
+    return result;
   }
 
   static async updateServiceArea(token, { address, latitude, longitude, radiusMiles }) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/user-info/service-area", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ address, latitude, longitude, radiusMiles }),
-      });
+    const result = await HttpClient.put(
+      "/user-info/service-area",
+      { address, latitude, longitude, radiusMiles },
+      { token }
+    );
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to update service area" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error updating service area:", error);
-      return { error: "Failed to update service area" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to update service area" };
     }
+
+    return result;
   }
 
   // Multi-Cleaner Job methods
   static async getMultiCleanerOffers(token) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/multi-cleaner/offers", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    const result = await HttpClient.get("/multi-cleaner/offers", { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to fetch multi-cleaner offers" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching multi-cleaner offers:", error);
+    if (result.success === false) {
+      if (__DEV__) console.error("Error fetching multi-cleaner offers:", result.error);
       return { personalOffers: [], availableJobs: [] };
     }
+
+    return result;
   }
 
   static async acceptMultiCleanerOffer(offerId, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/multi-cleaner/offers/${offerId}/accept`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.post(`/multi-cleaner/offers/${offerId}/accept`, {}, { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to accept offer" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error accepting multi-cleaner offer:", error);
-      return { error: "Failed to accept offer" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to accept offer" };
     }
+
+    return result;
   }
 
   static async declineMultiCleanerOffer(offerId, reason, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/multi-cleaner/offers/${offerId}/decline`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ reason }),
-        }
-      );
+    const result = await HttpClient.post(
+      `/multi-cleaner/offers/${offerId}/decline`,
+      { reason },
+      { token }
+    );
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to decline offer" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error declining multi-cleaner offer:", error);
-      return { error: "Failed to decline offer" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to decline offer" };
     }
+
+    return result;
   }
 
   static async joinMultiCleanerJob(jobId, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/multi-cleaner/join/${jobId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.post(`/multi-cleaner/join/${jobId}`, {}, { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to join job" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error joining multi-cleaner job:", error);
-      return { error: "Failed to join job" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to join job" };
     }
+
+    return result;
   }
 
   // Get cleaner's pending multi-cleaner job requests
   static async getMyMultiCleanerRequests(token) {
-    try {
-      const response = await fetch(
-        baseURL + "/api/v1/cleaner-approval/my-requests",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.get("/cleaner-approval/my-requests", { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to fetch requests" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching multi-cleaner requests:", error);
-      return { error: "Failed to fetch requests" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to fetch requests" };
     }
+
+    return result;
   }
 
   // Get cleaner's confirmed multi-cleaner jobs (jobs they've been approved for)
   static async getMyConfirmedMultiCleanerJobs(token) {
-    try {
-      const response = await fetch(
-        baseURL + "/api/v1/multi-cleaner/my-confirmed-jobs",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.get("/multi-cleaner/my-confirmed-jobs", { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to fetch confirmed jobs" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching confirmed multi-cleaner jobs:", error);
-      return { error: "Failed to fetch confirmed jobs" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to fetch confirmed jobs" };
     }
+
+    return result;
   }
 
   // Cancel a pending multi-cleaner job request
   static async cancelMultiCleanerRequest(requestId, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/cleaner-approval/${requestId}/cancel`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.post(`/cleaner-approval/${requestId}/cancel`, {}, { token });
 
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to cancel request" };
-      }
-
-      return responseData;
-    } catch (error) {
-      console.error("Error cancelling multi-cleaner request:", error);
-      return { error: "Failed to cancel request" };
+    if (result.success === false) {
+      return { error: result.error || "Failed to cancel request" };
     }
+
+    return result;
   }
 }
 

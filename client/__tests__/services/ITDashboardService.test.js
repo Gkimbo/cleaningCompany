@@ -5,29 +5,30 @@
 
 import ITDashboardService from "../../src/services/fetchRequests/ITDashboardService";
 
-// Mock fetch globally
-global.fetch = jest.fn();
-
-// Mock config
-jest.mock("../../src/services/config", () => ({
-  API_BASE: "http://localhost:3000/api/v1",
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
+import HttpClient from "../../src/services/HttpClient";
 
 describe("ITDashboardService", () => {
   const mockToken = "test-token";
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch.mockClear();
   });
 
   describe("fetchWithFallback", () => {
     it("should return data on successful fetch", async () => {
       const mockData = { openDisputes: 5 };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockData);
 
       const result = await ITDashboardService.getQuickStats(mockToken);
 
@@ -35,10 +36,7 @@ describe("ITDashboardService", () => {
     });
 
     it("should return fallback on non-ok response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Server error" });
 
       const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITDashboardService.getQuickStats(mockToken);
@@ -55,7 +53,7 @@ describe("ITDashboardService", () => {
     });
 
     it("should return fallback on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITDashboardService.getQuickStats(mockToken);
@@ -80,16 +78,13 @@ describe("ITDashboardService", () => {
         resolvedThisWeek: 10,
         slaBreaches: 1,
       };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockStats,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockStats);
 
       const result = await ITDashboardService.getQuickStats(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-dashboard/quick-stats",
-        { headers: { Authorization: "Bearer test-token" } }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/api/v1/it-dashboard/quick-stats",
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result).toEqual(mockStats);
     });
@@ -98,29 +93,23 @@ describe("ITDashboardService", () => {
   describe("getDisputes", () => {
     it("should call correct endpoint with filters", async () => {
       const mockDisputes = { disputes: [], total: 0 };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockDisputes,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockDisputes);
 
       const filters = { status: "submitted", priority: "high" };
       const result = await ITDashboardService.getDisputes(mockToken, filters);
 
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(HttpClient.get).toHaveBeenCalledWith(
         expect.stringContaining("status=submitted"),
-        { headers: { Authorization: "Bearer test-token" } }
+        { token: "test-token", useBaseUrl: true }
       );
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(HttpClient.get).toHaveBeenCalledWith(
         expect.stringContaining("priority=high"),
-        { headers: { Authorization: "Bearer test-token" } }
+        { token: "test-token", useBaseUrl: true }
       );
     });
 
     it("should return fallback for disputes", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Server error" });
 
       const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITDashboardService.getDisputes(mockToken);
@@ -133,16 +122,13 @@ describe("ITDashboardService", () => {
   describe("getDispute", () => {
     it("should fetch single dispute by id", async () => {
       const mockDispute = { dispute: { id: 1, category: "app_crash" } };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockDispute,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockDispute);
 
       const result = await ITDashboardService.getDispute(mockToken, 1);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-dashboard/disputes/1",
-        { headers: { Authorization: "Bearer test-token" } }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/api/v1/it-dashboard/disputes/1",
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result).toEqual(mockDispute);
     });
@@ -151,22 +137,19 @@ describe("ITDashboardService", () => {
   describe("getMyAssigned", () => {
     it("should fetch assigned disputes", async () => {
       const mockDisputes = { disputes: [{ id: 1 }] };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockDisputes,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockDisputes);
 
       const result = await ITDashboardService.getMyAssigned(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-dashboard/my-assigned",
-        { headers: { Authorization: "Bearer test-token" } }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/api/v1/it-dashboard/my-assigned",
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result).toEqual(mockDisputes);
     });
 
     it("should return fallback on error", async () => {
-      global.fetch.mockResolvedValueOnce({ ok: false, status: 500 });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Server error" });
 
       const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITDashboardService.getMyAssigned(mockToken);
@@ -179,16 +162,13 @@ describe("ITDashboardService", () => {
   describe("getITStaff", () => {
     it("should fetch IT staff list", async () => {
       const mockStaff = { itStaff: [{ id: 1, username: "alex_it" }] };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockStaff,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockStaff);
 
       const result = await ITDashboardService.getITStaff(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-dashboard/it-staff",
-        { headers: { Authorization: "Bearer test-token" } }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/api/v1/it-dashboard/it-staff",
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result).toEqual(mockStaff);
     });
@@ -196,32 +176,20 @@ describe("ITDashboardService", () => {
 
   describe("assignDispute", () => {
     it("should assign dispute successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ message: "Assigned" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ message: "Assigned" });
 
       const result = await ITDashboardService.assignDispute(mockToken, 1, 5);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-dashboard/disputes/1/assign",
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer test-token",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ assigneeId: 5 }),
-        }
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/api/v1/it-dashboard/disputes/1/assign",
+        { assigneeId: 5 },
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failed assignment", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Cannot assign to this user" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Cannot assign to this user" });
 
       const result = await ITDashboardService.assignDispute(mockToken, 1, 5);
 
@@ -230,45 +198,33 @@ describe("ITDashboardService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITDashboardService.assignDispute(mockToken, 1, 5);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
       consoleSpy.mockRestore();
     });
   });
 
   describe("updateStatus", () => {
     it("should update dispute status successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ message: "Status updated" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ message: "Status updated" });
 
       const result = await ITDashboardService.updateStatus(mockToken, 1, "in_progress");
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-dashboard/disputes/1/status",
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer test-token",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ status: "in_progress" }),
-        }
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/api/v1/it-dashboard/disputes/1/status",
+        { status: "in_progress" },
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failed status update", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Invalid status" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Invalid status" });
 
       const result = await ITDashboardService.updateStatus(mockToken, 1, "invalid");
 
@@ -279,33 +235,21 @@ describe("ITDashboardService", () => {
 
   describe("resolveDispute", () => {
     it("should resolve dispute successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ message: "Resolved" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ message: "Resolved" });
 
       const resolution = { resolutionNotes: "Fixed the issue" };
       const result = await ITDashboardService.resolveDispute(mockToken, 1, resolution);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-dashboard/disputes/1/resolve",
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer test-token",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(resolution),
-        }
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/api/v1/it-dashboard/disputes/1/resolve",
+        resolution,
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failed resolution", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Already resolved" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Already resolved" });
 
       const result = await ITDashboardService.resolveDispute(mockToken, 1, {});
 
@@ -318,31 +262,25 @@ describe("ITDashboardService", () => {
     describe("searchUsers", () => {
       it("should search users by query", async () => {
         const mockUsers = { users: [{ id: 1, email: "test@example.com" }] };
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockUsers,
-        });
+        HttpClient.get.mockResolvedValueOnce(mockUsers);
 
         const result = await ITDashboardService.searchUsers(mockToken, "test@example.com");
 
-        expect(global.fetch).toHaveBeenCalledWith(
+        expect(HttpClient.get).toHaveBeenCalledWith(
           expect.stringContaining("query=test%40example.com"),
-          { headers: { Authorization: "Bearer test-token" } }
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result).toEqual(mockUsers);
       });
 
       it("should search users with type filter", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ users: [] }),
-        });
+        HttpClient.get.mockResolvedValueOnce({ users: [] });
 
         await ITDashboardService.searchUsers(mockToken, "test", "homeowner");
 
-        expect(global.fetch).toHaveBeenCalledWith(
+        expect(HttpClient.get).toHaveBeenCalledWith(
           expect.stringContaining("type=homeowner"),
-          { headers: { Authorization: "Bearer test-token" } }
+          { token: "test-token", useBaseUrl: true }
         );
       });
     });
@@ -350,16 +288,13 @@ describe("ITDashboardService", () => {
     describe("getUserDetails", () => {
       it("should fetch user details", async () => {
         const mockUser = { user: { id: 1, email: "test@example.com" } };
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockUser,
-        });
+        HttpClient.get.mockResolvedValueOnce(mockUser);
 
         const result = await ITDashboardService.getUserDetails(mockToken, 1);
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1",
-          { headers: { Authorization: "Bearer test-token" } }
+        expect(HttpClient.get).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1",
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result).toEqual(mockUser);
       });
@@ -367,31 +302,20 @@ describe("ITDashboardService", () => {
 
     describe("sendPasswordReset", () => {
       it("should send password reset successfully", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ message: "Email sent" }),
-        });
+        HttpClient.post.mockResolvedValueOnce({ message: "Email sent" });
 
         const result = await ITDashboardService.sendPasswordReset(mockToken, 1);
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1/send-password-reset",
-          {
-            method: "POST",
-            headers: {
-              Authorization: "Bearer test-token",
-              "Content-Type": "application/json",
-            },
-          }
+        expect(HttpClient.post).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1/send-password-reset",
+          {},
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result.success).toBe(true);
       });
 
       it("should handle password reset failure", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ error: "User not found" }),
-        });
+        HttpClient.post.mockResolvedValueOnce({ success: false, error: "User not found" });
 
         const result = await ITDashboardService.sendPasswordReset(mockToken, 999);
 
@@ -402,22 +326,14 @@ describe("ITDashboardService", () => {
 
     describe("unlockAccount", () => {
       it("should unlock account successfully", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ message: "Account unlocked" }),
-        });
+        HttpClient.post.mockResolvedValueOnce({ message: "Account unlocked" });
 
         const result = await ITDashboardService.unlockAccount(mockToken, 1);
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1/unlock",
-          {
-            method: "POST",
-            headers: {
-              Authorization: "Bearer test-token",
-              "Content-Type": "application/json",
-            },
-          }
+        expect(HttpClient.post).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1/unlock",
+          {},
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result.success).toBe(true);
       });
@@ -426,16 +342,13 @@ describe("ITDashboardService", () => {
     describe("getUserProfile", () => {
       it("should fetch user profile", async () => {
         const mockProfile = { profile: { firstName: "John", lastName: "Doe" } };
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockProfile,
-        });
+        HttpClient.get.mockResolvedValueOnce(mockProfile);
 
         const result = await ITDashboardService.getUserProfile(mockToken, 1);
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1/profile",
-          { headers: { Authorization: "Bearer test-token" } }
+        expect(HttpClient.get).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1/profile",
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result).toEqual(mockProfile);
       });
@@ -443,35 +356,23 @@ describe("ITDashboardService", () => {
 
     describe("updateUserContact", () => {
       it("should update user contact info successfully", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ message: "Updated" }),
-        });
+        HttpClient.patch.mockResolvedValueOnce({ message: "Updated" });
 
         const result = await ITDashboardService.updateUserContact(mockToken, 1, {
           email: "new@example.com",
           phone: "1234567890",
         });
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1/contact",
-          {
-            method: "PATCH",
-            headers: {
-              Authorization: "Bearer test-token",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ email: "new@example.com", phone: "1234567890" }),
-          }
+        expect(HttpClient.patch).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1/contact",
+          { email: "new@example.com", phone: "1234567890" },
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result.success).toBe(true);
       });
 
       it("should handle duplicate email error", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ error: "Email already in use" }),
-        });
+        HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Email already in use" });
 
         const result = await ITDashboardService.updateUserContact(mockToken, 1, {
           email: "existing@example.com",
@@ -485,16 +386,13 @@ describe("ITDashboardService", () => {
     describe("getUserBilling", () => {
       it("should fetch user billing info", async () => {
         const mockBilling = { billing: { totalSpent: 1000 } };
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockBilling,
-        });
+        HttpClient.get.mockResolvedValueOnce(mockBilling);
 
         const result = await ITDashboardService.getUserBilling(mockToken, 1);
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1/billing",
-          { headers: { Authorization: "Bearer test-token" } }
+        expect(HttpClient.get).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1/billing",
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result).toEqual(mockBilling);
       });
@@ -503,16 +401,13 @@ describe("ITDashboardService", () => {
     describe("getUserSecurity", () => {
       it("should fetch user security info", async () => {
         const mockSecurity = { security: { failedAttempts: 0 } };
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockSecurity,
-        });
+        HttpClient.get.mockResolvedValueOnce(mockSecurity);
 
         const result = await ITDashboardService.getUserSecurity(mockToken, 1);
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1/security",
-          { headers: { Authorization: "Bearer test-token" } }
+        expect(HttpClient.get).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1/security",
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result).toEqual(mockSecurity);
       });
@@ -520,22 +415,14 @@ describe("ITDashboardService", () => {
 
     describe("forceLogout", () => {
       it("should force logout user successfully", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ message: "Logged out" }),
-        });
+        HttpClient.post.mockResolvedValueOnce({ message: "Logged out" });
 
         const result = await ITDashboardService.forceLogout(mockToken, 1);
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1/force-logout",
-          {
-            method: "POST",
-            headers: {
-              Authorization: "Bearer test-token",
-              "Content-Type": "application/json",
-            },
-          }
+        expect(HttpClient.post).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1/force-logout",
+          {},
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result.success).toBe(true);
       });
@@ -543,35 +430,23 @@ describe("ITDashboardService", () => {
 
     describe("suspendAccount", () => {
       it("should suspend account successfully", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ message: "Account suspended" }),
-        });
+        HttpClient.post.mockResolvedValueOnce({ message: "Account suspended" });
 
         const result = await ITDashboardService.suspendAccount(mockToken, 1, {
           reason: "Suspicious activity",
           hours: 24,
         });
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1/suspend",
-          {
-            method: "POST",
-            headers: {
-              Authorization: "Bearer test-token",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ reason: "Suspicious activity", hours: 24 }),
-          }
+        expect(HttpClient.post).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1/suspend",
+          { reason: "Suspicious activity", hours: 24 },
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result.success).toBe(true);
       });
 
       it("should handle cannot suspend owner error", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ error: "Cannot suspend owner account" }),
-        });
+        HttpClient.post.mockResolvedValueOnce({ success: false, error: "Cannot suspend owner account" });
 
         const result = await ITDashboardService.suspendAccount(mockToken, 1, {
           reason: "Test",
@@ -586,16 +461,13 @@ describe("ITDashboardService", () => {
     describe("getUserDataSummary", () => {
       it("should fetch user data summary", async () => {
         const mockSummary = { dataSummary: { appointments: 10, reviews: 5 } };
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockSummary,
-        });
+        HttpClient.get.mockResolvedValueOnce(mockSummary);
 
         const result = await ITDashboardService.getUserDataSummary(mockToken, 1);
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1/data-summary",
-          { headers: { Authorization: "Bearer test-token" } }
+        expect(HttpClient.get).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1/data-summary",
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result).toEqual(mockSummary);
       });
@@ -604,16 +476,13 @@ describe("ITDashboardService", () => {
     describe("getUserAppInfo", () => {
       it("should fetch user app info", async () => {
         const mockAppInfo = { appInfo: { deviceType: "ios" } };
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockAppInfo,
-        });
+        HttpClient.get.mockResolvedValueOnce(mockAppInfo);
 
         const result = await ITDashboardService.getUserAppInfo(mockToken, 1);
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1/app-info",
-          { headers: { Authorization: "Bearer test-token" } }
+        expect(HttpClient.get).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1/app-info",
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result).toEqual(mockAppInfo);
       });
@@ -621,22 +490,14 @@ describe("ITDashboardService", () => {
 
     describe("clearAppState", () => {
       it("should clear app state successfully", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ message: "App state cleared" }),
-        });
+        HttpClient.post.mockResolvedValueOnce({ message: "App state cleared" });
 
         const result = await ITDashboardService.clearAppState(mockToken, 1);
 
-        expect(global.fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/it-support/user/1/clear-app-state",
-          {
-            method: "POST",
-            headers: {
-              Authorization: "Bearer test-token",
-              "Content-Type": "application/json",
-            },
-          }
+        expect(HttpClient.post).toHaveBeenCalledWith(
+          "/api/v1/it-support/user/1/clear-app-state",
+          {},
+          { token: "test-token", useBaseUrl: true }
         );
         expect(result.success).toBe(true);
       });

@@ -120,6 +120,12 @@ jest.mock("../../models", () => ({
       finished: false,
     })),
   },
+  StripeWebhookEvent: {
+    claimEvent: jest.fn().mockResolvedValue({ id: 1, stripeEventId: "evt_test_123", status: "processing" }),
+    markCompleted: jest.fn().mockResolvedValue(true),
+    markFailed: jest.fn().mockResolvedValue(true),
+    markSkipped: jest.fn().mockResolvedValue(true),
+  },
 }));
 
 jest.mock("../../services/sendNotifications/EmailClass", () => ({
@@ -166,8 +172,12 @@ describe("Full Payment Flow", () => {
 
   describe("Complete Payment Workflow", () => {
     it("Step 1: Customer creates payment intent", async () => {
+      const { User } = require("../../models");
+      User.findByPk.mockResolvedValueOnce({ id: 1, email: "test@example.com", type: "owner" });
+
       const res = await request(app)
         .post("/api/v1/payments/create-intent")
+        .set("Authorization", `Bearer ${TEST_OWNER_TOKEN}`)
         .send({
           amount: 15000,
           email: "customer@example.com",
@@ -225,8 +235,18 @@ describe("Full Payment Flow", () => {
   });
 
   describe("Cancellation Flow", () => {
+    it("should require owner authentication for cancellation", async () => {
+      const res = await request(app)
+        .post("/api/v1/payments/cancel-or-refund")
+        .send({ appointmentId: 1 });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe("Authorization required");
+    });
+
     it("should cancel uncaptured payment", async () => {
       mockAppointment.paymentIntentId = "pi_test_cancel";
+      mockAppointment.paymentStatus = "requires_capture";
 
       const stripe = require("stripe")();
       stripe.paymentIntents.retrieve.mockResolvedValue({
@@ -236,6 +256,7 @@ describe("Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/cancel-or-refund")
+        .set("Authorization", `Bearer ${TEST_OWNER_TOKEN}`)
         .send({ appointmentId: 1 });
 
       expect(res.status).toBe(200);
@@ -246,6 +267,7 @@ describe("Full Payment Flow", () => {
   describe("Refund Flow", () => {
     it("should refund captured payment", async () => {
       mockAppointment.paymentIntentId = "pi_test_refund";
+      mockAppointment.paymentStatus = "captured";
 
       const stripe = require("stripe")();
       stripe.paymentIntents.retrieve.mockResolvedValue({
@@ -255,6 +277,7 @@ describe("Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/refund")
+        .set("Authorization", `Bearer ${TEST_OWNER_TOKEN}`)
         .send({ appointmentId: 1 });
 
       expect(res.status).toBe(200);
@@ -291,9 +314,11 @@ describe("Full Payment Flow", () => {
 
     it("should handle missing payment intent", async () => {
       mockAppointment.paymentIntentId = null;
+      mockAppointment.paymentStatus = null;
 
       const res = await request(app)
         .post("/api/v1/payments/refund")
+        .set("Authorization", `Bearer ${TEST_OWNER_TOKEN}`)
         .send({ appointmentId: 1 });
 
       expect(res.status).toBe(400);
@@ -323,9 +348,13 @@ describe("Full Payment Flow", () => {
 
   describe("Multi-step Booking Flow", () => {
     it("should handle complete booking with payment", async () => {
+      const { User } = require("../../models");
+      User.findByPk.mockResolvedValueOnce({ id: 1, email: "test@example.com", type: "owner" });
+
       // 1. Create payment intent with manual capture
       const createRes = await request(app)
         .post("/api/v1/payments/create-intent")
+        .set("Authorization", `Bearer ${TEST_OWNER_TOKEN}`)
         .send({
           amount: 20000,
           email: "booker@example.com",

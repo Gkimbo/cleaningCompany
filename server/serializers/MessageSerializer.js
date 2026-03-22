@@ -6,12 +6,7 @@ class MessageSerializer {
 
 	static decryptUserField(value) {
 		if (!value) return null;
-		const decrypted = EncryptionService.decrypt(value);
-		// Debug: log if decryption returned same value (likely failed)
-		if (decrypted === value && value.includes(':')) {
-			console.warn('[MessageSerializer] Decryption may have failed for value');
-		}
-		return decrypted;
+		return EncryptionService.decrypt(value);
 	}
 
 	static serializeUser(user) {

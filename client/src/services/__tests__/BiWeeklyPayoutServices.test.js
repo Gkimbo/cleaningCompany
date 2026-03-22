@@ -3,8 +3,19 @@
  * Tests the BusinessEmployeeService and BusinessOwnerService payout methods
  */
 
-// Mock fetch globally
-global.fetch = jest.fn();
+// Mock HttpClient
+jest.mock("../HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
+
+import HttpClient from "../HttpClient";
 
 // Mock the config
 jest.mock("../config", () => ({
@@ -17,7 +28,6 @@ import BusinessOwnerService from "../fetchRequests/BusinessOwnerService";
 describe("Bi-Weekly Payout Frontend Services", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch.mockReset();
   });
 
   // =============================================
@@ -35,27 +45,23 @@ describe("Bi-Weekly Payout Frontend Services", () => {
         formatted: { pendingAmount: "$75.00" },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await BusinessEmployeeService.getPendingEarnings("test-token");
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://test-api.com/api/v1/business-employee/pending-earnings",
-        expect.objectContaining({
-          headers: {
-            Authorization: "Bearer test-token",
-          },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/business-employee/pending-earnings",
+        { token: "test-token" }
       );
       expect(result.pendingAmount).toBe(7500);
       expect(result.payouts).toHaveLength(2);
     });
 
     it("should return default values on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
+        error: "Network error",
+      });
 
       const result = await BusinessEmployeeService.getPendingEarnings("test-token");
 
@@ -64,15 +70,11 @@ describe("Bi-Weekly Payout Frontend Services", () => {
     });
 
     it("should handle empty response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            pendingAmount: 0,
-            nextPayoutDate: "2024-01-19",
-            payouts: [],
-            formatted: { pendingAmount: "$0.00" },
-          }),
+      HttpClient.get.mockResolvedValueOnce({
+        pendingAmount: 0,
+        nextPayoutDate: "2024-01-19",
+        payouts: [],
+        formatted: { pendingAmount: "$0.00" },
       });
 
       const result = await BusinessEmployeeService.getPendingEarnings("test-token");
@@ -97,27 +99,23 @@ describe("Bi-Weekly Payout Frontend Services", () => {
         formatted: { totalPending: "$125.00" },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await BusinessOwnerService.getPendingPayroll("owner-token");
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://test-api.com/api/v1/business-owner/payroll/pending",
-        expect.objectContaining({
-          headers: {
-            Authorization: "Bearer owner-token",
-          },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/business-owner/payroll/pending",
+        { token: "owner-token" }
       );
       expect(result.totalPending).toBe(12500);
       expect(result.byEmployee).toHaveLength(2);
     });
 
     it("should return default values on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
+        error: "Network error",
+      });
 
       const result = await BusinessOwnerService.getPendingPayroll("owner-token");
 
@@ -126,15 +124,11 @@ describe("Bi-Weekly Payout Frontend Services", () => {
     });
 
     it("should handle response with no employees", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            totalPending: 0,
-            nextPayoutDate: "2024-01-19",
-            byEmployee: [],
-            formatted: { totalPending: "$0.00" },
-          }),
+      HttpClient.get.mockResolvedValueOnce({
+        totalPending: 0,
+        nextPayoutDate: "2024-01-19",
+        byEmployee: [],
+        formatted: { totalPending: "$0.00" },
       });
 
       const result = await BusinessOwnerService.getPendingPayroll("owner-token");
@@ -156,30 +150,23 @@ describe("Bi-Weekly Payout Frontend Services", () => {
         formattedAmount: "$75.00",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await BusinessOwnerService.triggerEarlyPayout("owner-token", 10);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://test-api.com/api/v1/business-owner/payroll/early-payout/10",
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            Authorization: "Bearer owner-token",
-          },
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/business-owner/payroll/early-payout/10",
+        {},
+        { token: "owner-token" }
       );
       expect(result.success).toBe(true);
       expect(result.totalAmount).toBe(7500);
     });
 
     it("should handle employee not found error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: "Employee not found" }),
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
+        error: "Employee not found",
       });
 
       const result = await BusinessOwnerService.triggerEarlyPayout("owner-token", 999);
@@ -189,7 +176,10 @@ describe("Bi-Weekly Payout Frontend Services", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
+        error: "Network error",
+      });
 
       const result = await BusinessOwnerService.triggerEarlyPayout("owner-token", 10);
 
@@ -198,16 +188,12 @@ describe("Bi-Weekly Payout Frontend Services", () => {
     });
 
     it("should handle zero pending payouts", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            success: true,
-            totalAmount: 0,
-            payoutCount: 0,
-            formattedAmount: "$0.00",
-            message: "No pending payouts",
-          }),
+      HttpClient.post.mockResolvedValueOnce({
+        success: true,
+        totalAmount: 0,
+        payoutCount: 0,
+        formattedAmount: "$0.00",
+        message: "No pending payouts",
       });
 
       const result = await BusinessOwnerService.triggerEarlyPayout("owner-token", 10);
@@ -217,10 +203,9 @@ describe("Bi-Weekly Payout Frontend Services", () => {
     });
 
     it("should handle Stripe error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () =>
-          Promise.resolve({ error: "Stripe account not connected" }),
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
+        error: "Stripe account not connected",
       });
 
       const result = await BusinessOwnerService.triggerEarlyPayout("owner-token", 10);
@@ -235,9 +220,9 @@ describe("Bi-Weekly Payout Frontend Services", () => {
   // =============================================
   describe("Edge Cases", () => {
     it("should handle malformed JSON response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.reject(new Error("Invalid JSON")),
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
+        error: "Invalid JSON",
       });
 
       const result = await BusinessEmployeeService.getPendingEarnings("test-token");
@@ -246,10 +231,10 @@ describe("Bi-Weekly Payout Frontend Services", () => {
     });
 
     it("should handle 401 unauthorized", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
         status: 401,
-        json: () => Promise.resolve({ error: "Unauthorized" }),
+        error: "Unauthorized",
       });
 
       const result = await BusinessOwnerService.getPendingPayroll("invalid-token");
@@ -259,10 +244,10 @@ describe("Bi-Weekly Payout Frontend Services", () => {
     });
 
     it("should handle 500 server error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
         status: 500,
-        json: () => Promise.resolve({ error: "Internal server error" }),
+        error: "Internal server error",
       });
 
       const result = await BusinessOwnerService.triggerEarlyPayout("owner-token", 10);
@@ -271,12 +256,11 @@ describe("Bi-Weekly Payout Frontend Services", () => {
     });
 
     it("should handle timeout", async () => {
-      global.fetch.mockImplementationOnce(
-        () =>
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout")), 100)
-          )
-      );
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
+        error: "Request timed out",
+        status: 408,
+      });
 
       const result = await BusinessEmployeeService.getPendingEarnings("test-token");
 
@@ -295,10 +279,7 @@ describe("Bi-Weekly Payout Frontend Services", () => {
         payouts: [],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await BusinessEmployeeService.getPendingEarnings("test-token");
 
@@ -313,10 +294,7 @@ describe("Bi-Weekly Payout Frontend Services", () => {
         formatted: { pendingAmount: "$50.00" },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await BusinessEmployeeService.getPendingEarnings("test-token");
 

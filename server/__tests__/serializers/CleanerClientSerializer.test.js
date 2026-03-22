@@ -48,7 +48,8 @@ describe("CleanerClientSerializer", () => {
       expect(result.cleanerId).toBe(10);
       expect(result.clientId).toBe(20);
       expect(result.homeId).toBe(30);
-      expect(result.inviteToken).toBe("abc123token");
+      // inviteToken intentionally omitted for security
+      expect(result.inviteToken).toBeUndefined();
       expect(result.status).toBe("active");
       expect(result.autoPayEnabled).toBe(true);
       expect(result.autoScheduleEnabled).toBe(false);
@@ -528,7 +529,8 @@ describe("CleanerClientSerializer", () => {
       const result = CleanerClientSerializer.serializeInvitation(mockCleanerClient);
 
       expect(result.id).toBe(1);
-      expect(result.inviteToken).toBe("token123");
+      // inviteToken intentionally omitted for security
+      expect(result.inviteToken).toBeUndefined();
       expect(result.invitedName).toBe("decrypted_iv:invname");
       expect(result.invitedEmail).toBe("decrypted_iv:invemail");
       expect(result.invitedPhone).toBe("decrypted_iv:invphone");

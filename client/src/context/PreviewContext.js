@@ -7,6 +7,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import SecureStorage from "../services/SecureStorage";
 import DemoAccountService from "../services/fetchRequests/DemoAccountService";
 
 const PreviewContext = createContext(null);
@@ -33,21 +34,29 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				const ownerStateStr = await AsyncStorage.getItem(OWNER_STATE_KEY);
 
 				if (previewStateStr && ownerStateStr) {
-					const previewState = JSON.parse(previewStateStr);
-					const ownerState = JSON.parse(ownerStateStr);
+					// Safely parse JSON with error handling
+					let previewState, ownerState;
+					try {
+						previewState = JSON.parse(previewStateStr);
+						ownerState = JSON.parse(ownerStateStr);
+					} catch (parseError) {
+						// Corrupted data - clear it and continue
+						await AsyncStorage.multiRemove([PREVIEW_STATE_KEY, OWNER_STATE_KEY]);
+						setIsRestoring(false);
+						return;
+					}
 
 					// Restore the preview state
 					setOriginalOwnerState(ownerState);
 					setIsPreviewMode(previewState.isPreviewMode);
 					setPreviewRole(previewState.previewRole);
 
-					console.log(
-						"[PreviewContext] Auto-restored preview mode:",
-						previewState.previewRole
-					);
+					if (__DEV__) {
+						console.log("[PreviewContext] Auto-restored preview mode:", previewState.previewRole);
+					}
 				}
 			} catch (err) {
-				console.error("[PreviewContext] Error restoring preview state:", err);
+				if (__DEV__) console.error("[PreviewContext] Error restoring preview state:", err);
 			} finally {
 				setIsRestoring(false);
 			}
@@ -95,8 +104,8 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 					throw new Error(result.error || "Failed to enter preview mode");
 				}
 
-				// Store the demo token in AsyncStorage so getCurrentUser and other fetches work
-				await AsyncStorage.setItem("token", result.token);
+				// Store the demo token securely so getCurrentUser and other fetches work
+				await SecureStorage.setItem("token", result.token);
 
 				// Save preview state for app reload persistence
 				await AsyncStorage.setItem(
@@ -112,7 +121,7 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 
 				return { success: true };
 			} catch (err) {
-				console.error("[PreviewContext] Error entering preview mode:", err);
+				if (__DEV__) console.error("[PreviewContext] Error entering preview mode:", err);
 				setError(err.message);
 				// Clean up on error
 				await AsyncStorage.removeItem(OWNER_STATE_KEY);
@@ -138,7 +147,11 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 			if (!ownerState) {
 				const stored = await AsyncStorage.getItem(OWNER_STATE_KEY);
 				if (stored) {
-					ownerState = JSON.parse(stored);
+					try {
+						ownerState = JSON.parse(stored);
+					} catch (parseError) {
+						// Corrupted data - will throw below
+					}
 				}
 			}
 
@@ -154,13 +167,13 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 
 			if (!result.success) {
 				// Even if backend fails, try to restore from stored state
-				console.warn("[PreviewContext] Backend exit failed, using stored state");
+				if (__DEV__) console.warn("[PreviewContext] Backend exit failed, using stored state");
 			}
 
-			// Restore the owner's token to AsyncStorage
+			// Restore the owner's token securely
 			const tokenToRestore = result.success ? result.token : ownerState.token;
 			if (tokenToRestore) {
-				await AsyncStorage.setItem("token", tokenToRestore);
+				await SecureStorage.setItem("token", tokenToRestore);
 			}
 
 			// Dispatch action to restore owner state
@@ -178,7 +191,7 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 
 			return { success: true };
 		} catch (err) {
-			console.error("[PreviewContext] Error exiting preview mode:", err);
+			if (__DEV__) console.error("[PreviewContext] Error exiting preview mode:", err);
 			setError(err.message);
 			return { success: false, error: err.message };
 		} finally {
@@ -207,9 +220,13 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				// Try to get from storage
 				const stored = await AsyncStorage.getItem(OWNER_STATE_KEY);
 				if (stored) {
-					const ownerState = JSON.parse(stored);
-					if (ownerState?.token) {
-						tokenToUse = ownerState.token;
+					try {
+						const ownerState = JSON.parse(stored);
+						if (ownerState?.token) {
+							tokenToUse = ownerState.token;
+						}
+					} catch (parseError) {
+						// Corrupted data - continue without token
 					}
 				}
 			}
@@ -225,13 +242,13 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				throw new Error(result.error || "Failed to reset demo data");
 			}
 
-			console.log("[PreviewContext] Demo data reset:", result);
+			if (__DEV__) console.log("[PreviewContext] Demo data reset:", result);
 
 			// If we got a new session back, update the state with the new token
 			if (result.newSession && isPreviewMode) {
-				console.log("[PreviewContext] Updating state with new session token");
-				// Also update AsyncStorage so getCurrentUser and other fetches use the new token
-				await AsyncStorage.setItem("token", result.newSession.token);
+				if (__DEV__) console.log("[PreviewContext] Updating state with new session token");
+				// Store token securely so getCurrentUser and other fetches use the new token
+				await SecureStorage.setItem("token", result.newSession.token);
 				dispatch({ type: "PREVIEW_ENTER", payload: result.newSession });
 			}
 
@@ -242,7 +259,7 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				created: result.created,
 			};
 		} catch (err) {
-			console.error("[PreviewContext] Error resetting demo data:", err);
+			if (__DEV__) console.error("[PreviewContext] Error resetting demo data:", err);
 			setError(err.message);
 			return { success: false, error: err.message };
 		} finally {
@@ -276,9 +293,13 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				if (!ownerId || !ownerToken) {
 					const stored = await AsyncStorage.getItem(OWNER_STATE_KEY);
 					if (stored) {
-						const ownerState = JSON.parse(stored);
-						ownerId = ownerId || ownerState?.currentUser?.id;
-						ownerToken = ownerToken || ownerState?.token;
+						try {
+							const ownerState = JSON.parse(stored);
+							ownerId = ownerId || ownerState?.currentUser?.id;
+							ownerToken = ownerToken || ownerState?.token;
+						} catch (parseError) {
+							// Corrupted data - will fail below
+						}
 					}
 				}
 
@@ -301,8 +322,8 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 					throw new Error(result.error || "Failed to switch preview role");
 				}
 
-				// Store the new demo token in AsyncStorage
-				await AsyncStorage.setItem("token", result.token);
+				// Store the new demo token securely
+				await SecureStorage.setItem("token", result.token);
 
 				// Update preview state in storage
 				await AsyncStorage.setItem(
@@ -316,10 +337,10 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				// Update local preview role state
 				setPreviewRole(newRole);
 
-				console.log(`[PreviewContext] Switched from ${previewRole} to ${newRole}`);
+				if (__DEV__) console.log(`[PreviewContext] Switched from ${previewRole} to ${newRole}`);
 				return { success: true, message: result.message };
 			} catch (err) {
-				console.error("[PreviewContext] Error switching preview role:", err);
+				if (__DEV__) console.error("[PreviewContext] Error switching preview role:", err);
 				setError(err.message);
 				return { success: false, error: err.message };
 			} finally {
@@ -340,18 +361,24 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 			const ownerStateStr = await AsyncStorage.getItem(OWNER_STATE_KEY);
 
 			if (previewStateStr && ownerStateStr) {
-				const previewState = JSON.parse(previewStateStr);
-				const ownerState = JSON.parse(ownerStateStr);
+				let previewState, ownerState;
+				try {
+					previewState = JSON.parse(previewStateStr);
+					ownerState = JSON.parse(ownerStateStr);
+				} catch (parseError) {
+					// Corrupted data - clear and return
+					await AsyncStorage.multiRemove([PREVIEW_STATE_KEY, OWNER_STATE_KEY]);
+					return { wasInPreview: false };
+				}
 
 				// Restore the preview state
 				setOriginalOwnerState(ownerState);
 				setIsPreviewMode(previewState.isPreviewMode);
 				setPreviewRole(previewState.previewRole);
 
-				console.log(
-					"[PreviewContext] Restored preview mode:",
-					previewState.previewRole
-				);
+				if (__DEV__) {
+					console.log("[PreviewContext] Restored preview mode:", previewState.previewRole);
+				}
 
 				return {
 					wasInPreview: true,
@@ -362,7 +389,7 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 
 			return { wasInPreview: false };
 		} catch (err) {
-			console.error("[PreviewContext] Error checking preview mode:", err);
+			if (__DEV__) console.error("[PreviewContext] Error checking preview mode:", err);
 			return { wasInPreview: false, error: err.message };
 		}
 	}, []);

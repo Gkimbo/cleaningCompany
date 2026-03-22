@@ -216,16 +216,10 @@ class EmployeeJobAssignmentSerializer {
     if (employeeRecord?.canViewJobEarnings) {
       serialized.hoursWorked = data.hoursWorked ? parseFloat(data.hoursWorked) : null;
       serialized.payoutStatus = data.payoutStatus;
+      // Pay type only - not exposing actual rates to employees
+      serialized.payType = employeeRecord.payType;
 
-      // Include pay configuration from employee record for breakdown display
-      serialized.payConfig = {
-        payType: employeeRecord.payType,
-        hourlyRate: employeeRecord.defaultHourlyRate,
-        jobRate: employeeRecord.defaultJobRate,
-        percentRate: employeeRecord.payRate ? parseFloat(employeeRecord.payRate) : null,
-      };
-
-      // Build pay breakdown string
+      // Build pay breakdown string (shows calculation result, not formula)
       if (employeeRecord.payType === "hourly" && data.hoursWorked && employeeRecord.defaultHourlyRate) {
         const hourlyRate = employeeRecord.defaultHourlyRate / 100;
         serialized.payBreakdown = `${parseFloat(data.hoursWorked)} hrs @ $${hourlyRate.toFixed(2)}/hr`;

@@ -114,6 +114,13 @@ describe("Employee CRUD Operations", () => {
       lastName: "Doe",
     };
 
+    const mockOwnerUser = { id: 1, type: "owner", username: "owner" };
+
+    beforeEach(() => {
+      // Default: auth middleware finds owner
+      User.findByPk.mockResolvedValue(mockOwnerUser);
+    });
+
     it("should create a new employee successfully", async () => {
       User.findOne.mockResolvedValue(null); // No existing user
       User.create.mockResolvedValue({
@@ -131,6 +138,7 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .post("/api/v1/users/new-employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(validEmployeeData);
 
       expect(response.status).toBe(201);
@@ -165,6 +173,7 @@ describe("Employee CRUD Operations", () => {
 
       await request(app)
         .post("/api/v1/users/new-employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(validEmployeeData);
 
       expect(Email.sendEmailCongragulations).toHaveBeenCalledWith(
@@ -182,6 +191,7 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .post("/api/v1/users/new-employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(validEmployeeData);
 
       expect(response.status).toBe(409);
@@ -195,6 +205,7 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .post("/api/v1/users/new-employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(validEmployeeData);
 
       expect(response.status).toBe(410);
@@ -225,6 +236,7 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .post("/api/v1/users/new-employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(dataWithoutNames);
 
       expect(response.status).toBe(201);
@@ -246,6 +258,7 @@ describe("Employee CRUD Operations", () => {
 
       await request(app)
         .post("/api/v1/users/new-employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(validEmployeeData);
 
       expect(UserBills.create).toHaveBeenCalledWith({
@@ -261,10 +274,20 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .post("/api/v1/users/new-employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(validEmployeeData);
 
       expect(response.status).toBe(500);
       expect(response.body.error).toBe("Failed to create employee account");
+    });
+
+    it("should require authorization", async () => {
+      const response = await request(app)
+        .post("/api/v1/users/new-employee")
+        .send(validEmployeeData);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe("Authorization token required");
     });
   });
 
@@ -333,6 +356,13 @@ describe("Employee CRUD Operations", () => {
       type: "cleaner",
     };
 
+    const mockOwnerUser = { id: 1, type: "owner", username: "owner" };
+
+    beforeEach(() => {
+      // Default: auth middleware finds owner
+      User.findByPk.mockResolvedValue(mockOwnerUser);
+    });
+
     it("should update employee successfully", async () => {
       UserInfo.editEmployeeInDB.mockResolvedValue({
         id: 10,
@@ -343,6 +373,7 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .patch("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(updateData);
 
       expect(response.status).toBe(200);
@@ -361,6 +392,7 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .patch("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(updateData);
 
       expect(response.status).toBe(200);
@@ -372,23 +404,30 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .patch("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(updateData);
 
-      expect(response.status).toBe(401);
-      expect(response.body.error).toBe("Invalid token");
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe("Failed to update employee");
     });
 
-    it("should handle token expiration error", async () => {
-      const expiredError = new Error("Token expired");
-      expiredError.name = "TokenExpiredError";
-      UserInfo.editEmployeeInDB.mockRejectedValue(expiredError);
-
+    it("should require authorization", async () => {
       const response = await request(app)
         .patch("/api/v1/users/employee")
         .send(updateData);
 
       expect(response.status).toBe(401);
-      expect(response.body.error).toBe("Token has expired");
+      expect(response.body.error).toBe("Authorization token required");
+    });
+
+    it("should reject invalid token", async () => {
+      const response = await request(app)
+        .patch("/api/v1/users/employee")
+        .set("Authorization", "Bearer invalid_token")
+        .send(updateData);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe("Invalid or expired token");
     });
 
     it("should change employee type from cleaner to owner", async () => {
@@ -409,6 +448,7 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .patch("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(promoteData);
 
       expect(response.status).toBe(200);

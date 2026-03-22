@@ -292,8 +292,8 @@ async function generateAppointmentsForSchedule(schedule, daysAhead = 84) {
         employeesAssigned: [schedule.cleanerId], // Store as integer for type consistency
         employeesNeeded: home.cleanersNeeded || 1,
         timeToBeCompleted: schedule.timeWindow || "anytime",
-        bringSheets: home.bringSheets || "no",
-        bringTowels: home.bringTowels || "no",
+        bringSheets: home.sheetsProvided === true || home.sheetsProvided === "yes" ? "no" : "yes",
+        bringTowels: home.towelsProvided === true || home.towelsProvided === "yes" ? "no" : "yes",
         keyPadCode: home.keyPadCode || null,
         keyLocation: home.keyLocation || null,
         bookedByCleanerId: schedule.cleanerId,
@@ -476,9 +476,13 @@ recurringSchedulesRouter.post("/", verifyCleaner, async (req, res) => {
       schedulePrice = cleanerClient.defaultPrice;
     } else {
       // calculatePrice returns cents
+      // sheetsProvided/towelsProvided indicate if client provides them
+      // bringSheets/bringTowels for price calc indicate if cleaner should bring them
+      const bringSheets = cleanerClient.home.sheetsProvided === true || cleanerClient.home.sheetsProvided === "yes" ? "no" : "yes";
+      const bringTowels = cleanerClient.home.towelsProvided === true || cleanerClient.home.towelsProvided === "yes" ? "no" : "yes";
       schedulePrice = await calculatePrice(
-        cleanerClient.home.bringSheets || "no",
-        cleanerClient.home.bringTowels || "no",
+        bringSheets,
+        bringTowels,
         cleanerClient.home.numBeds,
         cleanerClient.home.numBaths,
         timeWindow || "anytime"

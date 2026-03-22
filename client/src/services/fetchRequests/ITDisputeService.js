@@ -1,116 +1,78 @@
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class ITDisputeService {
   // Submit a new IT dispute (all authenticated users can submit)
   static async submitDispute(token, disputeData) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/it-disputes/submit`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(disputeData),
-      });
+    const result = await HttpClient.post(
+      "/it-disputes/submit",
+      disputeData,
+      { token, useBaseUrl: true }
+    );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: data.error || "Failed to submit dispute" };
-      }
-
-      return { success: true, dispute: data.dispute };
-    } catch (error) {
-      console.error("[ITDispute] submitDispute failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDisputeService] submitDispute failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, dispute: result.dispute };
   }
 
   // Get user's submitted disputes
   static async getMyDisputes(token) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/it-disputes/my-disputes`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const result = await HttpClient.get("/it-disputes/my-disputes", { token, useBaseUrl: true });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        return { success: false, error: errorData.error || "Failed to fetch disputes" };
-      }
-
-      const data = await response.json();
-      return { success: true, disputes: data.disputes || [] };
-    } catch (error) {
-      console.error("[ITDispute] getMyDisputes failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDisputeService] getMyDisputes failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, disputes: result.disputes || [] };
   }
 
   // Get a specific dispute's details
   static async getDispute(token, disputeId) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/it-disputes/${disputeId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const result = await HttpClient.get(
+      `/it-disputes/${disputeId}`,
+      { token, useBaseUrl: true }
+    );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        return { success: false, error: errorData.error || "Failed to fetch dispute" };
-      }
-
-      const data = await response.json();
-      return { success: true, dispute: data.dispute };
-    } catch (error) {
-      console.error("[ITDispute] getDispute failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDisputeService] getDispute failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, dispute: result.dispute };
   }
 
   // Add additional information to a dispute
   static async addInfo(token, disputeId, info) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/it-disputes/${disputeId}/add-info`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(info),
-      });
+    const result = await HttpClient.post(
+      `/it-disputes/${disputeId}/add-info`,
+      info,
+      { token, useBaseUrl: true }
+    );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: data.error || "Failed to add information" };
-      }
-
-      return { success: true, dispute: data.dispute };
-    } catch (error) {
-      console.error("[ITDispute] addInfo failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDisputeService] addInfo failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, dispute: result.dispute };
   }
 
   // Get available categories
   static async getCategories(token) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/it-disputes/categories/list`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const result = await HttpClient.get(
+      "/it-disputes/categories/list",
+      { token, useBaseUrl: true }
+    );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        return { success: false, error: errorData.error || "Failed to fetch categories" };
-      }
-
-      const data = await response.json();
-      return { success: true, categories: data.categories };
-    } catch (error) {
-      console.error("[ITDispute] getCategories failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDisputeService] getCategories failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, categories: result.categories };
   }
 
   // Helper to get category groups for display

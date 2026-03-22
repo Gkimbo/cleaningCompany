@@ -564,6 +564,7 @@ describe("BusinessEmployeeService", () => {
         businessOwnerId: 100,
         status: "pending_invite",
         inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        email: "iv:test@example.com", // Encrypted email
         update: jest.fn().mockResolvedValue(true),
         reload: jest.fn().mockImplementation(function () {
           return Promise.resolve(this);
@@ -576,6 +577,7 @@ describe("BusinessEmployeeService", () => {
       const mockUser = {
         id: 200,
         employeeOfBusinessId: null,
+        email: "iv:test@example.com", // Encrypted email - must match employee.email
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -655,6 +657,7 @@ describe("BusinessEmployeeService", () => {
         id: 1,
         status: "pending_invite",
         inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        email: "iv:test@example.com", // Encrypted email
         toJSON: function () {
           return { ...this, toJSON: undefined };
         },
@@ -663,6 +666,7 @@ describe("BusinessEmployeeService", () => {
       const mockUser = {
         id: 200,
         employeeOfBusinessId: 999, // Already employed
+        email: "iv:test@example.com", // Encrypted email - must match employee.email
       };
 
       BusinessEmployee.findOne.mockResolvedValue(mockEmployee);

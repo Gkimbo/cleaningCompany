@@ -1,6 +1,14 @@
 const EncryptionService = require("../services/EncryptionService");
 
 class ApplicationSerializer {
+  // Sensitive identity fields - only exposed in admin detail view, never in lists
+  static sensitiveIdentityFields = [
+    "ssnLast4",
+    "driversLicenseNumber",
+    "driversLicenseState",
+    "idPhoto",
+  ];
+
   static allowedAttributes = [
     // Basic Information
     "id",
@@ -14,11 +22,6 @@ class ApplicationSerializer {
     "city",
     "state",
     "zipCode",
-    // Identity Verification
-    "ssnLast4",
-    "driversLicenseNumber",
-    "driversLicenseState",
-    "idPhoto",
     // Work Eligibility
     "isAuthorizedToWork",
     "hasValidDriversLicense",
@@ -94,9 +97,25 @@ class ApplicationSerializer {
     return value;
   }
 
+  /**
+   * Serialize for list views - excludes sensitive identity fields (SSN, license)
+   */
   static serializeOne(application) {
     const serialized = {};
     for (const attribute of this.allowedAttributes) {
+      serialized[attribute] = this.getValue(application, attribute);
+    }
+    return serialized;
+  }
+
+  /**
+   * Serialize for admin detail view - includes sensitive identity fields
+   * Only use this when an authorized admin is viewing a specific application
+   */
+  static serializeForAdminDetail(application) {
+    const serialized = this.serializeOne(application);
+    // Add sensitive identity fields for authorized admin review
+    for (const attribute of this.sensitiveIdentityFields) {
       serialized[attribute] = this.getValue(application, attribute);
     }
     return serialized;

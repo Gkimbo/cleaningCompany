@@ -45,6 +45,7 @@ jest.mock("../../models", () => {
   const mockTransaction = {
     commit: jest.fn(),
     rollback: jest.fn(),
+    LOCK: { UPDATE: "UPDATE", SHARE: "SHARE" },
   };
 
   return {
@@ -112,6 +113,8 @@ const EmployeeJobAssignmentService = require("../../services/EmployeeJobAssignme
 describe("EmployeeJobAssignmentService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default mock for findAll used inside transaction with lock
+    EmployeeJobAssignment.findAll.mockResolvedValue([]);
   });
 
   describe("assignEmployeeToJob", () => {
@@ -126,7 +129,7 @@ describe("EmployeeJobAssignmentService", () => {
     const mockAppointment = {
       id: 100,
       userId: 50,
-      bookedByCleanerId: null,
+      bookedByCleanerId: 10, // Match businessOwnerId for authorization
       update: jest.fn(),
     };
 
@@ -232,10 +235,13 @@ describe("EmployeeJobAssignmentService", () => {
       ).rejects.toThrow("Appointment not found");
     });
 
-    it("should throw error when appointment already assigned", async () => {
+    it("should throw error when same employee already assigned", async () => {
       BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
       UserAppointments.findOne.mockResolvedValue(mockAppointment);
-      EmployeeJobAssignment.findOne.mockResolvedValue({ id: 1 }); // Existing assignment
+      // Mock findAll to return existing assignment for the same employee (duplicate check)
+      EmployeeJobAssignment.findAll.mockResolvedValue([
+        { id: 1, businessEmployeeId: 1, appointmentId: 100 },
+      ]);
 
       await expect(
         EmployeeJobAssignmentService.assignEmployeeToJob(10, {
@@ -390,7 +396,7 @@ describe("EmployeeJobAssignmentService", () => {
   describe("assignSelfToJob", () => {
     it("should create self-assignment for marketplace job with $0 pay", async () => {
       User.findByPk.mockResolvedValue({ id: 10, isBusinessOwner: true });
-      UserAppointments.findByPk.mockResolvedValue({ id: 100, userId: 50, update: jest.fn() });
+      UserAppointments.findByPk.mockResolvedValue({ id: 100, userId: 50, bookedByCleanerId: 10, update: jest.fn() });
       EmployeeJobAssignment.findOne.mockResolvedValue(null);
       MarketplaceJobRequirementsService.isMarketplaceJob.mockResolvedValue(true);
       MarketplaceJobRequirementsService.initializeChecklistProgress.mockResolvedValue({

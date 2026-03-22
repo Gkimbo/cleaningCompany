@@ -1,4 +1,4 @@
-import { API_BASE } from "../config";
+import HttpClient from "../HttpClient";
 
 /**
  * PreferredCleanerService - Client-side service for preferred cleaner management
@@ -11,24 +11,17 @@ class PreferredCleanerService {
    * @returns {Object} { preferredCleaners, usePreferredCleaners }
    */
   static async getPreferredCleaners(token, homeId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/preferred-cleaner/homes/${homeId}/preferred-cleaners`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        console.warn(`[PreferredCleaner] Failed to fetch: ${response.status}`);
-        return { preferredCleaners: [], usePreferredCleaners: false };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching preferred cleaners:", error);
-      return { preferredCleaners: [], usePreferredCleaners: true };
+    const result = await HttpClient.get(
+      `/preferred-cleaner/homes/${homeId}/preferred-cleaners`,
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredCleanerService] getPreferredCleaners failed:", result.error);
+      return { preferredCleaners: [], usePreferredCleaners: false };
     }
+
+    return result;
   }
 
   /**
@@ -39,21 +32,16 @@ class PreferredCleanerService {
    * @returns {Object} { success, message, error }
    */
   static async removePreferredCleaner(token, homeId, cleanerId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      console.error("Error removing preferred cleaner:", error);
-      return { success: false, error: "Failed to remove cleaner" };
+    const result = await HttpClient.delete(
+      `/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}`,
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredCleanerService] removePreferredCleaner failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -64,23 +52,17 @@ class PreferredCleanerService {
    * @returns {Object} { success, usePreferredCleaners, message, error }
    */
   static async updatePreferredSettings(token, homeId, usePreferredCleaners) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/preferred-cleaner/homes/${homeId}/preferred-settings`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ usePreferredCleaners }),
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      console.error("Error updating preferred settings:", error);
-      return { success: false, error: "Failed to update settings" };
+    const result = await HttpClient.patch(
+      `/preferred-cleaner/homes/${homeId}/preferred-settings`,
+      { usePreferredCleaners },
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredCleanerService] updatePreferredSettings failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -93,30 +75,20 @@ class PreferredCleanerService {
    * @returns {Object} Result with updated preferenceLevel and priority
    */
   static async updatePreferenceLevel(token, homeId, cleanerId, preferenceLevel, priority) {
-    try {
-      const body = { preferenceLevel };
-      if (priority !== undefined) body.priority = priority;
+    const body = { preferenceLevel };
+    if (priority !== undefined) body.priority = priority;
 
-      const response = await fetch(
-        `${API_BASE}/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}/preference`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(body),
-        }
-      );
-      if (!response.ok) {
-        const error = await response.json();
-        return { success: false, error: error.error || "Failed to update preference level" };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error updating preference level:", error);
-      return { success: false, error: error.message };
+    const result = await HttpClient.patch(
+      `/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}/preference`,
+      body,
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredCleanerService] updatePreferenceLevel failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -127,23 +99,17 @@ class PreferredCleanerService {
    * @returns {Object} { isPreferred }
    */
   static async isCleanerPreferred(token, homeId, cleanerId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}/is-preferred`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        return { isPreferred: false };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error checking preferred status:", error);
+    const result = await HttpClient.get(
+      `/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}/is-preferred`,
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredCleanerService] isCleanerPreferred failed:", result.error);
       return { isPreferred: false };
     }
+
+    return result;
   }
 
   /**
@@ -155,25 +121,18 @@ class PreferredCleanerService {
    * @returns {Object} { canSetAsPreferred, reason }
    */
   static async checkPreferredEligibility(token, homeId, cleanerId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}/preferred-eligibility`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        // Default to allowing if check fails (don't block feature due to API error)
-        return { canSetAsPreferred: true, reason: null };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error checking preferred eligibility:", error);
-      // Default to allowing if check fails
+    const result = await HttpClient.get(
+      `/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}/preferred-eligibility`,
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredCleanerService] checkPreferredEligibility failed:", result.error);
+      // Default to allowing if check fails (don't block feature due to API error)
       return { canSetAsPreferred: true, reason: null };
     }
+
+    return result;
   }
 
   /**
@@ -184,24 +143,17 @@ class PreferredCleanerService {
    * @returns {Object} Stats including totalBookings, avgDurationMinutes, avgReviewScore, etc.
    */
   static async getCleanerStats(token, homeId, cleanerId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}/stats`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        console.warn(`[PreferredCleaner] Failed to fetch stats: ${response.status}`);
-        return null;
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching cleaner stats:", error);
+    const result = await HttpClient.get(
+      `/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}/stats`,
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredCleanerService] getCleanerStats failed:", result.error);
       return null;
     }
+
+    return result;
   }
 
   /**
@@ -210,24 +162,17 @@ class PreferredCleanerService {
    * @returns {Object} { preferredHomes, homeIds }
    */
   static async getMyPreferredHomes(token) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/preferred-cleaner/my-preferred-homes`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        console.warn(`[PreferredCleaner] Failed to fetch my preferred homes: ${response.status}`);
-        return { preferredHomes: [], homeIds: [] };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching my preferred homes:", error);
+    const result = await HttpClient.get(
+      "/preferred-cleaner/my-preferred-homes",
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredCleanerService] getMyPreferredHomes failed:", result.error);
       return { preferredHomes: [], homeIds: [] };
     }
+
+    return result;
   }
 
   /**
@@ -236,24 +181,17 @@ class PreferredCleanerService {
    * @returns {Object} Perk status including tier, bonusPercent, benefits, etc.
    */
   static async getMyPerkStatus(token) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/preferred-cleaner/my-perk-status`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        console.warn(`[PreferredCleaner] Failed to fetch perk status: ${response.status}`);
-        return null;
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching perk status:", error);
+    const result = await HttpClient.get(
+      "/preferred-cleaner/my-perk-status",
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredCleanerService] getMyPerkStatus failed:", result.error);
       return null;
     }
+
+    return result;
   }
 
   /**
@@ -262,24 +200,17 @@ class PreferredCleanerService {
    * @returns {Object} { tiers: [...] }
    */
   static async getTierInfo(token) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/preferred-cleaner/perk-tier-info`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        console.warn(`[PreferredCleaner] Failed to fetch tier info: ${response.status}`);
-        return { tiers: [] };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching tier info:", error);
+    const result = await HttpClient.get(
+      "/preferred-cleaner/perk-tier-info",
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredCleanerService] getTierInfo failed:", result.error);
       return { tiers: [] };
     }
+
+    return result;
   }
 }
 

@@ -1,35 +1,20 @@
-import { API_BASE } from "../config";
-import AuthEventService from "../AuthEventService";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class OwnerDashboardService {
   static async fetchWithFallback(url, token, fallback = {}) {
-    try {
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const result = await HttpClient.get(url, { token, useBaseUrl: true });
 
-      // Handle expired token
-      if (response.status === 401) {
-        AuthEventService.handleTokenExpired();
-        return fallback;
-      }
-
-      if (!response.ok) {
-        console.warn(`[OwnerDashboard] ${url} returned ${response.status}`);
-        return fallback;
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn(`[OwnerDashboard] ${url} failed:`, error.message);
+    if (result.success === false) {
+      __DEV__ && console.warn(`[OwnerDashboard] ${url} failed:`, result.error);
       return fallback;
     }
+
+    return result;
   }
 
   static async getFinancialSummary(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/owner-dashboard/financial-summary`,
+      "/api/v1/owner-dashboard/financial-summary",
       token,
       {
         current: {
@@ -48,7 +33,7 @@ class OwnerDashboardService {
 
   static async getUserAnalytics(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/owner-dashboard/user-analytics`,
+      "/api/v1/owner-dashboard/user-analytics",
       token,
       {
         totals: { cleaners: 0, homeowners: 0, owners: 0, homes: 0, total: 0 },
@@ -64,7 +49,7 @@ class OwnerDashboardService {
 
   static async getAppointmentsAnalytics(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/owner-dashboard/appointments-analytics`,
+      "/api/v1/owner-dashboard/appointments-analytics",
       token,
       {
         totals: { total: 0, completed: 0, upcoming: 0 },
@@ -75,7 +60,7 @@ class OwnerDashboardService {
 
   static async getMessagesSummary(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/owner-dashboard/messages-summary`,
+      "/api/v1/owner-dashboard/messages-summary",
       token,
       {
         unreadCount: 0,
@@ -88,7 +73,7 @@ class OwnerDashboardService {
 
   static async getQuickStats(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/owner-dashboard/quick-stats`,
+      "/api/v1/owner-dashboard/quick-stats",
       token,
       {
         todaysAppointments: 0,
@@ -101,7 +86,7 @@ class OwnerDashboardService {
 
   static async getServiceAreas(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/owner-dashboard/service-areas`,
+      "/api/v1/owner-dashboard/service-areas",
       token,
       {
         config: { enabled: false, cities: [], states: [], zipcodes: [] },
@@ -112,7 +97,7 @@ class OwnerDashboardService {
 
   static async getAppUsageAnalytics(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/owner-dashboard/app-usage-analytics`,
+      "/api/v1/owner-dashboard/app-usage-analytics",
       token,
       {
         signups: {
@@ -160,7 +145,7 @@ class OwnerDashboardService {
 
   static async getBusinessMetrics(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/owner-dashboard/business-metrics`,
+      "/api/v1/owner-dashboard/business-metrics",
       token,
       {
         costPerBooking: {
@@ -204,31 +189,23 @@ class OwnerDashboardService {
   }
 
   static async recheckServiceAreas(token) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/owner-dashboard/recheck-service-areas`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (!response.ok) {
-        const errorData = await response.json();
-        return { success: false, error: errorData.error || "Failed to recheck service areas" };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("[OwnerDashboard] recheckServiceAreas failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post(
+      "/api/v1/owner-dashboard/recheck-service-areas",
+      {},
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[OwnerDashboard] recheckServiceAreas failed:", result.error);
+      return { success: false, error: result.error || "Failed to recheck service areas" };
     }
+
+    return result;
   }
 
   static async getSettings(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/owner-dashboard/settings`,
+      "/api/v1/owner-dashboard/settings",
       token,
       {
         email: "",
@@ -240,34 +217,25 @@ class OwnerDashboardService {
   }
 
   static async updateNotificationEmail(token, notificationEmail) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/owner-dashboard/settings/notification-email`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ notificationEmail }),
-        }
-      );
-      if (!response.ok) {
-        const errorData = await response.json();
-        return { success: false, error: errorData.error || "Failed to update notification email" };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("[OwnerDashboard] updateNotificationEmail failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.put(
+      "/api/v1/owner-dashboard/settings/notification-email",
+      { notificationEmail },
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[OwnerDashboard] updateNotificationEmail failed:", result.error);
+      return { success: false, error: result.error || "Failed to update notification email" };
     }
+
+    return result;
   }
 
   // ============ Withdrawal Methods ============
 
   static async getStripeBalance(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/owner-dashboard/stripe-balance`,
+      "/api/v1/owner-dashboard/stripe-balance",
       token,
       {
         available: { cents: 0, dollars: "0.00" },
@@ -290,7 +258,7 @@ class OwnerDashboardService {
     if (status) params.append("status", status);
 
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/owner-dashboard/withdrawals?${params}`,
+      `/api/v1/owner-dashboard/withdrawals?${params}`,
       token,
       {
         withdrawals: [],
@@ -302,39 +270,27 @@ class OwnerDashboardService {
   }
 
   static async createWithdrawal(token, amountCents, description = "") {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/owner-dashboard/withdraw`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ amount: amountCents, description }),
-        }
-      );
+    const result = await HttpClient.post(
+      "/api/v1/owner-dashboard/withdraw",
+      { amount: amountCents, description },
+      { token, useBaseUrl: true }
+    );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: data.error || "Failed to create withdrawal",
-          details: data.details,
-          available: data.available,
-          requested: data.requested,
-        };
-      }
-
+    if (result.success === false) {
+      __DEV__ && console.warn("[OwnerDashboard] createWithdrawal failed:", result.error);
       return {
-        success: true,
-        ...data,
+        success: false,
+        error: result.error || "Failed to create withdrawal",
+        details: result.details,
+        available: result.available,
+        requested: result.requested,
       };
-    } catch (error) {
-      console.error("[OwnerDashboard] createWithdrawal failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
     }
+
+    return {
+      success: true,
+      ...result,
+    };
   }
 }
 

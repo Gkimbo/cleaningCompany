@@ -99,6 +99,19 @@ jest.mock("../../models", () => ({
       },
     }),
   },
+  StripeWebhookEvent: {
+    claimEvent: jest.fn().mockResolvedValue({ id: 1, stripeEventId: "evt_test_123", status: "processing" }),
+    markCompleted: jest.fn().mockResolvedValue(true),
+    markFailed: jest.fn().mockResolvedValue(true),
+    markSkipped: jest.fn().mockResolvedValue(true),
+  },
+  sequelize: {
+    transaction: jest.fn().mockImplementation(() => Promise.resolve({
+      LOCK: { UPDATE: "UPDATE" },
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+    })),
+  },
 }));
 
 // Mock Push Notification service
@@ -335,7 +348,10 @@ describe("Payment Method Removal Protection", () => {
         amount_received: 15000,
       });
       mockStripe.paymentMethods.detach.mockResolvedValue({ id: "pm_test123" });
-      mockStripe.paymentMethods.list.mockResolvedValue({ data: [] });
+      // First call for ownership check, second call after detach
+      mockStripe.paymentMethods.list
+        .mockResolvedValueOnce({ data: [{ id: "pm_test123", type: "card" }] })
+        .mockResolvedValueOnce({ data: [] });
 
       const res = await request(app)
         .post("/api/v1/payments/prepay-all-and-remove")
@@ -363,7 +379,10 @@ describe("Payment Method Removal Protection", () => {
         status: "succeeded",
       });
       mockStripe.paymentMethods.detach.mockResolvedValue({ id: "pm_test123" });
-      mockStripe.paymentMethods.list.mockResolvedValue({ data: [] });
+      // First call for ownership check, second call after detach
+      mockStripe.paymentMethods.list
+        .mockResolvedValueOnce({ data: [{ id: "pm_test123", type: "card" }] })
+        .mockResolvedValueOnce({ data: [] });
 
       const res = await request(app)
         .post("/api/v1/payments/prepay-all-and-remove")
@@ -422,7 +441,10 @@ describe("Payment Method Removal Protection", () => {
 
       mockStripe.paymentIntents.cancel.mockResolvedValue({ id: "pi_test123", status: "canceled" });
       mockStripe.paymentMethods.detach.mockResolvedValue({ id: "pm_test123" });
-      mockStripe.paymentMethods.list.mockResolvedValue({ data: [] });
+      // First call for ownership check, second call after detach
+      mockStripe.paymentMethods.list
+        .mockResolvedValueOnce({ data: [{ id: "pm_test123", type: "card" }] })
+        .mockResolvedValueOnce({ data: [] });
 
       const res = await request(app)
         .post("/api/v1/payments/cancel-all-and-remove")
@@ -458,7 +480,10 @@ describe("Payment Method Removal Protection", () => {
         status: "succeeded",
       });
       mockStripe.paymentMethods.detach.mockResolvedValue({ id: "pm_test123" });
-      mockStripe.paymentMethods.list.mockResolvedValue({ data: [] });
+      // First call for ownership check, second call after detach
+      mockStripe.paymentMethods.list
+        .mockResolvedValueOnce({ data: [{ id: "pm_test123", type: "card" }] })
+        .mockResolvedValueOnce({ data: [] });
 
       const res = await request(app)
         .post("/api/v1/payments/cancel-all-and-remove")
@@ -485,7 +510,10 @@ describe("Payment Method Removal Protection", () => {
 
       mockStripe.paymentIntents.cancel.mockResolvedValue({ id: "pi_test123", status: "canceled" });
       mockStripe.paymentMethods.detach.mockResolvedValue({ id: "pm_test123" });
-      mockStripe.paymentMethods.list.mockResolvedValue({ data: [] });
+      // First call for ownership check, second call after detach
+      mockStripe.paymentMethods.list
+        .mockResolvedValueOnce({ data: [{ id: "pm_test123", type: "card" }] })
+        .mockResolvedValueOnce({ data: [] });
 
       const res = await request(app)
         .post("/api/v1/payments/cancel-all-and-remove")

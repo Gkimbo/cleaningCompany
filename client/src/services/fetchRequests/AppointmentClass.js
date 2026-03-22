@@ -1,215 +1,106 @@
 /* eslint-disable no-console */
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class Appointment {
   static async addAppointmentToDb(data) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/appointments", {
-        method: "post",
-        body: JSON.stringify(data),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        const responseData = await response.json();
-        console.error("Failed to add appointment:", response.status, responseData);
-        return { success: false, error: responseData.error || `Error: ${response.status}` };
-      }
-      const responseData = await response.json();
-      return { success: true, data: responseData };
-    } catch (err) {
-      console.error("Error adding appointment:", err);
-      return { success: false, error: err.message || "Network error" };
+    const result = await HttpClient.post("/appointments", data, { skipAuth: true });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[Appointment] addAppointmentToDb failed:", result.error);
+      return { success: false, error: result.error || "Failed to add appointment" };
     }
+
+    return { success: true, data: result };
   }
 
   static async deleteAppointment(id, fee, user) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/appointments/${id}`, {
-        body: JSON.stringify({ fee: fee, user: user }),
-        method: "delete",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        if (response.status === 400) {
-          const responseData = await response.json();
-          throw new Error(`Bad Request: ${JSON.stringify(responseData)}`);
-        }
-        throw new Error(`${response.status} (${response.statusText})`);
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (err) {
-      console.log(err);
-      throw new Error(`Failed to delete appointment: ${err.message}`);
+    const result = await HttpClient.delete(`/appointments/${id}`, { skipAuth: true, body: { fee, user } });
+
+    if (result.success === false) {
+      throw new Error(result.error || "Failed to delete appointment");
     }
+
+    return result;
   }
 
   static async deleteAppointmentById(id) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/appointments/id/${id}`, {
-        method: "delete",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        if (response.status === 400) {
-          const responseData = await response.json();
-          throw new Error(`Bad Request: ${JSON.stringify(responseData)}`);
-        }
-        throw new Error(`${response.status} (${response.statusText})`);
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (err) {
-      console.log(err);
-      throw new Error(`Failed to delete appointment: ${err.message}`);
+    const result = await HttpClient.delete(`/appointments/id/${id}`, { skipAuth: true });
+
+    if (result.success === false) {
+      throw new Error(result.error || "Failed to delete appointment");
     }
+
+    return result;
   }
 
   static async getHomeAppointments(homeId) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/appointments/${homeId}`);
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+    const result = await HttpClient.get(`/appointments/${homeId}`, { skipAuth: true });
+
+    if (result.success === false) {
+      throw new Error("No data received");
     }
+
+    return result;
   }
 
   static async getHomeInfo(homeId) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/appointments/home/${homeId}`);
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+    const result = await HttpClient.get(`/appointments/home/${homeId}`, { skipAuth: true });
+
+    if (result.success === false) {
+      throw new Error("No data received");
     }
+
+    return result;
   }
 
   static async updateSheetsAppointments(value, appointmentId) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/appointments/${appointmentId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ bringSheets: value, id: appointmentId }),
-        }
-      );
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+    const result = await HttpClient.patch(`/appointments/${appointmentId}`, { bringSheets: value, id: appointmentId }, { skipAuth: true });
+
+    if (result.success === false) {
+      throw new Error("No data received");
     }
+
+    return result;
   }
 
   static async updateTowelsAppointments(value, appointmentId) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/appointments/${appointmentId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ bringTowels: value, id: appointmentId }),
-        }
-      );
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+    const result = await HttpClient.patch(`/appointments/${appointmentId}`, { bringTowels: value, id: appointmentId }, { skipAuth: true });
+
+    if (result.success === false) {
+      throw new Error("No data received");
     }
+
+    return result;
   }
 
   static async updateCodeAppointments(value, appointmentId) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/appointments/${appointmentId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ keyPadCode: value, id: appointmentId }),
-        }
-      );
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+    const result = await HttpClient.patch(`/appointments/${appointmentId}`, { keyPadCode: value, id: appointmentId }, { skipAuth: true });
+
+    if (result.success === false) {
+      throw new Error("No data received");
     }
+
+    return result;
   }
 
   static async updateKeyAppointments(value, appointmentId) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/appointments/${appointmentId}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ keyLocation: value, id: appointmentId }),
-        }
-      );
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+    const result = await HttpClient.patch(`/appointments/${appointmentId}`, { keyLocation: value, id: appointmentId }, { skipAuth: true });
+
+    if (result.success === false) {
+      throw new Error("No data received");
     }
+
+    return result;
   }
 
   static async updateAppointmentLinens(appointmentId, data, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/appointments/${appointmentId}/linens`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(data),
-        }
-      );
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to update linens");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error updating appointment linens:", error);
-      throw error;
+    const result = await HttpClient.patch(`/appointments/${appointmentId}/linens`, data, { token });
+
+    if (result.success === false) {
+      throw new Error(result.error || "Failed to update linens");
     }
+
+    return result;
   }
 }
 

@@ -5,20 +5,24 @@
 
 import ITDisputeService from "../../src/services/fetchRequests/ITDisputeService";
 
-// Mock fetch globally
-global.fetch = jest.fn();
-
-// Mock config
-jest.mock("../../src/services/config", () => ({
-  API_BASE: "http://localhost:3000/api/v1",
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
+import HttpClient from "../../src/services/HttpClient";
 
 describe("ITDisputeService", () => {
   const mockToken = "test-token";
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch.mockClear();
   });
 
   describe("submitDispute", () => {
@@ -29,10 +33,7 @@ describe("ITDisputeService", () => {
         category: "app_crash",
         status: "submitted",
       };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ dispute: mockDispute }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ dispute: mockDispute });
 
       const disputeData = {
         category: "app_crash",
@@ -42,26 +43,17 @@ describe("ITDisputeService", () => {
 
       const result = await ITDisputeService.submitDispute(mockToken, disputeData);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-disputes/submit",
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer test-token",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(disputeData),
-        }
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/it-disputes/submit",
+        disputeData,
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.dispute).toEqual(mockDispute);
     });
 
     it("should return error when submission fails", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Invalid category" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Invalid category" });
 
       const result = await ITDisputeService.submitDispute(mockToken, {
         category: "invalid",
@@ -73,21 +65,18 @@ describe("ITDisputeService", () => {
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITDisputeService.submitDispute(mockToken, {});
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
       consoleSpy.mockRestore();
     });
 
     it("should include device info and platform in submission", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ dispute: { id: 1 } }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ dispute: { id: 1 } });
 
       const disputeData = {
         category: "app_crash",
@@ -100,11 +89,10 @@ describe("ITDisputeService", () => {
 
       await ITDisputeService.submitDispute(mockToken, disputeData);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: JSON.stringify(disputeData),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/it-disputes/submit",
+        disputeData,
+        { token: "test-token", useBaseUrl: true }
       );
     });
   });
@@ -115,26 +103,20 @@ describe("ITDisputeService", () => {
         { id: 1, category: "app_crash", status: "submitted" },
         { id: 2, category: "billing_error", status: "resolved" },
       ];
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ disputes: mockDisputes }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ disputes: mockDisputes });
 
       const result = await ITDisputeService.getMyDisputes(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-disputes/my-disputes",
-        { headers: { Authorization: "Bearer test-token" } }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/it-disputes/my-disputes",
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.disputes).toEqual(mockDisputes);
     });
 
     it("should return error when fetch fails", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Unauthorized" }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Unauthorized" });
 
       const result = await ITDisputeService.getMyDisputes(mockToken);
 
@@ -143,10 +125,7 @@ describe("ITDisputeService", () => {
     });
 
     it("should return empty array on missing disputes", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
-      });
+      HttpClient.get.mockResolvedValueOnce({});
 
       const result = await ITDisputeService.getMyDisputes(mockToken);
 
@@ -155,13 +134,13 @@ describe("ITDisputeService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITDisputeService.getMyDisputes(mockToken);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
       consoleSpy.mockRestore();
     });
   });
@@ -176,26 +155,20 @@ describe("ITDisputeService", () => {
         status: "submitted",
         priority: "normal",
       };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ dispute: mockDispute }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ dispute: mockDispute });
 
       const result = await ITDisputeService.getDispute(mockToken, 1);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-disputes/1",
-        { headers: { Authorization: "Bearer test-token" } }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/it-disputes/1",
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.dispute).toEqual(mockDispute);
     });
 
     it("should return error when dispute not found", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Dispute not found" }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Dispute not found" });
 
       const result = await ITDisputeService.getDispute(mockToken, 999);
 
@@ -204,10 +177,7 @@ describe("ITDisputeService", () => {
     });
 
     it("should return error when not reporter", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Not authorized to view this dispute" }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Not authorized to view this dispute" });
 
       const result = await ITDisputeService.getDispute(mockToken, 1);
 
@@ -222,34 +192,22 @@ describe("ITDisputeService", () => {
         id: 1,
         description: "Original description\n\n--- Additional Info ---\nMore details",
       };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ dispute: mockDispute }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ dispute: mockDispute });
 
       const result = await ITDisputeService.addInfo(mockToken, 1, {
         additionalInfo: "More details",
       });
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-disputes/1/add-info",
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer test-token",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ additionalInfo: "More details" }),
-        }
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/it-disputes/1/add-info",
+        { additionalInfo: "More details" },
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error when dispute is closed", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Cannot add info to closed dispute" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Cannot add info to closed dispute" });
 
       const result = await ITDisputeService.addInfo(mockToken, 1, {
         additionalInfo: "More details",
@@ -260,13 +218,13 @@ describe("ITDisputeService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITDisputeService.addInfo(mockToken, 1, {});
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
       consoleSpy.mockRestore();
     });
   });
@@ -277,26 +235,20 @@ describe("ITDisputeService", () => {
         { value: "app_crash", label: "App Crash", group: "technical" },
         { value: "billing_error", label: "Billing Error", group: "billing" },
       ];
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ categories: mockCategories }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ categories: mockCategories });
 
       const result = await ITDisputeService.getCategories(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/it-disputes/categories/list",
-        { headers: { Authorization: "Bearer test-token" } }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/it-disputes/categories/list",
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.categories).toEqual(mockCategories);
     });
 
     it("should handle fetch failure", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Failed to load" }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Failed to load" });
 
       const result = await ITDisputeService.getCategories(mockToken);
 

@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useCallback } from "react";
 import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import SecureStorage from "./SecureStorage";
 import PushNotificationService from "./PushNotificationService";
 import { OfflineManager, AutoSyncOrchestrator, SyncEngine } from "./offline";
 import AuthEventService from "./AuthEventService";
@@ -18,13 +19,13 @@ const AuthProvider = ({ children }) => {
 	const performLogout = useCallback(async () => {
 		try {
 			// Get the token before removing it to unregister push notifications
-			const token = await AsyncStorage.getItem("token");
+			const token = await SecureStorage.getItem("token");
 			if (token) {
 				// Remove push token from backend
 				await PushNotificationService.removeTokenFromBackend(token);
 			}
-			// Remove the token from AsyncStorage
-			await AsyncStorage.removeItem("token");
+			// Remove the token from SecureStorage
+			await SecureStorage.removeItem("token");
 			// Clear any preview mode state to prevent stale state on re-login
 			await AsyncStorage.removeItem("@preview_mode_state");
 			await AsyncStorage.removeItem("@preview_original_owner_state");
@@ -36,7 +37,7 @@ const AuthProvider = ({ children }) => {
 			// Set the user as logged out
 			setUser(null);
 		} catch (error) {
-			console.log("Error removing token:", error);
+			if (__DEV__) console.error("Error during logout:", error);
 		}
 	}, []);
 
@@ -121,7 +122,7 @@ const AuthProvider = ({ children }) => {
 				await performLogout();
 			}
 		} catch (error) {
-			console.log("Error during logout:", error);
+			if (__DEV__) console.error("Error during logout:", error);
 			// If checking fails, still allow logout
 			await performLogout();
 		}
@@ -142,34 +143,41 @@ const AuthProvider = ({ children }) => {
 
 	const checkToken = async () => {
 		try {
-			const token = await AsyncStorage.getItem("token");
+			// Migrate existing tokens from AsyncStorage to SecureStorage on first run
+			await SecureStorage.migrateToSecureStorage();
+
+			const token = await SecureStorage.getItem("token");
 			if (token) {
 				// Token exists, validate it on the server-side
 				// You need to implement the server-side validation logic here
 				// If the token is valid, set the user as logged in
 				setUser({ token });
 				// Initialize offline manager with token
-				OfflineManager.initialize(token).catch(console.error);
+				OfflineManager.initialize(token).catch((err) => {
+					if (__DEV__) console.error("OfflineManager init error:", err);
+				});
 				// Set auth token on auto-sync orchestrator
 				AutoSyncOrchestrator.setAuthToken(token);
 			}
 		} catch (error) {
-			console.log("Error checking token:", error);
+			if (__DEV__) console.error("Error checking token:", error);
 		}
 	};
 
 	const login = async (token) => {
 		try {
-			// Save the token to AsyncStorage
-			await AsyncStorage.setItem("token", token);
+			// Save the token to SecureStorage (encrypted on native platforms)
+			await SecureStorage.setItem("token", token);
 			// Set the user as logged in
 			setUser({ token });
 			// Initialize offline manager with token
-			OfflineManager.initialize(token).catch(console.error);
+			OfflineManager.initialize(token).catch((err) => {
+				if (__DEV__) console.error("OfflineManager init error:", err);
+			});
 			// Set auth token on auto-sync orchestrator
 			AutoSyncOrchestrator.setAuthToken(token);
 		} catch (error) {
-			console.log("Error saving token:", error);
+			if (__DEV__) console.error("Error saving token:", error);
 		}
 	};
 

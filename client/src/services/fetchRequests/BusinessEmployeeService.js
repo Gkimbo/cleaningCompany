@@ -3,7 +3,7 @@
  * Handles invitation acceptance, job management, and earnings
  */
 
-import { API_BASE } from "../config";
+import HttpClient from "../HttpClient";
 
 class BusinessEmployeeService {
   // =====================
@@ -12,112 +12,69 @@ class BusinessEmployeeService {
 
   /**
    * Validate an invitation token (public - no auth required)
-   * @param {string} token - Invitation token
-   * @returns {Object} { valid, invitation, error, isExpired, isAlreadyAccepted, isTerminated }
    */
   static async validateInvite(inviteToken) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/invite/${inviteToken}`);
-      const result = await response.json();
+    const result = await HttpClient.get(`/business-employee/invite/${inviteToken}`, { skipAuth: true });
 
-      if (response.status === 404) {
-        return { valid: false, error: "Invalid invitation link" };
-      }
-      if (response.status === 410) {
-        return {
-          valid: false,
-          error: result.error,
-          isExpired: result.isExpired || false,
-          isTerminated: result.isTerminated || false,
-        };
-      }
-      if (response.status === 409) {
-        return { valid: false, error: result.error, isAlreadyAccepted: true, email: result.email };
-      }
-
-      return { valid: true, invitation: result.invitation };
-    } catch (error) {
-      console.error("[BusinessEmployee] Error validating invite:", error);
-      return { valid: false, error: "Network error. Please try again." };
+    if (result.status === 404) {
+      return { valid: false, error: "Invalid invitation link" };
     }
+    if (result.status === 410) {
+      return {
+        valid: false,
+        error: result.error,
+        isExpired: result.isExpired || false,
+        isTerminated: result.isTerminated || false,
+      };
+    }
+    if (result.status === 409) {
+      return { valid: false, error: result.error, isAlreadyAccepted: true, email: result.email };
+    }
+
+    if (result.success === false) {
+      return { valid: false, error: result.error || "Network error. Please try again." };
+    }
+
+    return { valid: true, invitation: result.invitation };
   }
 
   /**
    * Accept an invitation (requires authenticated user)
-   * @param {string} authToken - Auth token
-   * @param {string} inviteToken - Invitation token
-   * @returns {Object} { success, employee, message, error }
    */
   static async acceptInvite(authToken, inviteToken) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/invite/${inviteToken}/accept`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
-      const result = await response.json();
+    const result = await HttpClient.post(`/business-employee/invite/${inviteToken}/accept`, {}, { token: authToken });
 
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to accept invitation" };
-      }
-
-      return { success: true, employee: result.employee, message: result.message };
-    } catch (error) {
-      console.error("[BusinessEmployee] Error accepting invite:", error);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to accept invitation" };
     }
+
+    return { success: true, employee: result.employee, message: result.message };
   }
 
   /**
    * Accept an invitation and create account in one step (for new employees)
-   * @param {string} inviteToken - Invitation token
-   * @param {Object} userData - { firstName, lastName, username, password, phone, termsId, privacyPolicyId }
-   * @returns {Object} { success, token, employee, error }
    */
   static async acceptInviteWithSignup(inviteToken, userData) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/invite/${inviteToken}/accept-with-signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(userData),
-      });
-      const result = await response.json();
+    const result = await HttpClient.post(`/business-employee/invite/${inviteToken}/accept-with-signup`, userData, { skipAuth: true });
 
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to accept invitation" };
-      }
-
-      return { success: true, token: result.token, employee: result.employee };
-    } catch (error) {
-      console.error("[BusinessEmployee] Error accepting invite with signup:", error);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to accept invitation" };
     }
+
+    return { success: true, token: result.token, employee: result.employee };
   }
 
   /**
    * Decline an invitation
-   * @param {string} inviteToken - Invitation token
-   * @returns {Object} { success, error }
    */
   static async declineInvite(inviteToken) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/invite/${inviteToken}/decline`, {
-        method: "POST",
-      });
-      const result = await response.json();
+    const result = await HttpClient.post(`/business-employee/invite/${inviteToken}/decline`, {}, { skipAuth: true });
 
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to decline invitation" };
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error("[BusinessEmployee] Error declining invite:", error);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to decline invitation" };
     }
+
+    return { success: true };
   }
 
   // =====================
@@ -126,209 +83,122 @@ class BusinessEmployeeService {
 
   /**
    * Get assigned jobs for the authenticated employee
-   * @param {string} token - Auth token
-   * @param {Object} filters - { status, upcoming }
-   * @returns {Object} { jobs }
    */
   static async getMyJobs(token, filters = {}) {
-    try {
-      const params = new URLSearchParams();
-      if (filters.status) params.append("status", filters.status);
-      if (filters.upcoming) params.append("upcoming", "true");
+    const params = new URLSearchParams();
+    if (filters.status) params.append("status", filters.status);
+    if (filters.upcoming) params.append("upcoming", "true");
 
-      const url = `${API_BASE}/business-employee/my-jobs${params.toString() ? `?${params}` : ""}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessEmployee] Error fetching jobs:", error);
+    const url = `/business-employee/my-jobs${params.toString() ? `?${params}` : ""}`;
+    const result = await HttpClient.get(url, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessEmployee] getMyJobs failed:", result.error);
       return { jobs: [] };
     }
+
+    return result;
   }
 
   /**
    * Get details for a specific job assignment
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @returns {Object} { job }
    */
   static async getJobDetails(token, assignmentId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessEmployee] Error fetching job details:", error);
+    const result = await HttpClient.get(`/business-employee/my-jobs/${assignmentId}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessEmployee] getJobDetails failed:", result.error);
       return null;
     }
+
+    return result;
   }
 
   /**
    * Get job flow settings for an assignment
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @returns {Object} Flow settings including photoRequirement, checklist, jobNotes
    */
   static async getJobFlow(token, assignmentId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}/flow`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        return null;
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessEmployee] Error fetching job flow:", error);
+    const result = await HttpClient.get(`/business-employee/my-jobs/${assignmentId}/flow`, { token });
+
+    if (result.success === false) {
       return null;
     }
+
+    return result;
   }
 
   /**
    * Get checklist for a job assignment
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @returns {Object} { checklist, progress, checklistCompleted, jobNotes, hasChecklist, itemCount, completedCount, completionPercentage }
    */
   static async getChecklist(token, assignmentId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}/checklist`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        return null;
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessEmployee] Error fetching checklist:", error);
+    const result = await HttpClient.get(`/business-employee/my-jobs/${assignmentId}/checklist`, { token });
+
+    if (result.success === false) {
       return null;
     }
+
+    return result;
   }
 
   /**
    * Update checklist item progress
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @param {string} sectionId - Section ID
-   * @param {string} itemId - Item ID
-   * @param {string} status - Status: "completed", "na", or null
-   * @returns {Object} { success, progress, checklistProgress, checklistCompleted }
    */
   static async updateChecklistItem(token, assignmentId, sectionId, itemId, status) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}/checklist`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ sectionId, itemId, status }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update checklist" };
-      }
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[BusinessEmployee] Error updating checklist:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.put(
+      `/business-employee/my-jobs/${assignmentId}/checklist`,
+      { sectionId, itemId, status },
+      { token }
+    );
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to update checklist" };
     }
+
+    return { success: true, ...result };
   }
 
   /**
    * Bulk update checklist progress (for offline sync)
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @param {Array} updates - Array of { sectionId, itemId, status }
-   * @returns {Object} { success, progress, checklistProgress, checklistCompleted }
    */
   static async bulkUpdateChecklist(token, assignmentId, updates) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}/checklist/bulk`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ updates }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update checklist" };
-      }
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[BusinessEmployee] Error bulk updating checklist:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.put(
+      `/business-employee/my-jobs/${assignmentId}/checklist/bulk`,
+      { updates },
+      { token }
+    );
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to update checklist" };
     }
+
+    return { success: true, ...result };
   }
 
   /**
    * Start a job
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @returns {Object} { success, assignment, message, error }
    */
   static async startJob(token, assignmentId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}/start`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const result = await response.json();
+    const result = await HttpClient.post(`/business-employee/my-jobs/${assignmentId}/start`, {}, { token });
 
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to start job" };
-      }
-
-      return { success: true, assignment: result.assignment, message: result.message };
-    } catch (error) {
-      console.error("[BusinessEmployee] Error starting job:", error);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to start job" };
     }
+
+    return { success: true, assignment: result.assignment, message: result.message };
   }
 
   /**
    * Complete a job
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @param {number} hoursWorked - Optional hours worked (for hourly jobs)
-   * @returns {Object} { success, assignment, message, error }
    */
   static async completeJob(token, assignmentId, hoursWorked = null) {
-    try {
-      const body = hoursWorked ? { hoursWorked } : {};
-      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}/complete`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-      const result = await response.json();
+    const body = hoursWorked ? { hoursWorked } : {};
+    const result = await HttpClient.post(`/business-employee/my-jobs/${assignmentId}/complete`, body, { token });
 
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to complete job" };
-      }
-
-      return { success: true, assignment: result.assignment, message: result.message };
-    } catch (error) {
-      console.error("[BusinessEmployee] Error completing job:", error);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to complete job" };
     }
+
+    return { success: true, assignment: result.assignment, message: result.message };
   }
 
   // =====================
@@ -337,49 +207,35 @@ class BusinessEmployeeService {
 
   /**
    * Get earnings summary for the authenticated employee
-   * @param {string} token - Auth token
-   * @param {string} startDate - Start date (YYYY-MM-DD)
-   * @param {string} endDate - End date (YYYY-MM-DD)
-   * @returns {Object} { period, summary, formatted, jobs }
    */
   static async getEarnings(token, startDate = null, endDate = null) {
-    try {
-      const params = new URLSearchParams();
-      if (startDate) params.append("startDate", startDate);
-      if (endDate) params.append("endDate", endDate);
+    const params = new URLSearchParams();
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
 
-      const url = `${API_BASE}/business-employee/my-earnings${params.toString() ? `?${params}` : ""}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessEmployee] Error fetching earnings:", error);
+    const url = `/business-employee/my-earnings${params.toString() ? `?${params}` : ""}`;
+    const result = await HttpClient.get(url, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessEmployee] getEarnings failed:", result.error);
       return {
         period: {},
         summary: { totalEarnings: 0, jobCount: 0, paidCount: 0, pendingCount: 0, pendingAmount: 0 },
         formatted: { totalEarnings: "$0.00", pendingAmount: "$0.00" },
       };
     }
+
+    return result;
   }
 
   /**
    * Get pending bi-weekly payout earnings for the authenticated employee
-   * @param {string} token - Auth token
-   * @returns {Object} { pendingAmount, nextPayoutDate, payouts, formatted }
    */
   static async getPendingEarnings(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/pending-earnings`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessEmployee] Error fetching pending earnings:", error);
+    const result = await HttpClient.get("/business-employee/pending-earnings", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessEmployee] getPendingEarnings failed:", result.error);
       return {
         pendingAmount: 0,
         nextPayoutDate: null,
@@ -387,6 +243,8 @@ class BusinessEmployeeService {
         formatted: { pendingAmount: "$0.00" },
       };
     }
+
+    return result;
   }
 
   // =====================
@@ -395,21 +253,16 @@ class BusinessEmployeeService {
 
   /**
    * Get the authenticated employee's profile
-   * @param {string} token - Auth token
-   * @returns {Object} { profile }
    */
   static async getProfile(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/my-profile`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessEmployee] Error fetching profile:", error);
+    const result = await HttpClient.get("/business-employee/my-profile", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessEmployee] getProfile failed:", result.error);
       return null;
     }
+
+    return result;
   }
 
   // =====================
@@ -418,47 +271,29 @@ class BusinessEmployeeService {
 
   /**
    * Get Stripe Connect status for the authenticated employee
-   * @param {string} token - Auth token
-   * @returns {Object} { paymentMethod, stripeConnectOnboarded, stripeAccountId }
    */
   static async getStripeStatus(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/stripe-connect/status`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessEmployee] Error fetching Stripe status:", error);
+    const result = await HttpClient.get("/business-employee/stripe-connect/status", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessEmployee] getStripeStatus failed:", result.error);
       return { paymentMethod: null, stripeConnectOnboarded: false, stripeAccountId: null };
     }
+
+    return result;
   }
 
   /**
    * Start Stripe Connect onboarding
-   * @param {string} token - Auth token
-   * @returns {Object} { success, onboardingUrl, error }
    */
   static async startStripeOnboarding(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-employee/stripe-connect/onboard`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const result = await response.json();
+    const result = await HttpClient.post("/business-employee/stripe-connect/onboard", {}, { token });
 
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to start onboarding" };
-      }
-
-      return { success: true, onboardingUrl: result.onboardingUrl };
-    } catch (error) {
-      console.error("[BusinessEmployee] Error starting Stripe onboarding:", error);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to start onboarding" };
     }
+
+    return { success: true, onboardingUrl: result.onboardingUrl };
   }
 }
 

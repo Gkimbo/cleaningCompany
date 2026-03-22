@@ -5,6 +5,7 @@
 
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const models = require("../../../models");
 const { User } = models;
 const BillingService = require("../../../services/BillingService");
@@ -124,21 +125,43 @@ billingRouter.post("/complete-with-autopay", verifyCleaner, async (req, res) => 
  */
 billingRouter.get("/pending-reminders", async (req, res) => {
   try {
-    // Verify admin access
+    // Verify access via either JWT (owner) or internal API key (cron jobs)
     const authHeader = req.headers.authorization;
-    if (authHeader) {
-      const token = authHeader.split(" ")[1];
-      const decoded = jwt.verify(token, secretKey);
-      const user = await User.findByPk(decoded.userId);
-      if (!user || user.type !== "owner") {
-        return res.status(403).json({ error: "Admin access required" });
+    const apiKey = req.headers["x-api-key"];
+
+    let isAuthorized = false;
+
+    // Option 1: Internal API key for cron jobs/internal services
+    // Use timing-safe comparison to prevent timing attacks
+    if (apiKey && process.env.INTERNAL_API_KEY) {
+      try {
+        const apiKeyBuffer = Buffer.from(apiKey);
+        const expectedBuffer = Buffer.from(process.env.INTERNAL_API_KEY);
+        if (apiKeyBuffer.length === expectedBuffer.length &&
+            crypto.timingSafeEqual(apiKeyBuffer, expectedBuffer)) {
+          isAuthorized = true;
+        }
+      } catch {
+        // Buffer comparison failed (different lengths or invalid input)
       }
-    } else {
-      // Check for internal API key
-      const apiKey = req.headers["x-api-key"];
-      if (apiKey !== process.env.INTERNAL_API_KEY) {
-        return res.status(401).json({ error: "Authentication required" });
+    }
+
+    // Option 2: JWT authentication for owner
+    if (!isAuthorized && authHeader?.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.split(" ")[1];
+        const decoded = jwt.verify(token, secretKey);
+        const user = await User.findByPk(decoded.userId);
+        if (user && user.type === "owner") {
+          isAuthorized = true;
+        }
+      } catch {
+        // JWT verification failed - will fall through to unauthorized
       }
+    }
+
+    if (!isAuthorized) {
+      return res.status(401).json({ error: "Authentication required" });
     }
 
     const daysOverdue = parseInt(req.query.days) || 3;

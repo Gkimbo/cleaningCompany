@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -52,6 +52,16 @@ const CleaningRequestList = ({ state, dispatch }) => {
   const [refreshing, setRefreshing] = useState(false);
 
   const navigate = useNavigate();
+  const refreshTimeoutRef = useRef(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Safely extract appointments
   const appointmentArray = useMemo(() => {
@@ -127,8 +137,12 @@ const CleaningRequestList = ({ state, dispatch }) => {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
+    // Clear any existing timeout before setting a new one
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
     // Simulate refresh - in real app would refetch data
-    setTimeout(() => setRefreshing(false), 1000);
+    refreshTimeoutRef.current = setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
   // Sort and calculate distances

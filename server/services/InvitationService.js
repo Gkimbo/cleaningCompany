@@ -4,7 +4,9 @@
  */
 
 const crypto = require("crypto");
+const { Op } = require("sequelize");
 const HomeClass = require("./HomeClass");
+const EncryptionService = require("./EncryptionService");
 
 class InvitationService {
   /**
@@ -19,8 +21,8 @@ class InvitationService {
     let attempts = 0;
 
     while (attempts < maxAttempts) {
-      // Generate a 32-character hex token
-      const token = crypto.randomBytes(16).toString("hex");
+      // Generate a 64-character hex token (256 bits for security)
+      const token = crypto.randomBytes(32).toString("hex");
 
       // Check if token already exists
       const existing = await CleanerClient.findOne({
@@ -46,7 +48,8 @@ class InvitationService {
   static async validateInviteToken(token, models) {
     const { CleanerClient, User } = models;
 
-    if (!token || typeof token !== "string" || token.length !== 32) {
+    // Validate token format: must be 32 or 64 lowercase hex characters
+    if (!token || typeof token !== "string" || !/^[a-f0-9]{32}([a-f0-9]{32})?$/.test(token)) {
       return null;
     }
 
@@ -63,6 +66,15 @@ class InvitationService {
 
     if (!cleanerClient) {
       return null;
+    }
+
+    // Check if invitation has expired
+    if (cleanerClient.inviteExpiresAt && cleanerClient.inviteExpiresAt < new Date()) {
+      return {
+        ...cleanerClient.toJSON(),
+        isExpired: true,
+        expirationReason: "expired",
+      };
     }
 
     // Check if invitation is still pending or cancelled (cancelled can still create account)
@@ -118,12 +130,34 @@ class InvitationService {
       notes,
     } = params;
 
+    // Validate input lengths (defense in depth - also validated at route level)
+    if (!name || !name.trim()) {
+      throw new Error("Client name is required");
+    }
+    if (name.trim().length > 100) {
+      throw new Error("Client name must not exceed 100 characters");
+    }
+    if (!email || !email.trim()) {
+      throw new Error("Client email is required");
+    }
+    if (email.trim().length > 254) {
+      throw new Error("Email address is too long");
+    }
+    if (phone && phone.trim().length > 20) {
+      throw new Error("Phone number must not exceed 20 characters");
+    }
+    if (notes && notes.length > 2000) {
+      throw new Error("Notes must not exceed 2000 characters");
+    }
+
     // Check if this cleaner already has a pending or active invitation for this email
+    // Use hash for lookup since invitedEmail is encrypted
+    const emailHash = EncryptionService.hash(email.toLowerCase().trim());
     const existing = await CleanerClient.findOne({
       where: {
         cleanerId,
-        invitedEmail: email.toLowerCase().trim(),
-        status: ["pending_invite", "active"],
+        invitedEmailHash: emailHash,
+        status: { [Op.in]: ["pending_invite", "active"] },
       },
     });
 
@@ -144,10 +178,15 @@ class InvitationService {
       ? JSON.stringify(address)
       : address || null;
 
+    // Set invitation expiration to 7 days from now
+    const inviteExpiresAt = new Date();
+    inviteExpiresAt.setDate(inviteExpiresAt.getDate() + 7);
+
     const cleanerClient = await CleanerClient.create({
       cleanerId,
       inviteToken,
       invitedEmail: email.toLowerCase().trim(),
+      invitedEmailHash: emailHash,
       invitedName: name.trim(),
       invitedPhone: phone ? phone.trim() : null,
       invitedAddress: addressValue,
@@ -156,6 +195,7 @@ class InvitationService {
       invitedNotes: notes || null,
       status: "pending_invite",
       invitedAt: new Date(),
+      inviteExpiresAt,
       defaultFrequency: frequency || null,
       defaultPrice: price || null,
       defaultDayOfWeek: dayOfWeek != null ? dayOfWeek : null,
@@ -200,12 +240,36 @@ class InvitationService {
     }
 
     // Check if a user with this email already exists
-    const existingUser = await User.findOne({
-      where: { email: cleanerClient.invitedEmail },
+    // Use emailHash for lookup since email is encrypted in the database
+    const invitedEmail = cleanerClient.invitedEmail;
+    const emailHash = EncryptionService.hash(invitedEmail?.toLowerCase?.().trim() || invitedEmail);
+    const existingUsers = await User.findAll({
+      where: { emailHash },
     });
 
-    if (existingUser) {
+    if (existingUsers.length > 0) {
       throw new Error("An account with this email already exists. Please log in instead.");
+    }
+
+    // Validate address corrections if provided
+    if (addressCorrections && typeof addressCorrections === "object") {
+      // Validate address field lengths
+      if (addressCorrections.address && addressCorrections.address.length > 500) {
+        throw new Error("Address is too long (max 500 characters)");
+      }
+      if (addressCorrections.city && addressCorrections.city.length > 100) {
+        throw new Error("City name is too long (max 100 characters)");
+      }
+      if (addressCorrections.state && addressCorrections.state.length > 50) {
+        throw new Error("State name is too long (max 50 characters)");
+      }
+      // Validate zipcode format (US format: 5 digits or 5+4)
+      if (addressCorrections.zipcode) {
+        const zipRegex = /^\d{5}(-\d{4})?$/;
+        if (!zipRegex.test(addressCorrections.zipcode)) {
+          throw new Error("Invalid zipcode format (use 5 digits or 5+4 format)");
+        }
+      }
     }
 
     // Parse the name into first/last
@@ -270,7 +334,7 @@ class InvitationService {
 
     // Create UserBills record
     await UserBills.create({
-      usersId: user.id,
+      userId: user.id,
       appointmentDue: 0,
       cancellationDue: 0,
       totalDue: 0,
@@ -318,9 +382,28 @@ class InvitationService {
     // Check if invitation was cancelled by the business owner
     const isCancelled = cleanerClient.isCancelled || cleanerClient.status === "cancelled";
 
+    // Parse invitedAddress safely - may be a string, object, or null
+    let parsedInvitedAddress = {};
+    if (cleanerClient.invitedAddress) {
+      if (typeof cleanerClient.invitedAddress === "string") {
+        try {
+          parsedInvitedAddress = JSON.parse(cleanerClient.invitedAddress);
+          // Ensure it's actually an object
+          if (typeof parsedInvitedAddress !== "object" || parsedInvitedAddress === null) {
+            parsedInvitedAddress = {};
+          }
+        } catch (e) {
+          // If JSON parsing fails, treat as empty
+          parsedInvitedAddress = {};
+        }
+      } else if (typeof cleanerClient.invitedAddress === "object") {
+        parsedInvitedAddress = cleanerClient.invitedAddress;
+      }
+    }
+
     // Merge address from invitation with any corrections
     const address = {
-      ...cleanerClient.invitedAddress,
+      ...parsedInvitedAddress,
       ...addressCorrections,
     };
 
@@ -362,6 +445,7 @@ class InvitationService {
       // Just mark as used but don't link - user becomes a regular homeowner
       await cleanerClient.update({
         acceptedAt: new Date(),
+        inviteToken: null, // Clear token after acceptance for security
       });
     } else {
       // Normal flow - link the client to the cleaner
@@ -370,6 +454,7 @@ class InvitationService {
         homeId: home ? home.id : null,
         status: "active",
         acceptedAt: new Date(),
+        inviteToken: null, // Clear token after acceptance for security
       });
     }
 
@@ -402,9 +487,13 @@ class InvitationService {
       throw new Error("Invitation not found or already accepted");
     }
 
-    // Update last reminder timestamp
+    // Reset expiration to 7 days from now and update last reminder timestamp
+    const inviteExpiresAt = new Date();
+    inviteExpiresAt.setDate(inviteExpiresAt.getDate() + 7);
+
     await cleanerClient.update({
       lastInviteReminderAt: new Date(),
+      inviteExpiresAt,
     });
 
     return cleanerClient;
@@ -471,6 +560,7 @@ class InvitationService {
 
     await cleanerClient.update({
       status: "declined",
+      inviteToken: null, // Clear token after decline for security
     });
 
     return true;

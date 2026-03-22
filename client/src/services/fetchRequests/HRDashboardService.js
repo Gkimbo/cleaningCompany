@@ -1,35 +1,20 @@
-import { API_BASE } from "../config";
-import AuthEventService from "../AuthEventService";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class HRDashboardService {
   static async fetchWithFallback(url, token, fallback = {}) {
-    try {
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const result = await HttpClient.get(url, { token, useBaseUrl: true });
 
-      // Handle expired token
-      if (response.status === 401) {
-        AuthEventService.handleTokenExpired();
-        return fallback;
-      }
-
-      if (!response.ok) {
-        console.warn(`[HRDashboard] ${url} returned ${response.status}`);
-        return fallback;
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn(`[HRDashboard] ${url} failed:`, error.message);
+    if (result.success === false) {
+      __DEV__ && console.warn(`[HRDashboard] ${url} failed:`, result.error);
       return fallback;
     }
+
+    return result;
   }
 
   static async getPendingDisputes(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/hr-dashboard/disputes/pending`,
+      "/api/v1/hr-dashboard/disputes/pending",
       token,
       { disputes: [] }
     );
@@ -37,7 +22,7 @@ class HRDashboardService {
 
   static async getDispute(token, id) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/hr-dashboard/disputes/${id}`,
+      `/api/v1/hr-dashboard/disputes/${id}`,
       token,
       { dispute: null }
     );
@@ -45,7 +30,7 @@ class HRDashboardService {
 
   static async getSupportConversations(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/hr-dashboard/support-conversations`,
+      "/api/v1/hr-dashboard/support-conversations",
       token,
       { conversations: [] }
     );
@@ -53,7 +38,7 @@ class HRDashboardService {
 
   static async getQuickStats(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/hr-dashboard/quick-stats`,
+      "/api/v1/hr-dashboard/quick-stats",
       token,
       {
         pendingDisputes: 0,
@@ -66,36 +51,24 @@ class HRDashboardService {
   // Use existing home-size-adjustment endpoints for dispute resolution
   // since HR now has access via verifyHROrOwner middleware
   static async resolveDispute(token, disputeId, data) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/home-size-adjustment/${disputeId}/owner-resolve`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(data),
-        }
-      );
+    const result = await HttpClient.post(
+      `/api/v1/home-size-adjustment/${disputeId}/owner-resolve`,
+      data,
+      { token, useBaseUrl: true }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || "Failed to resolve dispute",
-        };
-      }
-
+    if (result.success === false) {
+      __DEV__ && console.warn("[HRDashboard] resolveDispute failed:", result.error);
       return {
-        success: true,
-        ...result,
+        success: false,
+        error: result.error || "Failed to resolve dispute",
       };
-    } catch (error) {
-      console.error("[HRDashboard] resolveDispute failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
     }
+
+    return {
+      success: true,
+      ...result,
+    };
   }
 
   // ============================================================================
@@ -109,7 +82,7 @@ class HRDashboardService {
     const params = new URLSearchParams({ query });
     if (type) params.append("type", type);
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/hr-support/search?${params}`,
+      `/api/v1/hr-support/search?${params}`,
       token,
       { users: [] }
     );
@@ -120,7 +93,7 @@ class HRDashboardService {
    */
   static async getUserProfile(token, userId) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/hr-support/user/${userId}/profile`,
+      `/api/v1/hr-support/user/${userId}/profile`,
       token,
       { profile: null }
     );
@@ -130,23 +103,18 @@ class HRDashboardService {
    * Update user notes
    */
   static async updateUserNotes(token, userId, notes) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/hr-support/user/${userId}/notes`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ notes }),
-        }
-      );
-      const result = await response.json();
-      return response.ok ? { success: true, ...result } : { success: false, error: result.error };
-    } catch (error) {
-      return { success: false, error: "Network error" };
+    const result = await HttpClient.patch(
+      `/api/v1/hr-support/user/${userId}/notes`,
+      { notes },
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[HRDashboard] updateUserNotes failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 
   /**
@@ -154,7 +122,7 @@ class HRDashboardService {
    */
   static async getHomeDetails(token, homeId) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/hr-support/home/${homeId}/details`,
+      `/api/v1/hr-support/home/${homeId}/details`,
       token,
       { home: null }
     );
@@ -164,23 +132,18 @@ class HRDashboardService {
    * Update home size
    */
   static async updateHomeSize(token, homeId, data) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/hr-support/home/${homeId}/size`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(data),
-        }
-      );
-      const result = await response.json();
-      return response.ok ? { success: true, ...result } : { success: false, error: result.error };
-    } catch (error) {
-      return { success: false, error: "Network error" };
+    const result = await HttpClient.patch(
+      `/api/v1/hr-support/home/${homeId}/size`,
+      data,
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[HRDashboard] updateHomeSize failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 
   /**
@@ -188,7 +151,7 @@ class HRDashboardService {
    */
   static async getCleanerClaimHistory(token, cleanerId) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/hr-support/cleaner/${cleanerId}/claim-history`,
+      `/api/v1/hr-support/cleaner/${cleanerId}/claim-history`,
       token,
       { cleaner: null, stats: {}, claims: [] }
     );
@@ -198,23 +161,18 @@ class HRDashboardService {
    * Mark false claim on user
    */
   static async markFalseClaim(token, userId, type, reason, disputeId = null) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/hr-support/user/${userId}/mark-false-claim`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ type, reason, disputeId }),
-        }
-      );
-      const result = await response.json();
-      return response.ok ? { success: true, ...result } : { success: false, error: result.error };
-    } catch (error) {
-      return { success: false, error: "Network error" };
+    const result = await HttpClient.post(
+      `/api/v1/hr-support/user/${userId}/mark-false-claim`,
+      { type, reason, disputeId },
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[HRDashboard] markFalseClaim failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 
   /**
@@ -222,7 +180,7 @@ class HRDashboardService {
    */
   static async getCancellationHistory(token, userId) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/hr-support/user/${userId}/cancellation-history`,
+      `/api/v1/hr-support/user/${userId}/cancellation-history`,
       token,
       { user: null, cancelledAppointments: [], appeals: [] }
     );
@@ -233,7 +191,7 @@ class HRDashboardService {
    */
   static async getAppointmentDetails(token, appointmentId) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/hr-support/appointment/${appointmentId}/details`,
+      `/api/v1/hr-support/appointment/${appointmentId}/details`,
       token,
       { appointment: null }
     );
@@ -243,92 +201,72 @@ class HRDashboardService {
    * Waive penalty for user
    */
   static async waivePenalty(token, userId, penaltyType, reason, appointmentId = null) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/hr-support/user/${userId}/waive-penalty`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ penaltyType, reason, appointmentId }),
-        }
-      );
-      const result = await response.json();
-      return response.ok ? { success: true, ...result } : { success: false, error: result.error };
-    } catch (error) {
-      return { success: false, error: "Network error" };
+    const result = await HttpClient.post(
+      `/api/v1/hr-support/user/${userId}/waive-penalty`,
+      { penaltyType, reason, appointmentId },
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[HRDashboard] waivePenalty failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 
   /**
    * Reset all penalties for user
    */
   static async resetPenalties(token, userId, reason) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/hr-support/user/${userId}/reset-penalties`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ reason }),
-        }
-      );
-      const result = await response.json();
-      return response.ok ? { success: true, ...result } : { success: false, error: result.error };
-    } catch (error) {
-      return { success: false, error: "Network error" };
+    const result = await HttpClient.post(
+      `/api/v1/hr-support/user/${userId}/reset-penalties`,
+      { reason },
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[HRDashboard] resetPenalties failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 
   /**
    * Send notification to user
    */
   static async sendNotification(token, userId, title, body, options = {}) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/hr-support/user/${userId}/send-notification`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ title, body, ...options }),
-        }
-      );
-      const result = await response.json();
-      return response.ok ? { success: true, ...result } : { success: false, error: result.error };
-    } catch (error) {
-      return { success: false, error: "Network error" };
+    const result = await HttpClient.post(
+      `/api/v1/hr-support/user/${userId}/send-notification`,
+      { title, body, ...options },
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[HRDashboard] sendNotification failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 
   /**
    * Issue credit to user
    */
   static async issueCredit(token, userId, amount, reason, appointmentId = null) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/hr-support/user/${userId}/issue-credit`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ amount, reason, appointmentId }),
-        }
-      );
-      const result = await response.json();
-      return response.ok ? { success: true, ...result } : { success: false, error: result.error };
-    } catch (error) {
-      return { success: false, error: "Network error" };
+    const result = await HttpClient.post(
+      `/api/v1/hr-support/user/${userId}/issue-credit`,
+      { amount, reason, appointmentId },
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[HRDashboard] issueCredit failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 
   /**
@@ -336,7 +274,7 @@ class HRDashboardService {
    */
   static async getHRStaff(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/hr-support/hr-staff`,
+      "/api/v1/hr-support/hr-staff",
       token,
       { hrStaff: [] }
     );
@@ -346,46 +284,36 @@ class HRDashboardService {
    * Assign appeal to HR staff
    */
   static async assignAppeal(token, appealId, assigneeId) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/hr-support/appeal/${appealId}/assign`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ assigneeId }),
-        }
-      );
-      const result = await response.json();
-      return response.ok ? { success: true, ...result } : { success: false, error: result.error };
-    } catch (error) {
-      return { success: false, error: "Network error" };
+    const result = await HttpClient.post(
+      `/api/v1/hr-support/appeal/${appealId}/assign`,
+      { assigneeId },
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[HRDashboard] assignAppeal failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 
   /**
    * Resolve appeal
    */
   static async resolveAppeal(token, appealId, data) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/hr-support/appeal/${appealId}/resolve`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(data),
-        }
-      );
-      const result = await response.json();
-      return response.ok ? { success: true, ...result } : { success: false, error: result.error };
-    } catch (error) {
-      return { success: false, error: "Network error" };
+    const result = await HttpClient.post(
+      `/api/v1/hr-support/appeal/${appealId}/resolve`,
+      data,
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[HRDashboard] resolveAppeal failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 }
 

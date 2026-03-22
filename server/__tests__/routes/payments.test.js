@@ -81,6 +81,12 @@ jest.mock("../../models", () => ({
   UserPendingRequests: {
     destroy: jest.fn().mockResolvedValue(0),
   },
+  StripeWebhookEvent: {
+    claimEvent: jest.fn().mockResolvedValue({ id: 1, stripeEventId: "evt_test_123", status: "processing" }),
+    markCompleted: jest.fn().mockResolvedValue(true),
+    markFailed: jest.fn().mockResolvedValue(true),
+    markSkipped: jest.fn().mockResolvedValue(true),
+  },
   sequelize: {
     transaction: jest.fn().mockImplementation(() => Promise.resolve({
       LOCK: { UPDATE: 'UPDATE' },
@@ -141,9 +147,25 @@ describe("Payment Routes", () => {
   });
 
   describe("POST /create-intent", () => {
-    it("should create a payment intent with valid data", async () => {
+    it("should require authentication", async () => {
       const res = await request(app)
         .post("/api/v1/payments/create-intent")
+        .send({
+          amount: 15000,
+          email: "test@example.com",
+        });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe("Authorization required");
+    });
+
+    it("should create a payment intent with valid data and auth", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+      User.findByPk.mockResolvedValueOnce({ id: 1, email: "owner@example.com", type: "owner" });
+
+      const res = await request(app)
+        .post("/api/v1/payments/create-intent")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           amount: 15000,
           email: "test@example.com",
@@ -153,17 +175,36 @@ describe("Payment Routes", () => {
       expect(res.body).toHaveProperty("clientSecret");
     });
 
-    it("should return 400 for missing amount", async () => {
+    it("should return 400 for invalid amount", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+      User.findByPk.mockResolvedValueOnce({ id: 1, email: "owner@example.com", type: "owner" });
+
       const res = await request(app)
         .post("/api/v1/payments/create-intent")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           email: "test@example.com",
           // Missing amount
         });
 
-      // Note: The route still creates an intent even without amount,
-      // because Stripe mock doesn't validate. This tests the endpoint exists.
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Amount must be a valid integer in cents");
+    });
+
+    it("should return 400 for negative amount", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+      User.findByPk.mockResolvedValueOnce({ id: 1, email: "owner@example.com", type: "owner" });
+
+      const res = await request(app)
+        .post("/api/v1/payments/create-intent")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          amount: -100,
+          email: "test@example.com",
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Amount must be between $1.00 and $10,000.00");
     });
   });
 
@@ -288,21 +329,47 @@ describe("Payment Routes", () => {
   });
 
   describe("POST /refund and /cancel-or-refund", () => {
+    it("should require authentication", async () => {
+      const res = await request(app)
+        .post("/api/v1/payments/refund")
+        .send({ appointmentId: 1 });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe("Authorization required");
+    });
+
+    it("should reject non-owner users", async () => {
+      const cleanerToken = jwt.sign({ userId: 2 }, secretKey);
+      User.findByPk.mockResolvedValueOnce({ id: 2, type: "cleaner" });
+
+      const res = await request(app)
+        .post("/api/v1/payments/refund")
+        .set("Authorization", `Bearer ${cleanerToken}`)
+        .send({ appointmentId: 1 });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Only owners can cancel or refund payments");
+    });
+
     it("should cancel an uncaptured payment", async () => {
+      const ownerToken = jwt.sign({ userId: 1 }, secretKey);
       const stripe = require("stripe")();
       stripe.paymentIntents.retrieve.mockResolvedValue({
         id: "pi_test_123",
         status: "requires_capture",
       });
 
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         paymentIntentId: "pi_test_123",
+        paymentStatus: "requires_capture",
         update: jest.fn().mockResolvedValue(true),
       });
 
       const res = await request(app)
         .post("/api/v1/payments/refund")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ appointmentId: 1 });
 
       expect(res.status).toBe(200);
@@ -310,20 +377,24 @@ describe("Payment Routes", () => {
     });
 
     it("should refund a captured payment", async () => {
+      const ownerToken = jwt.sign({ userId: 1 }, secretKey);
       const stripe = require("stripe")();
       stripe.paymentIntents.retrieve.mockResolvedValue({
         id: "pi_test_123",
         status: "succeeded",
       });
 
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         paymentIntentId: "pi_test_123",
+        paymentStatus: "captured",
         update: jest.fn().mockResolvedValue(true),
       });
 
       const res = await request(app)
         .post("/api/v1/payments/refund")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ appointmentId: 1 });
 
       expect(res.status).toBe(200);
@@ -331,17 +402,34 @@ describe("Payment Routes", () => {
     });
 
     it("should return 400 if no payment intent found", async () => {
+      const ownerToken = jwt.sign({ userId: 1 }, secretKey);
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         paymentIntentId: null,
+        paymentStatus: null,
       });
 
       const res = await request(app)
         .post("/api/v1/payments/refund")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ appointmentId: 1 });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("No payment intent found for this appointment");
+    });
+
+    it("should return 400 if appointment ID is missing", async () => {
+      const ownerToken = jwt.sign({ userId: 1 }, secretKey);
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
+
+      const res = await request(app)
+        .post("/api/v1/payments/refund")
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Appointment ID is required");
     });
   });
 
@@ -369,6 +457,28 @@ describe("Payment Routes", () => {
       expect(res.body).toHaveProperty("payments");
       expect(Array.isArray(res.body.payments)).toBe(true);
     });
+
+    it("should reject invalid user ID", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const res = await request(app)
+        .get("/api/v1/payments/history/invalid")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Invalid user ID");
+    });
+
+    it("should reject negative user ID", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const res = await request(app)
+        .get("/api/v1/payments/history/-1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Invalid user ID");
+    });
   });
 
   describe("GET /earnings/:employeeId", () => {
@@ -393,6 +503,28 @@ describe("Payment Routes", () => {
       expect(res.body).toHaveProperty("pendingEarnings");
       expect(res.body).toHaveProperty("completedJobs");
     });
+
+    it("should reject invalid employee ID", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const res = await request(app)
+        .get("/api/v1/payments/earnings/abc")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Invalid employee ID");
+    });
+
+    it("should reject zero employee ID", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const res = await request(app)
+        .get("/api/v1/payments/earnings/0")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Invalid employee ID");
+    });
   });
 
   describe("GET /:homeId (appointments)", () => {
@@ -409,6 +541,28 @@ describe("Payment Routes", () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("appointments");
+    });
+
+    it("should reject invalid home ID", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const res = await request(app)
+        .get("/api/v1/payments/notanumber")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Invalid home ID");
+    });
+
+    it("should reject negative home ID", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const res = await request(app)
+        .get("/api/v1/payments/-5")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Invalid home ID");
     });
   });
 

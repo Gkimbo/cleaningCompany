@@ -96,6 +96,8 @@ import CleanerDetailPage from "../src/components/owner/CleanerDetailPage";
 
 // Shared components
 import FrozenAccountWrapper from "../src/components/shared/FrozenAccountWrapper";
+import ErrorBoundary from "../src/components/shared/ErrorBoundary";
+import ProtectedRoute from "../src/components/shared/ProtectedRoute";
 
 // Cleaner components
 import RecommendedSupplies from "../src/components/cleaner/RecommendedSupplies";
@@ -313,6 +315,8 @@ export default function App() {
               <TopBar dispatch={dispatch} state={state} />
               <OfflineBanner />
               <LowStorageWarning />
+              <ErrorBoundary>
+              <ProtectedRoute state={state}>
               <FrozenAccountWrapper state={state}>
               <Routes>
               <Route
@@ -833,6 +837,8 @@ export default function App() {
               />
             </Routes>
               </FrozenAccountWrapper>
+              </ProtectedRoute>
+              </ErrorBoundary>
               <ExitPreviewButton />
             </SafeAreaView>
             </OfflineProvider>

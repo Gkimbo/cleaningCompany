@@ -20,7 +20,7 @@ const PayoutItem = ({ payout, onMarkPaid }) => {
   };
 
   const employeeName = payout.employee
-    ? `${payout.employee.firstName} ${payout.employee.lastName}`
+    ? `${payout.employee.firstName || ""} ${payout.employee.lastName || ""}`.trim() || "Unknown Employee"
     : "Unknown Employee";
 
   const clientName = payout.clientName || "Client";

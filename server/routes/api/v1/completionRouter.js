@@ -1309,7 +1309,9 @@ async function processPayoutAfterApproval(appointment) {
 
         let transfer;
         try {
-          transfer = await stripe.transfers.create(transferParams);
+          // Use idempotency key to prevent duplicate transfers on retry
+          const idempotencyKey = `transfer-comp-${appointment.id}-${cleanerId}-${payout.id}`;
+          transfer = await stripe.transfers.create(transferParams, { idempotencyKey });
         } catch (stripeError) {
           // Stripe transfer failed - update payout status
           const tFailed = await sequelize.transaction();
@@ -1635,7 +1637,9 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
       transferParams.source_transaction = chargeId;
     }
 
-    const transfer = await stripe.transfers.create(transferParams);
+    // Use idempotency key to prevent duplicate transfers on retry
+    const idempotencyKey = `transfer-single-${appointment.id}-${cleanerId}-${payout.id}`;
+    const transfer = await stripe.transfers.create(transferParams, { idempotencyKey });
 
     await payout.update({
       stripeTransferId: transfer.id,

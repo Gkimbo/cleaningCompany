@@ -1,10 +1,16 @@
-// Mock fetch
-global.fetch = jest.fn();
-
-// Mock the config
-jest.mock("../../src/services/config", () => ({
-  API_BASE: "http://localhost:3000/api/v1",
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
+
+import HttpClient from "../../src/services/HttpClient";
 
 const CleanerClientService = require("../../src/services/fetchRequests/CleanerClientService").default;
 
@@ -17,7 +23,6 @@ describe("CleanerClientService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch.mockReset();
   });
 
   // =====================
@@ -48,35 +53,26 @@ describe("CleanerClientService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.inviteClient(mockToken, clientData);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/invite",
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mockToken}`,
-          },
-          body: JSON.stringify(clientData),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/cleaner-clients/invite",
+        clientData,
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.cleanerClient).toBeDefined();
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.inviteClient(mockToken, clientData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to send invitation");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -89,20 +85,13 @@ describe("CleanerClientService", () => {
         ],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getClients(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients",
-        expect.objectContaining({
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/cleaner-clients",
+        { token: mockToken }
       );
       expect(result.clients).toHaveLength(2);
     });
@@ -112,22 +101,19 @@ describe("CleanerClientService", () => {
         clients: [{ id: 1, clientName: "John Doe", inviteStatus: "active" }],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getClients(mockToken, "active");
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients?status=active",
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/cleaner-clients?status=active",
+        { token: mockToken }
       );
       expect(result.clients).toHaveLength(1);
     });
 
     it("should return empty list on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.getClients(mockToken);
 
@@ -146,26 +132,19 @@ describe("CleanerClientService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getClient(mockToken, cleanerClientId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/1",
-        expect.objectContaining({
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/cleaner-clients/1",
+        { token: mockToken }
       );
       expect(result.cleanerClient.id).toBe(1);
     });
 
     it("should return null on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.getClient(mockToken, cleanerClientId);
 
@@ -183,16 +162,13 @@ describe("CleanerClientService", () => {
         recurringSchedules: [],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getClientFull(mockToken, cleanerClientId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/1/full",
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/cleaner-clients/1/full",
+        { token: mockToken }
       );
       expect(result.cleanerClient).toBeDefined();
       expect(result.client).toBeDefined();
@@ -200,11 +176,11 @@ describe("CleanerClientService", () => {
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.getClientFull(mockToken, cleanerClientId);
 
-      expect(result.error).toBe("Failed to fetch client details");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -216,34 +192,25 @@ describe("CleanerClientService", () => {
         home: { id: 10, specialNotes: "Use back door", keyPadCode: "1234" },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.updateClientHome(mockToken, cleanerClientId, updates);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/1/home",
-        expect.objectContaining({
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mockToken}`,
-          },
-          body: JSON.stringify(updates),
-        })
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/cleaner-clients/1/home",
+        updates,
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.updateClientHome(mockToken, cleanerClientId, {});
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to update home details");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -255,30 +222,25 @@ describe("CleanerClientService", () => {
         cleanerClient: { id: 1, defaultPrice: 175 },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.updateClient(mockToken, cleanerClientId, updates);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/1",
-        expect.objectContaining({
-          method: "PATCH",
-          body: JSON.stringify(updates),
-        })
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/cleaner-clients/1",
+        updates,
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.updateClient(mockToken, cleanerClientId, {});
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to update client");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -286,32 +248,24 @@ describe("CleanerClientService", () => {
     it("should deactivate client relationship", async () => {
       const mockResponse = { success: true };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.delete.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.deactivateClient(mockToken, cleanerClientId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/1",
-        expect.objectContaining({
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        })
+      expect(HttpClient.delete).toHaveBeenCalledWith(
+        "/cleaner-clients/1",
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.delete.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.deactivateClient(mockToken, cleanerClientId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to deactivate client");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -319,32 +273,25 @@ describe("CleanerClientService", () => {
     it("should resend invitation successfully", async () => {
       const mockResponse = { success: true };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.resendInvite(mockToken, cleanerClientId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/1/resend-invite",
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/cleaner-clients/1/resend-invite",
+        {},
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.resendInvite(mockToken, cleanerClientId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to resend invitation");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -367,31 +314,26 @@ describe("CleanerClientService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.bookForClient(mockToken, cleanerClientId, bookingData);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/1/book-for-client",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify(bookingData),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/cleaner-clients/1/book-for-client",
+        bookingData,
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.appointment.id).toBe(200);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.bookForClient(mockToken, cleanerClientId, bookingData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to book appointment");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -412,27 +354,25 @@ describe("CleanerClientService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.validateInvitation(inviteToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/invitations/abc123token"
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/cleaner-clients/invitations/abc123token",
+        { skipAuth: true }
       );
       expect(result.valid).toBe(true);
       expect(result.invitation.cleanerName).toBe("Jane Cleaner");
     });
 
     it("should return invalid on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.validateInvitation(inviteToken);
 
       expect(result.valid).toBe(false);
-      expect(result.error).toBe("Failed to validate invitation");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -451,34 +391,26 @@ describe("CleanerClientService", () => {
         home: { id: 10, numBeds: 3, numBaths: 2 },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.acceptInvitation(inviteToken, userData);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/invitations/abc123token/accept",
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(userData),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/cleaner-clients/invitations/abc123token/accept",
+        userData,
+        { skipAuth: true }
       );
       expect(result.success).toBe(true);
       expect(result.token).toBeDefined();
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.acceptInvitation(inviteToken, userData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to accept invitation");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -488,29 +420,25 @@ describe("CleanerClientService", () => {
     it("should decline invitation successfully", async () => {
       const mockResponse = { success: true };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.declineInvitation(inviteToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/invitations/abc123token/decline",
-        expect.objectContaining({
-          method: "POST",
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/cleaner-clients/invitations/abc123token/decline",
+        {},
+        { skipAuth: true }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.declineInvitation(inviteToken);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to decline invitation");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -535,31 +463,26 @@ describe("CleanerClientService", () => {
         appointmentsCreated: 4,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.createRecurringSchedule(mockToken, scheduleData);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/recurring-schedules",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify(scheduleData),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/recurring-schedules",
+        scheduleData,
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.appointmentsCreated).toBe(4);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.createRecurringSchedule(mockToken, scheduleData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to create recurring schedule");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -572,36 +495,30 @@ describe("CleanerClientService", () => {
         ],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getRecurringSchedules(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/recurring-schedules?activeOnly=true",
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/recurring-schedules?activeOnly=true",
+        { token: mockToken }
       );
       expect(result.schedules).toHaveLength(2);
     });
 
     it("should fetch schedules filtered by client", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ schedules: [{ id: 50 }] }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ schedules: [{ id: 50 }] });
 
       await CleanerClientService.getRecurringSchedules(mockToken, cleanerClientId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/recurring-schedules?cleanerClientId=1&activeOnly=true",
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/recurring-schedules?cleanerClientId=1&activeOnly=true",
+        { token: mockToken }
       );
     });
 
     it("should return empty list on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.getRecurringSchedules(mockToken);
 
@@ -615,22 +532,19 @@ describe("CleanerClientService", () => {
         schedule: { id: 50, frequency: "weekly", dayOfWeek: 3 },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getRecurringSchedule(mockToken, scheduleId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/recurring-schedules/50",
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/recurring-schedules/50",
+        { token: mockToken }
       );
       expect(result.schedule.id).toBe(50);
     });
 
     it("should return null on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.getRecurringSchedule(mockToken, scheduleId);
 
@@ -646,30 +560,25 @@ describe("CleanerClientService", () => {
         schedule: { id: 50, price: 200 },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.updateRecurringSchedule(mockToken, scheduleId, updates);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/recurring-schedules/50",
-        expect.objectContaining({
-          method: "PATCH",
-          body: JSON.stringify(updates),
-        })
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/recurring-schedules/50",
+        updates,
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.updateRecurringSchedule(mockToken, scheduleId, {});
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to update recurring schedule");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -677,43 +586,35 @@ describe("CleanerClientService", () => {
     it("should delete schedule", async () => {
       const mockResponse = { success: true };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.delete.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.deleteRecurringSchedule(mockToken, scheduleId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/recurring-schedules/50",
-        expect.objectContaining({
-          method: "DELETE",
-        })
+      expect(HttpClient.delete).toHaveBeenCalledWith(
+        "/recurring-schedules/50",
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should delete schedule and cancel future appointments", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true }),
-      });
+      HttpClient.delete.mockResolvedValueOnce({ success: true });
 
       await CleanerClientService.deleteRecurringSchedule(mockToken, scheduleId, true);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/recurring-schedules/50?cancelFutureAppointments=true",
-        expect.any(Object)
+      expect(HttpClient.delete).toHaveBeenCalledWith(
+        "/recurring-schedules/50?cancelFutureAppointments=true",
+        { token: mockToken }
       );
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.delete.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.deleteRecurringSchedule(mockToken, scheduleId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to delete recurring schedule");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -724,30 +625,25 @@ describe("CleanerClientService", () => {
         schedule: { id: 50, isPaused: true },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.pauseRecurringSchedule(mockToken, scheduleId, "2026-02-01", "Vacation");
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/recurring-schedules/50/pause",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({ until: "2026-02-01", reason: "Vacation" }),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/recurring-schedules/50/pause",
+        { until: "2026-02-01", reason: "Vacation" },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.pauseRecurringSchedule(mockToken, scheduleId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to pause recurring schedule");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -759,30 +655,26 @@ describe("CleanerClientService", () => {
         appointmentsCreated: 4,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.resumeRecurringSchedule(mockToken, scheduleId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/recurring-schedules/50/resume",
-        expect.objectContaining({
-          method: "POST",
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/recurring-schedules/50/resume",
+        {},
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.appointmentsCreated).toBe(4);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.resumeRecurringSchedule(mockToken, scheduleId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to resume recurring schedule");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -798,23 +690,20 @@ describe("CleanerClientService", () => {
         upcoming: [{ id: 201 }, { id: 202 }],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getClientAppointments(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/preferred-cleaner/my-client-appointments",
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/preferred-cleaner/my-client-appointments",
+        { token: mockToken }
       );
       expect(result.pending).toHaveLength(1);
       expect(result.upcoming).toHaveLength(2);
     });
 
     it("should return empty lists on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.getClientAppointments(mockToken);
 
@@ -833,22 +722,19 @@ describe("CleanerClientService", () => {
         total: 1,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getPendingClientResponses(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/pending-client-responses",
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/cleaner-clients/pending-client-responses",
+        { token: mockToken }
       );
       expect(result.total).toBe(1);
     });
 
     it("should return empty lists on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.getPendingClientResponses(mockToken);
 
@@ -864,29 +750,25 @@ describe("CleanerClientService", () => {
         appointment: { id: 200, status: "confirmed" },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.acceptClientAppointment(mockToken, appointmentId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/preferred-cleaner/appointments/200/accept",
-        expect.objectContaining({
-          method: "POST",
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/preferred-cleaner/appointments/200/accept",
+        {},
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.acceptClientAppointment(mockToken, appointmentId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to accept appointment");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -897,29 +779,25 @@ describe("CleanerClientService", () => {
         appointment: { id: 200, status: "declined_by_preferred" },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.declineClientAppointment(mockToken, appointmentId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/preferred-cleaner/appointments/200/decline",
-        expect.objectContaining({
-          method: "POST",
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/preferred-cleaner/appointments/200/decline",
+        {},
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.declineClientAppointment(mockToken, appointmentId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to decline appointment");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -929,22 +807,19 @@ describe("CleanerClientService", () => {
         appointments: [{ id: 200 }],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getPendingResponses(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/preferred-cleaner/pending-responses",
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/preferred-cleaner/pending-responses",
+        { token: mockToken }
       );
       expect(result.appointments).toHaveLength(1);
     });
 
     it("should return empty list on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.getPendingResponses(mockToken);
 
@@ -960,19 +835,14 @@ describe("CleanerClientService", () => {
         message: "Appointment cancelled",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.respondToDecline(mockToken, appointmentId, "cancel");
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/preferred-cleaner/appointments/200/respond",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({ action: "cancel" }),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/preferred-cleaner/appointments/200/respond",
+        { action: "cancel" },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.action).toBe("cancelled");
@@ -986,10 +856,7 @@ describe("CleanerClientService", () => {
         newPrice: 175,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.respondToDecline(mockToken, appointmentId, "open_to_market");
 
@@ -999,12 +866,12 @@ describe("CleanerClientService", () => {
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.respondToDecline(mockToken, appointmentId, "cancel");
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to respond");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -1026,20 +893,13 @@ describe("CleanerClientService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getPlatformPrice(mockToken, cleanerClientId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/1/platform-price",
-        expect.objectContaining({
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/cleaner-clients/1/platform-price",
+        { token: mockToken }
       );
       expect(result.platformPrice).toBe(175);
       expect(result.numBeds).toBe(3);
@@ -1060,10 +920,7 @@ describe("CleanerClientService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getPlatformPrice(mockToken, cleanerClientId);
 
@@ -1073,13 +930,11 @@ describe("CleanerClientService", () => {
 
     it("should return error when no home associated", async () => {
       const mockResponse = {
+        success: false,
         error: "No home associated with this client",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getPlatformPrice(mockToken, cleanerClientId);
 
@@ -1087,22 +942,20 @@ describe("CleanerClientService", () => {
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.getPlatformPrice(mockToken, cleanerClientId);
 
-      expect(result.error).toBe("Failed to fetch platform price");
+      expect(result.error).toBe("Network request failed");
     });
 
     it("should return error when client not found", async () => {
       const mockResponse = {
+        success: false,
         error: "Client not found",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.getPlatformPrice(mockToken, cleanerClientId);
 
@@ -1120,23 +973,14 @@ describe("CleanerClientService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.updateDefaultPrice(mockToken, cleanerClientId, 175);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/cleaner-clients/1/default-price",
-        expect.objectContaining({
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mockToken}`,
-          },
-          body: JSON.stringify({ price: 175 }),
-        })
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/cleaner-clients/1/default-price",
+        { price: 175 },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.cleanerClient.defaultPrice).toBe(175);
@@ -1151,18 +995,14 @@ describe("CleanerClientService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.updateDefaultPrice(mockToken, cleanerClientId, 0);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: JSON.stringify({ price: 0 }),
-        })
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/cleaner-clients/1/default-price",
+        { price: 0 },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.cleanerClient.defaultPrice).toBe(0);
@@ -1170,13 +1010,11 @@ describe("CleanerClientService", () => {
 
     it("should return error when price is negative", async () => {
       const mockResponse = {
+        success: false,
         error: "Price must be a positive number",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.updateDefaultPrice(mockToken, cleanerClientId, -50);
 
@@ -1185,13 +1023,11 @@ describe("CleanerClientService", () => {
 
     it("should return error when price is missing", async () => {
       const mockResponse = {
+        success: false,
         error: "Price is required",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.updateDefaultPrice(mockToken, cleanerClientId, undefined);
 
@@ -1200,13 +1036,11 @@ describe("CleanerClientService", () => {
 
     it("should return error when client not found", async () => {
       const mockResponse = {
+        success: false,
         error: "Client not found",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.updateDefaultPrice(mockToken, 999, 175);
 
@@ -1214,12 +1048,12 @@ describe("CleanerClientService", () => {
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await CleanerClientService.updateDefaultPrice(mockToken, cleanerClientId, 175);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to update price");
+      expect(result.error).toBe("Network request failed");
     });
 
     it("should handle decimal prices", async () => {
@@ -1231,18 +1065,14 @@ describe("CleanerClientService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await CleanerClientService.updateDefaultPrice(mockToken, cleanerClientId, 175.50);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: JSON.stringify({ price: 175.50 }),
-        })
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/cleaner-clients/1/default-price",
+        { price: 175.50 },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.cleanerClient.defaultPrice).toBe(175.50);

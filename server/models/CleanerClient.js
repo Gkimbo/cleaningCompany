@@ -1,7 +1,7 @@
 const EncryptionService = require("../services/EncryptionService");
 
 // Fields that contain PII and should be encrypted
-const PII_FIELDS = ["invitedEmail", "invitedName", "invitedPhone", "invitedAddress"];
+const PII_FIELDS = ["invitedEmail", "invitedName", "invitedPhone", "invitedAddress", "invitedNotes"];
 
 module.exports = (sequelize, DataTypes) => {
   const CleanerClient = sequelize.define("CleanerClient", {
@@ -29,12 +29,17 @@ module.exports = (sequelize, DataTypes) => {
     // === Invitation data (encrypted) ===
     inviteToken: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true, // Null after invitation is accepted
       unique: true,
     },
     invitedEmail: {
       type: DataTypes.TEXT,
       allowNull: false,
+    },
+    invitedEmailHash: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: "Hash of invitedEmail for searching (since invitedEmail is encrypted)",
     },
     invitedName: {
       type: DataTypes.TEXT,
@@ -78,6 +83,11 @@ module.exports = (sequelize, DataTypes) => {
     lastInviteReminderAt: {
       type: DataTypes.DATE,
       allowNull: true,
+    },
+    inviteExpiresAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "Invitation expiration date (7 days from creation)",
     },
 
     // === Scheduling preferences ===

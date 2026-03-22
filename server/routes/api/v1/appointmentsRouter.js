@@ -921,19 +921,50 @@ appointmentRouter.get("/pending-approval", async (req, res) => {
 // ==========================================
 
 appointmentRouter.get("/home/:homeId", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { homeId } = req.params;
+
   try {
-    const home = await UserHomes.findAll({
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
+    const home = await UserHomes.findByPk(homeId);
+
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    // Verify user owns this home or is assigned to clean it
+    const isOwner = home.userId === requestingUserId;
+
+    // Check if user is a cleaner assigned to an appointment at this home
+    const isAssignedCleaner = await UserAppointments.findOne({
       where: {
-        id: homeId,
+        homeId: homeId,
+        employeesAssigned: { [Op.contains]: [String(requestingUserId)] },
       },
     });
-    const serializedHome = HomeSerializer.serializeArray(home);
 
-    return res.status(200).json({ home: serializedHome });
+    if (!isOwner && !isAssignedCleaner) {
+      return res.status(403).json({ error: "You don't have permission to view this home" });
+    }
+
+    const serializedHome = HomeSerializer.serializeOne(home);
+
+    return res.status(200).json({ home: [serializedHome] });
   } catch (error) {
-    console.log(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    console.error(error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    return res.status(500).json({ error: "Failed to fetch home" });
   }
 });
 
@@ -974,6 +1005,13 @@ appointmentRouter.post("/", async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
+    }
+
+    // Verify user owns this home (prevent booking appointments on other users' homes)
+    if (home.userId !== userId) {
+      return res.status(403).json({
+        error: "You can only book appointments for your own homes"
+      });
     }
 
     // Check if homeowner account is frozen
@@ -1428,24 +1466,49 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
 
 // NOTE: /id/:id must be defined BEFORE /:id to prevent route interception
 appointmentRouter.delete("/id/:id", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id } = req.params;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Verify appointment exists
     const appointmentToDelete = await UserAppointments.findOne({
       where: { id: id },
     });
 
-    const connectionsToDelete = await UserCleanerAppointments.destroy({
+    if (!appointmentToDelete) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify user owns this appointment
+    if (appointmentToDelete.userId !== userId) {
+      return res.status(403).json({ error: "You don't have permission to delete this appointment" });
+    }
+
+    await UserCleanerAppointments.destroy({
       where: { appointmentId: id },
     });
 
-    const deletedAppointmentInfo = await UserAppointments.destroy({
+    await UserAppointments.destroy({
       where: { id: id },
     });
 
-    return res.status(201).json({ message: "Appointment Deleted" });
+    return res.status(200).json({ message: "Appointment Deleted" });
   } catch (error) {
     console.error(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    return res.status(500).json({ error: "Failed to delete appointment" });
   }
 });
 
@@ -1456,13 +1519,25 @@ appointmentRouter.delete("/:id", async (req, res) => {
   try {
     const decodedToken = jwt.verify(user, secretKey);
     const userId = decodedToken.userId;
+
+    // Verify appointment exists and belongs to user
+    const appointmentToDelete = await UserAppointments.findOne({
+      where: { id: id },
+    });
+
+    if (!appointmentToDelete) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify user owns this appointment
+    if (appointmentToDelete.userId !== userId) {
+      return res.status(403).json({ error: "You don't have permission to delete this appointment" });
+    }
+
     const existingBill = await UserBills.findOne({
       where: { userId },
     });
 
-    const appointmentToDelete = await UserAppointments.findOne({
-      where: { id: id },
-    });
     const appointmentTotal = Number(appointmentToDelete.dataValues.price);
     const oldFee = Number(existingBill.dataValues.cancellationFee);
     const oldAppt = Number(existingBill.dataValues.appointmentDue);
@@ -1517,9 +1592,46 @@ appointmentRouter.delete("/:id", async (req, res) => {
 });
 
 appointmentRouter.patch("/remove-employee", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id, appointmentId } = req.body;
   let userInfo;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
+    // Get the appointment to verify ownership
+    const updateAppointment = await UserAppointments.findOne({
+      where: {
+        id: Number(appointmentId),
+      },
+    });
+
+    if (!updateAppointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Get the requesting user to check their type
+    const requestingUser = await User.findByPk(requestingUserId);
+    if (!requestingUser) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    // Authorization: only homeowner of appointment or owner/admin can remove employees
+    const isOwnerOrAdmin = requestingUser.type === "owner" || requestingUser.type === "admin";
+    const isAppointmentOwner = updateAppointment.userId === requestingUserId;
+
+    if (!isOwnerOrAdmin && !isAppointmentOwner) {
+      return res.status(403).json({ error: "You don't have permission to remove employees from this appointment" });
+    }
+
     const checkItExists = await UserCleanerAppointments.findOne({
       where: {
         employeeId: id,
@@ -1531,12 +1643,6 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
         where: {
           employeeId: id,
           appointmentId: Number(appointmentId),
-        },
-      });
-
-      const updateAppointment = await UserAppointments.findOne({
-        where: {
-          id: Number(appointmentId),
         },
       });
 
@@ -2157,8 +2263,20 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
 });
 
 appointmentRouter.patch("/approve-request", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { requestId, approve } = req.body;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
     const request = await UserPendingRequests.findOne({
       where: { id: requestId },
     });
@@ -2173,6 +2291,11 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
 
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify user owns this appointment
+    if (appointment.userId !== requestingUserId) {
+      return res.status(403).json({ error: "You don't have permission to approve requests for this appointment" });
     }
 
     // Check if appointment is paused (due to homeowner freeze)
@@ -2820,8 +2943,20 @@ appointmentRouter.post("/switch-cleaner", async (req, res) => {
 });
 
 appointmentRouter.patch("/deny-request", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id, appointmentId } = req.body;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
     const request = await UserPendingRequests.findOne({
       where: { appointmentId: Number(appointmentId), employeeId: Number(id) },
     });
@@ -2833,6 +2968,11 @@ appointmentRouter.patch("/deny-request", async (req, res) => {
     const appointment = await UserAppointments.findByPk(Number(appointmentId));
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify user owns this appointment
+    if (appointment.userId !== requestingUserId) {
+      return res.status(403).json({ error: "You don't have permission to deny requests for this appointment" });
     }
 
     const client = await User.findByPk(appointment.dataValues.userId);
@@ -2887,9 +3027,30 @@ appointmentRouter.patch("/deny-request", async (req, res) => {
 });
 
 appointmentRouter.patch("/undo-request-choice", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id, appointmentId } = req.body;
   let userInfo;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
+    // Verify appointment exists and user owns it
+    const appointment = await UserAppointments.findByPk(Number(appointmentId));
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+    if (appointment.userId !== requestingUserId) {
+      return res.status(403).json({ error: "You don't have permission to modify this appointment" });
+    }
+
     const checkItExists = await UserCleanerAppointments.findOne({
       where: {
         employeeId: id,
@@ -3078,8 +3239,20 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
 });
 
 appointmentRouter.patch("/remove-request", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id, appointmentId } = req.body;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
     const request = await UserPendingRequests.findOne({
       where: { appointmentId: Number(appointmentId), employeeId: Number(id) },
     });
@@ -3091,6 +3264,14 @@ appointmentRouter.patch("/remove-request", async (req, res) => {
     const appointment = await UserAppointments.findByPk(Number(appointmentId));
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Authorization: only homeowner or the cleaner who made the request can remove it
+    const isAppointmentOwner = appointment.userId === requestingUserId;
+    const isRequestingCleaner = Number(id) === requestingUserId;
+
+    if (!isAppointmentOwner && !isRequestingCleaner) {
+      return res.status(403).json({ error: "You don't have permission to remove this request" });
     }
 
     const client = await User.findByPk(appointment.dataValues.userId);
@@ -4827,8 +5008,39 @@ appointmentRouter.post("/:id/confirm-marketplace", async (req, res) => {
 // ==========================================
 
 appointmentRouter.get("/:homeId", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { homeId } = req.params;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Verify home exists and user has access
+    const home = await UserHomes.findByPk(homeId);
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    // Check if user owns this home or is assigned to clean appointments at this home
+    const isOwner = home.userId === userId;
+    const isAssignedCleaner = await UserAppointments.findOne({
+      where: {
+        homeId: homeId,
+        employeesAssigned: { [Op.contains]: [String(userId)] },
+      },
+    });
+
+    if (!isOwner && !isAssignedCleaner) {
+      return res.status(403).json({ error: "You don't have permission to view appointments for this home" });
+    }
+
     const appointments = await UserAppointments.findAll({
       where: {
         homeId: homeId,
@@ -4839,8 +5051,11 @@ appointmentRouter.get("/:homeId", async (req, res) => {
       AppointmentSerializer.serializeArray(appointments);
     return res.status(200).json({ appointments: serializedAppointments });
   } catch (error) {
-    console.log(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    console.error(error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    return res.status(500).json({ error: "Failed to fetch appointments" });
   }
 });
 

@@ -35,7 +35,10 @@ class UserSerializer {
 			"isBusinessOwner",
 			"businessName",
 			"businessLogo",
-			"yearsInBusiness"
+			"yearsInBusiness",
+			"businessDescription",
+			"businessVerificationStatus",
+			"businessHighlightOptIn"
 		];
 
 		const serializedUser = {};
@@ -57,7 +60,7 @@ class UserSerializer {
 			serializedUser.appointments = appointments;
 		}
 		if (user.bills) {
-			const bill = BillSerializer.serializeArray(user.bills);
+			const bill = BillSerializer.serializeFirst(user.bills);
 			serializedUser.bill = bill;
 		}
 		return serializedUser;
@@ -81,9 +84,9 @@ class UserSerializer {
 			"businessName",
 			"businessLogo",
 			"yearsInBusiness",
-			"accountFrozen",
-			"accountFrozenAt",
-			"accountFrozenReason",
+			"businessDescription",
+			"businessVerificationStatus",
+			"businessHighlightOptIn",
 		];
 		const serializedUser = {};
 

@@ -9,6 +9,9 @@
  * 5. 90% payout is sent to cleaner
  */
 
+// Set environment variables BEFORE importing any modules that depend on them
+process.env.STRIPE_CONNECT_WEBHOOK_SECRET = process.env.STRIPE_CONNECT_WEBHOOK_SECRET || "whsec_test_connect";
+
 const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
@@ -106,6 +109,13 @@ const mockCleaner = {
   username: "cleaner",
   email: "cleaner@test.com",
   type: "cleaner",
+};
+
+const mockOwner = {
+  id: 99,
+  username: "owner",
+  email: "owner@test.com",
+  type: "owner",
 };
 
 // Create mock appointment
@@ -214,6 +224,12 @@ jest.mock("../../models", () => ({
       finished: false,
     })),
   },
+  StripeWebhookEvent: {
+    claimEvent: jest.fn().mockResolvedValue({ id: 1, stripeEventId: "evt_test_123", status: "processing" }),
+    markCompleted: jest.fn().mockResolvedValue(true),
+    markFailed: jest.fn().mockResolvedValue(true),
+    markSkipped: jest.fn().mockResolvedValue(true),
+  },
 }));
 
 // Mock services
@@ -297,7 +313,8 @@ describe("Stripe Connect Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/stripe-connect/create-account")
-        .send({ token });
+        .set("Authorization", `Bearer ${token}`)
+        .send({});
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
@@ -315,7 +332,8 @@ describe("Stripe Connect Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/stripe-connect/onboarding-link")
-        .send({ token });
+        .set("Authorization", `Bearer ${token}`)
+        .send({});
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -323,14 +341,17 @@ describe("Stripe Connect Full Payment Flow", () => {
     });
 
     it("should show account status after onboarding", async () => {
+      const token = jwt.sign({ userId: mockCleaner.id }, secretKey);
+
+      User.findByPk.mockResolvedValue(mockCleaner);
       StripeConnectAccount.findOne.mockResolvedValue({
         ...mockConnectAccount,
         update: jest.fn().mockResolvedValue(true),
       });
 
-      const res = await request(app).get(
-        `/api/v1/stripe-connect/account-status/${mockCleaner.id}`
-      );
+      const res = await request(app)
+        .get(`/api/v1/stripe-connect/account-status/${mockCleaner.id}`)
+        .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body.hasAccount).toBe(true);
@@ -341,8 +362,12 @@ describe("Stripe Connect Full Payment Flow", () => {
 
   describe("Step 2: Appointment Creation & Payment Authorization", () => {
     it("should create payment intent with manual capture", async () => {
+      const token = jwt.sign({ userId: mockHomeowner.id }, secretKey);
+      User.findByPk.mockResolvedValueOnce(mockHomeowner);
+
       const res = await request(app)
         .post("/api/v1/payments/create-intent")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           amount: 15000,
           email: mockHomeowner.email,
@@ -355,6 +380,9 @@ describe("Stripe Connect Full Payment Flow", () => {
 
   describe("Step 3: Cleaner Assignment & Payout Record", () => {
     it("should create payout record when cleaner is assigned", async () => {
+      const token = jwt.sign({ userId: mockOwner.id }, secretKey);
+
+      User.findByPk.mockResolvedValue(mockOwner);
       UserAppointments.findByPk.mockResolvedValue({
         ...mockAppointment,
         employeesAssigned: [mockCleaner.id],
@@ -364,6 +392,7 @@ describe("Stripe Connect Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/stripe-connect/create-payout-record")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId: mockAppointment.id,
           cleanerId: mockCleaner.id,
@@ -405,7 +434,10 @@ describe("Stripe Connect Full Payment Flow", () => {
 
   describe("Step 5: Job Completion & Payout Processing", () => {
     it("should process payout after job completion", async () => {
+      const token = jwt.sign({ userId: mockOwner.id }, secretKey);
+
       // Setup: completed job with payment captured
+      User.findByPk.mockResolvedValue(mockOwner);
       UserAppointments.findByPk.mockResolvedValue({
         ...mockAppointment,
         paid: true,
@@ -427,6 +459,7 @@ describe("Stripe Connect Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/stripe-connect/process-payout")
+        .set("Authorization", `Bearer ${token}`)
         .send({ appointmentId: mockAppointment.id });
 
       expect(res.status).toBe(200);
@@ -437,6 +470,9 @@ describe("Stripe Connect Full Payment Flow", () => {
     });
 
     it("should correctly calculate 90/10 split", async () => {
+      const token = jwt.sign({ userId: mockOwner.id }, secretKey);
+
+      User.findByPk.mockResolvedValue(mockOwner);
       UserAppointments.findByPk.mockResolvedValue({
         ...mockAppointment,
         price: 20000, // $200 in cents
@@ -460,6 +496,7 @@ describe("Stripe Connect Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/stripe-connect/process-payout")
+        .set("Authorization", `Bearer ${token}`)
         .send({ appointmentId: mockAppointment.id });
 
       expect(res.status).toBe(200);
@@ -470,8 +507,10 @@ describe("Stripe Connect Full Payment Flow", () => {
     });
 
     it("should split payout among multiple cleaners", async () => {
+      const token = jwt.sign({ userId: mockOwner.id }, secretKey);
       const cleanerIds = [2, 3]; // Two cleaners
 
+      User.findByPk.mockResolvedValue(mockOwner);
       UserAppointments.findByPk.mockResolvedValue({
         ...mockAppointment,
         price: 30000, // $300 in cents
@@ -506,6 +545,7 @@ describe("Stripe Connect Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/stripe-connect/process-payout")
+        .set("Authorization", `Bearer ${token}`)
         .send({ appointmentId: mockAppointment.id });
 
       expect(res.status).toBe(200);
@@ -523,6 +563,9 @@ describe("Stripe Connect Full Payment Flow", () => {
 
   describe("Step 6: Payout History", () => {
     it("should show payout history for cleaner", async () => {
+      const token = jwt.sign({ userId: mockCleaner.id }, secretKey);
+
+      User.findByPk.mockResolvedValue(mockCleaner);
       Payout.findAll.mockResolvedValue([
         {
           ...mockPayout,
@@ -539,9 +582,9 @@ describe("Stripe Connect Full Payment Flow", () => {
         },
       ]);
 
-      const res = await request(app).get(
-        `/api/v1/stripe-connect/payouts/${mockCleaner.id}`
-      );
+      const res = await request(app)
+        .get(`/api/v1/stripe-connect/payouts/${mockCleaner.id}`)
+        .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body.payouts).toHaveLength(1);
@@ -554,6 +597,9 @@ describe("Stripe Connect Full Payment Flow", () => {
 
   describe("Error Handling", () => {
     it("should fail payout if cleaner has no Connect account", async () => {
+      const token = jwt.sign({ userId: mockOwner.id }, secretKey);
+
+      User.findByPk.mockResolvedValue(mockOwner);
       UserAppointments.findByPk.mockResolvedValue({
         ...mockAppointment,
         paid: true,
@@ -574,6 +620,7 @@ describe("Stripe Connect Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/stripe-connect/process-payout")
+        .set("Authorization", `Bearer ${token}`)
         .send({ appointmentId: mockAppointment.id });
 
       expect(res.status).toBe(200);
@@ -582,6 +629,9 @@ describe("Stripe Connect Full Payment Flow", () => {
     });
 
     it("should fail payout if cleaner onboarding incomplete", async () => {
+      const token = jwt.sign({ userId: mockOwner.id }, secretKey);
+
+      User.findByPk.mockResolvedValue(mockOwner);
       UserAppointments.findByPk.mockResolvedValue({
         ...mockAppointment,
         paid: true,
@@ -606,6 +656,7 @@ describe("Stripe Connect Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/stripe-connect/process-payout")
+        .set("Authorization", `Bearer ${token}`)
         .send({ appointmentId: mockAppointment.id });
 
       expect(res.status).toBe(200);
@@ -620,7 +671,8 @@ describe("Stripe Connect Full Payment Flow", () => {
 
       const res = await request(app)
         .post("/api/v1/stripe-connect/create-account")
-        .send({ token });
+        .set("Authorization", `Bearer ${token}`)
+        .send({});
 
       expect(res.status).toBe(403);
       expect(res.body.code).toBe("NOT_A_CLEANER");
@@ -629,13 +681,16 @@ describe("Stripe Connect Full Payment Flow", () => {
 
   describe("Webhook Processing", () => {
     const originalNodeEnv = process.env.NODE_ENV;
+    const originalWebhookSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
 
     beforeEach(() => {
       process.env.NODE_ENV = "development";
+      process.env.STRIPE_CONNECT_WEBHOOK_SECRET = "whsec_test_connect";
     });
 
     afterEach(() => {
       process.env.NODE_ENV = originalNodeEnv;
+      process.env.STRIPE_CONNECT_WEBHOOK_SECRET = originalWebhookSecret;
     });
 
     it("should update account status via webhook", async () => {
@@ -653,6 +708,7 @@ describe("Stripe Connect Full Payment Flow", () => {
         .set("Content-Type", "application/json")
         .send(
           JSON.stringify({
+            id: "evt_test_webhook_123",
             type: "account.updated",
             data: {
               object: {

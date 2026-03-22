@@ -102,11 +102,10 @@ module.exports = (sequelize, DataTypes) => {
     },
   });
 
-  // Generate unique transaction ID
+  // Generate unique transaction ID using cryptographically secure random bytes
   OwnerWithdrawal.generateTransactionId = () => {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 8);
-    return `ow_${timestamp}_${random}`;
+    const crypto = require("crypto");
+    return `ow_${crypto.randomBytes(16).toString("hex")}`;
   };
 
   // Get withdrawal history with pagination

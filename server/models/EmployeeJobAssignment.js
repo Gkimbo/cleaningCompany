@@ -55,6 +55,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       comment: "Hours worked (for hourly pay type)",
     },
+    hourlyRateAtAssignment: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Hourly rate in cents at time of assignment (for hourly pay type)",
+    },
     payAdjustmentReason: {
       type: DataTypes.TEXT,
       allowNull: true,

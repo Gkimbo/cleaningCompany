@@ -169,11 +169,10 @@ module.exports = (sequelize, DataTypes) => {
     });
   };
 
-  // Generate unique transaction ID
+  // Generate unique transaction ID using cryptographically secure random bytes
   PlatformEarnings.generateTransactionId = () => {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 8);
-    return `pf_${timestamp}_${random}`;
+    const crypto = require("crypto");
+    return `pf_${crypto.randomBytes(16).toString("hex")}`;
   };
 
   // Get quarter from date

@@ -1,5 +1,17 @@
-// Mock fetch globally
-global.fetch = jest.fn();
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
+
+import HttpClient from "../../src/services/HttpClient";
+import IncentivesService from "../../src/services/fetchRequests/IncentivesService";
 
 // Mock console methods
 const originalWarn = console.warn;
@@ -14,13 +26,6 @@ afterEach(() => {
   console.warn = originalWarn;
   console.error = originalError;
 });
-
-// Mock config
-jest.mock("../../src/services/config", () => ({
-  API_BASE: "http://localhost:5000/api/v1",
-}));
-
-import IncentivesService from "../../src/services/fetchRequests/IncentivesService";
 
 describe("IncentivesService", () => {
   const mockToken = "test_token_123";
@@ -45,24 +50,16 @@ describe("IncentivesService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await IncentivesService.getCurrentIncentives();
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:5000/api/v1/incentives/current"
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/incentives/current", { skipAuth: true });
       expect(result).toEqual(mockResponse);
     });
 
     it("should return null on failed response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Server error" });
 
       const result = await IncentivesService.getCurrentIncentives();
 
@@ -71,7 +68,7 @@ describe("IncentivesService", () => {
     });
 
     it("should return null on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await IncentivesService.getCurrentIncentives();
 
@@ -100,27 +97,16 @@ describe("IncentivesService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await IncentivesService.getFullConfig(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:5000/api/v1/incentives/config",
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/incentives/config", { token: mockToken });
       expect(result).toEqual(mockResponse);
     });
 
     it("should return null on unauthorized response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Unauthorized" });
 
       const result = await IncentivesService.getFullConfig(mockToken);
 
@@ -129,7 +115,7 @@ describe("IncentivesService", () => {
     });
 
     it("should return null on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await IncentivesService.getFullConfig(mockToken);
 
@@ -160,38 +146,26 @@ describe("IncentivesService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.put.mockResolvedValueOnce(mockResponse);
 
       const result = await IncentivesService.updateIncentives(
         mockToken,
         validIncentiveData
       );
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:5000/api/v1/incentives/config",
-        expect.objectContaining({
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(validIncentiveData),
-        })
+      expect(HttpClient.put).toHaveBeenCalledWith(
+        "/incentives/config",
+        validIncentiveData,
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.message).toBe("Incentive configuration updated successfully");
     });
 
     it("should return error on validation failure", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () =>
-          Promise.resolve({
-            error: "cleanerFeeReductionPercent must be a number between 0 and 1",
-          }),
+      HttpClient.put.mockResolvedValueOnce({
+        success: false,
+        error: "cleanerFeeReductionPercent must be a number between 0 and 1",
       });
 
       const result = await IncentivesService.updateIncentives(mockToken, {
@@ -206,7 +180,7 @@ describe("IncentivesService", () => {
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.put.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await IncentivesService.updateIncentives(
         mockToken,
@@ -214,14 +188,11 @@ describe("IncentivesService", () => {
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
     });
 
     it("should return generic error when error field missing", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({}),
-      });
+      HttpClient.put.mockResolvedValueOnce({ success: false });
 
       const result = await IncentivesService.updateIncentives(
         mockToken,
@@ -253,42 +224,31 @@ describe("IncentivesService", () => {
         ],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await IncentivesService.getIncentiveHistory(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:5000/api/v1/incentives/history?limit=20",
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/incentives/history?limit=20",
+        { token: mockToken }
       );
       expect(result.count).toBe(2);
       expect(result.history).toHaveLength(2);
     });
 
     it("should accept custom limit parameter", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ count: 0, history: [] }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ count: 0, history: [] });
 
       await IncentivesService.getIncentiveHistory(mockToken, 5);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:5000/api/v1/incentives/history?limit=5",
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/incentives/history?limit=5",
+        { token: mockToken }
       );
     });
 
     it("should return empty history on failed response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Forbidden" });
 
       const result = await IncentivesService.getIncentiveHistory(mockToken);
 
@@ -296,7 +256,7 @@ describe("IncentivesService", () => {
     });
 
     it("should return empty history on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await IncentivesService.getIncentiveHistory(mockToken);
 
@@ -318,28 +278,20 @@ describe("IncentivesService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await IncentivesService.checkCleanerEligibility(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:5000/api/v1/incentives/cleaner-eligibility",
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/incentives/cleaner-eligibility",
+        { token: mockToken }
       );
       expect(result.eligible).toBe(true);
       expect(result.remainingCleanings).toBe(3);
     });
 
     it("should return not eligible on failed response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Unauthorized" });
 
       const result = await IncentivesService.checkCleanerEligibility(mockToken);
 
@@ -347,7 +299,7 @@ describe("IncentivesService", () => {
     });
 
     it("should return not eligible on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await IncentivesService.checkCleanerEligibility(mockToken);
 
@@ -368,18 +320,13 @@ describe("IncentivesService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await IncentivesService.checkHomeownerEligibility(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:5000/api/v1/incentives/homeowner-eligibility",
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/incentives/homeowner-eligibility",
+        { token: mockToken }
       );
       expect(result.eligible).toBe(true);
       expect(result.remainingCleanings).toBe(2);
@@ -387,10 +334,7 @@ describe("IncentivesService", () => {
     });
 
     it("should return not eligible on failed response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Unauthorized" });
 
       const result = await IncentivesService.checkHomeownerEligibility(mockToken);
 
@@ -398,7 +342,7 @@ describe("IncentivesService", () => {
     });
 
     it("should return not eligible on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await IncentivesService.checkHomeownerEligibility(mockToken);
 

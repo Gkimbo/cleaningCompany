@@ -375,6 +375,12 @@ userInfoRouter.post("/home", async (req, res) => {
 });
 
 userInfoRouter.patch("/home", async (req, res) => {
+  // Authentication check
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const {
     id,
     nickName,
@@ -404,6 +410,19 @@ userInfoRouter.patch("/home", async (req, res) => {
   } = req.body;
 
   try {
+    // Verify token and get user ID
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Verify home exists and belongs to the authenticated user
+    const home = await UserHomes.findByPk(id);
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+    if (home.userId !== userId) {
+      return res.status(403).json({ error: "You don't have permission to update this home" });
+    }
+
     const checkZipCode = await HomeClass.checkZipCodeExists(zipcode);
     if (!checkZipCode) {
       return res.status(400).json({ error: "Cannot find zipcode" });
@@ -600,22 +619,36 @@ userInfoRouter.patch("/home/:id/complete-setup", async (req, res) => {
 });
 
 userInfoRouter.delete("/home", async (req, res) => {
+  // Authentication check
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const id = req.body.id;
+
   try {
+    // Verify token and get user ID
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Verify home exists and belongs to the authenticated user
+    const homeToDelete = await UserHomes.findByPk(id);
+    if (!homeToDelete) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+    if (homeToDelete.userId !== userId) {
+      return res.status(403).json({ error: "You don't have permission to delete this home" });
+    }
+
     const today = new Date();
     const oneWeekFromToday = new Date(today);
     let price = 0;
     oneWeekFromToday.setDate(oneWeekFromToday.getDate() + 7);
 
-    const homeToDelete = await UserHomes.findAll({
-      where: {
-        id: id,
-      },
-    });
-
     const billToUpdate = await UserBills.findOne({
       where: {
-        userId: homeToDelete[0].dataValues.userId,
+        userId: userId,
       },
     });
 

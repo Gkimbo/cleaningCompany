@@ -152,10 +152,34 @@ cleanerApprovalRouter.get("/pending", async (req, res) => {
 /**
  * GET /appointment/:appointmentId
  * Get pending join requests for a specific appointment
+ * Only the homeowner or assigned cleaners can view these requests
  */
 cleanerApprovalRouter.get("/appointment/:appointmentId", async (req, res) => {
   try {
     const { appointmentId } = req.params;
+    const { UserAppointments, UserCleanerAppointments } = require("../../../models");
+
+    // Verify the appointment exists and check authorization
+    const appointment = await UserAppointments.findByPk(parseInt(appointmentId));
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Check if user is the homeowner
+    const isHomeowner = appointment.userId === req.userId;
+
+    // Check if user is an assigned cleaner
+    const isAssignedCleaner = await UserCleanerAppointments.findOne({
+      where: {
+        appointmentId: parseInt(appointmentId),
+        employeeId: req.userId,
+      },
+    });
+
+    if (!isHomeowner && !isAssignedCleaner) {
+      return res.status(403).json({ error: "You don't have permission to view requests for this appointment" });
+    }
+
     const requests = await CleanerApprovalService.getPendingRequestsForAppointment(
       parseInt(appointmentId)
     );

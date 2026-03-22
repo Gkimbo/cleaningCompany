@@ -468,6 +468,30 @@ async function updateAllHomesServiceAreaStatus(
 }
 
 /**
+ * Validates that a platform fee percentage is within safe bounds
+ * @param {number} fee - Fee as decimal (e.g., 0.10 for 10%)
+ * @param {string} fieldName - Name of the field for logging
+ * @returns {number} Validated fee or default 0.10
+ */
+function validatePlatformFee(fee, fieldName = "feePercent") {
+  const MIN_FEE = 0.0;
+  const MAX_FEE = 0.5; // 50% max - catches misconfiguration like 10 instead of 0.10
+  const DEFAULT_FEE = 0.10;
+
+  if (typeof fee !== "number" || isNaN(fee)) {
+    console.error(`[BusinessConfig] CRITICAL: Invalid ${fieldName} "${fee}" is not a number! Using default ${DEFAULT_FEE}.`);
+    return DEFAULT_FEE;
+  }
+
+  if (fee < MIN_FEE || fee > MAX_FEE) {
+    console.error(`[BusinessConfig] CRITICAL: ${fieldName} ${fee} is outside valid range (${MIN_FEE}-${MAX_FEE})! Using default ${DEFAULT_FEE}.`);
+    return DEFAULT_FEE;
+  }
+
+  return fee;
+}
+
+/**
  * Get pricing from database with fallback to static config
  * @returns {Promise<object>} Pricing configuration object
  */
@@ -477,6 +501,21 @@ async function getPricingConfig() {
     const { PricingConfig } = require("../models");
     const dbPricing = await PricingConfig.getFormattedPricing();
     if (dbPricing) {
+      // Validate platform fee percentages to prevent misconfiguration
+      if (dbPricing.platform) {
+        dbPricing.platform.feePercent = validatePlatformFee(
+          dbPricing.platform.feePercent,
+          "platform.feePercent"
+        );
+        dbPricing.platform.businessOwnerFeePercent = validatePlatformFee(
+          dbPricing.platform.businessOwnerFeePercent,
+          "platform.businessOwnerFeePercent"
+        );
+        dbPricing.platform.largeBusinessFeePercent = validatePlatformFee(
+          dbPricing.platform.largeBusinessFeePercent,
+          "platform.largeBusinessFeePercent"
+        );
+      }
       return dbPricing;
     }
   } catch (error) {

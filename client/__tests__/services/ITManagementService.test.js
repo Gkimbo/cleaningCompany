@@ -5,20 +5,24 @@
 
 import ITManagementService from "../../src/services/fetchRequests/ITManagementService";
 
-// Mock fetch globally
-global.fetch = jest.fn();
-
-// Mock config
-jest.mock("../../src/services/config", () => ({
-  API_BASE: "http://localhost:3000/api/v1",
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
+import HttpClient from "../../src/services/HttpClient";
 
 describe("ITManagementService", () => {
   const mockToken = "test-token";
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch.mockClear();
   });
 
   describe("getITStaff", () => {
@@ -27,26 +31,20 @@ describe("ITManagementService", () => {
         { id: 1, firstName: "Alex", lastName: "IT", username: "alexIT" },
         { id: 2, firstName: "Sam", lastName: "Tech", username: "samtech" },
       ];
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ itStaff: mockStaff }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ itStaff: mockStaff });
 
       const result = await ITManagementService.getITStaff(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/users/it-staff",
-        { headers: { Authorization: "Bearer test-token" } }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/users/it-staff",
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.itStaff).toEqual(mockStaff);
     });
 
     it("should return empty array when no IT staff", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
-      });
+      HttpClient.get.mockResolvedValueOnce({});
 
       const result = await ITManagementService.getITStaff(mockToken);
 
@@ -55,10 +53,7 @@ describe("ITManagementService", () => {
     });
 
     it("should return error when fetch fails", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Unauthorized" }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Unauthorized" });
 
       const result = await ITManagementService.getITStaff(mockToken);
 
@@ -67,13 +62,13 @@ describe("ITManagementService", () => {
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITManagementService.getITStaff(mockToken);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
       consoleSpy.mockRestore();
     });
   });
@@ -87,10 +82,7 @@ describe("ITManagementService", () => {
         username: "johndoe",
         email: "john@example.com",
       };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ user: mockUser }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ user: mockUser });
 
       const employeeData = {
         firstName: "John",
@@ -102,26 +94,17 @@ describe("ITManagementService", () => {
 
       const result = await ITManagementService.createITEmployee(mockToken, employeeData);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/users/new-it",
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer test-token",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(employeeData),
-        }
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/users/new-it",
+        employeeData,
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.user).toEqual(mockUser);
     });
 
     it("should return error for duplicate username", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Username already exists" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Username already exists" });
 
       const result = await ITManagementService.createITEmployee(mockToken, {
         username: "existing",
@@ -132,10 +115,7 @@ describe("ITManagementService", () => {
     });
 
     it("should return error for duplicate email", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Email already in use" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Email already in use" });
 
       const result = await ITManagementService.createITEmployee(mockToken, {
         email: "existing@example.com",
@@ -146,10 +126,7 @@ describe("ITManagementService", () => {
     });
 
     it("should return error for weak password", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Password must be at least 8 characters" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Password must be at least 8 characters" });
 
       const result = await ITManagementService.createITEmployee(mockToken, {
         password: "weak",
@@ -160,21 +137,18 @@ describe("ITManagementService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITManagementService.createITEmployee(mockToken, {});
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
       consoleSpy.mockRestore();
     });
 
     it("should include phone in request if provided", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ user: { id: 1 } }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ user: { id: 1 } });
 
       const employeeData = {
         firstName: "John",
@@ -187,11 +161,10 @@ describe("ITManagementService", () => {
 
       await ITManagementService.createITEmployee(mockToken, employeeData);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: expect.stringContaining("1234567890"),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/users/new-it",
+        expect.objectContaining({ phone: "1234567890" }),
+        { token: "test-token", useBaseUrl: true }
       );
     });
   });
@@ -204,10 +177,7 @@ describe("ITManagementService", () => {
         lastName: "Doe",
         email: "jane@example.com",
       };
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ user: mockUser, message: "Updated successfully" }),
-      });
+      HttpClient.patch.mockResolvedValueOnce({ user: mockUser, message: "Updated successfully" });
 
       const updates = {
         firstName: "Jane",
@@ -217,16 +187,10 @@ describe("ITManagementService", () => {
 
       const result = await ITManagementService.updateITEmployee(mockToken, 10, updates);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/users/it-staff/10",
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: "Bearer test-token",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(updates),
-        }
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/users/it-staff/10",
+        updates,
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.user).toEqual(mockUser);
@@ -234,10 +198,7 @@ describe("ITManagementService", () => {
     });
 
     it("should return error for duplicate email", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Email already in use" }),
-      });
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Email already in use" });
 
       const result = await ITManagementService.updateITEmployee(mockToken, 10, {
         email: "existing@example.com",
@@ -248,10 +209,7 @@ describe("ITManagementService", () => {
     });
 
     it("should return error when employee not found", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "IT employee not found" }),
-      });
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "IT employee not found" });
 
       const result = await ITManagementService.updateITEmployee(mockToken, 999, {});
 
@@ -260,42 +218,33 @@ describe("ITManagementService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITManagementService.updateITEmployee(mockToken, 10, {});
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
       consoleSpy.mockRestore();
     });
   });
 
   describe("removeITEmployee", () => {
     it("should remove IT employee successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ message: "IT employee removed successfully" }),
-      });
+      HttpClient.delete.mockResolvedValueOnce({ message: "IT employee removed successfully" });
 
       const result = await ITManagementService.removeITEmployee(mockToken, 10);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/users/it-staff/10",
-        {
-          method: "DELETE",
-          headers: { Authorization: "Bearer test-token" },
-        }
+      expect(HttpClient.delete).toHaveBeenCalledWith(
+        "/users/it-staff/10",
+        { token: "test-token", useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.message).toBe("IT employee removed successfully");
     });
 
     it("should return error when employee not found", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "IT employee not found" }),
-      });
+      HttpClient.delete.mockResolvedValueOnce({ success: false, error: "IT employee not found" });
 
       const result = await ITManagementService.removeITEmployee(mockToken, 999);
 
@@ -304,10 +253,7 @@ describe("ITManagementService", () => {
     });
 
     it("should return error when not authorized", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Not authorized to remove IT employees" }),
-      });
+      HttpClient.delete.mockResolvedValueOnce({ success: false, error: "Not authorized to remove IT employees" });
 
       const result = await ITManagementService.removeITEmployee(mockToken, 10);
 
@@ -316,13 +262,13 @@ describe("ITManagementService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.delete.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const result = await ITManagementService.removeITEmployee(mockToken, 10);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
       consoleSpy.mockRestore();
     });
   });
@@ -375,17 +321,13 @@ describe("ITManagementService Integration Scenarios", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch.mockClear();
   });
 
   describe("Full CRUD workflow", () => {
     it("should complete a full create-read-update-delete cycle", async () => {
       // Create
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          user: { id: 100, firstName: "Test", lastName: "User", username: "testuser" },
-        }),
+      HttpClient.post.mockResolvedValueOnce({
+        user: { id: 100, firstName: "Test", lastName: "User", username: "testuser" },
       });
 
       const createResult = await ITManagementService.createITEmployee(mockToken, {
@@ -399,11 +341,8 @@ describe("ITManagementService Integration Scenarios", () => {
       expect(createResult.user.id).toBe(100);
 
       // Read
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          itStaff: [{ id: 100, firstName: "Test", lastName: "User" }],
-        }),
+      HttpClient.get.mockResolvedValueOnce({
+        itStaff: [{ id: 100, firstName: "Test", lastName: "User" }],
       });
 
       const readResult = await ITManagementService.getITStaff(mockToken);
@@ -413,12 +352,9 @@ describe("ITManagementService Integration Scenarios", () => {
       );
 
       // Update
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          user: { id: 100, firstName: "Updated", lastName: "User" },
-          message: "Updated",
-        }),
+      HttpClient.patch.mockResolvedValueOnce({
+        user: { id: 100, firstName: "Updated", lastName: "User" },
+        message: "Updated",
       });
 
       const updateResult = await ITManagementService.updateITEmployee(mockToken, 100, {
@@ -428,10 +364,7 @@ describe("ITManagementService Integration Scenarios", () => {
       expect(updateResult.user.firstName).toBe("Updated");
 
       // Delete
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ message: "Removed" }),
-      });
+      HttpClient.delete.mockResolvedValueOnce({ message: "Removed" });
 
       const deleteResult = await ITManagementService.removeITEmployee(mockToken, 100);
       expect(deleteResult.success).toBe(true);
@@ -441,17 +374,14 @@ describe("ITManagementService Integration Scenarios", () => {
   describe("Error recovery scenarios", () => {
     it("should handle temporary network failure and retry", async () => {
       // First call fails
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
       const firstResult = await ITManagementService.getITStaff(mockToken);
       expect(firstResult.success).toBe(false);
 
       // Retry succeeds
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ itStaff: [] }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ itStaff: [] });
 
       const retryResult = await ITManagementService.getITStaff(mockToken);
       expect(retryResult.success).toBe(true);

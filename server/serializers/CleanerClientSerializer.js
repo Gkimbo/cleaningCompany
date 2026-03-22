@@ -54,18 +54,19 @@ class CleanerClientSerializer {
 			cleanerId: data.cleanerId,
 			clientId: data.clientId,
 			homeId: data.homeId,
-			inviteToken: data.inviteToken,
+			// inviteToken intentionally omitted from API responses for security
 			invitedEmail: this.decryptField(data.invitedEmail),
 			invitedName: this.decryptField(data.invitedName),
 			invitedPhone: this.decryptField(data.invitedPhone),
 			invitedAddress: this.parseAddress(data.invitedAddress),
 			invitedBeds: data.invitedBeds,
 			invitedBaths: data.invitedBaths ? parseFloat(data.invitedBaths) : null,
-			invitedNotes: data.invitedNotes,
+			invitedNotes: this.decryptField(data.invitedNotes),
 			status: data.status,
 			invitedAt: data.invitedAt,
 			acceptedAt: data.acceptedAt,
 			lastInviteReminderAt: data.lastInviteReminderAt,
+			inviteExpiresAt: data.inviteExpiresAt,
 			defaultFrequency: data.defaultFrequency,
 			defaultPrice: data.defaultPrice || null, // Return cents, frontend handles conversion to dollars
 			defaultDayOfWeek: data.defaultDayOfWeek,
@@ -147,18 +148,19 @@ class CleanerClientSerializer {
 
 		return {
 			id: data.id,
-			inviteToken: data.inviteToken,
+			// inviteToken intentionally omitted - only sent via email for security
 			invitedName: this.decryptField(data.invitedName),
 			invitedEmail: this.decryptField(data.invitedEmail),
 			invitedPhone: this.decryptField(data.invitedPhone),
 			invitedAddress: this.parseAddress(data.invitedAddress),
 			invitedBeds: data.invitedBeds,
 			invitedBaths: data.invitedBaths ? parseFloat(data.invitedBaths) : null,
-			invitedNotes: data.invitedNotes,
+			invitedNotes: this.decryptField(data.invitedNotes),
 			defaultFrequency: data.defaultFrequency,
 			defaultPrice: data.defaultPrice || null, // Return cents, frontend handles conversion
 			status: data.status,
-			invitedAt: data.invitedAt
+			invitedAt: data.invitedAt,
+			inviteExpiresAt: data.inviteExpiresAt
 		};
 	}
 }

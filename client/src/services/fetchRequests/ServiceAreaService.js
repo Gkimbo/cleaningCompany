@@ -3,7 +3,7 @@
  * API calls for managing service area configuration
  */
 
-import { API_BASE } from "../config";
+import HttpClient from "../HttpClient";
 
 class ServiceAreaService {
   /**
@@ -12,25 +12,14 @@ class ServiceAreaService {
    * @returns {Promise<object>} Config with stats
    */
   static async getConfig(token) {
-    try {
-      const response = await fetch(`${API_BASE}/service-areas/config`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+    const result = await HttpClient.get("/service-areas/config", { token });
 
-      if (!response.ok) {
-        const error = await response.json();
-        return { error: error.error || "Failed to fetch service area config" };
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("[ServiceAreaService] getConfig error:", error);
-      return { error: "Network error fetching service area config" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ServiceAreaService] getConfig error:", result.error);
+      return { error: result.error || "Failed to fetch service area config" };
     }
+
+    return result;
   }
 
   /**
@@ -40,26 +29,14 @@ class ServiceAreaService {
    * @returns {Promise<object>} Updated config
    */
   static async updateConfig(token, configData) {
-    try {
-      const response = await fetch(`${API_BASE}/service-areas/config`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(configData),
-      });
+    const result = await HttpClient.put("/service-areas/config", configData, { token });
 
-      if (!response.ok) {
-        const error = await response.json();
-        return { error: error.error || "Failed to update service area config" };
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("[ServiceAreaService] updateConfig error:", error);
-      return { error: "Network error updating service area config" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ServiceAreaService] updateConfig error:", result.error);
+      return { error: result.error || "Failed to update service area config" };
     }
+
+    return result;
   }
 
   /**
@@ -69,28 +46,17 @@ class ServiceAreaService {
    * @returns {Promise<object>} History list
    */
   static async getHistory(token, limit = 20) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/service-areas/history?limit=${limit}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+    const result = await HttpClient.get(
+      `/service-areas/history?limit=${limit}`,
+      { token }
+    );
 
-      if (!response.ok) {
-        const error = await response.json();
-        return { error: error.error || "Failed to fetch history" };
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("[ServiceAreaService] getHistory error:", error);
-      return { error: "Network error fetching history" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ServiceAreaService] getHistory error:", result.error);
+      return { error: result.error || "Failed to fetch history" };
     }
+
+    return result;
   }
 
   /**
@@ -99,28 +65,18 @@ class ServiceAreaService {
    * @returns {Promise<object>} Recheck results
    */
   static async recheckAllHomes(token) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/service-areas/recheck-all-homes`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+    const result = await HttpClient.post(
+      "/service-areas/recheck-all-homes",
+      {},
+      { token }
+    );
 
-      if (!response.ok) {
-        const error = await response.json();
-        return { error: error.error || "Failed to recheck homes" };
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("[ServiceAreaService] recheckAllHomes error:", error);
-      return { error: "Network error rechecking homes" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ServiceAreaService] recheckAllHomes error:", result.error);
+      return { error: result.error || "Failed to recheck homes" };
     }
+
+    return result;
   }
 
   /**
@@ -130,29 +86,18 @@ class ServiceAreaService {
    * @returns {Promise<object>} Validation result
    */
   static async validateAddress(token, address) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/service-areas/validate-address`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(address),
-        }
-      );
+    const result = await HttpClient.post(
+      "/service-areas/validate-address",
+      address,
+      { token }
+    );
 
-      if (!response.ok) {
-        const error = await response.json();
-        return { error: error.error || "Failed to validate address" };
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("[ServiceAreaService] validateAddress error:", error);
-      return { error: "Network error validating address" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ServiceAreaService] validateAddress error:", result.error);
+      return { error: result.error || "Failed to validate address" };
     }
+
+    return result;
   }
 
   /**
@@ -161,25 +106,14 @@ class ServiceAreaService {
    * @returns {Promise<object>} Stats
    */
   static async getStats(token) {
-    try {
-      const response = await fetch(`${API_BASE}/service-areas/stats`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+    const result = await HttpClient.get("/service-areas/stats", { token });
 
-      if (!response.ok) {
-        const error = await response.json();
-        return { error: error.error || "Failed to fetch stats" };
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("[ServiceAreaService] getStats error:", error);
-      return { error: "Network error fetching stats" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ServiceAreaService] getStats error:", result.error);
+      return { error: result.error || "Failed to fetch stats" };
     }
+
+    return result;
   }
 }
 

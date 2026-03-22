@@ -1,5 +1,17 @@
-// Mock fetch
-global.fetch = jest.fn();
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+    request: jest.fn(),
+  },
+}));
+
+import HttpClient from "../../src/services/HttpClient";
 
 // Mock the config
 jest.mock("../../src/services/config", () => ({
@@ -26,84 +38,64 @@ describe("FetchData - Token Expiry Handling", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch.mockReset();
     mockHandleTokenExpired.mockClear();
   });
 
   describe("get method", () => {
-    it("should trigger handleTokenExpired on 401 response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+    it("should throw 'Session expired' on 401 response", async () => {
+      HttpClient.request.mockResolvedValueOnce({
+        success: false,
         status: 401,
-        statusText: "Unauthorized",
+        error: "Session expired",
       });
 
-      const result = await FetchData.get("/api/v1/test", mockToken);
-
-      expect(mockHandleTokenExpired).toHaveBeenCalledTimes(1);
-      expect(result).toBeInstanceOf(Error);
-      expect(result.message).toBe("Session expired");
+      await expect(FetchData.get("/api/v1/test", mockToken)).rejects.toThrow("Session expired");
     });
 
-    it("should not trigger handleTokenExpired on successful response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ data: "test" }),
-      });
+    it("should not throw on successful response", async () => {
+      HttpClient.request.mockResolvedValueOnce({ data: "test" });
 
       const result = await FetchData.get("/api/v1/test", mockToken);
 
-      expect(mockHandleTokenExpired).not.toHaveBeenCalled();
       expect(result.data).toBe("test");
     });
 
-    it("should not trigger handleTokenExpired on other error status codes", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+    it("should throw 'No data received' on other error status codes", async () => {
+      HttpClient.request.mockResolvedValueOnce({
+        success: false,
         status: 500,
-        statusText: "Internal Server Error",
+        error: "Internal Server Error",
       });
 
-      await FetchData.get("/api/v1/test", mockToken);
-
-      expect(mockHandleTokenExpired).not.toHaveBeenCalled();
+      await expect(FetchData.get("/api/v1/test", mockToken)).rejects.toThrow("No data received");
     });
 
-    it("should not trigger handleTokenExpired on 404 response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+    it("should throw 'No data received' on 404 response", async () => {
+      HttpClient.request.mockResolvedValueOnce({
+        success: false,
         status: 404,
-        statusText: "Not Found",
+        error: "Not Found",
       });
 
-      await FetchData.get("/api/v1/test", mockToken);
-
-      expect(mockHandleTokenExpired).not.toHaveBeenCalled();
+      await expect(FetchData.get("/api/v1/test", mockToken)).rejects.toThrow("No data received");
     });
   });
 
   describe("post method", () => {
-    it("should trigger handleTokenExpired on 401 response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+    it("should throw 'Session expired' on 401 response", async () => {
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
         status: 401,
-        statusText: "Unauthorized",
+        error: "Session expired",
       });
 
       await expect(
         FetchData.post("/api/v1/test", { data: "test" }, mockToken)
       ).rejects.toThrow("Session expired");
-
-      expect(mockHandleTokenExpired).toHaveBeenCalledTimes(1);
     });
 
-    it("should not trigger handleTokenExpired on successful response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ success: true }),
-      });
+    it("should return data on successful response", async () => {
+      HttpClient.post.mockResolvedValueOnce({ success: true });
 
       const result = await FetchData.post(
         "/api/v1/test",
@@ -111,108 +103,87 @@ describe("FetchData - Token Expiry Handling", () => {
         mockToken
       );
 
-      expect(mockHandleTokenExpired).not.toHaveBeenCalled();
       expect(result.success).toBe(true);
     });
   });
 
   describe("getApplicationsFromBackend method", () => {
-    it("should trigger handleTokenExpired on 401 response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+    it("should throw on 401 response", async () => {
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
         status: 401,
-        statusText: "Unauthorized",
+        error: "Session expired",
       });
 
-      const result = await FetchData.getApplicationsFromBackend(mockToken);
-
-      expect(mockHandleTokenExpired).toHaveBeenCalledTimes(1);
-      expect(result).toBeInstanceOf(Error);
+      await expect(FetchData.getApplicationsFromBackend(mockToken)).rejects.toThrow("Session expired");
     });
 
-    it("should not trigger handleTokenExpired on successful response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ applications: [] }),
-      });
+    it("should return data on successful response", async () => {
+      HttpClient.get.mockResolvedValueOnce({ applications: [] });
 
       const result = await FetchData.getApplicationsFromBackend(mockToken);
 
-      expect(mockHandleTokenExpired).not.toHaveBeenCalled();
       expect(result.applications).toEqual([]);
     });
   });
 
   describe("getBookingInfo method", () => {
-    it("should trigger handleTokenExpired on 401 response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+    it("should return error object on 401 response", async () => {
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
         status: 401,
-        statusText: "Unauthorized",
+        error: "Session expired",
       });
 
       const result = await FetchData.getBookingInfo(123, mockToken);
 
-      expect(mockHandleTokenExpired).toHaveBeenCalledTimes(1);
       expect(result.error).toBe("Session expired");
     });
 
-    it("should not trigger handleTokenExpired on successful response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ booking: { id: 123 } }),
-      });
+    it("should return data on successful response", async () => {
+      HttpClient.get.mockResolvedValueOnce({ booking: { id: 123 } });
 
       const result = await FetchData.getBookingInfo(123, mockToken);
 
-      expect(mockHandleTokenExpired).not.toHaveBeenCalled();
       expect(result.booking.id).toBe(123);
     });
   });
 
   describe("getRequestCountsByHome method", () => {
-    it("should trigger handleTokenExpired on 401 response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+    it("should return empty object on 401 response", async () => {
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
         status: 401,
-        statusText: "Unauthorized",
+        error: "Session expired",
       });
 
       const result = await FetchData.getRequestCountsByHome(mockToken);
 
-      expect(mockHandleTokenExpired).toHaveBeenCalledTimes(1);
       expect(result).toEqual({ requestCountsByHome: {} });
     });
 
-    it("should not trigger handleTokenExpired on successful response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: () => Promise.resolve({ requestCountsByHome: { 1: 5 } }),
-      });
+    it("should return data on successful response", async () => {
+      HttpClient.get.mockResolvedValueOnce({ requestCountsByHome: { 1: 5 } });
 
       const result = await FetchData.getRequestCountsByHome(mockToken);
 
-      expect(mockHandleTokenExpired).not.toHaveBeenCalled();
       expect(result.requestCountsByHome).toEqual({ 1: 5 });
     });
 
     it("should return empty object when no token provided", async () => {
       const result = await FetchData.getRequestCountsByHome(null);
 
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(HttpClient.get).not.toHaveBeenCalled();
       expect(result).toEqual({ requestCountsByHome: {} });
     });
   });
 
   describe("login method (unauthenticated endpoint)", () => {
     it("should not trigger handleTokenExpired on 401 for invalid password", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
         status: 401,
-        statusText: "Unauthorized",
+        error: "Invalid credentials",
       });
 
       const result = await FetchData.login({

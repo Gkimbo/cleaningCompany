@@ -552,6 +552,25 @@ usersRouter.patch("/upgrade-to-business", async (req, res) => {
 });
 
 usersRouter.post("/new-employee", async (req, res) => {
+  // Verify caller is owner
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  let decoded;
+  try {
+    decoded = jwt.verify(token, secretKey);
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  const caller = await User.findByPk(decoded.userId);
+  if (!caller || caller.type !== "owner") {
+    return res.status(403).json({ error: "Only owner can create employee accounts" });
+  }
+
   try {
     const { username, password, email, type, firstName, lastName, phone } = req.body;
     let existingUser = null;
@@ -1272,6 +1291,25 @@ usersRouter.get("/employees", async (req, res) => {
 });
 
 usersRouter.patch("/employee", async (req, res) => {
+  // Verify caller is owner
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  let decoded;
+  try {
+    decoded = jwt.verify(token, secretKey);
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  const caller = await User.findByPk(decoded.userId);
+  if (!caller || caller.type !== "owner") {
+    return res.status(403).json({ error: "Only owner can edit employee accounts" });
+  }
+
   const { id, username, password, email, type, firstName, lastName, phone } = req.body;
   try {
     const userInfo = await UserInfo.editEmployeeInDB({
@@ -1293,7 +1331,7 @@ usersRouter.patch("/employee", async (req, res) => {
       return res.status(401).json({ error: "Token has expired" });
     }
 
-    return res.status(401).json({ error: "Invalid token" });
+    return res.status(500).json({ error: "Failed to update employee" });
   }
 });
 
@@ -1658,6 +1696,11 @@ usersRouter.post("/update-business-name", async (req, res) => {
       return res.status(403).json({ error: "Only business owners can update business name" });
     }
 
+    // Check if account is frozen
+    if (user.accountFrozen) {
+      return res.status(403).json({ error: "Account is frozen. Please contact support." });
+    }
+
     // Update business name
     await user.update({ businessName: businessName.trim() });
     console.log(`✅ Business name updated for user ${userId}: ${businessName.trim()}`);
@@ -1700,6 +1743,11 @@ usersRouter.post("/update-business-logo", async (req, res) => {
       return res.status(403).json({ error: "Only business owners can update business logo" });
     }
 
+    // Check if account is frozen
+    if (user.accountFrozen) {
+      return res.status(403).json({ error: "Account is frozen. Please contact support." });
+    }
+
     // Validate logo data (should be base64 string or null to remove)
     if (businessLogo && typeof businessLogo !== "string") {
       return res.status(400).json({ error: "Invalid logo format" });
@@ -1708,6 +1756,23 @@ usersRouter.post("/update-business-logo", async (req, res) => {
     // Check size limit (max 5MB base64 - roughly 6.67MB as base64)
     if (businessLogo && businessLogo.length > 7000000) {
       return res.status(400).json({ error: "Logo image is too large. Maximum size is 5MB." });
+    }
+
+    // Validate image format (must be a valid image data URI)
+    if (businessLogo) {
+      const validImagePrefixes = [
+        "data:image/jpeg;base64,",
+        "data:image/jpg;base64,",
+        "data:image/png;base64,",
+        "data:image/gif;base64,",
+        "data:image/webp;base64,",
+      ];
+      const hasValidPrefix = validImagePrefixes.some(prefix =>
+        businessLogo.toLowerCase().startsWith(prefix.toLowerCase())
+      );
+      if (!hasValidPrefix) {
+        return res.status(400).json({ error: "Invalid image format. Please upload a JPEG, PNG, GIF, or WebP image." });
+      }
     }
 
     // Update business logo (null to remove)

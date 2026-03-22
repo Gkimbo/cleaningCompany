@@ -64,11 +64,11 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
     try {
       const confirmResponse = await fetch(`${API_BASE}/payments/confirm-checkout-session`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: state.currentUser.token,
-          sessionId,
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.currentUser.token}`,
+        },
+        body: JSON.stringify({ sessionId }),
       });
 
       const confirmData = await confirmResponse.json();
@@ -129,9 +129,11 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
       if (Platform.OS === "web") {
         const response = await fetch(`${API_BASE}/payments/setup-checkout-session`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${state.currentUser.token}`,
+          },
           body: JSON.stringify({
-            token: state.currentUser.token,
             successUrl: `${window.location.origin}/payment-setup?setup_complete=true&session_id={CHECKOUT_SESSION_ID}`,
             cancelUrl: `${window.location.origin}/payment-setup?canceled=true`,
           }),
@@ -150,8 +152,10 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
       // On native, use SetupIntent with payment sheet
       const setupResponse = await fetch(`${API_BASE}/payments/setup-intent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: state.currentUser.token }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.currentUser.token}`,
+        },
       });
       const setupData = await setupResponse.json();
 
@@ -179,9 +183,11 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
       // Confirm the payment method was saved
       const confirmResponse = await fetch(`${API_BASE}/payments/confirm-payment-method`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.currentUser.token}`,
+        },
         body: JSON.stringify({
-          token: state.currentUser.token,
           setupIntentId: setupData.clientSecret.split("_secret_")[0],
         }),
       });

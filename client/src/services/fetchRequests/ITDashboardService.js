@@ -1,35 +1,20 @@
-import { API_BASE } from "../config";
-import AuthEventService from "../AuthEventService";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class ITDashboardService {
   static async fetchWithFallback(url, token, fallback = {}) {
-    try {
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const result = await HttpClient.get(url, { token, useBaseUrl: true });
 
-      // Handle expired token
-      if (response.status === 401) {
-        AuthEventService.handleTokenExpired();
-        return fallback;
-      }
-
-      if (!response.ok) {
-        console.warn(`[ITDashboard] ${url} returned ${response.status}`);
-        return fallback;
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn(`[ITDashboard] ${url} failed:`, error.message);
+    if (result.success === false) {
+      __DEV__ && console.warn(`[ITDashboard] ${url} failed:`, result.error);
       return fallback;
     }
+
+    return result;
   }
 
   static async getQuickStats(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-dashboard/quick-stats`,
+      "/api/v1/it-dashboard/quick-stats",
       token,
       {
         openDisputes: 0,
@@ -45,7 +30,7 @@ class ITDashboardService {
   static async getDisputes(token, filters = {}) {
     const params = new URLSearchParams(filters);
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-dashboard/disputes?${params}`,
+      `/api/v1/it-dashboard/disputes?${params}`,
       token,
       { disputes: [], total: 0 }
     );
@@ -53,7 +38,7 @@ class ITDashboardService {
 
   static async getDispute(token, id) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-dashboard/disputes/${id}`,
+      `/api/v1/it-dashboard/disputes/${id}`,
       token,
       { dispute: null }
     );
@@ -61,7 +46,7 @@ class ITDashboardService {
 
   static async getMyAssigned(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-dashboard/my-assigned`,
+      "/api/v1/it-dashboard/my-assigned",
       token,
       { disputes: [] }
     );
@@ -69,100 +54,64 @@ class ITDashboardService {
 
   static async getITStaff(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-dashboard/it-staff`,
+      "/api/v1/it-dashboard/it-staff",
       token,
       { itStaff: [] }
     );
   }
 
   static async assignDispute(token, disputeId, assigneeId) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/it-dashboard/disputes/${disputeId}/assign`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ assigneeId }),
-        }
-      );
+    const result = await HttpClient.post(
+      `/api/v1/it-dashboard/disputes/${disputeId}/assign`,
+      { assigneeId },
+      { token, useBaseUrl: true }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || "Failed to assign dispute",
-        };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[ITDashboard] assignDispute failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDashboard] assignDispute failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to assign dispute",
+      };
     }
+
+    return { success: true, ...result };
   }
 
   static async updateStatus(token, disputeId, status) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/it-dashboard/disputes/${disputeId}/status`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ status }),
-        }
-      );
+    const result = await HttpClient.post(
+      `/api/v1/it-dashboard/disputes/${disputeId}/status`,
+      { status },
+      { token, useBaseUrl: true }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || "Failed to update status",
-        };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[ITDashboard] updateStatus failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDashboard] updateStatus failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to update status",
+      };
     }
+
+    return { success: true, ...result };
   }
 
   static async resolveDispute(token, disputeId, resolution) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/it-dashboard/disputes/${disputeId}/resolve`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(resolution),
-        }
-      );
+    const result = await HttpClient.post(
+      `/api/v1/it-dashboard/disputes/${disputeId}/resolve`,
+      resolution,
+      { token, useBaseUrl: true }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || "Failed to resolve dispute",
-        };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[ITDashboard] resolveDispute failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDashboard] resolveDispute failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to resolve dispute",
+      };
     }
+
+    return { success: true, ...result };
   }
 
   // ==================== IT Support Tools ====================
@@ -175,7 +124,7 @@ class ITDashboardService {
     if (type) params.append("type", type);
 
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-support/search?${params}`,
+      `/api/v1/it-support/search?${params}`,
       token,
       { users: [] }
     );
@@ -186,7 +135,7 @@ class ITDashboardService {
    */
   static async getUserDetails(token, userId) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-support/user/${userId}`,
+      `/api/v1/it-support/user/${userId}`,
       token,
       { user: null }
     );
@@ -196,64 +145,42 @@ class ITDashboardService {
    * Send password reset email to user
    */
   static async sendPasswordReset(token, userId) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/it-support/user/${userId}/send-password-reset`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+    const result = await HttpClient.post(
+      `/api/v1/it-support/user/${userId}/send-password-reset`,
+      {},
+      { token, useBaseUrl: true }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || "Failed to send password reset",
-        };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[ITDashboard] sendPasswordReset failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDashboard] sendPasswordReset failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to send password reset",
+      };
     }
+
+    return { success: true, ...result };
   }
 
   /**
    * Unlock user account (clear failed login attempts)
    */
   static async unlockAccount(token, userId) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/it-support/user/${userId}/unlock`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+    const result = await HttpClient.post(
+      `/api/v1/it-support/user/${userId}/unlock`,
+      {},
+      { token, useBaseUrl: true }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || "Failed to unlock account",
-        };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[ITDashboard] unlockAccount failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDashboard] unlockAccount failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to unlock account",
+      };
     }
+
+    return { success: true, ...result };
   }
 
   // ==================== Profile Tools ====================
@@ -263,7 +190,7 @@ class ITDashboardService {
    */
   static async getUserProfile(token, userId) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-support/user/${userId}/profile`,
+      `/api/v1/it-support/user/${userId}/profile`,
       token,
       { profile: null }
     );
@@ -273,30 +200,18 @@ class ITDashboardService {
    * Update user contact info
    */
   static async updateUserContact(token, userId, { email, phone }) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/it-support/user/${userId}/contact`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ email, phone }),
-        }
-      );
+    const result = await HttpClient.patch(
+      `/api/v1/it-support/user/${userId}/contact`,
+      { email, phone },
+      { token, useBaseUrl: true }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[ITDashboard] updateUserContact failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDashboard] updateUserContact failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 
   // ==================== Billing Tools ====================
@@ -306,7 +221,7 @@ class ITDashboardService {
    */
   static async getUserBilling(token, userId) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-support/user/${userId}/billing`,
+      `/api/v1/it-support/user/${userId}/billing`,
       token,
       { billing: null }
     );
@@ -319,7 +234,7 @@ class ITDashboardService {
    */
   static async getUserSecurity(token, userId) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-support/user/${userId}/security`,
+      `/api/v1/it-support/user/${userId}/security`,
       token,
       { security: null }
     );
@@ -329,59 +244,36 @@ class ITDashboardService {
    * Force user logout
    */
   static async forceLogout(token, userId) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/it-support/user/${userId}/force-logout`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+    const result = await HttpClient.post(
+      `/api/v1/it-support/user/${userId}/force-logout`,
+      {},
+      { token, useBaseUrl: true }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[ITDashboard] forceLogout failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDashboard] forceLogout failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 
   /**
    * Temporarily suspend account
    */
   static async suspendAccount(token, userId, { reason, hours }) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/it-support/user/${userId}/suspend`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ reason, hours }),
-        }
-      );
+    const result = await HttpClient.post(
+      `/api/v1/it-support/user/${userId}/suspend`,
+      { reason, hours },
+      { token, useBaseUrl: true }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[ITDashboard] suspendAccount failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDashboard] suspendAccount failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 
   // ==================== Data Tools ====================
@@ -391,7 +283,7 @@ class ITDashboardService {
    */
   static async getUserDataSummary(token, userId) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-support/user/${userId}/data-summary`,
+      `/api/v1/it-support/user/${userId}/data-summary`,
       token,
       { dataSummary: null }
     );
@@ -404,7 +296,7 @@ class ITDashboardService {
    */
   static async getUserAppInfo(token, userId) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/it-support/user/${userId}/app-info`,
+      `/api/v1/it-support/user/${userId}/app-info`,
       token,
       { appInfo: null }
     );
@@ -414,29 +306,18 @@ class ITDashboardService {
    * Clear user's app state
    */
   static async clearAppState(token, userId) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/it-support/user/${userId}/clear-app-state`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+    const result = await HttpClient.post(
+      `/api/v1/it-support/user/${userId}/clear-app-state`,
+      {},
+      { token, useBaseUrl: true }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[ITDashboard] clearAppState failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
+    if (result.success === false) {
+      __DEV__ && console.warn("[ITDashboard] clearAppState failed:", result.error);
+      return { success: false, error: result.error };
     }
+
+    return { success: true, ...result };
   }
 }
 

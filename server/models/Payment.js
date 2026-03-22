@@ -182,11 +182,10 @@ module.exports = (sequelize, DataTypes) => {
     });
   };
 
-  // Helper to generate unique transaction ID
+  // Helper to generate unique transaction ID using cryptographically secure random bytes
   Payment.generateTransactionId = () => {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 10);
-    return `txn_${timestamp}_${random}`;
+    const crypto = require("crypto");
+    return `txn_${crypto.randomBytes(16).toString("hex")}`;
   };
 
   // Get all reportable payments for a cleaner in a tax year

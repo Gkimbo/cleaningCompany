@@ -17,7 +17,9 @@
 
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const EncryptionService = require("../../../services/EncryptionService");
+const authenticateToken = require("../../../middleware/authenticatedToken");
 
 // ============================================================================
 // CONFIGURATION & VALIDATION
@@ -61,6 +63,8 @@ const {
   PlatformEarnings,
   Payment,
   PricingConfig,
+  StripeWebhookEvent,
+  sequelize,
 } = require("../../../models");
 
 // Import services
@@ -80,6 +84,13 @@ const stripeConnectRouter = express.Router();
 const DEFAULT_PLATFORM_FEE_PERCENT = 0.10;
 
 /**
+ * Valid fee range: 0% to 50% (0.0 to 0.5)
+ * Prevents misconfiguration where someone sets 10 instead of 0.10
+ */
+const MIN_PLATFORM_FEE_PERCENT = 0.0;
+const MAX_PLATFORM_FEE_PERCENT = 0.5;
+
+/**
  * Helper to get current platform fee from database
  * @returns {Promise<number>} Fee as decimal (e.g., 0.10 for 10%)
  */
@@ -90,7 +101,23 @@ const getPlatformFeePercent = async () => {
       console.error("[StripeConnect] CRITICAL: No active PricingConfig found! Using emergency fallback fee. Please configure pricing.");
       return DEFAULT_PLATFORM_FEE_PERCENT;
     }
-    return parseFloat(config.platformFeePercent);
+
+    const fee = parseFloat(config.platformFeePercent);
+
+    // Validate fee is a valid number
+    if (isNaN(fee)) {
+      console.error(`[StripeConnect] CRITICAL: Invalid platform fee "${config.platformFeePercent}" is not a number! Using default.`);
+      return DEFAULT_PLATFORM_FEE_PERCENT;
+    }
+
+    // Validate fee is within reasonable bounds (0% to 50%)
+    // This catches misconfiguration like setting 10 instead of 0.10
+    if (fee < MIN_PLATFORM_FEE_PERCENT || fee > MAX_PLATFORM_FEE_PERCENT) {
+      console.error(`[StripeConnect] CRITICAL: Platform fee ${fee} is outside valid range (${MIN_PLATFORM_FEE_PERCENT}-${MAX_PLATFORM_FEE_PERCENT})! Using default.`);
+      return DEFAULT_PLATFORM_FEE_PERCENT;
+    }
+
+    return fee;
   } catch (error) {
     console.error("[StripeConnect] Error fetching platform fee, using default:", error.message);
     return DEFAULT_PLATFORM_FEE_PERCENT;
@@ -137,6 +164,44 @@ const verifyToken = (token) => {
   } catch (error) {
     console.error("[StripeConnect] Token verification failed:", error.message);
     return null;
+  }
+};
+
+/**
+ * Generates an HMAC signature for onboarding callback URLs.
+ * This prevents unauthorized access to callback endpoints.
+ *
+ * @param {string|number} userId - User ID to sign
+ * @returns {string} - HMAC signature (hex)
+ */
+const generateOnboardingSignature = (userId) => {
+  return crypto
+    .createHmac("sha256", SESSION_SECRET)
+    .update(String(userId))
+    .digest("hex");
+};
+
+/**
+ * Verifies an HMAC signature for onboarding callbacks.
+ * Uses timing-safe comparison to prevent timing attacks.
+ *
+ * @param {string|number} userId - User ID that was signed
+ * @param {string} signature - Signature to verify
+ * @returns {boolean} - True if signature is valid
+ */
+const verifyOnboardingSignature = (userId, signature) => {
+  if (!userId || !signature) return false;
+
+  const expectedSignature = generateOnboardingSignature(userId);
+
+  // Use timing-safe comparison
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature, "hex"),
+      Buffer.from(expectedSignature, "hex")
+    );
+  } catch {
+    return false;
   }
 };
 
@@ -209,13 +274,22 @@ const getBaseUrl = (req) => {
  * @param {string} userId - User ID to check
  * @returns {object} - Account status information
  */
-stripeConnectRouter.get("/account-status/:userId", async (req, res) => {
+stripeConnectRouter.get("/account-status/:userId", authenticateToken, async (req, res) => {
   const userId = validateUserId(req.params.userId);
 
   if (!userId) {
     return res.status(400).json({
       error: "Invalid user ID",
       code: "INVALID_USER_ID",
+    });
+  }
+
+  // Users can only view their own account status (unless owner)
+  const requestingUser = await User.findByPk(req.userId);
+  if (req.userId !== userId && requestingUser?.type !== "owner") {
+    return res.status(403).json({
+      error: "You can only view your own account status",
+      code: "FORBIDDEN",
     });
   }
 
@@ -310,25 +384,17 @@ stripeConnectRouter.get("/account-status/:userId", async (req, res) => {
  * - losses.payments: 'application' - Platform handles refunds/chargebacks
  * - stripe_dashboard.type: 'express' - Cleaner gets Express Dashboard access
  *
- * @body {string} token - JWT authentication token
+ * @header {string} Authorization - Bearer token
  * @body {object} personalInfo - Optional pre-filled personal info (dob, address, ssn_last_4)
  * @returns {object} - Created account details
  */
-stripeConnectRouter.post("/create-account", async (req, res) => {
-  const { token, personalInfo } = req.body;
-
-  // Validate token
-  const decoded = verifyToken(token);
-  if (!decoded) {
-    return res.status(401).json({
-      error: "Invalid or expired authentication token",
-      code: "INVALID_TOKEN",
-    });
-  }
+stripeConnectRouter.post("/create-account", authenticateToken, async (req, res) => {
+  const { personalInfo } = req.body;
+  const userId = req.userId;
 
   try {
     // Find user
-    const user = await User.findByPk(decoded.userId);
+    const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({
         error: "User not found",
@@ -497,26 +563,18 @@ stripeConnectRouter.post("/create-account", async (req, res) => {
  * 2. Create account with pre-filled data
  * 3. Return onboarding link for Stripe to collect verification + bank account
  *
- * @body {string} token - JWT authentication token
+ * @header {string} Authorization - Bearer token
  * @body {object} personalInfo - Personal information (dob, address)
  * @body {object} tosAcceptance - ToS acceptance (accepted, date)
  * @returns {object} - Account status and onboarding URL
  */
-stripeConnectRouter.post("/complete-setup", async (req, res) => {
-  const { token, personalInfo, tosAcceptance } = req.body;
-
-  // Validate token
-  const decoded = verifyToken(token);
-  if (!decoded) {
-    return res.status(401).json({
-      error: "Invalid or expired authentication token",
-      code: "INVALID_TOKEN",
-    });
-  }
+stripeConnectRouter.post("/complete-setup", authenticateToken, async (req, res) => {
+  const { personalInfo, tosAcceptance } = req.body;
+  const userId = req.userId;
 
   try {
     // Find user
-    const user = await User.findByPk(decoded.userId);
+    const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({
         error: "User not found",
@@ -691,10 +749,11 @@ stripeConnectRouter.post("/complete-setup", async (req, res) => {
 
     // Generate onboarding link for Stripe to collect remaining info (SSN, bank account)
     const baseUrl = getBaseUrl(req);
+    const signature = generateOnboardingSignature(user.id);
     const accountLink = await stripe.accountLinks.create({
       account: stripeAccountId,
-      refresh_url: `${baseUrl}/api/v1/stripe-connect/onboarding-refresh?userId=${user.id}`,
-      return_url: `${baseUrl}/api/v1/stripe-connect/onboarding-complete?userId=${user.id}`,
+      refresh_url: `${baseUrl}/api/v1/stripe-connect/onboarding-refresh?userId=${user.id}&sig=${signature}`,
+      return_url: `${baseUrl}/api/v1/stripe-connect/onboarding-complete?userId=${user.id}&sig=${signature}`,
       type: "account_onboarding",
       collection_options: {
         fields: "eventually_due",
@@ -740,7 +799,22 @@ stripeConnectRouter.post("/complete-setup", async (req, res) => {
  * Redirects to the mobile app with success status.
  */
 stripeConnectRouter.get("/onboarding-complete", async (req, res) => {
-  const { userId } = req.query;
+  const { userId, sig } = req.query;
+
+  // Verify the signature to prevent unauthorized access
+  if (!verifyOnboardingSignature(userId, sig)) {
+    console.error(`[StripeConnect] Invalid signature for onboarding-complete. userId: ${userId}`);
+    return res.status(403).send(`
+      <!DOCTYPE html>
+      <html>
+        <head><title>Access Denied</title></head>
+        <body>
+          <h1>Access Denied</h1>
+          <p>Invalid or expired link. Please try again from the app.</p>
+        </body>
+      </html>
+    `);
+  }
 
   try {
     const connectAccount = await StripeConnectAccount.findOne({
@@ -816,7 +890,13 @@ stripeConnectRouter.get("/onboarding-complete", async (req, res) => {
  * Generates a new link and redirects.
  */
 stripeConnectRouter.get("/onboarding-refresh", async (req, res) => {
-  const { userId } = req.query;
+  const { userId, sig } = req.query;
+
+  // Verify the signature to prevent unauthorized access
+  if (!verifyOnboardingSignature(userId, sig)) {
+    console.error(`[StripeConnect] Invalid signature for onboarding-refresh. userId: ${userId}`);
+    return res.status(403).send("Access denied. Invalid or expired link. Please try again from the app.");
+  }
 
   try {
     const connectAccount = await StripeConnectAccount.findOne({
@@ -829,10 +909,11 @@ stripeConnectRouter.get("/onboarding-refresh", async (req, res) => {
 
     // Generate new onboarding link
     const baseUrl = getBaseUrl(req);
+    const signature = generateOnboardingSignature(userId);
     const accountLink = await stripe.accountLinks.create({
       account: connectAccount.stripeAccountId,
-      refresh_url: `${baseUrl}/api/v1/stripe-connect/onboarding-refresh?userId=${userId}`,
-      return_url: `${baseUrl}/api/v1/stripe-connect/onboarding-complete?userId=${userId}`,
+      refresh_url: `${baseUrl}/api/v1/stripe-connect/onboarding-refresh?userId=${userId}&sig=${signature}`,
+      return_url: `${baseUrl}/api/v1/stripe-connect/onboarding-complete?userId=${userId}&sig=${signature}`,
       type: "account_onboarding",
       collection_options: {
         fields: "eventually_due",
@@ -853,21 +934,13 @@ stripeConnectRouter.get("/onboarding-refresh", async (req, res) => {
  * Updates the bank account for a connected account.
  * Removes the old bank account and adds a new one.
  *
- * @body {string} token - JWT authentication token
+ * @header {string} Authorization - Bearer token
  * @body {object} bankAccount - New bank account details (routingNumber, accountNumber)
  * @returns {object} - Success status
  */
-stripeConnectRouter.post("/update-bank-account", async (req, res) => {
-  const { token, bankAccount } = req.body;
-
-  // Validate token
-  const decoded = verifyToken(token);
-  if (!decoded) {
-    return res.status(401).json({
-      error: "Invalid or expired authentication token",
-      code: "INVALID_TOKEN",
-    });
-  }
+stripeConnectRouter.post("/update-bank-account", authenticateToken, async (req, res) => {
+  const { bankAccount } = req.body;
+  const userId = req.userId;
 
   // Validate bank account info
   if (!bankAccount?.routingNumber || !bankAccount?.accountNumber) {
@@ -879,7 +952,7 @@ stripeConnectRouter.post("/update-bank-account", async (req, res) => {
 
   try {
     // Find user
-    const user = await User.findByPk(decoded.userId);
+    const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({
         error: "User not found",
@@ -985,27 +1058,19 @@ stripeConnectRouter.post("/update-bank-account", async (req, res) => {
  * Generates a Stripe Account Link for onboarding.
  * Account Links are single-use and expire after a few minutes.
  *
- * @body {string} token - JWT authentication token
+ * @header {string} Authorization - Bearer token
  * @body {string} returnUrl - URL to redirect after successful onboarding
  * @body {string} refreshUrl - URL to redirect if link expires
  * @returns {object} - Onboarding URL and expiration
  */
-stripeConnectRouter.post("/onboarding-link", async (req, res) => {
-  const { token, returnUrl, refreshUrl } = req.body;
-
-  // Validate token
-  const decoded = verifyToken(token);
-  if (!decoded) {
-    return res.status(401).json({
-      error: "Invalid or expired authentication token",
-      code: "INVALID_TOKEN",
-    });
-  }
+stripeConnectRouter.post("/onboarding-link", authenticateToken, async (req, res) => {
+  const { returnUrl, refreshUrl } = req.body;
+  const userId = req.userId;
 
   try {
     // Find Connect account
     const connectAccount = await StripeConnectAccount.findOne({
-      where: { userId: decoded.userId },
+      where: { userId },
     });
 
     if (!connectAccount) {
@@ -1057,25 +1122,16 @@ stripeConnectRouter.post("/onboarding-link", async (req, res) => {
  * Generates a login link to the Express Dashboard.
  * Only available for accounts that have completed onboarding.
  *
- * @body {string} token - JWT authentication token
+ * @header {string} Authorization - Bearer token
  * @returns {object} - Dashboard URL
  */
-stripeConnectRouter.post("/dashboard-link", async (req, res) => {
-  const { token } = req.body;
-
-  // Validate token
-  const decoded = verifyToken(token);
-  if (!decoded) {
-    return res.status(401).json({
-      error: "Invalid or expired authentication token",
-      code: "INVALID_TOKEN",
-    });
-  }
+stripeConnectRouter.post("/dashboard-link", authenticateToken, async (req, res) => {
+  const userId = req.userId;
 
   try {
     // Find Connect account
     const connectAccount = await StripeConnectAccount.findOne({
-      where: { userId: decoded.userId },
+      where: { userId },
     });
 
     if (!connectAccount) {
@@ -1124,13 +1180,22 @@ stripeConnectRouter.post("/dashboard-link", async (req, res) => {
  * @param {string} userId - User ID
  * @returns {object} - Payout history and totals
  */
-stripeConnectRouter.get("/payouts/:userId", async (req, res) => {
+stripeConnectRouter.get("/payouts/:userId", authenticateToken, async (req, res) => {
   const userId = validateUserId(req.params.userId);
 
   if (!userId) {
     return res.status(400).json({
       error: "Invalid user ID",
       code: "INVALID_USER_ID",
+    });
+  }
+
+  // Users can only view their own payouts (unless owner)
+  const requestingUser = await User.findByPk(req.userId);
+  if (req.userId !== userId && requestingUser?.type !== "owner") {
+    return res.status(403).json({
+      error: "You can only view your own payout history",
+      code: "FORBIDDEN",
     });
   }
 
@@ -1219,7 +1284,7 @@ stripeConnectRouter.get("/payouts/:userId", async (req, res) => {
  * @body {number} appointmentId - Appointment ID
  * @returns {object} - Payout results for each cleaner
  */
-stripeConnectRouter.post("/process-payout", async (req, res) => {
+stripeConnectRouter.post("/process-payout", authenticateToken, async (req, res) => {
   const { appointmentId } = req.body;
 
   if (!appointmentId) {
@@ -1230,8 +1295,24 @@ stripeConnectRouter.post("/process-payout", async (req, res) => {
   }
 
   try {
+    // Verify the requesting user is authorized (owner or assigned cleaner)
+    const requestingUser = await User.findByPk(req.userId);
+
     // Find appointment
     const appointment = await UserAppointments.findByPk(appointmentId);
+
+    if (appointment) {
+      const isOwner = requestingUser?.type === "owner";
+      const isAssignedCleaner = appointment.employeesAssigned?.includes(String(req.userId)) ||
+                                 appointment.employeesAssigned?.includes(req.userId);
+
+      if (!isOwner && !isAssignedCleaner) {
+        return res.status(403).json({
+          error: "You are not authorized to process payouts for this appointment",
+          code: "FORBIDDEN",
+        });
+      }
+    }
 
     if (!appointment) {
       return res.status(404).json({
@@ -1379,7 +1460,8 @@ async function processCleanerPayout(appointment, cleanerId, totalCleaners, feePe
       });
     }
 
-    // Create Stripe Transfer
+    // Create Stripe Transfer with idempotency key to prevent duplicates
+    const idempotencyKey = `transfer-connect-${appointment.id}-${cleanerId}-${payout.id}`;
     const transfer = await stripe.transfers.create({
       amount: netAmount,
       currency: "usd",
@@ -1392,7 +1474,7 @@ async function processCleanerPayout(appointment, cleanerId, totalCleaners, feePe
         gross_amount: perCleanerGross.toString(),
         platform_fee: platformFee.toString(),
       },
-    });
+    }, { idempotencyKey });
 
     // Update payout as completed
     await payout.update({
@@ -1464,13 +1546,22 @@ async function processCleanerPayout(appointment, cleanerId, totalCleaners, feePe
  * @body {number} cleanerId - Cleaner user ID
  * @returns {object} - Created payout record
  */
-stripeConnectRouter.post("/create-payout-record", async (req, res) => {
+stripeConnectRouter.post("/create-payout-record", authenticateToken, async (req, res) => {
   const { appointmentId, cleanerId } = req.body;
 
   if (!appointmentId || !cleanerId) {
     return res.status(400).json({
       error: "Appointment ID and cleaner ID are required",
       code: "MISSING_FIELDS",
+    });
+  }
+
+  // Verify the requesting user is authorized (owner only for creating payout records)
+  const requestingUser = await User.findByPk(req.userId);
+  if (requestingUser?.type !== "owner") {
+    return res.status(403).json({
+      error: "Only owners can create payout records",
+      code: "FORBIDDEN",
     });
   }
 
@@ -1540,7 +1631,7 @@ stripeConnectRouter.post("/create-payout-record", async (req, res) => {
 /**
  * POST /webhook
  *
- * Handles Stripe Connect webhook events.
+ * Handles Stripe Connect webhook events with idempotency/deduplication.
  * Verifies webhook signature and processes events.
  *
  * Important events:
@@ -1554,21 +1645,9 @@ stripeConnectRouter.post(
   async (req, res) => {
     const sig = req.headers["stripe-signature"];
 
-    // Webhook secret is optional in development
+    // Webhook secret is required - even in development for security
     if (!STRIPE_CONNECT_WEBHOOK_SECRET) {
-      console.warn("[StripeConnect] No webhook secret configured, skipping signature verification");
-
-      // In development, try to parse the body directly
-      if (process.env.NODE_ENV === "development") {
-        try {
-          const event = JSON.parse(req.body.toString());
-          await handleWebhookEvent(event);
-          return res.json({ received: true });
-        } catch (err) {
-          return res.status(400).json({ error: "Invalid webhook payload" });
-        }
-      }
-
+      console.error("[StripeConnect] STRIPE_CONNECT_WEBHOOK_SECRET not configured");
       return res.status(400).json({
         error: "Webhook secret not configured",
         code: "WEBHOOK_SECRET_MISSING",
@@ -1591,112 +1670,158 @@ stripeConnectRouter.post(
       });
     }
 
-    // Handle the event
+    // Validate event timestamp to prevent replay attacks (reject events older than 5 minutes)
+    const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000; // 5 minutes
+    const eventAgeMs = Date.now() - (event.created * 1000);
+    if (eventAgeMs > MAX_WEBHOOK_AGE_MS) {
+      console.warn(`[StripeConnect] Rejected stale event ${event.id} (age: ${Math.round(eventAgeMs / 1000)}s)`);
+      return res.status(400).json({ error: "Event too old", code: "STALE_EVENT" });
+    }
+
+    // Attempt to claim this event for processing (prevents duplicate processing)
+    const webhookRecord = await StripeWebhookEvent.claimEvent(event, "connect");
+    if (!webhookRecord) {
+      // Event already processed or being processed
+      console.log(`[StripeConnect] Event ${event.id} already processed, skipping`);
+      return res.json({ received: true, duplicate: true });
+    }
+
+    // Handle the event with deduplication tracking
     try {
-      await handleWebhookEvent(event);
+      const result = await handleWebhookEvent(event);
+      await StripeWebhookEvent.markCompleted(
+        event.id,
+        result?.entityType || null,
+        result?.entityId || null
+      );
       res.json({ received: true });
     } catch (err) {
       console.error("[StripeConnect] Webhook handler error:", err);
-      res.status(500).json({ error: "Webhook handler failed" });
+      await StripeWebhookEvent.markFailed(event.id, err.message);
+      // Return 200 to prevent Stripe from retrying indefinitely
+      res.json({ received: true, error: true });
     }
   }
 );
 
 /**
  * Handles a webhook event.
+ * Returns entity info for tracking purposes.
  *
  * @param {object} event - Stripe webhook event
+ * @returns {object|null} - { entityType, entityId } or null
  */
 async function handleWebhookEvent(event) {
-  console.log(`[StripeConnect] Received webhook event: ${event.type}`);
+  console.log(`[StripeConnect] Processing webhook event: ${event.type} (${event.id})`);
 
   switch (event.type) {
     case "account.updated": {
       const account = event.data.object;
-      await handleAccountUpdated(account);
-      break;
+      const result = await handleAccountUpdated(account);
+      return { entityType: "stripe_connect_account", entityId: result?.accountId };
     }
 
     case "transfer.created": {
       const transfer = event.data.object;
       console.log(`[StripeConnect] Transfer created: ${transfer.id}, amount: ${transfer.amount}`);
-      break;
+      return { entityType: "transfer", entityId: transfer.id };
     }
 
     case "transfer.failed": {
       const transfer = event.data.object;
-      await handleTransferFailed(transfer);
-      break;
+      const result = await handleTransferFailed(transfer);
+      return { entityType: "payout", entityId: result?.payoutId };
     }
 
     case "payout.failed": {
       const payout = event.data.object;
       console.error(`[StripeConnect] Payout failed: ${payout.id}, reason: ${payout.failure_message}`);
-      break;
+      return { entityType: "stripe_payout", entityId: payout.id };
     }
 
     default:
       console.log(`[StripeConnect] Unhandled event type: ${event.type}`);
+      return null;
   }
 }
 
 /**
  * Handles account.updated webhook event.
+ * Uses row-level locking to prevent race conditions.
  *
  * @param {object} account - Stripe account object
+ * @returns {object|null} - { accountId } or null if not found
  */
 async function handleAccountUpdated(account) {
-  const connectAccount = await StripeConnectAccount.findOne({
-    where: { stripeAccountId: account.id },
-  });
+  return await sequelize.transaction(async (t) => {
+    const connectAccount = await StripeConnectAccount.findOne({
+      where: { stripeAccountId: account.id },
+      lock: t.LOCK.UPDATE,
+      transaction: t,
+    });
 
-  if (!connectAccount) {
-    console.warn(`[StripeConnect] Received update for unknown account: ${account.id}`);
-    return;
-  }
-
-  const wasComplete = connectAccount.onboardingComplete;
-  const newStatus = determineAccountStatus(account);
-  const isNowComplete = account.payouts_enabled && account.details_submitted;
-
-  await connectAccount.update({
-    payoutsEnabled: account.payouts_enabled,
-    chargesEnabled: account.charges_enabled,
-    detailsSubmitted: account.details_submitted,
-    onboardingComplete: isNowComplete,
-    accountStatus: newStatus,
-  });
-
-  // Log status change
-  if (!wasComplete && isNowComplete) {
-    console.log(`[StripeConnect] Account ${account.id} onboarding completed`);
-
-    // Could send notification email here
-    const user = await User.findByPk(connectAccount.userId);
-    if (user) {
-      console.log(`[StripeConnect] User ${user.id} can now receive payouts`);
+    if (!connectAccount) {
+      console.warn(`[StripeConnect] Received update for unknown account: ${account.id}`);
+      return null;
     }
-  }
+
+    const wasComplete = connectAccount.onboardingComplete;
+    const newStatus = determineAccountStatus(account);
+    const isNowComplete = account.payouts_enabled && account.details_submitted;
+
+    await connectAccount.update({
+      payoutsEnabled: account.payouts_enabled,
+      chargesEnabled: account.charges_enabled,
+      detailsSubmitted: account.details_submitted,
+      onboardingComplete: isNowComplete,
+      accountStatus: newStatus,
+    }, { transaction: t });
+
+    // Log status change
+    if (!wasComplete && isNowComplete) {
+      console.log(`[StripeConnect] Account ${account.id} onboarding completed`);
+
+      // Could send notification email here
+      const user = await User.findByPk(connectAccount.userId, { transaction: t });
+      if (user) {
+        console.log(`[StripeConnect] User ${user.id} can now receive payouts`);
+      }
+    }
+
+    return { accountId: connectAccount.id };
+  });
 }
 
 /**
  * Handles transfer.failed webhook event.
+ * Uses row-level locking to prevent race conditions.
  *
  * @param {object} transfer - Stripe transfer object
+ * @returns {object|null} - { payoutId } or null if not found
  */
 async function handleTransferFailed(transfer) {
   console.error(`[StripeConnect] Transfer failed: ${transfer.id}`);
 
-  const payout = await Payout.findOne({
-    where: { stripeTransferId: transfer.id },
-  });
-
-  if (payout) {
-    await payout.update({
-      status: PAYOUT_STATUS.FAILED,
-      failureReason: transfer.failure_message || "Transfer failed",
+  return await sequelize.transaction(async (t) => {
+    const payout = await Payout.findOne({
+      where: { stripeTransferId: transfer.id },
+      lock: t.LOCK.UPDATE,
+      transaction: t,
     });
-  }
+
+    if (payout) {
+      // Only update if not already marked as failed (idempotent)
+      if (payout.status !== PAYOUT_STATUS.FAILED) {
+        await payout.update({
+          status: PAYOUT_STATUS.FAILED,
+          failureReason: transfer.failure_message || "Transfer failed",
+        }, { transaction: t });
+      }
+      return { payoutId: payout.id };
+    }
+
+    return null;
+  });
 }
 
 // ============================================================================

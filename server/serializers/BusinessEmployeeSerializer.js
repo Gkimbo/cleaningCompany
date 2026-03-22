@@ -128,7 +128,7 @@ class BusinessEmployeeSerializer {
       phone: this.decryptField(data.phone),
       businessName: data.businessName,
       businessLogo: data.businessLogo,
-      expoPushToken: data.expoPushToken,
+      // expoPushToken intentionally omitted - sensitive device identifier
     };
   }
 

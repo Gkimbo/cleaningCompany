@@ -370,7 +370,7 @@ describe("Business Employee Router - Invitation Flow", () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe(
-        "Password must contain at least 2 uppercase letters, 2 lowercase letters, and 2 special characters"
+        "Password must contain at least 2 uppercase letters, 2 lowercase letters, 1 number, and 2 special characters"
       );
     });
 

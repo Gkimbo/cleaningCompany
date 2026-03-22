@@ -3,14 +3,18 @@
  * Tests all API methods for conflict resolution
  */
 
-// Mock fetch globally
-global.fetch = jest.fn();
-
-// Mock config
-jest.mock("../../src/services/config", () => ({
-  API_BASE: "http://localhost:5000/api/v1",
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
+import HttpClient from "../../src/services/HttpClient";
 import ConflictService from "../../src/services/fetchRequests/ConflictService";
 
 describe("ConflictService", () => {
@@ -31,29 +35,19 @@ describe("ConflictService", () => {
         total: 2,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await ConflictService.getQueue(mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/conflicts/queue"),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            Authorization: `Bearer ${mockToken}`,
-          }),
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/conflicts/queue",
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.cases).toHaveLength(2);
     });
 
     it("should pass filter parameters", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, cases: [] }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: true, cases: [] });
 
       await ConflictService.getQueue(mockToken, {
         caseType: "appeal",
@@ -61,18 +55,14 @@ describe("ConflictService", () => {
         priority: "high",
       });
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("caseType=appeal"),
-        expect.any(Object)
-      );
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("status=submitted"),
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/conflicts/queue?caseType=appeal&status=submitted&priority=high",
+        { token: mockToken, useBaseUrl: true }
       );
     });
 
     it("should handle network errors", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ConflictService.getQueue(mockToken);
 
@@ -91,10 +81,7 @@ describe("ConflictService", () => {
         adjustments: { pending: 5 },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await ConflictService.getStats(mockToken);
 
@@ -103,10 +90,7 @@ describe("ConflictService", () => {
     });
 
     it("should handle error response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: "Unauthorized" }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Unauthorized" });
 
       const result = await ConflictService.getStats(mockToken);
 
@@ -126,16 +110,13 @@ describe("ConflictService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockCase),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockCase);
 
       const result = await ConflictService.getCase(mockToken, "appeal", 1);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/conflicts/appeal/1"),
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/conflicts/appeal/1",
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.case.id).toBe(1);
     });
@@ -150,24 +131,18 @@ describe("ConflictService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockCase),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockCase);
 
       const result = await ConflictService.getCase(mockToken, "adjustment", 1);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/conflicts/adjustment/1"),
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/conflicts/adjustment/1",
+        { token: mockToken, useBaseUrl: true }
       );
     });
 
     it("should handle case not found", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ success: false, error: "Case not found" }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Case not found" });
 
       const result = await ConflictService.getCase(mockToken, "appeal", 999);
 
@@ -185,10 +160,7 @@ describe("ConflictService", () => {
         passes: [],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockPhotos),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockPhotos);
 
       const result = await ConflictService.getPhotos(mockToken, "appeal", 1);
 
@@ -197,10 +169,7 @@ describe("ConflictService", () => {
     });
 
     it("should handle empty photos", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, before: [], after: [], passes: [] }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: true, before: [], after: [], passes: [] });
 
       const result = await ConflictService.getPhotos(mockToken, "appeal", 1);
 
@@ -222,10 +191,7 @@ describe("ConflictService", () => {
         completionNotes: "All done",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockChecklist),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockChecklist);
 
       const result = await ConflictService.getChecklist(mockToken, "appeal", 1);
 
@@ -243,10 +209,7 @@ describe("ConflictService", () => {
         ],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockMessages),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockMessages);
 
       const result = await ConflictService.getMessages(mockToken, "appeal", 1);
 
@@ -264,10 +227,7 @@ describe("ConflictService", () => {
         ],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockAuditTrail),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockAuditTrail);
 
       const result = await ConflictService.getAuditTrail(mockToken, "appeal", 1);
 
@@ -283,10 +243,7 @@ describe("ConflictService", () => {
         amount: 5000,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await ConflictService.processRefund(
         mockToken,
@@ -296,22 +253,17 @@ describe("ConflictService", () => {
         "customer_request"
       );
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/conflicts/appeal/1/refund"),
-        expect.objectContaining({
-          method: "POST",
-          body: expect.stringContaining('"amount":5000'),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/conflicts/appeal/1/refund",
+        { amount: 5000, reason: "customer_request" },
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.refundId).toBe("re_test_123");
     });
 
     it("should handle refund failure", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ success: false, error: "No payment intent" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "No payment intent" });
 
       const result = await ConflictService.processRefund(
         mockToken,
@@ -334,10 +286,7 @@ describe("ConflictService", () => {
         amount: 3000,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await ConflictService.processPayout(
         mockToken,
@@ -347,20 +296,16 @@ describe("ConflictService", () => {
         "Compensation"
       );
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/conflicts/appeal/1/payout"),
-        expect.objectContaining({
-          method: "POST",
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/conflicts/appeal/1/payout",
+        { amount: 3000, reason: "Compensation" },
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.success).toBe(true);
     });
 
     it("should handle payout failure", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ success: false, error: "No Stripe account" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "No Stripe account" });
 
       const result = await ConflictService.processPayout(
         mockToken,
@@ -376,10 +321,7 @@ describe("ConflictService", () => {
 
   describe("addNote", () => {
     it("should add note successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: true });
 
       const result = await ConflictService.addNote(
         mockToken,
@@ -388,12 +330,10 @@ describe("ConflictService", () => {
         "Test note"
       );
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/conflicts/appeal/1/note"),
-        expect.objectContaining({
-          method: "POST",
-          body: expect.stringContaining("Test note"),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/conflicts/appeal/1/note",
+        { note: "Test note" },
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.success).toBe(true);
     });
@@ -401,10 +341,7 @@ describe("ConflictService", () => {
 
   describe("resolveCase", () => {
     it("should resolve case successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: true });
 
       const result = await ConflictService.resolveCase(
         mockToken,
@@ -414,20 +351,16 @@ describe("ConflictService", () => {
         "Case approved"
       );
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/conflicts/appeal/1/resolve"),
-        expect.objectContaining({
-          method: "POST",
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/conflicts/appeal/1/resolve",
+        { decision: "approved", resolution: "Case approved", notes: undefined },
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.success).toBe(true);
     });
 
     it("should handle resolution failure", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ success: false, error: "Already resolved" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Already resolved" });
 
       const result = await ConflictService.resolveCase(
         mockToken,
@@ -443,10 +376,7 @@ describe("ConflictService", () => {
 
   describe("assignCase", () => {
     it("should assign case successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: true });
 
       const result = await ConflictService.assignCase(
         mockToken,
@@ -484,39 +414,28 @@ describe("ConflictService", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await ConflictService.createSupportTicket(mockToken, ticketData);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/conflicts/support/create"),
-        expect.objectContaining({
-          method: "POST",
-          headers: expect.objectContaining({
-            Authorization: `Bearer ${mockToken}`,
-          }),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/conflicts/support/create",
+        ticketData,
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.ticket.caseNumber).toBe("SUP-000001");
     });
 
     it("should send all ticket data in request body", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, ticket: { id: 1 } }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: true, ticket: { id: 1 } });
 
       await ConflictService.createSupportTicket(mockToken, ticketData);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: JSON.stringify(ticketData),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/conflicts/support/create",
+        ticketData,
+        { token: mockToken, useBaseUrl: true }
       );
     });
 
@@ -532,18 +451,14 @@ describe("ConflictService", () => {
       ];
 
       for (const category of categories) {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ success: true, ticket: { id: 1 } }),
-        });
+        HttpClient.post.mockResolvedValueOnce({ success: true, ticket: { id: 1 } });
 
         await ConflictService.createSupportTicket(mockToken, { ...ticketData, category });
 
-        expect(global.fetch).toHaveBeenLastCalledWith(
-          expect.any(String),
-          expect.objectContaining({
-            body: expect.stringContaining(category),
-          })
+        expect(HttpClient.post).toHaveBeenLastCalledWith(
+          "/conflicts/support/create",
+          expect.objectContaining({ category }),
+          { token: mockToken, useBaseUrl: true }
         );
       }
     });
@@ -552,27 +467,20 @@ describe("ConflictService", () => {
       const priorities = ["normal", "high", "urgent"];
 
       for (const priority of priorities) {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ success: true, ticket: { id: 1 } }),
-        });
+        HttpClient.post.mockResolvedValueOnce({ success: true, ticket: { id: 1 } });
 
         await ConflictService.createSupportTicket(mockToken, { ...ticketData, priority });
 
-        expect(global.fetch).toHaveBeenLastCalledWith(
-          expect.any(String),
-          expect.objectContaining({
-            body: expect.stringContaining(priority),
-          })
+        expect(HttpClient.post).toHaveBeenLastCalledWith(
+          "/conflicts/support/create",
+          expect.objectContaining({ priority }),
+          { token: mockToken, useBaseUrl: true }
         );
       }
     });
 
     it("should handle validation error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: "Category and description are required" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Category and description are required" });
 
       const result = await ConflictService.createSupportTicket(mockToken, {});
 
@@ -581,7 +489,7 @@ describe("ConflictService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ConflictService.createSupportTicket(mockToken, ticketData);
 
@@ -597,24 +505,17 @@ describe("ConflictService", () => {
         { id: 2, content: "Hi there", sender: { firstName: "Jane" } },
       ];
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          success: true,
-          messages: mockMessages,
-          conversationId: 5,
-        }),
+      HttpClient.get.mockResolvedValueOnce({
+        success: true,
+        messages: mockMessages,
+        conversationId: 5,
       });
 
       const result = await ConflictService.getLinkedConversation(mockToken, 1);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/conflicts/support/1/conversation"),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            Authorization: `Bearer ${mockToken}`,
-          }),
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/conflicts/support/1/conversation",
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.messages).toHaveLength(2);
@@ -622,13 +523,10 @@ describe("ConflictService", () => {
     });
 
     it("should handle empty messages for ticket without conversation", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          success: true,
-          messages: [],
-          conversationId: null,
-        }),
+      HttpClient.get.mockResolvedValueOnce({
+        success: true,
+        messages: [],
+        conversationId: null,
       });
 
       const result = await ConflictService.getLinkedConversation(mockToken, 1);
@@ -639,10 +537,7 @@ describe("ConflictService", () => {
     });
 
     it("should handle ticket not found", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: "Support ticket not found" }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Support ticket not found" });
 
       const result = await ConflictService.getLinkedConversation(mockToken, 999);
 
@@ -651,7 +546,7 @@ describe("ConflictService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ConflictService.getLinkedConversation(mockToken, 1);
 
@@ -667,16 +562,13 @@ describe("ConflictService", () => {
         { id: 2, caseType: "support", caseNumber: "SUP-000002" },
       ];
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, cases: mockCases, total: 2 }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: true, cases: mockCases, total: 2 });
 
       await ConflictService.getQueue(mockToken, { caseType: "support" });
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("caseType=support"),
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/conflicts/queue?caseType=support",
+        { token: mockToken, useBaseUrl: true }
       );
     });
   });
@@ -692,16 +584,13 @@ describe("ConflictService", () => {
         conversationId: 5,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, case: mockCase }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: true, case: mockCase });
 
       const result = await ConflictService.getCase(mockToken, "support", 1);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/conflicts/support/1"),
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/conflicts/support/1",
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.success).toBe(true);
       expect(result.case.caseNumber).toBe("SUP-000001");
@@ -720,10 +609,7 @@ describe("ConflictService", () => {
         support: { total: 3, urgent: 1 },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockStats),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockStats);
 
       const result = await ConflictService.getStats(mockToken);
 

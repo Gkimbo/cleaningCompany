@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import {
   View,
   Text,
@@ -115,6 +115,16 @@ const CalendarSyncManager = ({ state, dispatch }) => {
   const [pendingAction, setPendingAction] = useState(null);
 
   const home = state.homes?.find((h) => h.id === Number(homeId));
+  const successTimeoutRef = useRef(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (homeId) {
@@ -243,7 +253,8 @@ const CalendarSyncManager = ({ state, dispatch }) => {
           await handleManualSync(data.sync.id);
         } else {
           setSuccess(data.message);
-          setTimeout(() => setSuccess(null), 5000);
+          if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+          successTimeoutRef.current = setTimeout(() => setSuccess(null), 5000);
         }
       } else {
         setError(data.error || "Failed to add calendar sync");
@@ -339,7 +350,8 @@ const CalendarSyncManager = ({ state, dispatch }) => {
         if (data.appointmentsCreated > 0) {
           await refreshAppointments(user?.token, dispatch);
         }
-        setTimeout(() => setSuccess(null), 5000);
+        if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+        successTimeoutRef.current = setTimeout(() => setSuccess(null), 5000);
       } else {
         Alert.alert("Sync Failed", data.error);
       }
