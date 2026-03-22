@@ -84,6 +84,11 @@ const ROUTE_ACCESS = {
     "/cleaner-profile",
     "/upgrade-to-business",
     "/upgrade-form",
+    // Home management routes (for dual-role cleaners who also own properties)
+    "/add-home",
+    "/list-of-homes",
+    "/edit-home",
+    "/edit-home/*",
     // Business owner cleaners get additional routes
     "/my-clients",
     "/my-clients/*",

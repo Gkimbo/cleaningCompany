@@ -279,6 +279,15 @@ userInfoRouter.post("/home", async (req, res) => {
     dirtyTowelsLocation,
     bedConfigurations,
     bathroomConfigurations,
+    // Common room counts for large homes (4+ beds)
+    numKitchens,
+    numLivingRooms,
+    numDiningRooms,
+    numFamilyRooms,
+    numOffices,
+    numLaundryRooms,
+    numBonusRooms,
+    numBasements,
   } = req.body.home;
   try {
     const decodedToken = jwt.verify(token, secretKey);
@@ -334,6 +343,15 @@ userInfoRouter.post("/home", async (req, res) => {
       dirtyTowelsLocation,
       bedConfigurations,
       bathroomConfigurations,
+      // Common room counts for large homes (4+ beds)
+      numKitchens,
+      numLivingRooms,
+      numDiningRooms,
+      numFamilyRooms,
+      numOffices,
+      numLaundryRooms,
+      numBonusRooms,
+      numBasements,
     });
 
     // Serialize the home to ensure consistent structure with fetched homes
@@ -407,6 +425,15 @@ userInfoRouter.patch("/home", async (req, res) => {
     dirtyTowelsLocation,
     bedConfigurations,
     bathroomConfigurations,
+    // Common room counts for large homes (4+ beds)
+    numKitchens,
+    numLivingRooms,
+    numDiningRooms,
+    numFamilyRooms,
+    numOffices,
+    numLaundryRooms,
+    numBonusRooms,
+    numBasements,
   } = req.body;
 
   try {
@@ -461,6 +488,15 @@ userInfoRouter.patch("/home", async (req, res) => {
       dirtyTowelsLocation,
       bedConfigurations,
       bathroomConfigurations,
+      // Common room counts for large homes (4+ beds)
+      numKitchens,
+      numLivingRooms,
+      numDiningRooms,
+      numFamilyRooms,
+      numOffices,
+      numLaundryRooms,
+      numBonusRooms,
+      numBasements,
     });
 
     return res.status(200).json({

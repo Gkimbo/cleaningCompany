@@ -28,7 +28,16 @@ class HomeSerializer {
 		"dirtySheetsLocation",
 		"cleanTowelsLocation",
 		"dirtyTowelsLocation",
-		"timezone"
+		"timezone",
+		// Common room counts for large homes (4+ beds)
+		"numKitchens",
+		"numLivingRooms",
+		"numDiningRooms",
+		"numFamilyRooms",
+		"numOffices",
+		"numLaundryRooms",
+		"numBonusRooms",
+		"numBasements"
 	];
 
 	// Fields that are encrypted in the database

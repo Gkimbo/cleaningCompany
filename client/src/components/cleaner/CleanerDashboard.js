@@ -857,6 +857,18 @@ const CleanerDashboard = ({ state, dispatch }) => {
                 }
               }}
             />
+            {/* My Homes - for non-business-owner cleaners only */}
+            {!state.isBusinessOwner && (
+              <QuickActionButton
+                title={state.homes?.length > 0 ? "My Homes" : "Add Home"}
+                subtitle={state.homes?.length > 0 ? "Manage properties" : "Register a property"}
+                icon="home"
+                iconColor="#fff"
+                bgColor="#fff"
+                accentColor="#8b5cf6"
+                onPress={() => navigate(state.homes?.length > 0 ? "/list-of-homes" : "/add-home")}
+              />
+            )}
           </View>
         </View>
 

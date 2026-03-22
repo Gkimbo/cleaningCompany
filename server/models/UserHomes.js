@@ -168,6 +168,48 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			// [{type: 'bedroom', label: 'Master Bedroom', squareFt: 300}, ...]
 		},
+		// Common room counts for large homes (4+ beds)
+		// These enable accurate room assignment for multi-cleaner jobs
+		numKitchens: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Number of kitchens (for large homes with 4+ beds)",
+		},
+		numLivingRooms: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Number of living rooms (for large homes with 4+ beds)",
+		},
+		numDiningRooms: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Number of dining rooms (for large homes with 4+ beds)",
+		},
+		numFamilyRooms: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Number of family rooms (for large homes with 4+ beds)",
+		},
+		numOffices: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Number of home offices (for large homes with 4+ beds)",
+		},
+		numLaundryRooms: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Number of laundry rooms (for large homes with 4+ beds)",
+		},
+		numBonusRooms: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Number of bonus rooms (for large homes with 4+ beds)",
+		},
+		numBasements: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Number of basements (for large homes with 4+ beds)",
+		},
 		// Tenant present tracking
 		tenantPresentIncidentCount: {
 			type: DataTypes.INTEGER,

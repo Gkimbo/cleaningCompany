@@ -116,6 +116,15 @@ const AddHomeForm = ({ state, dispatch }) => {
     dirtyTowelsLocation: "",
     bedConfigurations: [],
     bathroomConfigurations: [],
+    // Common room counts for large homes (4+ beds)
+    numKitchens: 1,
+    numLivingRooms: 1,
+    numDiningRooms: 1,
+    numFamilyRooms: 0,
+    numOffices: 0,
+    numLaundryRooms: 0,
+    numBonusRooms: 0,
+    numBasements: 0,
   });
 
   const updateField = (field, value) => {
@@ -200,6 +209,90 @@ const AddHomeForm = ({ state, dispatch }) => {
         bathroomConfigurations: [],
       }));
     }
+  };
+
+  // Render a room counter with +/- buttons for common room configuration
+  const renderRoomCounter = (label, field, min = 0, max = 10) => {
+    const value = homeData[field] || 0;
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingVertical: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: "#e2e8f0",
+        }}
+      >
+        <Text style={{ fontSize: 15, color: "#334155" }}>{label}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <TouchableOpacity
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: value <= min ? "#e2e8f0" : "#f1f5f9",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+            onPress={() => {
+              if (value > min) {
+                updateField(field, value - 1);
+              }
+            }}
+            disabled={value <= min}
+          >
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "bold",
+                color: value <= min ? "#94a3b8" : "#334155",
+              }}
+            >
+              -
+            </Text>
+          </TouchableOpacity>
+          <Text
+            style={{
+              width: 40,
+              textAlign: "center",
+              fontSize: 16,
+              fontWeight: "600",
+              color: "#1e293b",
+            }}
+          >
+            {value}
+          </Text>
+          <TouchableOpacity
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: value >= max ? "#e2e8f0" : "#3b82f6",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+            onPress={() => {
+              if (value < max) {
+                updateField(field, value + 1);
+              }
+            }}
+            disabled={value >= max}
+          >
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "bold",
+                color: value >= max ? "#94a3b8" : "#fff",
+              }}
+            >
+              +
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   // Calculate linen price for display
@@ -308,6 +401,15 @@ const AddHomeForm = ({ state, dispatch }) => {
           // Always save configurations so they can be restored when toggled back on
           bedConfigurations: homeData.bedConfigurations,
           bathroomConfigurations: homeData.bathroomConfigurations,
+          // Common room counts (only meaningful for large homes with 4+ beds)
+          numKitchens: parseInt(homeData.numBeds) >= 4 ? homeData.numKitchens : null,
+          numLivingRooms: parseInt(homeData.numBeds) >= 4 ? homeData.numLivingRooms : null,
+          numDiningRooms: parseInt(homeData.numBeds) >= 4 ? homeData.numDiningRooms : null,
+          numFamilyRooms: parseInt(homeData.numBeds) >= 4 ? homeData.numFamilyRooms : null,
+          numOffices: parseInt(homeData.numBeds) >= 4 ? homeData.numOffices : null,
+          numLaundryRooms: parseInt(homeData.numBeds) >= 4 ? homeData.numLaundryRooms : null,
+          numBonusRooms: parseInt(homeData.numBeds) >= 4 ? homeData.numBonusRooms : null,
+          numBasements: parseInt(homeData.numBeds) >= 4 ? homeData.numBasements : null,
         },
       };
 
@@ -551,6 +653,24 @@ const AddHomeForm = ({ state, dispatch }) => {
           )}
         </View>
       </View>
+
+      {/* Common Rooms Section - only shown for large homes (4+ beds) */}
+      {parseInt(homeData.numBeds) >= 4 && (
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Common Rooms</Text>
+          <Text style={[styles.inputHelper, { marginBottom: 12, marginTop: 0 }]}>
+            For larger homes, let us know how many of each room type you have for accurate cleaning assignments.
+          </Text>
+          {renderRoomCounter("Kitchens", "numKitchens", 1, 5)}
+          {renderRoomCounter("Living Rooms", "numLivingRooms", 0, 5)}
+          {renderRoomCounter("Dining Rooms", "numDiningRooms", 0, 5)}
+          {renderRoomCounter("Family Rooms", "numFamilyRooms", 0, 5)}
+          {renderRoomCounter("Offices", "numOffices", 0, 5)}
+          {renderRoomCounter("Laundry Rooms", "numLaundryRooms", 0, 3)}
+          {renderRoomCounter("Bonus Rooms", "numBonusRooms", 0, 5)}
+          {renderRoomCounter("Basements", "numBasements", 0, 3)}
+        </View>
+      )}
     </View>
   );
 

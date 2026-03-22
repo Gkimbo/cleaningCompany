@@ -31,6 +31,11 @@ module.exports = (sequelize, DataTypes) => {
         "kitchen",
         "living_room",
         "dining_room",
+        "family_room",
+        "office",
+        "laundry_room",
+        "bonus_room",
+        "basement",
         "other"
       ),
       allowNull: false,
@@ -99,6 +104,11 @@ module.exports = (sequelize, DataTypes) => {
       kitchen: "Kitchen",
       living_room: "Living Room",
       dining_room: "Dining Room",
+      family_room: "Family Room",
+      office: "Office",
+      laundry_room: "Laundry Room",
+      bonus_room: "Bonus Room",
+      basement: "Basement",
       other: "Other Area",
     };
     const label = typeLabels[this.roomType] || "Room";

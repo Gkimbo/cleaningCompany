@@ -110,9 +110,14 @@ const reducer = (state, action) => {
         homes: [...state.homes, action.payload],
       };
     case "DELETE_HOME":
+      const remainingHomes = state.homes.filter((home) => home.id !== action.payload);
       return {
         ...state,
-        homes: state.homes.filter((home) => home.id !== action.payload),
+        homes: remainingHomes,
+        // Reset activeRole to cleaner if no homes left and currently viewing as homeowner
+        activeRole: remainingHomes.length === 0 && state.activeRole === "homeowner"
+          ? "cleaner"
+          : state.activeRole,
       };
     case "UPDATE_HOME":
       const updatedHomes = state.homes.map((home) =>
@@ -340,13 +345,20 @@ const reducer = (state, action) => {
       };
     // Dual-role switching actions (cleaner + homeowner)
     case "SET_ACTIVE_ROLE":
+      // Validate: only allow "homeowner" if user has homes
+      if (action.payload === "homeowner" && (!state.homes || state.homes.length === 0)) {
+        return {
+          ...state,
+          activeRole: "cleaner", // Fall back to cleaner if no homes
+        };
+      }
       return {
         ...state,
         activeRole: action.payload, // "cleaner" | "homeowner" | null
       };
     case "TOGGLE_ROLE":
-      // Only for cleaners with homes
-      if (state.account !== "cleaner" || !state.homes?.length) {
+      // Only for non-business-owner cleaners with homes
+      if (state.account !== "cleaner" || state.isBusinessOwner || !state.homes?.length) {
         return state;
       }
       return {

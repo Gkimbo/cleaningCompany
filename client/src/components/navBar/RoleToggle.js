@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import { View, Text, Pressable, StyleSheet, Alert } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useNavigate } from "react-router-native";
 import SecureStorage from "../../services/SecureStorage";
@@ -9,19 +9,37 @@ import { colors, spacing, radius, typography } from "../../services/styles/theme
  * RoleToggle - Allows dual-role users (cleaner + homeowner) to switch views
  * Only shown for cleaners who also have homes registered
  */
-const RoleToggle = ({ activeRole, dispatch, closeModal }) => {
+const RoleToggle = ({ activeRole, dispatch, closeModal, isOffline = false }) => {
   const navigate = useNavigate();
+  const [isToggling, setIsToggling] = useState(false);
   const isHomeownerView = activeRole === "homeowner";
+  const isDisabled = isToggling || isOffline;
 
   const handleToggle = async () => {
+    // Prevent toggling in offline mode
+    if (isOffline) {
+      Alert.alert("Offline", "You cannot switch roles while offline.");
+      return;
+    }
+    // Prevent rapid toggling
+    if (isToggling) return;
+    setIsToggling(true);
+
     const newRole = isHomeownerView ? "cleaner" : "homeowner";
-    // Persist preference
-    await SecureStorage.setItem("activeRole", newRole);
-    // Update state
-    dispatch({ type: "TOGGLE_ROLE" });
-    // Close modal and navigate home to refresh dashboard
-    closeModal();
-    navigate("/");
+
+    try {
+      // Persist preference first
+      await SecureStorage.setItem("activeRole", newRole);
+      // Update state with explicit role (ensures storage and state match)
+      dispatch({ type: "SET_ACTIVE_ROLE", payload: newRole });
+      // Close modal and navigate home to refresh dashboard
+      closeModal();
+      navigate("/");
+    } catch (err) {
+      console.error("Failed to save role preference:", err);
+      Alert.alert("Error", "Could not save your preference. Please try again.");
+      setIsToggling(false);
+    }
   };
 
   return (
@@ -44,12 +62,20 @@ const RoleToggle = ({ activeRole, dispatch, closeModal }) => {
       <Pressable
         style={({ pressed }) => [
           styles.switchButton,
-          pressed && styles.switchButtonPressed,
+          pressed && !isDisabled && styles.switchButtonPressed,
+          isDisabled && styles.switchButtonDisabled,
         ]}
         onPress={handleToggle}
+        disabled={isDisabled}
       >
-        <Feather name="repeat" size={16} color={colors.neutral[0]} />
-        <Text style={styles.switchText}>Switch</Text>
+        <Feather
+          name={isOffline ? "wifi-off" : "repeat"}
+          size={16}
+          color={colors.neutral[0]}
+        />
+        <Text style={styles.switchText}>
+          {isToggling ? "..." : isOffline ? "Offline" : "Switch"}
+        </Text>
       </Pressable>
     </View>
   );
@@ -108,6 +134,10 @@ const styles = StyleSheet.create({
   },
   switchButtonPressed: {
     backgroundColor: colors.primary[700],
+  },
+  switchButtonDisabled: {
+    backgroundColor: colors.neutral[400],
+    opacity: 0.7,
   },
   switchText: {
     fontSize: typography.fontSize.sm,

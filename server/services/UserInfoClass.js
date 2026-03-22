@@ -33,6 +33,15 @@ class UserInfoClass {
     dirtyTowelsLocation,
     bedConfigurations,
     bathroomConfigurations,
+    // Common room counts for large homes (4+ beds)
+    numKitchens,
+    numLivingRooms,
+    numDiningRooms,
+    numFamilyRooms,
+    numOffices,
+    numLaundryRooms,
+    numBonusRooms,
+    numBasements,
   }) {
     // Geocode the address to get accurate coordinates
     const { latitude, longitude } = await HomeClass.geocodeAddress(
@@ -79,6 +88,15 @@ class UserInfoClass {
       latitude,
       longitude,
       timezone,
+      // Common room counts for large homes (4+ beds)
+      numKitchens,
+      numLivingRooms,
+      numDiningRooms,
+      numFamilyRooms,
+      numOffices,
+      numLaundryRooms,
+      numBonusRooms,
+      numBasements,
     });
     return newHome;
   }
@@ -111,6 +129,15 @@ class UserInfoClass {
     dirtyTowelsLocation,
     bedConfigurations,
     bathroomConfigurations,
+    // Common room counts for large homes (4+ beds)
+    numKitchens,
+    numLivingRooms,
+    numDiningRooms,
+    numFamilyRooms,
+    numOffices,
+    numLaundryRooms,
+    numBonusRooms,
+    numBasements,
   }) {
     const existingHome = await UserHomes.findOne({
       where: { id },
@@ -172,6 +199,15 @@ class UserInfoClass {
       latitude,
       longitude,
       timezone,
+      // Common room counts for large homes (4+ beds)
+      numKitchens,
+      numLivingRooms,
+      numDiningRooms,
+      numFamilyRooms,
+      numOffices,
+      numLaundryRooms,
+      numBonusRooms,
+      numBasements,
     });
 
     return existingHome;

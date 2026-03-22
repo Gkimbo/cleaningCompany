@@ -52,6 +52,7 @@ import TermsEditorButton from "./TermsEditorButton";
 import WithdrawalsButton from "./WithdrawalsButton";
 import MyClientsButton from "./MyClientsButton";
 import MyHomesButton from "./MyHomesButton";
+import BecomeCleanerButton from "./BecomeCleanerButton";
 import SuspiciousReportsButton from "./SuspiciousReportsButton";
 import CalculatorButton from "./CalculatorButton";
 import PlatformCalculatorButton from "./PlatformCalculatorButton";
@@ -458,6 +459,7 @@ const TopBar = ({ dispatch, state }) => {
                                 activeRole={state.activeRole || "cleaner"}
                                 dispatch={dispatch}
                                 closeModal={closeModal}
+                                isOffline={state.offlineMode || state.isOnline === false}
                               />
                             )}
 
@@ -530,6 +532,7 @@ const TopBar = ({ dispatch, state }) => {
                             {referralsEnabled && (
                               <MyReferralsButton closeModal={closeModal} />
                             )}
+                            <BecomeCleanerButton closeModal={closeModal} />
                           </>
                         )}
 
