@@ -55,6 +55,7 @@ import MyHomesButton from "./MyHomesButton";
 import SuspiciousReportsButton from "./SuspiciousReportsButton";
 import CalculatorButton from "./CalculatorButton";
 import PlatformCalculatorButton from "./PlatformCalculatorButton";
+import RoleToggle from "./RoleToggle";
 
 // Helper to get display name for current account type
 const getCurrentAccountDisplayName = (account) => {
@@ -451,34 +452,61 @@ const TopBar = ({ dispatch, state }) => {
                           </>
                         ) : state.account === "cleaner" ? (
                           <>
-                            {/* Search Jobs, My Jobs, Earnings only for non-business-owner cleaners */}
-                            {!state.isBusinessOwner && (
+                            {/* Role Toggle for non-business-owner cleaners with homes (dual-role users) */}
+                            {!state.isBusinessOwner && state.homes && state.homes.length > 0 && (
+                              <RoleToggle
+                                activeRole={state.activeRole || "cleaner"}
+                                dispatch={dispatch}
+                                closeModal={closeModal}
+                              />
+                            )}
+
+                            {/* Show homeowner menu if non-business-owner cleaner is viewing as homeowner */}
+                            {!state.isBusinessOwner && state.homes && state.homes.length > 0 && state.activeRole === "homeowner" ? (
                               <>
-                                <ChooseNewJobButton closeModal={closeModal} />
-                                <EmployeeAssignmentsButton
+                                <AppointmentsButton closeModal={closeModal} />
+                                <ScheduleCleaningButton closeModal={closeModal} />
+                                <MyHomesButton closeModal={closeModal} />
+                                <BillButton closeModal={closeModal} />
+                                <PendingReviewsButton closeModal={closeModal} />
+                                <ReviewsButton closeModal={closeModal} />
+                                <ArchiveButton closeModal={closeModal} />
+                                {referralsEnabled && (
+                                  <MyReferralsButton closeModal={closeModal} />
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                {/* Search Jobs, My Jobs, Earnings only for non-business-owner cleaners */}
+                                {!state.isBusinessOwner && (
+                                  <>
+                                    <ChooseNewJobButton closeModal={closeModal} />
+                                    <EmployeeAssignmentsButton
+                                      closeModal={closeModal}
+                                    />
+                                  </>
+                                )}
+                                <MyRequestsButton closeModal={closeModal} />
+                                {/* My Clients only for business owner cleaners */}
+                                {state.isBusinessOwner && (
+                                  <MyClientsButton closeModal={closeModal} />
+                                )}
+                                {/* <EmployeeShiftButton closeModal={closeModal} /> */}
+                                {/* Earnings only for non-business-owner cleaners */}
+                                {!state.isBusinessOwner && (
+                                  <EarningsButton closeModal={closeModal} />
+                                )}
+                                {state.isBusinessOwner && (
+                                  <CalculatorButton closeModal={closeModal} />
+                                )}
+                                {referralsEnabled && (
+                                  <MyReferralsButton closeModal={closeModal} />
+                                )}
+                                <RecommendedSuppliesButton
                                   closeModal={closeModal}
                                 />
                               </>
                             )}
-                            <MyRequestsButton closeModal={closeModal} />
-                            {/* My Clients only for business owner cleaners */}
-                            {state.isBusinessOwner && (
-                              <MyClientsButton closeModal={closeModal} />
-                            )}
-                            {/* <EmployeeShiftButton closeModal={closeModal} /> */}
-                            {/* Earnings only for non-business-owner cleaners */}
-                            {!state.isBusinessOwner && (
-                              <EarningsButton closeModal={closeModal} />
-                            )}
-                            {state.isBusinessOwner && (
-                              <CalculatorButton closeModal={closeModal} />
-                            )}
-                            {referralsEnabled && (
-                              <MyReferralsButton closeModal={closeModal} />
-                            )}
-                            <RecommendedSuppliesButton
-                              closeModal={closeModal}
-                            />
                           </>
                         ) : state.account === "humanResources" ? (
                           <>

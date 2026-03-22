@@ -297,6 +297,10 @@ const HomePage = ({ state, dispatch }) => {
 
   // Show Cleaner Dashboard for marketplace cleaners
   if (state.account === "cleaner" && state.currentUser.token) {
+    // Dual-role: cleaner viewing as homeowner - show client dashboard
+    if (state.homes && state.homes.length > 0 && state.activeRole === "homeowner") {
+      return <ClientDashboard state={state} dispatch={dispatch} />;
+    }
     // Show frozen banner for frozen cleaners
     if (state.accountFrozen) {
       return (

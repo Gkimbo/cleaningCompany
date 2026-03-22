@@ -4,6 +4,7 @@ const reducer = (state, action) => {
       return {
         ...state,
         account: null,
+        activeRole: null,
         currentUser: { token: null, id: null, email: null },
         homes: [],
         appointments: [],
@@ -336,6 +337,21 @@ const reducer = (state, action) => {
         accountFrozen: false,
         accountFrozenReason: null,
         accountFrozenAt: null,
+      };
+    // Dual-role switching actions (cleaner + homeowner)
+    case "SET_ACTIVE_ROLE":
+      return {
+        ...state,
+        activeRole: action.payload, // "cleaner" | "homeowner" | null
+      };
+    case "TOGGLE_ROLE":
+      // Only for cleaners with homes
+      if (state.account !== "cleaner" || !state.homes?.length) {
+        return state;
+      }
+      return {
+        ...state,
+        activeRole: state.activeRole === "homeowner" ? "cleaner" : "homeowner",
       };
     default:
       throw new Error();

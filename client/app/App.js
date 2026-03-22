@@ -10,6 +10,8 @@ import { UserContext } from "../src/context/UserContext";
 import getCurrentUser from "../src/services/fetchRequests/getCurrentUser";
 import reducer from "../src/services/reducerFunction";
 import { API_BASE } from "../src/services/config";
+import FetchData from "../src/services/fetchRequests/fetchData";
+import SecureStorage from "../src/services/SecureStorage";
 
 // Import components
 import AddHomeForm from "../src/components/addUserInformation/AddHomeForm";
@@ -190,6 +192,7 @@ export default function App() {
   const [employeeDays, setEmployeeDays] = useState(null);
   const [state, dispatch] = useReducer(reducer, {
     account: null,
+    activeRole: null, // For dual-role users (cleaner + homeowner)
     currentUser: { token: null, id: null },
     bill: { cancellationFee: 0, totalPaid: 0 },
     homes: [],
@@ -242,6 +245,25 @@ export default function App() {
       }
       if (user.user.type === "cleaner") {
         dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
+        // For dual-role support: fetch homes for non-business-owner cleaners
+        // Business owner cleaners don't use dual-role switching
+        if (!user.user.isBusinessOwner) {
+          try {
+            const userInfo = await FetchData.get("/api/v1/user-info", user.token);
+            if (userInfo?.user?.homes && userInfo.user.homes.length > 0) {
+              dispatch({ type: "USER_HOME", payload: userInfo.user.homes });
+              // Restore persisted activeRole or default to "cleaner"
+              const persistedRole = await SecureStorage.getItem("activeRole");
+              dispatch({
+                type: "SET_ACTIVE_ROLE",
+                payload: persistedRole === "homeowner" ? "homeowner" : "cleaner",
+              });
+            }
+          } catch (err) {
+            // Dual-role fetch failed, continue with cleaner-only view
+            console.warn("Could not fetch homes for cleaner:", err);
+          }
+        }
       }
       if (user.user.type === "employee") {
         dispatch({ type: "USER_ACCOUNT", payload: "employee" });

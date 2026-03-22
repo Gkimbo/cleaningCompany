@@ -29,6 +29,8 @@ const AuthProvider = ({ children }) => {
 			// Clear any preview mode state to prevent stale state on re-login
 			await AsyncStorage.removeItem("@preview_mode_state");
 			await AsyncStorage.removeItem("@preview_original_owner_state");
+			// Clear dual-role active role preference
+			await SecureStorage.removeItem("activeRole");
 			// Clear auth token and cancel pending sync retries BEFORE resetting
 			AutoSyncOrchestrator.setAuthToken(null);
 			AutoSyncOrchestrator.cancelPendingRetry();

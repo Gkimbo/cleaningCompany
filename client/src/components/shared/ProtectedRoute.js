@@ -189,6 +189,12 @@ const hasRouteAccess = (path, state) => {
 
   // Cleaner (marketplace)
   if (accountType === "cleaner") {
+    // Dual-role: non-business-owner cleaner viewing as homeowner gets client route access
+    if (!isBusinessOwner && state.activeRole === "homeowner" && state.homes && state.homes.length > 0) {
+      if (ROUTE_ACCESS.client.some((pattern) => matchesPattern(path, pattern))) {
+        return true;
+      }
+    }
     // Business owner cleaners get additional access
     if (isBusinessOwner) {
       if (ROUTE_ACCESS.cleaner.some((pattern) => matchesPattern(path, pattern))) {
