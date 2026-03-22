@@ -31,6 +31,7 @@ const NotificationService = require("../../../services/NotificationService");
 const CleanerClientSerializer = require("../../../serializers/CleanerClientSerializer");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const TimezoneService = require("../../../services/TimezoneService");
+const { checkBookingDistance, MAX_BOOKING_DISTANCE_MILES } = require("../../../utils/geoUtils");
 
 // Safe decrypt helper - returns fallback value on decryption failure
 const safeDecrypt = (value, fallback = "") => {
@@ -1424,6 +1425,25 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       }
     }
 
+    // Check distance from cleaner's service area to home (max 30 miles)
+    const cleanerLat = req.user.serviceAreaLatitude ? parseFloat(req.user.serviceAreaLatitude) : null;
+    const cleanerLon = req.user.serviceAreaLongitude ? parseFloat(req.user.serviceAreaLongitude) : null;
+    const homeLat = home.latitude ? parseFloat(EncryptionService.decrypt(home.latitude)) : null;
+    const homeLon = home.longitude ? parseFloat(EncryptionService.decrypt(home.longitude)) : null;
+
+    if (cleanerLat && cleanerLon && homeLat && homeLon) {
+      const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+      if (distanceCheck.canBook === false) {
+        return res.status(400).json({
+          error: "Home too far from service area",
+          message: `This home is ${distanceCheck.distanceMiles} miles from your service area center. The maximum booking distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+          code: "EXCEEDS_MAX_DISTANCE",
+          distanceMiles: distanceCheck.distanceMiles,
+          maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+        });
+      }
+    }
+
     // Check if client has payment method
     if (!client.hasPaymentMethod) {
       return res.status(400).json({
@@ -1658,7 +1678,7 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
         {
           model: UserHomes,
           as: "home",
-          attributes: ["id", "numBeds", "numBaths", "sheetsProvided", "towelsProvided", "keyPadCode", "keyLocation", "cleanersNeeded", "timeToBeCompleted", "isSetupComplete"],
+          attributes: ["id", "numBeds", "numBaths", "sheetsProvided", "towelsProvided", "keyPadCode", "keyLocation", "cleanersNeeded", "timeToBeCompleted", "isSetupComplete", "latitude", "longitude"],
         },
       ],
     });
@@ -1681,6 +1701,25 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
         error: "This client's account has been suspended. You cannot book appointments for them.",
         accountSuspended: true,
       });
+    }
+
+    // Check distance from cleaner's service area to home (max 30 miles)
+    const cleanerLat = req.user.serviceAreaLatitude ? parseFloat(req.user.serviceAreaLatitude) : null;
+    const cleanerLon = req.user.serviceAreaLongitude ? parseFloat(req.user.serviceAreaLongitude) : null;
+    const homeLat = cleanerClient.home.latitude ? parseFloat(EncryptionService.decrypt(cleanerClient.home.latitude)) : null;
+    const homeLon = cleanerClient.home.longitude ? parseFloat(EncryptionService.decrypt(cleanerClient.home.longitude)) : null;
+
+    if (cleanerLat && cleanerLon && homeLat && homeLon) {
+      const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+      if (distanceCheck.canBook === false) {
+        return res.status(400).json({
+          error: "Home too far from service area",
+          message: `This home is ${distanceCheck.distanceMiles} miles from your service area center. The maximum booking distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+          code: "EXCEEDS_MAX_DISTANCE",
+          distanceMiles: distanceCheck.distanceMiles,
+          maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+        });
+      }
     }
 
     // Check if there's already a pending booking for this date

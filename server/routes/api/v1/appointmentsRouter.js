@@ -45,6 +45,7 @@ const {
   getAutoCompleteConfig,
 } = require("../../../services/cron/AutoCompleteMonitor");
 const { notifyInitialPaymentFailure } = require("../../../services/cron/PaymentRetryMonitor");
+const { checkBookingDistance, MAX_BOOKING_DISTANCE_MILES } = require("../../../utils/geoUtils");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -1910,6 +1911,27 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
     // Check if home is large and requires acknowledgment
     const home = await UserHomes.findByPk(appointment.homeId);
     if (home) {
+      // Check distance from cleaner's service area to home (max 30 miles)
+      const cleanerLat = cleaner.serviceAreaLatitude ? parseFloat(cleaner.serviceAreaLatitude) : null;
+      const cleanerLon = cleaner.serviceAreaLongitude ? parseFloat(cleaner.serviceAreaLongitude) : null;
+      const homeLat = home.latitude ? parseFloat(EncryptionService.decrypt(home.latitude)) : null;
+      const homeLon = home.longitude ? parseFloat(EncryptionService.decrypt(home.longitude)) : null;
+
+      if (cleanerLat && cleanerLon && homeLat && homeLon) {
+        const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+        if (distanceCheck.canBook === false) {
+          return res.status(400).json({
+            error: "Job too far from service area",
+            message: `This job is ${distanceCheck.distanceMiles} miles from your service area center. The maximum booking distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+            code: "EXCEEDS_MAX_DISTANCE",
+            distanceMiles: distanceCheck.distanceMiles,
+            maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+          });
+        }
+      } else if (!cleanerLat || !cleanerLon) {
+        console.warn(`[Appointments] Cleaner ${id} has no service area coordinates set - skipping distance check`);
+      }
+
       const numBeds = parseInt(home.numBeds, 10) || 0;
       const numBaths = parseInt(home.numBaths, 10) || 0;
       const MultiCleanerService = require("../../../services/MultiCleanerService");
@@ -2788,6 +2810,28 @@ appointmentRouter.post("/switch-cleaner", async (req, res) => {
       return res.status(404).json({ error: "New cleaner not found" });
     }
 
+    // 3b. Check distance from new cleaner's service area to home (max 30 miles)
+    if (home) {
+      const cleanerLat = newCleaner.serviceAreaLatitude ? parseFloat(newCleaner.serviceAreaLatitude) : null;
+      const cleanerLon = newCleaner.serviceAreaLongitude ? parseFloat(newCleaner.serviceAreaLongitude) : null;
+      const homeLat = home.latitude ? parseFloat(EncryptionService.decrypt(home.latitude)) : null;
+      const homeLon = home.longitude ? parseFloat(EncryptionService.decrypt(home.longitude)) : null;
+
+      if (cleanerLat && cleanerLon && homeLat && homeLon) {
+        const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+        if (distanceCheck.canBook === false) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: "New cleaner too far from service area",
+            message: `The new cleaner is ${distanceCheck.distanceMiles} miles from this home. The maximum distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+            code: "EXCEEDS_MAX_DISTANCE",
+            distanceMiles: distanceCheck.distanceMiles,
+            maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+          });
+        }
+      }
+    }
+
     // 4. Remove old cleaner assignment
     await existingAssignment.destroy({ transaction });
 
@@ -3212,6 +3256,28 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
       const cleaner = await User.findByPk(id);
       if (!cleaner) {
         return res.status(404).json({ error: "Cleaner not found" });
+      }
+
+      // Check distance from cleaner's service area to home (max 30 miles)
+      const home = await UserHomes.findByPk(appointment.dataValues.homeId);
+      if (home) {
+        const cleanerLat = cleaner.serviceAreaLatitude ? parseFloat(cleaner.serviceAreaLatitude) : null;
+        const cleanerLon = cleaner.serviceAreaLongitude ? parseFloat(cleaner.serviceAreaLongitude) : null;
+        const homeLat = home.latitude ? parseFloat(EncryptionService.decrypt(home.latitude)) : null;
+        const homeLon = home.longitude ? parseFloat(EncryptionService.decrypt(home.longitude)) : null;
+
+        if (cleanerLat && cleanerLon && homeLat && homeLon) {
+          const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+          if (distanceCheck.canBook === false) {
+            return res.status(400).json({
+              error: "Cleaner too far from home",
+              message: `This cleaner is ${distanceCheck.distanceMiles} miles from the home. The maximum distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+              code: "EXCEEDS_MAX_DISTANCE",
+              distanceMiles: distanceCheck.distanceMiles,
+              maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+            });
+          }
+        }
       }
 
       const existingRequest = await UserPendingRequests.findOne({

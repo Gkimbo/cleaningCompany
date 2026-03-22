@@ -775,12 +775,25 @@ userInfoRouter.put("/service-area", async (req, res) => {
       return res.status(400).json({ error: "Invalid coordinates" });
     }
 
+    // Validate radius (must be between 1 and 30 miles)
+    if (radiusMiles !== undefined && radiusMiles !== null) {
+      const { validateServiceRadius } = require("../../../utils/geoUtils");
+      const radiusValidation = validateServiceRadius(radiusMiles);
+      if (!radiusValidation.valid) {
+        return res.status(400).json({
+          error: radiusValidation.error,
+          code: "INVALID_RADIUS",
+        });
+      }
+    }
+
     // Update user's service area
+    const clampedRadius = Math.min(Math.max(parseFloat(radiusMiles) || 30, 1), 30);
     await user.update({
       serviceAreaAddress: address || null,
       serviceAreaLatitude: String(latitude),
       serviceAreaLongitude: String(longitude),
-      serviceAreaRadiusMiles: radiusMiles || 30,
+      serviceAreaRadiusMiles: clampedRadius,
     });
 
     res.json({
@@ -788,7 +801,7 @@ userInfoRouter.put("/service-area", async (req, res) => {
       message: "Service area updated successfully",
       serviceArea: {
         address: address || null,
-        radiusMiles: radiusMiles || 30,
+        radiusMiles: clampedRadius,
         // Don't return exact coordinates for privacy
         hasLocation: true,
       },

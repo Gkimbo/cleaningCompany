@@ -28,6 +28,7 @@ const { cancelEdgeCaseAppointment } = require("../../../services/cron/MultiClean
 const Email = require("../../../services/sendNotifications/EmailClass");
 const EncryptionService = require("../../../services/EncryptionService");
 const MultiCleanerJobSerializer = require("../../../serializers/MultiCleanerJobSerializer");
+const { checkBookingDistance, MAX_BOOKING_DISTANCE_MILES } = require("../../../utils/geoUtils");
 
 const multiCleanerRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -400,6 +401,32 @@ multiCleanerRouter.post("/offers/:offerId/accept", async (req, res) => {
       return res.status(400).json({ error: "Offer is no longer available" });
     }
 
+    // Check distance from cleaner to home (max 30 miles)
+    const cleaner = await User.findByPk(cleanerId);
+    const appointment = await UserAppointments.findByPk(offer.appointmentId, {
+      include: [{ model: UserHomes, as: "home" }],
+    });
+
+    if (appointment?.home) {
+      const cleanerLat = cleaner?.serviceAreaLatitude ? parseFloat(cleaner.serviceAreaLatitude) : null;
+      const cleanerLon = cleaner?.serviceAreaLongitude ? parseFloat(cleaner.serviceAreaLongitude) : null;
+      const homeLat = appointment.home.latitude ? parseFloat(EncryptionService.decrypt(appointment.home.latitude)) : null;
+      const homeLon = appointment.home.longitude ? parseFloat(EncryptionService.decrypt(appointment.home.longitude)) : null;
+
+      if (cleanerLat && cleanerLon && homeLat && homeLon) {
+        const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+        if (distanceCheck.canBook === false) {
+          return res.status(400).json({
+            error: "Job too far from service area",
+            message: `This job is ${distanceCheck.distanceMiles} miles from your service area center. The maximum booking distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+            code: "EXCEEDS_MAX_DISTANCE",
+            distanceMiles: distanceCheck.distanceMiles,
+            maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+          });
+        }
+      }
+    }
+
     // Accept the offer
     await offer.accept();
 
@@ -600,6 +627,28 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
 
     if (!job) {
       return res.status(404).json({ error: "Job not found" });
+    }
+
+    // Check distance from cleaner to home (max 30 miles)
+    const cleaner = await User.findByPk(cleanerId);
+    if (job.appointment?.home) {
+      const cleanerLat = cleaner?.serviceAreaLatitude ? parseFloat(cleaner.serviceAreaLatitude) : null;
+      const cleanerLon = cleaner?.serviceAreaLongitude ? parseFloat(cleaner.serviceAreaLongitude) : null;
+      const homeLat = job.appointment.home.latitude ? parseFloat(EncryptionService.decrypt(job.appointment.home.latitude)) : null;
+      const homeLon = job.appointment.home.longitude ? parseFloat(EncryptionService.decrypt(job.appointment.home.longitude)) : null;
+
+      if (cleanerLat && cleanerLon && homeLat && homeLon) {
+        const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+        if (distanceCheck.canBook === false) {
+          return res.status(400).json({
+            error: "Job too far from service area",
+            message: `This job is ${distanceCheck.distanceMiles} miles from your service area center. The maximum booking distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+            code: "EXCEEDS_MAX_DISTANCE",
+            distanceMiles: distanceCheck.distanceMiles,
+            maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+          });
+        }
+      }
     }
 
     if (job.isFilled()) {
