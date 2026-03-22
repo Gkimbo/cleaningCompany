@@ -265,14 +265,14 @@ class EmployeeBonusService {
 
 		return {
 			pending: {
-				total: parseInt(pending.total) || 0,
-				totalFormatted: `$${((parseInt(pending.total) || 0) / 100).toFixed(2)}`,
-				count: parseInt(pending.count) || 0,
+				total: parseInt(pending.total, 10) || 0,
+				totalFormatted: `$${((parseInt(pending.total, 10) || 0) / 100).toFixed(2)}`,
+				count: parseInt(pending.count, 10) || 0,
 			},
 			paid: {
-				total: parseInt(paid.total) || 0,
-				totalFormatted: `$${((parseInt(paid.total) || 0) / 100).toFixed(2)}`,
-				count: parseInt(paid.count) || 0,
+				total: parseInt(paid.total, 10) || 0,
+				totalFormatted: `$${((parseInt(paid.total, 10) || 0) / 100).toFixed(2)}`,
+				count: parseInt(paid.count, 10) || 0,
 			},
 		};
 	}

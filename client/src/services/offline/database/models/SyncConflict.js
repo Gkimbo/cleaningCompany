@@ -4,7 +4,9 @@ import { field, date, relation, json } from "@nozbe/watermelondb/decorators";
 const sanitizeJSON = (raw) => {
   try {
     return raw ? JSON.parse(raw) : null;
-  } catch {
+  } catch (error) {
+    // Log parsing errors to help diagnose data corruption
+    console.warn("[SyncConflict] JSON parse error:", error.message, "Raw value:", typeof raw === "string" ? raw.substring(0, 100) : typeof raw);
     return null;
   }
 };

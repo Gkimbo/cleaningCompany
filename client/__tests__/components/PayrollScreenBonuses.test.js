@@ -9,7 +9,7 @@ import { render, fireEvent, waitFor } from "@testing-library/react-native";
 // Mock dependencies
 jest.mock("react-router-native", () => ({
   useNavigate: () => jest.fn(),
-  useLocation: () => ({ search: "" }),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
@@ -20,6 +20,7 @@ jest.mock("../../src/services/fetchRequests/BusinessOwnerService", () => ({
   getBonuses: jest.fn(),
   markBonusPaid: jest.fn(),
   cancelBonus: jest.fn(),
+  getEmployeePayoutSettings: jest.fn(),
 }));
 
 jest.mock("../../src/services/styles/theme", () => ({
@@ -108,6 +109,12 @@ describe("PayrollScreen Bonus Integration", () => {
     BusinessOwnerService.getPendingPayouts.mockResolvedValue(mockPendingPayouts);
     BusinessOwnerService.getPayrollHistory.mockResolvedValue(mockPayrollHistory);
     BusinessOwnerService.getBonuses.mockResolvedValue(mockBonuses);
+    BusinessOwnerService.getEmployeePayoutSettings.mockResolvedValue({
+      employeePayoutMethod: "all_to_owner",
+      totalActiveEmployees: 1,
+      employeesReadyForDirectPayout: 0,
+      employees: [],
+    });
   });
 
   // =============================================
@@ -116,6 +123,15 @@ describe("PayrollScreen Bonus Integration", () => {
   describe("Loading & Initial Render", () => {
     it("should show loading state initially", () => {
       BusinessOwnerService.getPendingPayouts.mockImplementation(
+        () => new Promise(() => {})
+      );
+      BusinessOwnerService.getPayrollHistory.mockImplementation(
+        () => new Promise(() => {})
+      );
+      BusinessOwnerService.getBonuses.mockImplementation(
+        () => new Promise(() => {})
+      );
+      BusinessOwnerService.getEmployeePayoutSettings.mockImplementation(
         () => new Promise(() => {})
       );
 

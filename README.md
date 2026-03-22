@@ -6,7 +6,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-10256_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-11406_Passing-brightgreen?style=for-the-badge)
 
 **A comprehensive cleaning service marketplace platform connecting homeowners with professional cleaners and cleaning businesses**
 
@@ -18,7 +18,7 @@
 
 ## Overview
 
-Kleanr is a full-stack mobile platform that connects vacation rental hosts with professional cleaners and cleaning businesses. The platform supports multiple user types including homeowners, independent cleaners, business owners with their own employees, HR staff for dispute resolution, and platform administrators.
+Kleanr is a full-stack mobile platform that connects vacation rental hosts with professional cleaners and cleaning businesses. The platform supports multiple user types including homeowners, independent cleaners, business owners with their own employees, HR staff for dispute resolution, IT support staff for technical issues, and platform administrators.
 
 **Key Capabilities:**
 - Multi-tenant cleaning service marketplace with offline support
@@ -32,7 +32,8 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - Preferred cleaner tier system (Bronze/Silver/Gold/Platinum) with bonuses
 - Stripe Connect for instant cleaner payouts
 - iCal calendar sync with Airbnb, VRBO, Booking.com
-- Comprehensive tax reporting (1099-NEC, W-9 collection, platform reports)
+- **New Home Request System** for seamless client home additions
+- Stripe-integrated tax reporting (1099 forms via Stripe Dashboard)
 - **Unified Conflict Resolution Center** for appeals and disputes
 - **Cancellation Appeals System** with 72-hour appeal window and HR review
 - **Job Ledger** with double-entry accounting and Stripe reconciliation
@@ -101,6 +102,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - **Employee Payroll**: Hourly or flat-rate pay with automatic calculations
 - **Timesheet Management**: Track employee hours and approve timesheets
 - **Client Invitations**: Invite clients via email with token expiration
+- **New Home Requests**: Accept/decline requests when clients add new homes
 - **Business Client Portal**: Dedicated portal for business clients
 - **Client Management**: View all direct clients
 - **Book For Clients**: Create appointments on their behalf
@@ -161,13 +163,31 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 </td>
 <td width="50%" valign="top">
 
+### IT Support Staff
+
+- **IT Dashboard**: Centralized queue for technical support tickets
+- **Dispute Categories**: App crashes, login problems, billing errors, security issues, data requests
+- **Priority Management**: Low/Normal/High/Critical priority levels with SLA tracking
+- **Ticket Assignment**: Self-assign tickets and track resolution
+- **Status Workflow**: Submitted → In Progress → Awaiting Info → Resolved → Closed
+- **User Search**: Find users by email, username, or ID for support
+- **Account Actions**: Freeze/unfreeze accounts, reset passwords
+- **Quick Stats**: Overview of open tickets, SLA compliance, resolution times
+- **Resolution Notes**: Document solutions for future reference
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
 ### Platform Owner/Admin
 
 - **Financial Dashboard**: Revenue metrics (today, week, month, year, all-time)
 - **Platform Withdrawals**: Transfer earnings via Stripe
 - **Internal Analytics**: Track flow abandonment, job duration, offline usage, disputes, pay overrides
 - **Preview as Role**: Test the app as any user type (Cleaner, Homeowner, Business Owner, Employee)
-- **Employee Management**: Create/edit HR staff and cleaners
+- **Employee Management**: Create/edit HR staff, IT staff, and cleaners
+- **IT Employee Management**: Full CRUD for IT support staff with auto-generated passwords
 - **Pricing Configuration**: Base prices, per-bed/bath fees, time windows, cancellation fees, last-minute fees
 - **Large Business Fees**: Configure volume thresholds and reduced fees for high-volume business owners
 - **Incentive Programs**: Configure cleaner fee reductions, homeowner discounts
@@ -192,7 +212,8 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | **Multi-Cleaner Jobs** | Large homes (3+ beds AND 3+ baths) automatically require multiple cleaners. Room-level assignments, offer management, slot tracking, and split pricing. Edge-case homes allow solo with warning. |
 | **Real-time Messaging** | Socket.io-powered chat with message reactions, read receipts, typing indicators. Suspicious content auto-detection for phone numbers/emails. Broadcast messaging for owners. |
 | **Payment Processing** | Stripe integration with saved payment methods. Platform fee collection and instant cleaner payouts via Stripe Connect. Authorization, capture, and refund tracking. |
-| **Tax Management** | Automated W-9 collection, 1099-NEC generation for cleaners with all box fields, platform income tracking, IRS filing status, corrections support, and delivery tracking. |
+| **Tax Management** | Stripe Tax Reporting for cleaners (SSN/EIN collected during Connect onboarding, 1099 forms via Stripe Dashboard). Platform income tracking, quarterly estimates, and Schedule C data for business owners. |
+| **New Home Requests** | When clients add new homes, existing business owners receive notifications with 48-hour response window. Business owners can accept (creates CleanerClient relationship with calculated pricing) or decline (client can enable marketplace or re-request after 30 days). |
 | **Photo Documentation** | Before/after photo capture required for job completion. Room-by-room organization with notes. Offline capture with automatic sync. Access control for cleaners and homeowners. |
 | **Review System** | Multi-aspect bidirectional reviews (cleaning quality, punctuality, professionalism, communication, etc.). Both parties must review before either can see results. Option to mark cleaner as preferred. |
 | **Home Size Disputes** | Cleaners can report incorrect bed/bath counts with photo evidence. Two-stage approval (homeowner then HR). Automatic price recalculation and expiration windows. |
@@ -206,10 +227,12 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | **Terms & Conditions** | Version-controlled legal documents with PDF/text support, user acceptance tracking, and compliance snapshots. |
 | **Push Notifications** | Expo push notifications with preferences. Supply reminder snooze. Multi-channel delivery (push, email, in-app). |
 | **Account Security** | JWT authentication, encrypted PII (AES-256-CBC), account freezing, warning system, password strength validation. |
-| **Conflict Resolution Center** | Unified HR queue for all disputes and appeals. Photo comparison tools, evidence gallery, message threads, audit trail. Priority-based sorting with SLA tracking. |
+| **Conflict Resolution Center** | Unified HR queue for all disputes, appeals, and support tickets. Photo comparison tools, evidence gallery, message threads, audit trail. Priority-based sorting with SLA tracking. Create support tickets directly from conversations. |
 | **Cancellation Appeals** | 72-hour appeal window for both cleaners and homeowners. 48-hour HR review SLA. Supports penalty waiver, full/partial refunds. Financial breakdown with automatic calculations. |
 | **Job Ledger** | Double-entry accounting system tracking all job-related financial transactions. Stripe reconciliation, balance tracking, automated entry creation for fees, payouts, refunds. |
 | **Cancellation Audit Log** | Immutable event tracking for all cancellation-related actions. Captures actor, changes, timestamps for compliance and dispute resolution. |
+| **IT Support System** | User-submitted technical support tickets with categorization (app crashes, login issues, billing errors, security, data requests). Priority levels (low/normal/high/critical) with SLA tracking. IT staff dashboard for ticket management, user search, and account actions. |
+| **Service Area Management** | Platform owners configure geographic restrictions for cleaners. City-based or radius-based modes. Validates addresses against service area. Bulk recheck of existing homes when config changes. |
 | **Preview as Role** | Platform owners can preview the app as any user type using demo accounts. Preserves owner state for seamless return. Full functionality with demo data. |
 | **Internal Analytics** | Platform-level metrics dashboard for owners. Flow abandonment tracking with step-by-step funnel analysis. Job duration statistics (avg/min/max/percentiles). Offline usage monitoring (sync success rate, duration). Dispute and pay override frequency with breakdowns by type/reason. Date range filtering (7/30/90 days). |
 | **Transit Time** | Automatic calculation of travel time between jobs for scheduling optimization. Factors in distance and traffic patterns. Helps prevent overbooking and late arrivals. |
@@ -217,6 +240,12 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | **Bi-Weekly Batch Payouts** | Business owners get paid immediately when jobs complete. Employees accumulate earnings and get paid every other Friday. Supports early payout trigger and immediate payout on termination. |
 | **Database-Driven Pricing** | All platform fees and pricing configurable via database (PricingConfig). Platform fee (10%), business owner fee (10%), large business fee (7%), multi-cleaner fee (13%), incentive percentages. Owner can adjust via admin dashboard. |
 | **Employee Pay Calculation** | Supports three pay types: hourly (rate × hours worked), percentage (% of job price), and flat/per-job (fixed amount). Pay calculated at job completion with full audit trail. |
+| **Custom Job Flows** | Business owners can create custom job flows with specialized checklists for different client types. Assign flows to specific clients for tailored service requirements. |
+| **Security Audit Logging** | Immutable audit trail for security-sensitive actions (password changes, login events, account freezes). IP address tracking and device type detection. |
+| **Account Freezing** | Accounts can be suspended with reason tracking. Frozen accounts cannot access platform features. HR/IT staff can freeze/unfreeze with audit logging. |
+| **Multi-Account Support** | Users can have multiple account types (homeowner + cleaner, business owner + employee) linked to the same email. Account selection during login. |
+| **2-Step Job Completion** | Cleaners submit job completion with photos/checklist. Homeowners approve within configurable window. Auto-approval after timeout with notification workflow. |
+| **Employee Bonuses** | Business owners can award bonuses to employees. Bonus tracking with reason and payment status. Includes in payroll calculations. |
 
 ---
 
@@ -247,7 +276,7 @@ React Native + Expo SDK 52
 
 ```
 Node.js + Express.js
-├── PostgreSQL + Sequelize  # Database & ORM (60 models)
+├── PostgreSQL + Sequelize  # Database & ORM (68 models)
 ├── Socket.io               # WebSocket server
 ├── Passport.js + JWT       # Authentication
 ├── Stripe API              # Payment processing
@@ -284,10 +313,18 @@ cd server
 npm install
 createdb cleaning_company_development
 npx sequelize-cli db:migrate
+
+# Required seeders
 npx sequelize-cli db:seed --seed ownerSeeder.js
 npx sequelize-cli db:seed --seed termsAndConditionsSeeder.js
 npx sequelize-cli db:seed --seed privacyPolicySeeder.js
+npx sequelize-cli db:seed --seed paymentTermsSeeder.js
+npx sequelize-cli db:seed --seed damageProtectionSeeder.js
 npx sequelize-cli db:seed --seed cleanerChecklistSeeder.js
+node seeders/serviceAreaConfigSeeder.js
+
+# Optional: Demo accounts for "Preview as Role" feature
+node seeders/demo-accounts.js
 
 # Setup Client
 cd ../client
@@ -381,6 +418,7 @@ kleanr/
 │   │   │   ├── client/              # Homeowner dashboard & features
 │   │   │   ├── employeeAssignments/ # Job assignments, photos, checklists
 │   │   │   ├── hr/                  # HR staff features
+│   │   │   ├── it/                  # IT support staff features
 │   │   │   ├── messaging/           # Real-time chat
 │   │   │   ├── multiCleaner/        # Multi-cleaner job support
 │   │   │   ├── offline/             # Offline mode UI
@@ -404,7 +442,7 @@ kleanr/
 │   └── package.json
 │
 ├── server/                          # Express.js API Server
-│   ├── routes/api/v1/               # 35 API routers
+│   ├── routes/api/v1/               # 46 API routers
 │   │   ├── appointmentsRouter.js    # Scheduling endpoints
 │   │   ├── businessEmployeeRouter.js # Employee management
 │   │   ├── businessOwnerRouter.js   # Business owner features
@@ -423,13 +461,18 @@ kleanr/
 │   │   ├── referralsRouter.js       # Referral programs
 │   │   ├── stripeConnectRouter.js   # Cleaner payouts
 │   │   ├── suspiciousActivityRouter.js  # Content moderation
-│   │   ├── taxRouter.js             # Tax documents
+│   │   ├── stripeTaxRouter.js        # Tax documents (Stripe-based)
+│   │   ├── newHomeRequestRouter.js   # New home request workflow
 │   │   ├── termsRouter.js           # Terms & Conditions
 │   │   ├── conflictRouter.js        # Conflict resolution center
 │   │   ├── cancellationAppealRouter.js  # Cancellation appeals
 │   │   ├── demoAccountRouter.js     # Preview as Role
-│   │   └── analyticsRouter.js       # Internal analytics
-│   ├── services/                    # 41 business logic services
+│   │   ├── analyticsRouter.js       # Internal analytics
+│   │   ├── itDashboardRouter.js     # IT support dashboard
+│   │   ├── itDisputeRouter.js       # IT dispute tickets
+│   │   ├── itSupportToolsRouter.js  # IT support tools
+│   │   └── serviceAreaRouter.js     # Service area config
+│   ├── services/                    # 43 business logic services
 │   │   ├── BusinessEmployeeService.js # Employee management
 │   │   ├── CalculatePrice.js        # Dynamic pricing logic
 │   │   ├── calendarSyncService.js   # iCal parsing & sync
@@ -442,7 +485,7 @@ kleanr/
 │   │   ├── PreferredCleanerService.js # Preferred matching
 │   │   ├── ReferralService.js       # Referral code management
 │   │   ├── SuspiciousContentDetector.js  # Content moderation
-│   │   ├── TaxDocumentService.js    # 1099-NEC generation
+│   │   ├── NewHomeRequestService.js # New home request workflow
 │   │   ├── ConflictResolutionService.js  # Conflict center logic
 │   │   ├── AppealService.js         # Cancellation appeals
 │   │   ├── JobLedgerService.js      # Financial ledger
@@ -454,7 +497,7 @@ kleanr/
 │   ├── models/                      # 60 Sequelize models
 │   ├── serializers/                 # 37 API serializers
 │   ├── migrations/                  # Database migrations
-│   ├── __tests__/                   # 4504 server tests
+│   ├── __tests__/                   # 5364 server tests
 │   └── package.json
 │
 └── README.md
@@ -472,17 +515,18 @@ kleanr/
 | **Business Client** | Corporate client of a business owner | Book via business portal, manage company properties, view service history |
 | **Business Employee** | Works for a business owner | Accept assigned jobs, track earnings, availability settings, coworker messaging |
 | **HR Staff** | Support and moderation team | Handle disputes, review reports, manage support, freeze accounts |
-| **Owner** | Platform administrator | Full access: financials, employees, pricing, settings, reports, tax filing |
+| **IT Support** | Technical support team | Handle technical tickets, user search, account management, system monitoring |
+| **Owner** | Platform administrator | Full access: financials, employees, pricing, settings, reports, tax filing, IT staff management |
 
 ---
 
 ## Testing
 
 ```bash
-# Run all server tests (5038 tests)
+# Run all server tests (5445 tests)
 cd server && npm test
 
-# Run all client tests (5561 tests)
+# Run all client tests (5961 tests)
 cd client && npm test
 
 # Run specific test file
@@ -511,7 +555,9 @@ npm test -- --watch
 | Incentives | 54 | Qualification, discounts |
 | Referrals | 48 | Codes, rewards, tracking |
 | Preferred Cleaners | 56 | Tiers, perks, bonuses |
-| Tax Documents | 89 | W-9, 1099-NEC, platform taxes |
+| Tax Documents | 89 | Earnings summary, dashboard link, platform taxes |
+| New Home Requests | 45 | Accept/decline, re-request, marketplace |
+| Support Tickets | 67 | Create, link to conversation, categories |
 | Reviews | 67 | Create, read, bidirectional |
 | Messaging | 234 | Conversations, reactions, suspicious content |
 | Job Photos | 67 | Upload, access control, completion |
@@ -536,9 +582,13 @@ npm test -- --watch
 | Preview as Role | 129 | Context, modals, demo account services |
 | Internal Analytics | 89 | Event tracking, dashboard stats, aggregations |
 | Multi-Cleaner Router | 76 | Job creation, offers, room assignments |
-| **Server Total** | **5128** | 202 test suites |
-| **Client Total** | **5128** | 175 test suites |
-| **Combined Total** | **10256** | 377 test suites |
+| IT Dashboard | 92 | Ticket management, assignment, resolution |
+| IT Disputes | 67 | Submission, categories, priorities, status |
+| IT Management | 45 | CRUD operations, password generation |
+| Service Area | 56 | Config, validation, history, bulk recheck |
+| **Server Total** | **5445** | 215 test suites |
+| **Client Total** | **5961** | 210 test suites |
+| **Combined Total** | **11406** | 425 test suites |
 
 ---
 
@@ -546,7 +596,7 @@ npm test -- --watch
 
 See [Server README](./server/README.md) for complete API documentation.
 
-### Endpoint Summary (35 Routers, 200+ Endpoints)
+### Endpoint Summary (46 Routers, 300+ Endpoints)
 
 | Category | Router | Key Endpoints |
 |----------|--------|---------------|
@@ -560,7 +610,8 @@ See [Server README](./server/README.md) for complete API documentation.
 | **Messaging** | messageRouter | Conversations, send, reactions, reports |
 | **Calendar** | calendarSyncRouter | iCal feeds, sync, auto-appointments |
 | **Reviews** | reviewsRouter | Submit, view, multi-aspect ratings |
-| **Tax** | taxRouter | W-9, 1099-NEC, platform reports |
+| **Tax** | stripeTaxRouter | Earnings, dashboard link, platform reports |
+| **New Home** | newHomeRequestRouter | Accept/decline, re-request, marketplace toggle |
 | **Preferred** | preferredCleanerRouter | Tiers, perks, availability config |
 | **Incentives** | incentivesRouter | Configuration, eligibility |
 | **Referrals** | referralsRouter | Codes, rewards, validation |
@@ -570,6 +621,19 @@ See [Server README](./server/README.md) for complete API documentation.
 | **Appeals** | cancellationAppealRouter | Submit, review, decide, stats |
 | **Demo Accounts** | demoAccountRouter | Preview enter/exit, role selection |
 | **Analytics** | analyticsRouter | Flow abandonment, job duration, offline usage, disputes, pay overrides |
+| **IT Dashboard** | itDashboardRouter | Quick stats, dispute queue, assignment, resolution |
+| **IT Disputes** | itDisputeRouter | Submit, view, add info, categories |
+| **IT Support Tools** | itSupportToolsRouter | User search, account freeze/unfreeze |
+| **Service Areas** | serviceAreaRouter | Config, validation, history, bulk recheck |
+| **Completion** | completionRouter | 2-step completion submit, homeowner approval, auto-complete |
+| **Guest Not Left** | guestNotLeftRouter | Report, wait, will-return, cancel, resolved states |
+| **Applications** | applicationRouter | Cleaner applications, status tracking |
+| **User Info** | userInfoRouter | User details, homes CRUD, service area config |
+| **User Sessions** | userSessionsRouter | Login, logout, check-accounts, password reset |
+| **Billing** | billingRouter | Bill history, summary, payment processing |
+| **Notifications** | notificationsRouter | User notifications, read status |
+| **Push Notifications** | pushNotificationRouter | Token registration, send notifications |
+| **Checklists** | checklistRouter | Draft, publish, versions, templates |
 
 ---
 
@@ -629,7 +693,7 @@ Real-time communication via Socket.io:
 
 ---
 
-## Database Models (66 Total)
+## Database Models (68 Total)
 
 ### Core Models
 - User, UserHomes, UserAppointments, UserBills
@@ -653,7 +717,10 @@ Real-time communication via Socket.io:
 - UserReviews, SuspiciousActivityReport, HomeSizeAdjustmentRequest, HomeSizeAdjustmentPhoto, GuestNotLeftReport
 
 ### Tax & Legal
-- TaxDocument, TaxInfo, UserTermsAcceptance
+- UserTermsAcceptance
+
+### New Home Requests
+- NewHomeRequest
 
 ### Programs
 - Referral, ReferralConfig, IncentiveConfig
@@ -669,6 +736,9 @@ Real-time communication via Socket.io:
 
 ### Analytics
 - AnalyticsEvent
+
+### IT Support
+- ITDispute, ServiceAreaConfig
 
 ---
 

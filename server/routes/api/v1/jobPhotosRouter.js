@@ -59,6 +59,19 @@ jobPhotosRouter.post("/upload", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
+    // Check if appointment is paused (homeowner account frozen)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment was cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
+    }
+
     const cleanerIdStr = cleanerId.toString();
     if (
       !appointment.employeesAssigned ||
@@ -67,6 +80,21 @@ jobPhotosRouter.post("/upload", authenticateToken, async (req, res) => {
       return res.status(403).json({
         error: "You are not assigned to this appointment",
       });
+    }
+
+    // Check if payment has failed - block job start
+    if (photoType === "before" && appointment.paymentCaptureFailed) {
+      // Check if this is their first before photo (i.e., starting the job)
+      const existingBeforePhotos = await JobPhoto.count({
+        where: { appointmentId, cleanerId, photoType: "before" },
+      });
+      if (existingBeforePhotos === 0) {
+        return res.status(400).json({
+          error: "Cannot start job - client payment issue",
+          message: "The client's payment method has failed. Please contact support or wait for the client to resolve their payment issue.",
+          paymentFailed: true,
+        });
+      }
     }
 
     // If uploading 'after' photos, verify 'before' photos exist

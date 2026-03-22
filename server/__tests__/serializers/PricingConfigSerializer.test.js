@@ -6,25 +6,25 @@ describe("PricingConfigSerializer", () => {
   });
 
   describe("serializeOne", () => {
-    it("should serialize basic pricing config fields", () => {
+    it("should serialize basic pricing config fields with cents converted to dollars", () => {
       const mockConfig = {
         dataValues: {
           id: 1,
-          basePrice: 150,
-          extraBedBathFee: 50,
-          halfBathFee: 25,
-          sheetFeePerBed: 30,
-          towelFee: 5,
-          faceClothFee: 2,
+          basePrice: 15000, // cents
+          extraBedBathFee: 5000,
+          halfBathFee: 2500,
+          sheetFeePerBed: 3000,
+          towelFee: 500,
+          faceClothFee: 200,
           timeWindowAnytime: 0,
-          timeWindow10To3: 25,
-          timeWindow11To4: 25,
-          timeWindow12To2: 30,
-          cancellationFee: 25,
+          timeWindow10To3: 2500,
+          timeWindow11To4: 2500,
+          timeWindow12To2: 3000,
+          cancellationFee: 2500,
           cancellationWindowDays: 7,
           homeownerPenaltyDays: 3,
           cleanerPenaltyDays: 4,
-          highVolumeFee: 50,
+          highVolumeFee: 5000,
           isActive: true,
         },
       };
@@ -32,21 +32,21 @@ describe("PricingConfigSerializer", () => {
       const result = PricingConfigSerializer.serializeOne(mockConfig);
 
       expect(result.id).toBe(1);
-      expect(result.basePrice).toBe(150);
-      expect(result.extraBedBathFee).toBe(50);
-      expect(result.halfBathFee).toBe(25);
-      expect(result.sheetFeePerBed).toBe(30);
-      expect(result.towelFee).toBe(5);
-      expect(result.faceClothFee).toBe(2);
-      expect(result.timeWindowAnytime).toBe(0);
-      expect(result.timeWindow10To3).toBe(25);
-      expect(result.timeWindow11To4).toBe(25);
-      expect(result.timeWindow12To2).toBe(30);
-      expect(result.cancellationFee).toBe(25);
+      expect(result.basePrice).toBe("150.00");
+      expect(result.extraBedBathFee).toBe("50.00");
+      expect(result.halfBathFee).toBe("25.00");
+      expect(result.sheetFeePerBed).toBe("30.00");
+      expect(result.towelFee).toBe("5.00");
+      expect(result.faceClothFee).toBe("2.00");
+      expect(result.timeWindowAnytime).toBe("0.00");
+      expect(result.timeWindow10To3).toBe("25.00");
+      expect(result.timeWindow11To4).toBe("25.00");
+      expect(result.timeWindow12To2).toBe("30.00");
+      expect(result.cancellationFee).toBe("25.00");
       expect(result.cancellationWindowDays).toBe(7);
       expect(result.homeownerPenaltyDays).toBe(3);
       expect(result.cleanerPenaltyDays).toBe(4);
-      expect(result.highVolumeFee).toBe(50);
+      expect(result.highVolumeFee).toBe("50.00");
       expect(result.isActive).toBe(true);
     });
 
@@ -138,7 +138,7 @@ describe("PricingConfigSerializer", () => {
       const mockConfig = {
         dataValues: {
           id: 1,
-          lastMinuteFee: 50,
+          lastMinuteFee: 5000, // cents
           lastMinuteThresholdHours: 48,
           lastMinuteNotificationRadiusMiles: "25.00",
           refundPercentage: "0.50",
@@ -148,7 +148,7 @@ describe("PricingConfigSerializer", () => {
 
       const result = PricingConfigSerializer.serializeOne(mockConfig);
 
-      expect(result.lastMinuteFee).toBe(50);
+      expect(result.lastMinuteFee).toBe("50.00");
       expect(result.lastMinuteThresholdHours).toBe(48);
       expect(result.lastMinuteNotificationRadiusMiles).toBe(25);
       expect(typeof result.lastMinuteNotificationRadiusMiles).toBe("number");
@@ -165,7 +165,7 @@ describe("PricingConfigSerializer", () => {
 
       const result = PricingConfigSerializer.serializeOne(mockConfig);
 
-      expect(result.lastMinuteFee).toBe(50);
+      expect(result.lastMinuteFee).toBe("50.00");
       expect(result.lastMinuteThresholdHours).toBe(48);
       expect(result.lastMinuteNotificationRadiusMiles).toBe(25);
     });
@@ -174,7 +174,7 @@ describe("PricingConfigSerializer", () => {
       const mockConfig = {
         dataValues: {
           id: 1,
-          soloLargeHomeBonus: 20,
+          soloLargeHomeBonus: 2000, // cents
           largeHomeBedsThreshold: 4,
           largeHomeBathsThreshold: 3,
           multiCleanerOfferExpirationHours: 72,
@@ -187,7 +187,7 @@ describe("PricingConfigSerializer", () => {
 
       const result = PricingConfigSerializer.serializeOne(mockConfig);
 
-      expect(result.soloLargeHomeBonus).toBe(20);
+      expect(result.soloLargeHomeBonus).toBe("20.00");
       expect(result.largeHomeBedsThreshold).toBe(4);
       expect(result.largeHomeBathsThreshold).toBe(3);
       expect(result.multiCleanerOfferExpirationHours).toBe(72);
@@ -198,7 +198,7 @@ describe("PricingConfigSerializer", () => {
     it("should access values directly if dataValues not present", () => {
       const mockConfig = {
         id: 1,
-        basePrice: 150,
+        basePrice: 15000, // cents
         refundPercentage: "0.50",
         platformFeePercent: "0.10",
       };
@@ -206,7 +206,7 @@ describe("PricingConfigSerializer", () => {
       const result = PricingConfigSerializer.serializeOne(mockConfig);
 
       expect(result.id).toBe(1);
-      expect(result.basePrice).toBe(150);
+      expect(result.basePrice).toBe("150.00");
     });
   });
 
@@ -216,7 +216,7 @@ describe("PricingConfigSerializer", () => {
         {
           dataValues: {
             id: 1,
-            basePrice: 150,
+            basePrice: 15000, // cents
             refundPercentage: "0.50",
             platformFeePercent: "0.10",
           },
@@ -224,7 +224,7 @@ describe("PricingConfigSerializer", () => {
         {
           dataValues: {
             id: 2,
-            basePrice: 175,
+            basePrice: 17500, // cents
             refundPercentage: "0.60",
             platformFeePercent: "0.12",
           },
@@ -234,8 +234,8 @@ describe("PricingConfigSerializer", () => {
       const result = PricingConfigSerializer.serializeArray(mockConfigs);
 
       expect(result).toHaveLength(2);
-      expect(result[0].basePrice).toBe(150);
-      expect(result[1].basePrice).toBe(175);
+      expect(result[0].basePrice).toBe("150.00");
+      expect(result[1].basePrice).toBe("175.00");
       expect(result[0].refundPercentage).toBe(0.5);
       expect(result[1].refundPercentage).toBe(0.6);
     });
@@ -256,24 +256,24 @@ describe("PricingConfigSerializer", () => {
       const mockConfig = {
         dataValues: {
           id: 1,
-          basePrice: 150,
-          extraBedBathFee: 50,
-          halfBathFee: 25,
-          sheetFeePerBed: 30,
-          towelFee: 5,
-          faceClothFee: 2,
+          basePrice: 15000, // cents
+          extraBedBathFee: 5000,
+          halfBathFee: 2500,
+          sheetFeePerBed: 3000,
+          towelFee: 500,
+          faceClothFee: 200,
           timeWindowAnytime: 0,
-          timeWindow10To3: 25,
-          timeWindow11To4: 25,
-          timeWindow12To2: 30,
-          cancellationFee: 25,
+          timeWindow10To3: 2500,
+          timeWindow11To4: 2500,
+          timeWindow12To2: 3000,
+          cancellationFee: 2500,
           cancellationWindowDays: 7,
           homeownerPenaltyDays: 3,
           cleanerPenaltyDays: 4,
           refundPercentage: "0.50",
           platformFeePercent: "0.10",
           businessOwnerFeePercent: "0.10",
-          highVolumeFee: 50,
+          highVolumeFee: 5000,
           multiCleanerPlatformFeePercent: "0.13",
           soloLargeHomeBonus: 0,
           largeHomeBedsThreshold: 3,
@@ -284,7 +284,7 @@ describe("PricingConfigSerializer", () => {
           largeBusinessFeePercent: "0.07",
           largeBusinessMonthlyThreshold: 50,
           largeBusinessLookbackMonths: 1,
-          lastMinuteFee: 50,
+          lastMinuteFee: 5000,
           lastMinuteThresholdHours: 48,
           lastMinuteNotificationRadiusMiles: "25.00",
         },
@@ -292,27 +292,27 @@ describe("PricingConfigSerializer", () => {
 
       const result = PricingConfigSerializer.serializeFormatted(mockConfig);
 
-      // Base pricing
-      expect(result.basePrice).toBe(150);
-      expect(result.extraBedBathFee).toBe(50);
-      expect(result.halfBathFee).toBe(25);
+      // Base pricing (converted to dollar strings)
+      expect(result.basePrice).toBe("150.00");
+      expect(result.extraBedBathFee).toBe("50.00");
+      expect(result.halfBathFee).toBe("25.00");
 
       // Linens
       expect(result.linens).toBeDefined();
-      expect(result.linens.sheetFeePerBed).toBe(30);
-      expect(result.linens.towelFee).toBe(5);
-      expect(result.linens.faceClothFee).toBe(2);
+      expect(result.linens.sheetFeePerBed).toBe("30.00");
+      expect(result.linens.towelFee).toBe("5.00");
+      expect(result.linens.faceClothFee).toBe("2.00");
 
       // Time windows
       expect(result.timeWindows).toBeDefined();
-      expect(result.timeWindows.anytime.surcharge).toBe(0);
-      expect(result.timeWindows["10-3"].surcharge).toBe(25);
-      expect(result.timeWindows["11-4"].surcharge).toBe(25);
-      expect(result.timeWindows["12-2"].surcharge).toBe(30);
+      expect(result.timeWindows.anytime.surcharge).toBe("0.00");
+      expect(result.timeWindows["10-3"].surcharge).toBe("25.00");
+      expect(result.timeWindows["11-4"].surcharge).toBe("25.00");
+      expect(result.timeWindows["12-2"].surcharge).toBe("30.00");
 
       // Cancellation
       expect(result.cancellation).toBeDefined();
-      expect(result.cancellation.fee).toBe(25);
+      expect(result.cancellation.fee).toBe("25.00");
       expect(result.cancellation.windowDays).toBe(7);
       expect(result.cancellation.refundPercentage).toBe(0.5);
 
@@ -329,7 +329,7 @@ describe("PricingConfigSerializer", () => {
 
       // Last-minute
       expect(result.lastMinute).toBeDefined();
-      expect(result.lastMinute.fee).toBe(50);
+      expect(result.lastMinute.fee).toBe("50.00");
       expect(result.lastMinute.thresholdHours).toBe(48);
       expect(result.lastMinute.notificationRadiusMiles).toBe(25);
     });
@@ -361,19 +361,19 @@ describe("PricingConfigSerializer", () => {
       const mockConfig = {
         dataValues: {
           id: 1,
-          basePrice: 150,
-          extraBedBathFee: 50,
-          halfBathFee: 25,
-          sheetFeePerBed: 30,
-          towelFee: 5,
-          faceClothFee: 2,
+          basePrice: 15000, // cents
+          extraBedBathFee: 5000,
+          halfBathFee: 2500,
+          sheetFeePerBed: 3000,
+          towelFee: 500,
+          faceClothFee: 200,
           timeWindowAnytime: 0,
-          timeWindow10To3: 25,
-          timeWindow11To4: 25,
-          timeWindow12To2: 30,
-          cancellationFee: 25,
+          timeWindow10To3: 2500,
+          timeWindow11To4: 2500,
+          timeWindow12To2: 3000,
+          cancellationFee: 2500,
           cancellationWindowDays: 7,
-          highVolumeFee: 50,
+          highVolumeFee: 5000,
           // Private fields that should NOT be included
           platformFeePercent: "0.10",
           businessOwnerFeePercent: "0.10",
@@ -385,14 +385,14 @@ describe("PricingConfigSerializer", () => {
 
       const result = PricingConfigSerializer.serializeForPublic(mockConfig);
 
-      // Should include public fields
-      expect(result.basePrice).toBe(150);
-      expect(result.extraBedBathFee).toBe(50);
-      expect(result.sheetFeePerBed).toBe(30);
-      expect(result.towelFee).toBe(5);
-      expect(result.faceClothFee).toBe(2);
-      expect(result.cancellationFee).toBe(25);
-      expect(result.highVolumeFee).toBe(50);
+      // Should include public fields (converted to dollar strings)
+      expect(result.basePrice).toBe("150.00");
+      expect(result.extraBedBathFee).toBe("50.00");
+      expect(result.sheetFeePerBed).toBe("30.00");
+      expect(result.towelFee).toBe("5.00");
+      expect(result.faceClothFee).toBe("2.00");
+      expect(result.cancellationFee).toBe("25.00");
+      expect(result.highVolumeFee).toBe("50.00");
 
       // Should NOT include private fields
       expect(result.platformFeePercent).toBeUndefined();
@@ -409,7 +409,7 @@ describe("PricingConfigSerializer", () => {
         {
           dataValues: {
             id: 1,
-            basePrice: 150,
+            basePrice: 15000, // cents
             refundPercentage: "0.50",
             platformFeePercent: "0.10",
             createdAt: new Date("2026-01-01"),

@@ -42,6 +42,7 @@ jest.mock("../../models", () => {
   const mockTransaction = {
     commit: jest.fn(),
     rollback: jest.fn(),
+    LOCK: { UPDATE: "UPDATE" },
   };
 
   return {
@@ -131,7 +132,7 @@ describe("Multi-Employee Job Assignment", () => {
     const mockAppointment = {
       id: 100,
       userId: 50,
-      bookedByCleanerId: null,
+      bookedByCleanerId: 10, // Match businessOwnerId for authorization
       isMultiCleanerJob: false,
       multiCleanerJobId: null,
       update: jest.fn(),
@@ -143,6 +144,10 @@ describe("Multi-Employee Job Assignment", () => {
 
       // First employee already assigned, but this is a different employee
       EmployeeJobAssignment.findOne.mockResolvedValue(null); // No duplicate for this specific employee
+      // Mock findAll for existing assignments (used inside transaction with lock)
+      EmployeeJobAssignment.findAll.mockResolvedValue([
+        { id: 1, businessEmployeeId: 1, appointmentId: 100 },
+      ]);
 
       MarketplaceJobRequirementsService.isMarketplaceJob.mockResolvedValue(false);
       CustomJobFlowService.resolveFlowForAppointment.mockResolvedValue({
@@ -177,12 +182,13 @@ describe("Multi-Employee Job Assignment", () => {
       BusinessEmployee.findOne.mockResolvedValue(mockEmployee1);
       UserAppointments.findOne.mockResolvedValue(mockAppointment);
 
-      // Same employee already assigned
-      EmployeeJobAssignment.findOne.mockResolvedValue({
+      // Same employee already assigned - use findAll (now used inside transaction with lock)
+      EmployeeJobAssignment.findAll.mockResolvedValue([{
         id: 1,
         businessEmployeeId: 1,
         appointmentId: 100,
-      });
+      }]);
+      EmployeeJobAssignment.findOne.mockResolvedValue(null);
 
       await expect(
         EmployeeJobAssignmentService.assignEmployeeToJob(10, {
@@ -203,6 +209,11 @@ describe("Multi-Employee Job Assignment", () => {
       BusinessEmployee.findOne.mockResolvedValue(mockEmployee1);
       UserAppointments.findOne.mockResolvedValue(marketplaceAppointment);
       EmployeeJobAssignment.findOne.mockResolvedValue(null); // No duplicate
+      // Mock findAll for existing assignments (used inside transaction with lock)
+      EmployeeJobAssignment.findAll.mockResolvedValue([
+        { id: 1, businessEmployeeId: 2, appointmentId: 100 },
+        { id: 2, businessEmployeeId: 3, appointmentId: 100 },
+      ]);
 
       MultiCleanerJob.findByPk.mockResolvedValue({
         id: 5,
@@ -231,6 +242,10 @@ describe("Multi-Employee Job Assignment", () => {
       BusinessEmployee.findOne.mockResolvedValue(mockEmployee1);
       UserAppointments.findOne.mockResolvedValue(marketplaceAppointment);
       EmployeeJobAssignment.findOne.mockResolvedValue(null);
+      // Mock findAll for existing assignments (used inside transaction with lock)
+      EmployeeJobAssignment.findAll.mockResolvedValue([
+        { id: 1, businessEmployeeId: 2, appointmentId: 100 },
+      ]);
 
       MultiCleanerJob.findByPk.mockResolvedValue({
         id: 5,

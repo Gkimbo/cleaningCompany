@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
 export const offlineSchema = appSchema({
-  version: 4,
+  version: 5,
   tables: [
     tableSchema({
       name: "offline_jobs",
@@ -32,6 +32,7 @@ export const offlineSchema = appSchema({
         { name: "uploaded", type: "boolean" },
         { name: "upload_attempts", type: "number" },
         { name: "is_not_applicable", type: "boolean", isOptional: true }, // For passes marked as N/A
+        { name: "missing_file_checks", type: "number", isOptional: true }, // Track missing file retries
         { name: "created_at", type: "number" },
       ],
     }),

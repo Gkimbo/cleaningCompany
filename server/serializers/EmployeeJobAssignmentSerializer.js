@@ -9,6 +9,12 @@ class EmployeeJobAssignmentSerializer {
     return EncryptionService.decrypt(value);
   }
 
+  // Convert cents to dollars for display
+  static toDollars(cents) {
+    if (cents === null || cents === undefined) return null;
+    return (cents / 100).toFixed(2);
+  }
+
   /**
    * Serialize a single EmployeeJobAssignment
    * @param {Object} assignment - EmployeeJobAssignment instance or plain object
@@ -101,8 +107,9 @@ class EmployeeJobAssignmentSerializer {
       id: data.id,
       date: data.date,
       scheduledDate: data.scheduledDate,
-      price: data.price,
+      price: this.toDollars(data.price),
       completed: data.completed,
+      paymentCaptureFailed: data.paymentCaptureFailed || false,
     };
 
     // Include home details
@@ -143,9 +150,18 @@ class EmployeeJobAssignmentSerializer {
 
     if (includeDetails) {
       serialized.address = this.decryptUserField(data.address);
+      serialized.city = this.decryptUserField(data.city);
+      serialized.state = this.decryptUserField(data.state);
+      serialized.zipcode = this.decryptUserField(data.zipcode);
       serialized.keyPadCode = this.decryptUserField(data.keyPadCode);
       serialized.keyLocation = this.decryptUserField(data.keyLocation);
+      serialized.contact = this.decryptUserField(data.contact);
       serialized.notes = data.notes;
+    }
+
+    // Handle nested user relationship (home.user)
+    if (data.user) {
+      serialized.user = this.serializeUser(data.user);
     }
 
     return serialized;
@@ -189,13 +205,52 @@ class EmployeeJobAssignmentSerializer {
       completedAt: data.completedAt,
     };
 
-    // Include pay info only if employee has permission
+    // Always include pay amount - employees should see what they'll earn for their own jobs
+    serialized.payAmount = data.payAmount;
+    serialized.payType = data.payType;
+    serialized.formattedPay = data.payAmount != null
+      ? `$${(data.payAmount / 100).toFixed(2)}`
+      : null;
+
+    // Include additional pay details if employee has permission
     if (employeeRecord?.canViewJobEarnings) {
-      serialized.payAmount = data.payAmount;
-      serialized.payType = data.payType;
-      serialized.formattedPay = data.payAmount != null
-        ? `$${(data.payAmount / 100).toFixed(2)}`
-        : null;
+      serialized.hoursWorked = data.hoursWorked ? parseFloat(data.hoursWorked) : null;
+      serialized.payoutStatus = data.payoutStatus;
+      // Pay type only - not exposing actual rates to employees
+      serialized.payType = employeeRecord.payType;
+
+      // Build pay breakdown string (shows calculation result, not formula)
+      if (employeeRecord.payType === "hourly" && data.hoursWorked && employeeRecord.defaultHourlyRate) {
+        const hourlyRate = employeeRecord.defaultHourlyRate / 100;
+        serialized.payBreakdown = `${parseFloat(data.hoursWorked)} hrs @ $${hourlyRate.toFixed(2)}/hr`;
+      } else if (employeeRecord.payType === "percentage" && employeeRecord.payRate && data.payAmount) {
+        const percentRate = parseFloat(employeeRecord.payRate);
+        const originalPrice = (data.payAmount / 100) / (percentRate / 100);
+        serialized.payBreakdown = `${percentRate.toFixed(0)}% of $${originalPrice.toFixed(0)}`;
+      } else if (employeeRecord.payType === "per_job" && employeeRecord.defaultJobRate) {
+        serialized.payBreakdown = "Flat rate per job";
+      }
+    }
+
+    // For upcoming jobs, estimate pay based on home size if not yet calculated
+    // This shows the employee what they can expect to earn
+    if (data.payAmount === 0 && employeeRecord && data.appointment?.home) {
+      const home = data.appointment.home;
+      const numBeds = home.numBeds || 2;
+      const numBaths = home.numBaths || 1;
+
+      // Estimate duration: base 1hr + 0.25hr/bed + 0.5hr/bath
+      const estimatedHours = Math.ceil((1 + (numBeds * 0.25) + (numBaths * 0.5)) * 2) / 2;
+
+      if (employeeRecord.payType === "hourly" && employeeRecord.defaultHourlyRate) {
+        serialized.payAmount = Math.round(employeeRecord.defaultHourlyRate * estimatedHours);
+        serialized.formattedPay = `$${(serialized.payAmount / 100).toFixed(2)}`;
+        serialized.isEstimate = true;
+      } else if (employeeRecord.payType === "per_job" && employeeRecord.defaultJobRate) {
+        serialized.payAmount = employeeRecord.defaultJobRate;
+        serialized.formattedPay = `$${(serialized.payAmount / 100).toFixed(2)}`;
+        serialized.isEstimate = true;
+      }
     }
 
     // Serialize appointment with permission-based details
@@ -296,7 +351,7 @@ class EmployeeJobAssignmentSerializer {
       appointment: data.appointment ? {
         id: data.appointment.id,
         date: data.appointment.date,
-        price: data.appointment.price,
+        price: this.toDollars(data.appointment.price),
         home: data.appointment.home ? {
           id: data.appointment.home.id,
           address: this.decryptUserField(data.appointment.home.address),

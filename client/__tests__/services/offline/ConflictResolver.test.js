@@ -41,14 +41,15 @@ describe("ConflictResolver", () => {
 
   describe("getUnresolvedConflicts", () => {
     it("should return only unresolved conflicts", async () => {
-      const conflicts = [
+      // Now using database-level filtering with Q.where("resolved", false)
+      // So mock returns only unresolved conflicts (as database would)
+      const unresolvedConflicts = [
         { id: "1", resolved: false },
-        { id: "2", resolved: true },
         { id: "3", resolved: false },
       ];
 
       syncConflictsCollection.query.mockReturnValue({
-        fetch: jest.fn().mockResolvedValue(conflicts),
+        fetch: jest.fn().mockResolvedValue(unresolvedConflicts),
       });
 
       const result = await ConflictResolver.getUnresolvedConflicts();
@@ -70,14 +71,15 @@ describe("ConflictResolver", () => {
 
   describe("getConflictsForJob", () => {
     it("should return conflicts for specific job", async () => {
-      const conflicts = [
+      // Now using database-level filtering with Q.where("job_id", jobId)
+      // So mock returns only conflicts for the specific job (as database would)
+      const jobConflicts = [
         { id: "1", jobId: "job-1" },
-        { id: "2", jobId: "job-2" },
         { id: "3", jobId: "job-1" },
       ];
 
       syncConflictsCollection.query.mockReturnValue({
-        fetch: jest.fn().mockResolvedValue(conflicts),
+        fetch: jest.fn().mockResolvedValue(jobConflicts),
       });
 
       const result = await ConflictResolver.getConflictsForJob("job-1");
@@ -263,16 +265,18 @@ describe("ConflictResolver", () => {
 
   describe("getConflictSummary", () => {
     it("should return summary counts by type", async () => {
-      const conflicts = [
+      // getConflictSummary calls getUnresolvedConflicts() which now uses database-level filtering
+      // with Q.where("resolved", false), so mock returns only unresolved conflicts
+      const unresolvedConflicts = [
         { conflictType: CONFLICT_TYPES.CANCELLATION, resolved: false },
         { conflictType: CONFLICT_TYPES.CANCELLATION, resolved: false },
         { conflictType: CONFLICT_TYPES.MULTI_CLEANER, resolved: false },
         { conflictType: CONFLICT_TYPES.DATA_MISMATCH, resolved: false },
-        { conflictType: CONFLICT_TYPES.CANCELLATION, resolved: true }, // Should not count
+        // Resolved conflict is not included (filtered at database level)
       ];
 
       syncConflictsCollection.query.mockReturnValue({
-        fetch: jest.fn().mockResolvedValue(conflicts),
+        fetch: jest.fn().mockResolvedValue(unresolvedConflicts),
       });
 
       const summary = await ConflictResolver.getConflictSummary();

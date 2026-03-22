@@ -1,5 +1,5 @@
 /**
- * Script to update existing appointments' empoyeesNeeded values
+ * Script to update existing appointments' employeesNeeded values
  * based on home size and time window constraints
  */
 
@@ -41,9 +41,9 @@ async function updateAppointmentCleaners() {
       const timeWindow = apt.timeWindow || apt.home.timeToBeCompleted || 'anytime';
       const needed = getCleanersNeeded(apt.home.numBeds, apt.home.numBaths, timeWindow);
 
-      if (apt.empoyeesNeeded !== needed) {
-        console.log(`Updating appointment ${apt.id}: ${apt.empoyeesNeeded} -> ${needed} (${apt.home.numBeds}bed/${apt.home.numBaths}bath, ${timeWindow})`);
-        await apt.update({ empoyeesNeeded: needed });
+      if (apt.employeesNeeded !== needed) {
+        console.log(`Updating appointment ${apt.id}: ${apt.employeesNeeded} -> ${needed} (${apt.home.numBeds}bed/${apt.home.numBaths}bath, ${timeWindow})`);
+        await apt.update({ employeesNeeded: needed });
         updatedCount++;
       }
     }

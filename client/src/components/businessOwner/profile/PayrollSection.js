@@ -11,7 +11,8 @@ const PayoutItem = ({ payout, onMarkPaid }) => {
   // Format date
   const formatDate = (dateStr) => {
     if (!dateStr) return "Unknown date";
-    const date = new Date(dateStr);
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    const date = new Date(dateStr + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -19,7 +20,7 @@ const PayoutItem = ({ payout, onMarkPaid }) => {
   };
 
   const employeeName = payout.employee
-    ? `${payout.employee.firstName} ${payout.employee.lastName}`
+    ? `${payout.employee.firstName || ""} ${payout.employee.lastName || ""}`.trim() || "Unknown Employee"
     : "Unknown Employee";
 
   const clientName = payout.clientName || "Client";

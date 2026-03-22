@@ -22,11 +22,12 @@ jest.mock("../../src/services/styles/theme", () => ({
 
 import DiscountedPrice from "../../src/components/pricing/DiscountedPrice";
 
+// All prices are in cents (e.g., 20000 = $200.00)
 describe("DiscountedPrice", () => {
   describe("No Discount Applied", () => {
     it("should show normal price when originalPrice equals discountedPrice", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice={200} discountedPrice={200} />
+        <DiscountedPrice originalPrice={20000} discountedPrice={20000} />
       );
 
       expect(getByText("$200.00")).toBeTruthy();
@@ -34,7 +35,7 @@ describe("DiscountedPrice", () => {
 
     it("should show normal price when originalPrice is null", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice={null} discountedPrice={150} />
+        <DiscountedPrice originalPrice={null} discountedPrice={15000} />
       );
 
       expect(getByText("$150.00")).toBeTruthy();
@@ -42,7 +43,7 @@ describe("DiscountedPrice", () => {
 
     it("should show normal price when originalPrice is undefined", () => {
       const { getByText } = render(
-        <DiscountedPrice discountedPrice={100} />
+        <DiscountedPrice discountedPrice={10000} />
       );
 
       expect(getByText("$100.00")).toBeTruthy();
@@ -52,7 +53,7 @@ describe("DiscountedPrice", () => {
   describe("Discount Applied", () => {
     it("should show original price crossed out and discounted price", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice={200} discountedPrice={180} />
+        <DiscountedPrice originalPrice={20000} discountedPrice={18000} />
       );
 
       // Should show both original and discounted prices
@@ -62,7 +63,7 @@ describe("DiscountedPrice", () => {
 
     it("should show 10% discount correctly", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice={100} discountedPrice={90} />
+        <DiscountedPrice originalPrice={10000} discountedPrice={9000} />
       );
 
       expect(getByText("$100.00")).toBeTruthy();
@@ -71,7 +72,7 @@ describe("DiscountedPrice", () => {
 
     it("should show 20% discount correctly", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice={150} discountedPrice={120} />
+        <DiscountedPrice originalPrice={15000} discountedPrice={12000} />
       );
 
       expect(getByText("$150.00")).toBeTruthy();
@@ -80,7 +81,7 @@ describe("DiscountedPrice", () => {
 
     it("should handle decimal prices", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice={99.99} discountedPrice={84.99} />
+        <DiscountedPrice originalPrice={9999} discountedPrice={8499} />
       );
 
       expect(getByText("$99.99")).toBeTruthy();
@@ -92,8 +93,8 @@ describe("DiscountedPrice", () => {
     it("should hide original price when showOriginal is false", () => {
       const { queryByText, getByText } = render(
         <DiscountedPrice
-          originalPrice={200}
-          discountedPrice={180}
+          originalPrice={20000}
+          discountedPrice={18000}
           showOriginal={false}
         />
       );
@@ -108,8 +109,8 @@ describe("DiscountedPrice", () => {
     it("should show original price when showOriginal is true (default)", () => {
       const { getByText } = render(
         <DiscountedPrice
-          originalPrice={200}
-          discountedPrice={180}
+          originalPrice={20000}
+          discountedPrice={18000}
           showOriginal={true}
         />
       );
@@ -123,8 +124,8 @@ describe("DiscountedPrice", () => {
     it("should render with small size", () => {
       const { getByText } = render(
         <DiscountedPrice
-          originalPrice={200}
-          discountedPrice={180}
+          originalPrice={20000}
+          discountedPrice={18000}
           size="sm"
         />
       );
@@ -136,8 +137,8 @@ describe("DiscountedPrice", () => {
     it("should render with medium size (default)", () => {
       const { getByText } = render(
         <DiscountedPrice
-          originalPrice={200}
-          discountedPrice={180}
+          originalPrice={20000}
+          discountedPrice={18000}
           size="md"
         />
       );
@@ -149,8 +150,8 @@ describe("DiscountedPrice", () => {
     it("should render with large size", () => {
       const { getByText } = render(
         <DiscountedPrice
-          originalPrice={200}
-          discountedPrice={180}
+          originalPrice={20000}
+          discountedPrice={18000}
           size="lg"
         />
       );
@@ -163,7 +164,7 @@ describe("DiscountedPrice", () => {
   describe("Price Formatting", () => {
     it("should format prices with two decimal places", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice={100} discountedPrice={90} />
+        <DiscountedPrice originalPrice={10000} discountedPrice={9000} />
       );
 
       expect(getByText("$100.00")).toBeTruthy();
@@ -172,7 +173,7 @@ describe("DiscountedPrice", () => {
 
     it("should handle string prices", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice="200" discountedPrice="180" />
+        <DiscountedPrice originalPrice="20000" discountedPrice="18000" />
       );
 
       expect(getByText("$200.00")).toBeTruthy();
@@ -181,7 +182,7 @@ describe("DiscountedPrice", () => {
 
     it("should handle large prices", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice={1500} discountedPrice={1200} />
+        <DiscountedPrice originalPrice={150000} discountedPrice={120000} />
       );
 
       expect(getByText("$1500.00")).toBeTruthy();
@@ -190,7 +191,7 @@ describe("DiscountedPrice", () => {
 
     it("should handle small prices", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice={25.50} discountedPrice={21.68} />
+        <DiscountedPrice originalPrice={2550} discountedPrice={2168} />
       );
 
       expect(getByText("$25.50")).toBeTruthy();
@@ -201,7 +202,7 @@ describe("DiscountedPrice", () => {
   describe("Edge Cases", () => {
     it("should handle zero discounted price", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice={50} discountedPrice={0} />
+        <DiscountedPrice originalPrice={5000} discountedPrice={0} />
       );
 
       expect(getByText("$50.00")).toBeTruthy();
@@ -210,7 +211,7 @@ describe("DiscountedPrice", () => {
 
     it("should handle very small discount", () => {
       const { getByText } = render(
-        <DiscountedPrice originalPrice={100} discountedPrice={99.99} />
+        <DiscountedPrice originalPrice={10000} discountedPrice={9999} />
       );
 
       expect(getByText("$100.00")).toBeTruthy();
@@ -219,7 +220,7 @@ describe("DiscountedPrice", () => {
 
     it("should render container when discount applied", () => {
       const { UNSAFE_root } = render(
-        <DiscountedPrice originalPrice={200} discountedPrice={180} />
+        <DiscountedPrice originalPrice={20000} discountedPrice={18000} />
       );
 
       // Should have a View container with children

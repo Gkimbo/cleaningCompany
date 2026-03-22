@@ -43,7 +43,7 @@ const MultiCleanerOfferModal = ({
   if (!offer) return null;
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       month: "long",

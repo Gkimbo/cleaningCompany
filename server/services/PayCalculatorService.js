@@ -11,6 +11,7 @@ const {
   sequelize,
 } = require("../models");
 const { getPricingConfig } = require("../config/businessConfig");
+const EncryptionService = require("./EncryptionService");
 
 class PayCalculatorService {
   /**
@@ -23,13 +24,8 @@ class PayCalculatorService {
     const config = await getPricingConfig();
     const platformFeePercent = config?.businessOwnerFeePercent || 0.10;
 
-    // Get customer payment amount (convert from string to cents if needed)
-    let customerPays;
-    if (typeof appointment.price === "string") {
-      customerPays = Math.round(parseFloat(appointment.price) * 100);
-    } else {
-      customerPays = appointment.price;
-    }
+    // Get customer payment amount - price is already stored in cents (INTEGER)
+    const customerPays = appointment.price || 0;
 
     // Calculate platform fee
     const platformFee = Math.round(customerPays * platformFeePercent);
@@ -128,10 +124,8 @@ class PayCalculatorService {
     let employeeAssignmentCount = 0;
 
     for (const assignment of assignments) {
-      const price =
-        typeof assignment.appointment.price === "string"
-          ? Math.round(parseFloat(assignment.appointment.price) * 100)
-          : assignment.appointment.price;
+      // Price is already stored in cents (INTEGER)
+      const price = assignment.appointment.price || 0;
 
       const platformFee = Math.round(price * platformFeePercent);
 
@@ -300,15 +294,21 @@ class PayCalculatorService {
 
     return results.map((r) => {
       const employee = employeeMap.get(r.businessEmployeeId);
+      // Decrypt employee names (BusinessEmployee has encrypted PII fields)
+      const firstName = employee?.firstName ? EncryptionService.decrypt(employee.firstName) : "";
+      const lastName = employee?.lastName ? EncryptionService.decrypt(employee.lastName) : "";
+      const totalPay = parseInt(r.totalPay, 10) || 0;
+      const jobCount = parseInt(r.jobCount, 10) || 0;
+      const averagePerJob = jobCount > 0 ? totalPay / jobCount : 0;
       return {
         employeeId: r.businessEmployeeId,
         employeeName: employee
-          ? `${employee.firstName} ${employee.lastName}`
+          ? `${firstName} ${lastName}`.trim() || "Unknown"
           : "Unknown",
-        totalPay: parseInt(r.totalPay, 10),
-        jobCount: parseInt(r.jobCount, 10),
-        formattedTotalPay: `$${(parseInt(r.totalPay, 10) / 100).toFixed(2)}`,
-        averagePerJob: `$${(parseInt(r.totalPay, 10) / parseInt(r.jobCount, 10) / 100).toFixed(2)}`,
+        totalPay,
+        jobCount,
+        formattedTotalPay: `$${(totalPay / 100).toFixed(2)}`,
+        averagePerJob: `$${(averagePerJob / 100).toFixed(2)}`,
       };
     });
   }
@@ -323,11 +323,8 @@ class PayCalculatorService {
     const config = await getPricingConfig();
     const platformFeePercent = config?.businessOwnerFeePercent || 0.10;
 
-    // Get job price
-    const jobPrice =
-      typeof appointment.price === "string"
-        ? Math.round(parseFloat(appointment.price) * 100)
-        : appointment.price;
+    // Get job price (already in cents)
+    const jobPrice = appointment.price || 0;
 
     const platformFee = Math.round(jobPrice * platformFeePercent);
     const revenueAfterFee = jobPrice - platformFee;

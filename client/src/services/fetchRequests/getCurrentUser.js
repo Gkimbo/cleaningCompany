@@ -1,12 +1,10 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_BASE } from "../config";
+import SecureStorage from "../SecureStorage";
+import HttpClient from "../HttpClient";
 
 const getCurrentUser = async (providedToken = null) => {
-  const baseURL = API_BASE.replace("/api/v1", "");
-
-  // Use provided token if available, otherwise get from AsyncStorage
-  // This is important for preview mode where the token is in state but not AsyncStorage
-  const token = providedToken || await AsyncStorage.getItem("token");
+  // Use provided token if available, otherwise get from SecureStorage
+  // This is important for preview mode where the token is in state but not storage
+  const token = providedToken || (await SecureStorage.getItem("token"));
 
   // If no token, user is not logged in - return null instead of throwing
   // This prevents error messages from showing during logout
@@ -14,21 +12,18 @@ const getCurrentUser = async (providedToken = null) => {
     return null;
   }
 
-  const response = await fetch(`${baseURL}/api/v1/user-sessions/current`, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  const result = await HttpClient.get("/user-sessions/current", { token });
 
-  if (!response.ok) {
-    const errorMessage = `${response.status} (${response.statusText})`;
-    const error = new Error(errorMessage);
-    throw error;
+  // HttpClient returns { success: false, error: ... } on failure
+  if (result.success === false) {
+    // 401 is handled automatically by HttpClient (triggers logout)
+    if (result.status === 401) {
+      return null;
+    }
+    throw new Error(result.error || "Failed to get current user");
   }
 
-  const userData = await response.json();
-  return userData;
+  return result;
 };
 
 export default getCurrentUser;

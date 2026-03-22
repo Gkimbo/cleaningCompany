@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigate, useParams } from "react-router-native";
+import { useParams } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { Calendar } from "react-native-calendars";
 import {
@@ -22,10 +22,12 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
+import { formatCurrency, parseDateString } from "../../services/formatters";
 import EditClientHomeModal from "./EditClientHomeModal";
 import BookForClientModal from "./BookForClientModal";
 import SetupRecurringModal from "./SetupRecurringModal";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 // Home picker modal component
 const HomePickerModal = ({ visible, onClose, homes, onSelectHome, actionType }) => {
   if (!visible) return null;
@@ -184,11 +186,18 @@ const homePickerStyles = StyleSheet.create({
   },
 });
 
-// Format time constraint for display: "10-3" → "10am - 3pm"
+// Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (timeToBeCompleted) => {
   if (!timeToBeCompleted || timeToBeCompleted.toLowerCase() === "anytime") {
     return "Anytime";
   }
+  // Check if it's a numeric hours limit (e.g., "2.5", "3")
+  const numericValue = parseFloat(timeToBeCompleted);
+  if (!isNaN(numericValue) && numericValue > 0 && numericValue <= 12) {
+    const unit = numericValue === 1 ? "hr" : "hrs";
+    return `Within ${numericValue} ${unit}`;
+  }
+  // Check for time window pattern (e.g., "10-3", "9am-12pm")
   const match = timeToBeCompleted.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
   if (!match) return timeToBeCompleted;
   const startHour = parseInt(match[1], 10);
@@ -245,7 +254,7 @@ const StatusBadge = ({ status }) => {
 const AppointmentCard = ({ appointment, homes }) => {
   const [expanded, setExpanded] = useState(false);
 
-  const date = new Date(appointment.date);
+  const date = parseDateString(appointment.date);
   const formattedDate = date.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
@@ -314,7 +323,7 @@ const AppointmentCard = ({ appointment, homes }) => {
           </Text>
         </View>
         <View style={styles.appointmentCardRight}>
-          <Text style={styles.appointmentPrice}>${appointment.price || 0}</Text>
+          <Text style={styles.appointmentPrice}>{formatCurrency(appointment.price || 0)}</Text>
           <Feather name={statusConfig.icon} size={18} color={statusConfig.color} />
           <Feather
             name={expanded ? "chevron-up" : "chevron-down"}
@@ -407,7 +416,7 @@ const AppointmentCard = ({ appointment, homes }) => {
               <View style={styles.appointmentDetailContent}>
                 <Text style={styles.appointmentDetailLabel}>Price</Text>
                 <Text style={[styles.appointmentDetailValue, styles.appointmentDetailPrice]}>
-                  ${appointment.price || 0}
+                  {formatCurrency(appointment.price || 0)}
                 </Text>
               </View>
             </View>
@@ -477,7 +486,7 @@ const EmptyAppointments = ({ tab }) => (
 );
 
 const ClientDetailPage = ({ state, dispatch }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const { clientId } = useParams();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -509,7 +518,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
 
       if (data.error) {
         Alert.alert("Error", data.error);
-        navigate(-1);
+        goBack();
         return;
       }
 
@@ -524,20 +533,20 @@ const ClientDetailPage = ({ state, dispatch }) => {
     } catch (error) {
       console.error("Error fetching client data:", error);
       Alert.alert("Error", "Failed to load client details");
-      navigate(-1);
+      goBack();
     } finally {
       setIsLoading(false);
     }
-  }, [state?.currentUser?.token, clientId, navigate]);
+  }, [state?.currentUser?.token, clientId, goBack]);
 
   useEffect(() => {
     fetchClientData();
   }, [fetchClientData]);
 
-  // Update price input when client data changes
+  // Update price input when client data changes (convert cents to dollars for display)
   useEffect(() => {
     if (clientData?.cleanerClient?.defaultPrice) {
-      setPriceInput(clientData.cleanerClient.defaultPrice.toString());
+      setPriceInput((clientData.cleanerClient.defaultPrice / 100).toString());
     }
   }, [clientData?.cleanerClient?.defaultPrice]);
 
@@ -583,27 +592,30 @@ const ClientDetailPage = ({ state, dispatch }) => {
     const targetHome = homes.find(h => h.id === homeId) || home;
     const cleanerClientIdToUpdate = targetHome?.cleanerClientId || clientData.cleanerClient.id;
 
+    // Convert dollars to cents for storage
+    const priceInCents = Math.round(parseFloat(priceInput) * 100);
+
     setSavingPrice(true);
     try {
       const result = await CleanerClientService.updateDefaultPrice(
         state.currentUser.token,
         cleanerClientIdToUpdate,
-        parseFloat(priceInput)
+        priceInCents
       );
 
       if (result.success) {
         setEditingPriceHomeId(null);
-        // Update local state - update the specific home's price
+        // Update local state - update the specific home's price (in cents)
         setClientData((prev) => ({
           ...prev,
           homes: prev.homes.map(h =>
             h.id === homeId
-              ? { ...h, defaultPrice: parseFloat(priceInput) }
+              ? { ...h, defaultPrice: priceInCents }
               : h
           ),
           // Also update cleanerClient if it's the primary home
           cleanerClient: targetHome?.cleanerClientId === prev.cleanerClient.id
-            ? { ...prev.cleanerClient, defaultPrice: parseFloat(priceInput) }
+            ? { ...prev.cleanerClient, defaultPrice: priceInCents }
             : prev.cleanerClient,
         }));
         Alert.alert("Success", "Price updated for this home");
@@ -780,7 +792,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
         <Text style={styles.errorText}>Client not found</Text>
         <Pressable
           style={styles.backButtonLarge}
-          onPress={() => navigate(-1)}
+          onPress={() => goBack()}
         >
           <Text style={styles.backButtonLargeText}>Go Back</Text>
         </Pressable>
@@ -817,7 +829,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
       <View style={styles.header}>
         <Pressable
           style={styles.backButton}
-          onPress={() => navigate(-1)}
+          onPress={() => goBack()}
         >
           <Feather name="arrow-left" size={24} color={colors.text.primary} />
         </Pressable>
@@ -1087,7 +1099,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                       <View style={styles.homePriceDisplay}>
                         <Text style={styles.homePriceLabel}>Default Price</Text>
                         <Text style={styles.homePriceValue}>
-                          ${homeItem.defaultPrice || cleanerClient.defaultPrice || "0"}
+                          ${((homeItem.defaultPrice || cleanerClient.defaultPrice || 0) / 100).toFixed(0)}
                         </Text>
                       </View>
                       <Pressable
@@ -1096,7 +1108,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                           pressed && styles.homePriceEditBtnPressed,
                         ]}
                         onPress={() => {
-                          setPriceInput((homeItem.defaultPrice || cleanerClient.defaultPrice || 0).toString());
+                          setPriceInput(((homeItem.defaultPrice || cleanerClient.defaultPrice || 0) / 100).toString());
                           setEditingPriceHomeId(homeItem.id);
                         }}
                       >
@@ -1265,7 +1277,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                       <View style={styles.homePriceDisplay}>
                         <Text style={styles.homePriceLabel}>Default Price</Text>
                         <Text style={styles.homePriceValue}>
-                          ${cleanerClient.defaultPrice || "0"}
+                          ${((cleanerClient.defaultPrice || 0) / 100).toFixed(0)}
                         </Text>
                       </View>
                       <Pressable
@@ -1274,7 +1286,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                           pressed && styles.homePriceEditBtnPressed,
                         ]}
                         onPress={() => {
-                          setPriceInput((cleanerClient.defaultPrice || 0).toString());
+                          setPriceInput(((cleanerClient.defaultPrice || 0) / 100).toString());
                           setEditingPriceHomeId(home.id);
                         }}
                       >
@@ -1431,7 +1443,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                   const appointmentDetails = dayAppointments.map((apt) => {
                     const homeIndex = homes.findIndex(h => h.id === apt.home?.id);
                     const homeLabel = apt.home?.nickName || (homeIndex >= 0 ? `Home ${homeIndex + 1}` : "Home");
-                    return `• ${homeLabel}\n  Time: ${formatTimeConstraint(apt.timeToBeCompleted)}\n  Price: $${apt.price || 0}\n  Status: ${apt.status}`;
+                    return `• ${homeLabel}\n  Time: ${formatTimeConstraint(apt.timeToBeCompleted)}\n  Price: ${formatCurrency(apt.price || 0)}\n  Status: ${apt.status}`;
                   }).join("\n\n");
 
                   Alert.alert(

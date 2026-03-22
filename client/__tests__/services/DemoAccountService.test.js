@@ -3,14 +3,19 @@
  * Tests the client-side API service for the owner's "Preview as Role" feature.
  */
 
-// Mock fetch globally
-global.fetch = jest.fn();
-
-// Mock config
-jest.mock("../../src/services/config", () => ({
-	API_BASE: "http://test-api.example.com/api/v1",
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+	__esModule: true,
+	default: {
+		get: jest.fn(),
+		post: jest.fn(),
+		put: jest.fn(),
+		patch: jest.fn(),
+		delete: jest.fn(),
+	},
 }));
 
+import HttpClient from "../../src/services/HttpClient";
 import DemoAccountService from "../../src/services/fetchRequests/DemoAccountService";
 
 describe("DemoAccountService", () => {
@@ -34,21 +39,11 @@ describe("DemoAccountService", () => {
 				],
 			};
 
-			global.fetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(mockResponse),
-			});
+			HttpClient.get.mockResolvedValueOnce(mockResponse);
 
 			const result = await DemoAccountService.getDemoAccounts(mockToken);
 
-			expect(global.fetch).toHaveBeenCalledWith(
-				"http://test-api.example.com/api/v1/demo-accounts",
-				{
-					headers: {
-						Authorization: `Bearer ${mockToken}`,
-					},
-				}
-			);
+			expect(HttpClient.get).toHaveBeenCalledWith("/demo-accounts", { token: mockToken });
 
 			expect(result.success).toBe(true);
 			expect(result.demoAccounts).toHaveLength(2);
@@ -56,10 +51,7 @@ describe("DemoAccountService", () => {
 		});
 
 		it("should return error on failed response", async () => {
-			global.fetch.mockResolvedValue({
-				ok: false,
-				json: () => Promise.resolve({ error: "Unauthorized" }),
-			});
+			HttpClient.get.mockResolvedValueOnce({ success: false, error: "Unauthorized" });
 
 			const result = await DemoAccountService.getDemoAccounts(mockToken);
 
@@ -68,10 +60,7 @@ describe("DemoAccountService", () => {
 		});
 
 		it("should return default error message when no error provided", async () => {
-			global.fetch.mockResolvedValue({
-				ok: false,
-				json: () => Promise.resolve({}),
-			});
+			HttpClient.get.mockResolvedValueOnce({ success: false });
 
 			const result = await DemoAccountService.getDemoAccounts(mockToken);
 
@@ -80,12 +69,12 @@ describe("DemoAccountService", () => {
 		});
 
 		it("should handle network errors", async () => {
-			global.fetch.mockRejectedValue(new Error("Network error"));
+			HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
 			const result = await DemoAccountService.getDemoAccounts(mockToken);
 
 			expect(result.success).toBe(false);
-			expect(result.error).toBe("Network error. Please check your connection.");
+			expect(result.error).toBe("Network request failed");
 		});
 	});
 
@@ -101,31 +90,18 @@ describe("DemoAccountService", () => {
 				],
 			};
 
-			global.fetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(mockResponse),
-			});
+			HttpClient.get.mockResolvedValueOnce(mockResponse);
 
 			const result = await DemoAccountService.getAvailableRoles(mockToken);
 
-			expect(global.fetch).toHaveBeenCalledWith(
-				"http://test-api.example.com/api/v1/demo-accounts/roles",
-				{
-					headers: {
-						Authorization: `Bearer ${mockToken}`,
-					},
-				}
-			);
+			expect(HttpClient.get).toHaveBeenCalledWith("/demo-accounts/roles", { token: mockToken });
 
 			expect(result.success).toBe(true);
 			expect(result.roles).toHaveLength(4);
 		});
 
 		it("should return error on failed response", async () => {
-			global.fetch.mockResolvedValue({
-				ok: false,
-				json: () => Promise.resolve({ error: "Unauthorized" }),
-			});
+			HttpClient.get.mockResolvedValueOnce({ success: false, error: "Unauthorized" });
 
 			const result = await DemoAccountService.getAvailableRoles(mockToken);
 
@@ -134,12 +110,12 @@ describe("DemoAccountService", () => {
 		});
 
 		it("should handle network errors", async () => {
-			global.fetch.mockRejectedValue(new Error("Network error"));
+			HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
 			const result = await DemoAccountService.getAvailableRoles(mockToken);
 
 			expect(result.success).toBe(false);
-			expect(result.error).toBe("Network error. Please check your connection.");
+			expect(result.error).toBe("Network request failed");
 		});
 	});
 
@@ -153,22 +129,14 @@ describe("DemoAccountService", () => {
 				originalOwnerId: 100,
 			};
 
-			global.fetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(mockResponse),
-			});
+			HttpClient.post.mockResolvedValueOnce(mockResponse);
 
 			const result = await DemoAccountService.enterPreviewMode(mockToken, "cleaner");
 
-			expect(global.fetch).toHaveBeenCalledWith(
-				"http://test-api.example.com/api/v1/demo-accounts/enter/cleaner",
-				{
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${mockToken}`,
-						"Content-Type": "application/json",
-					},
-				}
+			expect(HttpClient.post).toHaveBeenCalledWith(
+				"/demo-accounts/enter/cleaner",
+				{},
+				{ token: mockToken }
 			);
 
 			expect(result.success).toBe(true);
@@ -185,10 +153,7 @@ describe("DemoAccountService", () => {
 				originalOwnerId: 100,
 			};
 
-			global.fetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(mockResponse),
-			});
+			HttpClient.post.mockResolvedValueOnce(mockResponse);
 
 			const result = await DemoAccountService.enterPreviewMode(mockToken, "homeowner");
 
@@ -205,10 +170,7 @@ describe("DemoAccountService", () => {
 				originalOwnerId: 100,
 			};
 
-			global.fetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(mockResponse),
-			});
+			HttpClient.post.mockResolvedValueOnce(mockResponse);
 
 			const result = await DemoAccountService.enterPreviewMode(mockToken, "businessOwner");
 
@@ -225,10 +187,7 @@ describe("DemoAccountService", () => {
 				originalOwnerId: 100,
 			};
 
-			global.fetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(mockResponse),
-			});
+			HttpClient.post.mockResolvedValueOnce(mockResponse);
 
 			const result = await DemoAccountService.enterPreviewMode(mockToken, "employee");
 
@@ -237,10 +196,7 @@ describe("DemoAccountService", () => {
 		});
 
 		it("should return error for invalid role", async () => {
-			global.fetch.mockResolvedValue({
-				ok: false,
-				json: () => Promise.resolve({ error: "Invalid role: invalid" }),
-			});
+			HttpClient.post.mockResolvedValueOnce({ success: false, error: "Invalid role: invalid" });
 
 			const result = await DemoAccountService.enterPreviewMode(mockToken, "invalid");
 
@@ -249,10 +205,7 @@ describe("DemoAccountService", () => {
 		});
 
 		it("should return error when demo account not found", async () => {
-			global.fetch.mockResolvedValue({
-				ok: false,
-				json: () => Promise.resolve({ error: "Demo account not found" }),
-			});
+			HttpClient.post.mockResolvedValueOnce({ success: false, error: "Demo account not found" });
 
 			const result = await DemoAccountService.enterPreviewMode(mockToken, "cleaner");
 
@@ -261,12 +214,12 @@ describe("DemoAccountService", () => {
 		});
 
 		it("should handle network errors", async () => {
-			global.fetch.mockRejectedValue(new Error("Network error"));
+			HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
 			const result = await DemoAccountService.enterPreviewMode(mockToken, "cleaner");
 
 			expect(result.success).toBe(false);
-			expect(result.error).toBe("Network error. Please check your connection.");
+			expect(result.error).toBe("Network request failed");
 		});
 	});
 
@@ -280,23 +233,14 @@ describe("DemoAccountService", () => {
 				user: { id: 100, username: "platform_owner", type: "owner" },
 			};
 
-			global.fetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(mockResponse),
-			});
+			HttpClient.post.mockResolvedValueOnce(mockResponse);
 
 			const result = await DemoAccountService.exitPreviewMode(mockToken, ownerId);
 
-			expect(global.fetch).toHaveBeenCalledWith(
-				"http://test-api.example.com/api/v1/demo-accounts/exit",
-				{
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${mockToken}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({ ownerId }),
-				}
+			expect(HttpClient.post).toHaveBeenCalledWith(
+				"/demo-accounts/exit",
+				{ ownerId },
+				{ token: mockToken }
 			);
 
 			expect(result.success).toBe(true);
@@ -305,10 +249,7 @@ describe("DemoAccountService", () => {
 		});
 
 		it("should return error for invalid owner ID", async () => {
-			global.fetch.mockResolvedValue({
-				ok: false,
-				json: () => Promise.resolve({ error: "Invalid owner ID" }),
-			});
+			HttpClient.post.mockResolvedValueOnce({ success: false, error: "Invalid owner ID" });
 
 			const result = await DemoAccountService.exitPreviewMode(mockToken, 999);
 
@@ -317,12 +258,12 @@ describe("DemoAccountService", () => {
 		});
 
 		it("should handle network errors", async () => {
-			global.fetch.mockRejectedValue(new Error("Network error"));
+			HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
 			const result = await DemoAccountService.exitPreviewMode(mockToken, ownerId);
 
 			expect(result.success).toBe(false);
-			expect(result.error).toBe("Network error. Please check your connection.");
+			expect(result.error).toBe("Network request failed");
 		});
 	});
 
@@ -334,21 +275,11 @@ describe("DemoAccountService", () => {
 				account: { id: 1, username: "demo_cleaner" },
 			};
 
-			global.fetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(mockResponse),
-			});
+			HttpClient.get.mockResolvedValueOnce(mockResponse);
 
 			const result = await DemoAccountService.checkDemoAccount(mockToken, "cleaner");
 
-			expect(global.fetch).toHaveBeenCalledWith(
-				"http://test-api.example.com/api/v1/demo-accounts/check/cleaner",
-				{
-					headers: {
-						Authorization: `Bearer ${mockToken}`,
-					},
-				}
-			);
+			expect(HttpClient.get).toHaveBeenCalledWith("/demo-accounts/check/cleaner", { token: mockToken });
 
 			expect(result.exists).toBe(true);
 			expect(result.role).toBe("cleaner");
@@ -362,10 +293,7 @@ describe("DemoAccountService", () => {
 				account: null,
 			};
 
-			global.fetch.mockResolvedValue({
-				ok: true,
-				json: () => Promise.resolve(mockResponse),
-			});
+			HttpClient.get.mockResolvedValueOnce(mockResponse);
 
 			const result = await DemoAccountService.checkDemoAccount(mockToken, "cleaner");
 
@@ -377,16 +305,13 @@ describe("DemoAccountService", () => {
 			const roles = ["cleaner", "homeowner", "businessOwner", "employee"];
 
 			for (const role of roles) {
-				global.fetch.mockResolvedValue({
-					ok: true,
-					json: () => Promise.resolve({ exists: true, role, account: {} }),
-				});
+				HttpClient.get.mockResolvedValueOnce({ exists: true, role, account: {} });
 
 				const result = await DemoAccountService.checkDemoAccount(mockToken, role);
 
-				expect(global.fetch).toHaveBeenCalledWith(
-					`http://test-api.example.com/api/v1/demo-accounts/check/${role}`,
-					expect.any(Object)
+				expect(HttpClient.get).toHaveBeenCalledWith(
+					`/demo-accounts/check/${role}`,
+					{ token: mockToken }
 				);
 
 				expect(result.exists).toBe(true);
@@ -395,10 +320,7 @@ describe("DemoAccountService", () => {
 		});
 
 		it("should return error on failed response", async () => {
-			global.fetch.mockResolvedValue({
-				ok: false,
-				json: () => Promise.resolve({ error: "Invalid role" }),
-			});
+			HttpClient.get.mockResolvedValueOnce({ success: false, error: "Invalid role" });
 
 			const result = await DemoAccountService.checkDemoAccount(mockToken, "invalid");
 
@@ -407,12 +329,12 @@ describe("DemoAccountService", () => {
 		});
 
 		it("should handle network errors", async () => {
-			global.fetch.mockRejectedValue(new Error("Network error"));
+			HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
 			const result = await DemoAccountService.checkDemoAccount(mockToken, "cleaner");
 
 			expect(result.exists).toBe(false);
-			expect(result.error).toBe("Network error. Please check your connection.");
+			expect(result.error).toBe("Network request failed");
 		});
 	});
 });

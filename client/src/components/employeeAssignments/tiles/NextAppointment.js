@@ -35,8 +35,10 @@ const NextAppointment = ({ appointment }) => {
   });
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
-    return new Date(dateString + "T00:00:00").toLocaleDateString(undefined, options);
+    // Use noon to avoid timezone edge cases that could shift the day
+    return new Date(dateString + "T12:00:00").toLocaleDateString(undefined, options);
   };
 
   const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);

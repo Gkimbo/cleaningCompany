@@ -15,6 +15,11 @@ class RoomAssignmentService {
     kitchen: 40,
     living_room: 25,
     dining_room: 20,
+    family_room: 25,
+    office: 15,
+    laundry_room: 15,
+    bonus_room: 20,
+    basement: 30,
     other: 20,
   };
 
@@ -45,6 +50,9 @@ class RoomAssignmentService {
     const rooms = [];
     const beds = parseFloat(home.numBeds) || 0;
     const baths = parseFloat(home.numBaths) || 0;
+
+    // Determine if this is a large home with specified common room counts
+    const isLargeHomeWithData = beds >= 4 && home.numKitchens != null;
 
     // Add bedrooms
     for (let i = 1; i <= beds; i++) {
@@ -78,29 +86,38 @@ class RoomAssignmentService {
       });
     }
 
-    // Add common areas (always included)
-    rooms.push({
-      roomType: "kitchen",
-      roomNumber: 1,
-      roomLabel: "Kitchen",
-      estimatedMinutes: this.calculateRoomEffort("kitchen"),
-    });
+    // Helper to add multiple rooms of a type
+    const addRooms = (roomType, count, labelSingular) => {
+      for (let i = 1; i <= count; i++) {
+        rooms.push({
+          roomType,
+          roomNumber: i,
+          roomLabel: count === 1 ? labelSingular : `${labelSingular} ${i}`,
+          estimatedMinutes: this.calculateRoomEffort(roomType),
+        });
+      }
+    };
 
-    rooms.push({
-      roomType: "living_room",
-      roomNumber: 1,
-      roomLabel: "Living Room",
-      estimatedMinutes: this.calculateRoomEffort("living_room"),
-    });
+    if (isLargeHomeWithData) {
+      // Large home with specified room counts - use actual values
+      // Use ?? for null coalescing to respect explicit 0 values
+      addRooms("kitchen", home.numKitchens ?? 1, "Kitchen");
+      addRooms("living_room", home.numLivingRooms ?? 1, "Living Room");
+      addRooms("dining_room", home.numDiningRooms ?? 1, "Dining Room");
+      addRooms("family_room", home.numFamilyRooms ?? 0, "Family Room");
+      addRooms("office", home.numOffices ?? 0, "Office");
+      addRooms("laundry_room", home.numLaundryRooms ?? 0, "Laundry Room");
+      addRooms("bonus_room", home.numBonusRooms ?? 0, "Bonus Room");
+      addRooms("basement", home.numBasements ?? 0, "Basement");
+    } else {
+      // Smaller home or no data - use defaults
+      addRooms("kitchen", 1, "Kitchen");
+      addRooms("living_room", 1, "Living Room");
 
-    // Add dining room if home is large enough
-    if (beds >= 3) {
-      rooms.push({
-        roomType: "dining_room",
-        roomNumber: 1,
-        roomLabel: "Dining Room",
-        estimatedMinutes: this.calculateRoomEffort("dining_room"),
-      });
+      // Add dining room if home is large enough (3+ beds)
+      if (beds >= 3) {
+        addRooms("dining_room", 1, "Dining Room");
+      }
     }
 
     return rooms;
@@ -329,6 +346,11 @@ class RoomAssignmentService {
       kitchen: ["Kitchen"],
       living_room: ["Living Areas"],
       dining_room: ["Living Areas"],
+      family_room: ["Living Areas"],
+      office: ["Living Areas"],
+      laundry_room: ["Laundry"],
+      bonus_room: ["Living Areas"],
+      basement: ["General"],
       other: ["General"],
     };
 

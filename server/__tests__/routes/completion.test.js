@@ -113,6 +113,14 @@ jest.mock("../../models", () => ({
   CleanerRoomAssignment: {
     findAll: jest.fn(),
   },
+  sequelize: {
+    transaction: jest.fn().mockImplementation(() => Promise.resolve({
+      LOCK: { UPDATE: 'UPDATE' },
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      finished: false,
+    })),
+  },
 }));
 
 const {
@@ -269,6 +277,26 @@ describe("Completion Router", () => {
       expect(res.body.error).toContain("already approved");
     });
 
+    it("should reject if payment capture has failed", async () => {
+      const mockAppointment = createMockAppointment({
+        paymentCaptureFailed: true, // Payment has failed
+        paid: true, // Still marked as "paid" from initial authorization
+      });
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+      const token = generateToken(200);
+      const res = await request(app)
+        .post("/api/v1/completion/submit/1")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          checklistData: { kitchen: { completed: ["k1"] } },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain("payment issue");
+      expect(res.body.paymentFailed).toBe(true);
+    });
+
     it("should reject if checklist data is missing", async () => {
       const mockAppointment = createMockAppointment();
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
@@ -348,11 +376,14 @@ describe("Completion Router", () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.completionStatus).toBe("approved");
+      // Verify the update was called with the right status fields
+      // (transaction is passed as second arg due to row-level locking)
       expect(mockAppointmentUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           completionStatus: "approved",
           completed: true,
-        })
+        }),
+        expect.anything() // transaction option
       );
     });
 

@@ -142,7 +142,8 @@ const DetailsComponent = ({ state, dispatch }) => {
 
   const formatApprovalDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -368,7 +369,7 @@ const DetailsComponent = ({ state, dispatch }) => {
               Fresh Sheets
             </Text>
             <Text style={styles.servicePrice}>
-              {homeDetails.sheetsProvided === "yes" ? "Included" : `$${pricing.linens.sheetFeePerBed}/bed`}
+              {homeDetails.sheetsProvided === "yes" ? "Included" : `$${((pricing?.linens?.sheetFeePerBed || 0) / 100).toFixed(0)}/bed`}
             </Text>
           </View>
 
@@ -382,7 +383,7 @@ const DetailsComponent = ({ state, dispatch }) => {
               Fresh Towels
             </Text>
             <Text style={styles.servicePrice}>
-              {homeDetails.towelsProvided === "yes" ? "Included" : `$${pricing.linens.towelFee}/towel`}
+              {homeDetails.towelsProvided === "yes" ? "Included" : `$${((pricing?.linens?.towelFee || 0) / 100).toFixed(0)}/towel`}
             </Text>
           </View>
         </View>

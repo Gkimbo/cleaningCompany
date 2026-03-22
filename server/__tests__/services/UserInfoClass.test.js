@@ -272,12 +272,13 @@ describe("UserInfoClass", () => {
   });
 
   describe("editTimeInDB", () => {
+    // Note: All prices are in cents for Stripe compatibility
     const mockAppointment = {
-      dataValues: { id: 1, price: 100, userId: 1 },
+      dataValues: { id: 1, price: 10000, userId: 1 }, // $100.00 in cents
       update: jest.fn(),
     };
     const mockBill = {
-      dataValues: { appointmentDue: 100, totalDue: 100 },
+      dataValues: { appointmentDue: 10000, totalDue: 10000 },
       update: jest.fn(),
     };
 
@@ -292,38 +293,38 @@ describe("UserInfoClass", () => {
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           timeToBeCompleted: "anytime",
-          price: 100, // No change
+          price: 10000, // No change
         })
       );
     });
 
-    it("should add $25 for 10-3 time slot", async () => {
+    it("should add $25 (2500 cents) for 10-3 time slot", async () => {
       await UserInfoClass.editTimeInDB({ id: 1, timeToBeCompleted: "10-3" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           timeToBeCompleted: "10-3",
-          price: 125,
+          price: 12500, // 10000 + 2500
         })
       );
     });
 
-    it("should add $25 for 11-4 time slot", async () => {
+    it("should add $25 (2500 cents) for 11-4 time slot", async () => {
       await UserInfoClass.editTimeInDB({ id: 1, timeToBeCompleted: "11-4" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          price: 125,
+          price: 12500, // 10000 + 2500
         })
       );
     });
 
-    it("should add $30 for 12-2 time slot", async () => {
+    it("should add $30 (3000 cents) for 12-2 time slot", async () => {
       await UserInfoClass.editTimeInDB({ id: 1, timeToBeCompleted: "12-2" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          price: 130,
+          price: 13000, // 10000 + 3000
         })
       );
     });
@@ -332,19 +333,20 @@ describe("UserInfoClass", () => {
       await UserInfoClass.editTimeInDB({ id: 1, timeToBeCompleted: "10-3" });
 
       expect(mockBill.update).toHaveBeenCalledWith({
-        appointmentDue: 125,
-        totalDue: 125,
+        appointmentDue: 12500,
+        totalDue: 12500,
       });
     });
   });
 
   describe("editSheetsInDB", () => {
+    // Note: All prices are in cents for Stripe compatibility
     const mockAppointment = {
-      dataValues: { id: 1, price: 100, userId: 1 },
+      dataValues: { id: 1, price: 10000, userId: 1 }, // $100.00 in cents
       update: jest.fn(),
     };
     const mockBill = {
-      dataValues: { appointmentDue: 100, totalDue: 100 },
+      dataValues: { appointmentDue: 10000, totalDue: 10000 },
       update: jest.fn(),
     };
 
@@ -353,36 +355,39 @@ describe("UserInfoClass", () => {
       UserBills.findOne.mockResolvedValue(mockBill);
     });
 
-    it("should add $30 when bringing sheets", async () => {
+    it("should add $30 (3000 cents) when bringing sheets", async () => {
       await UserInfoClass.editSheetsInDB({ id: 1, bringSheets: "yes" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           bringSheets: "yes",
-          price: 130,
+          price: 13000, // 10000 + 3000
         })
       );
     });
 
-    it("should subtract $30 when not bringing sheets", async () => {
+    it("should subtract $30 (3000 cents) when not bringing sheets", async () => {
       await UserInfoClass.editSheetsInDB({ id: 1, bringSheets: "no" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           bringSheets: "no",
-          price: 70,
+          price: 7000, // 10000 - 3000
         })
       );
     });
   });
 
   describe("editTowelsInDB", () => {
+    // Note: All prices are in cents for Stripe compatibility
+    // Towel fee = 500 cents ($5), face cloth fee = 200 cents ($2)
+    // Total for 2 towels + 1 face cloth = 2*500 + 200 = 1200 cents ($12)
     const mockAppointment = {
-      dataValues: { id: 1, price: 100, userId: 1 },
+      dataValues: { id: 1, price: 10000, userId: 1 }, // $100.00 in cents
       update: jest.fn(),
     };
     const mockBill = {
-      dataValues: { appointmentDue: 100, totalDue: 100 },
+      dataValues: { appointmentDue: 10000, totalDue: 10000 },
       update: jest.fn(),
     };
 
@@ -391,24 +396,24 @@ describe("UserInfoClass", () => {
       UserBills.findOne.mockResolvedValue(mockBill);
     });
 
-    it("should add $12 when bringing towels (2 towels at $5 + 1 face cloth at $2)", async () => {
+    it("should add $12 (1200 cents) when bringing towels (2 towels at $5 + 1 face cloth at $2)", async () => {
       await UserInfoClass.editTowelsInDB({ id: 1, bringTowels: "yes" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           bringTowels: "yes",
-          price: 112,
+          price: 11200, // 10000 + 1200
         })
       );
     });
 
-    it("should subtract $12 when not bringing towels", async () => {
+    it("should subtract $12 (1200 cents) when not bringing towels", async () => {
       await UserInfoClass.editTowelsInDB({ id: 1, bringTowels: "no" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           bringTowels: "no",
-          price: 88,
+          price: 8800, // 10000 - 1200
         })
       );
     });

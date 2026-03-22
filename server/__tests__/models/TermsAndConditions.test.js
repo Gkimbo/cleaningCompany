@@ -38,10 +38,10 @@ describe("TermsAndConditions Model", () => {
       );
     });
 
-    it("should have type field as ENUM with homeowner, cleaner, and privacy_policy", () => {
+    it("should have type field as ENUM with homeowner, cleaner, privacy_policy, and payment_terms", () => {
       const attributes = mockDefine.mock.calls[0][1];
       expect(attributes.type.type.type).toBe("ENUM");
-      expect(attributes.type.type.values).toEqual(["homeowner", "cleaner", "privacy_policy"]);
+      expect(attributes.type.type.values).toEqual(["homeowner", "cleaner", "privacy_policy", "payment_terms"]);
       expect(attributes.type.allowNull).toBe(false);
     });
 
@@ -153,6 +153,8 @@ describe("TermsAndConditions Model", () => {
       const validTypes = attributes.type.type.values;
       expect(validTypes).toContain("homeowner");
       expect(validTypes).toContain("cleaner");
+      expect(validTypes).toContain("privacy_policy");
+      expect(validTypes).toContain("payment_terms");
       expect(validTypes).not.toContain("admin");
       expect(validTypes).not.toContain("owner");
     });

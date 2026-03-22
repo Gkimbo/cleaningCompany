@@ -44,10 +44,18 @@ import {
 } from "../../../services/styles/theme";
 import { usePricing } from "../../../context/PricingContext";
 import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
+import { useOffline } from "../../../services/offline/OfflineContext";
+import { getTodayString } from "../../../services/formatters";
 
-// Format time constraint for display: "10-3" → "10am - 3pm"
+// Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (time) => {
   if (!time || time.toLowerCase() === "anytime") return "Anytime";
+  // Check if it's a numeric hours limit (e.g., "2.5", "3")
+  const numericValue = parseFloat(time);
+  if (!isNaN(numericValue) && numericValue > 0 && numericValue <= 12) {
+    const unit = numericValue === 1 ? "hr" : "hrs";
+    return `Within ${numericValue} ${unit}`;
+  }
   const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
   if (!match) return time;
   const startHour = parseInt(match[1], 10);
@@ -88,7 +96,21 @@ const sortOptions = [
 
 const SelectNewJobList = ({ state }) => {
   const { pricing } = usePricing();
+  const { isOffline } = useOffline();
   const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
+
+  // Helper to check offline and show alert
+  const requiresOnline = (action = "This action") => {
+    if (isOffline) {
+      Alert.alert(
+        "Internet Required",
+        `${action} requires an internet connection. Please connect to the internet and try again.`,
+        [{ text: "OK" }]
+      );
+      return true;
+    }
+    return false;
+  };
   const [allAppointments, setAllAppointments] = useState([]);
   const [allRequests, setAllRequests] = useState([]);
   const [userId, setUserId] = useState(null);
@@ -188,8 +210,8 @@ const SelectNewJobList = ({ state }) => {
           getCurrentUser(state.currentUser.token),
         ]);
 
-        const now = new Date();
-        const isUpcoming = (item) => new Date(item.date) >= now;
+        const todayStr = getTodayString();
+        const isUpcoming = (item) => item.date >= todayStr;
 
         // Filter out jobs that have already been assigned to anyone (including yourself)
         // Those should only show on the "My Jobs" page
@@ -438,6 +460,8 @@ const SelectNewJobList = ({ state }) => {
   // Handle booking request with large home check
   const handleBookingRequest = useCallback(
     async (employeeId, appointmentId) => {
+      if (requiresOnline("Requesting a job")) return;
+
       setRequestingJobId(appointmentId);
       try {
         // First, check if this is a large home that requires acknowledgment
@@ -537,6 +561,7 @@ const SelectNewJobList = ({ state }) => {
   // Confirm booking after acknowledging large home warning
   const handleConfirmLargeHomeBooking = useCallback(async () => {
     if (!pendingBooking) return;
+    if (requiresOnline("Confirming a job booking")) return;
 
     setBookingLoading(true);
     try {
@@ -605,10 +630,8 @@ const SelectNewJobList = ({ state }) => {
   };
 
   const transformOfferToJobData = (offer) => {
-    // Server stores earningsOffered in cents, convert to dollars for display
-    const earningsInDollars = offer.earningsOffered
-      ? offer.earningsOffered / 100
-      : null;
+    // Server stores earningsOffered in cents - keep as cents, formatPrice will convert
+    const earningsInCents = offer.earningsOffered || null;
 
     // Calculate distance for this offer
     // Use inline coordinates from API response, fallback to fetched locations
@@ -639,8 +662,8 @@ const SelectNewJobList = ({ state }) => {
       totalCleanersRequired: offer.multiCleanerJob?.totalCleanersRequired || 2,
       cleanersConfirmed: offer.multiCleanerJob?.cleanersConfirmed || 0,
       status: offer.multiCleanerJob?.status,
-      earningsOffered: earningsInDollars,
-      perCleanerEarnings: earningsInDollars,
+      earningsOffered: earningsInCents,
+      perCleanerEarnings: earningsInCents,
       timeToBeCompleted: offer.multiCleanerJob?.appointment?.timeToBeCompleted,
       distance,
       numBeds: offer.multiCleanerJob?.appointment?.home?.numBeds,
@@ -650,12 +673,14 @@ const SelectNewJobList = ({ state }) => {
 
   const transformJobData = (job) => {
     // Calculate per-cleaner earnings from appointment price (after platform fee, split by cleaners)
-    const totalPrice = job.appointment?.price || 0;
+    // Note: price from serializer is in dollars (string), convert to cents for consistency with formatPrice
+    const totalPriceDollars = parseFloat(job.appointment?.price) || 0;
+    const totalPriceCents = Math.round(totalPriceDollars * 100);
     const cleanersRequired = job.totalCleanersRequired || 2;
     const cleanersConfirmed = job.cleanersConfirmed || 0;
-    const cleanersTotalShare = totalPrice * cleanerSharePercent;
+    const cleanersTotalShareCents = totalPriceCents * cleanerSharePercent;
     const perCleanerEarnings =
-      totalPrice > 0 ? Math.round(cleanersTotalShare / cleanersRequired) : null;
+      totalPriceCents > 0 ? Math.round(cleanersTotalShareCents / cleanersRequired) : null;
 
     // Get estimated time (totalEstimatedMinutes from job, or parse timeToBeCompleted from appointment)
     let estimatedMinutes = job.totalEstimatedMinutes;
@@ -701,7 +726,7 @@ const SelectNewJobList = ({ state }) => {
       remainingSlots: cleanersRequired - cleanersConfirmed,
       status: job.status,
       perCleanerEarnings,
-      totalJobPrice: totalPrice,
+      totalJobPrice: totalPriceCents,
       estimatedMinutes,
       timeToBeCompleted: job.appointment?.timeToBeCompleted,
       distance,
@@ -711,11 +736,13 @@ const SelectNewJobList = ({ state }) => {
   };
 
   const transformJobToOfferFormat = (job) => {
-    const totalPrice = job.appointment?.price || 0;
+    // Note: price from serializer is in dollars (string), convert to cents for consistency with formatPrice
+    const totalPriceDollars = parseFloat(job.appointment?.price) || 0;
+    const totalPriceCents = Math.round(totalPriceDollars * 100);
     const cleanersRequired = job.totalCleanersRequired || 2;
-    const cleanersTotalShare = totalPrice * cleanerSharePercent;
+    const cleanersTotalShareCents = totalPriceCents * cleanerSharePercent;
     const perCleanerEarnings =
-      totalPrice > 0 ? Math.round(cleanersTotalShare / cleanersRequired) : null;
+      totalPriceCents > 0 ? Math.round(cleanersTotalShareCents / cleanersRequired) : null;
 
     return {
       id: job.id,
@@ -726,7 +753,7 @@ const SelectNewJobList = ({ state }) => {
       state: job.appointment?.home?.state,
       estimatedMinutes: null,
       earningsOffered: perCleanerEarnings,
-      totalJobPrice: totalPrice,
+      totalJobPrice: totalPriceCents,
       platformFee: null,
       percentOfWork: Math.round(100 / cleanersRequired),
       roomAssignments: [],
@@ -738,6 +765,8 @@ const SelectNewJobList = ({ state }) => {
   // Handle accepting a multi-cleaner offer
   const handleAcceptOffer = useCallback(
     async (offer) => {
+      if (requiresOnline("Accepting a team job offer")) return;
+
       setMultiCleanerLoading(true);
       try {
         const result = await FetchData.acceptMultiCleanerOffer(
@@ -766,6 +795,8 @@ const SelectNewJobList = ({ state }) => {
   // Handle declining a multi-cleaner offer
   const handleDeclineOffer = useCallback(
     async (offer) => {
+      if (requiresOnline("Declining a team job offer")) return;
+
       Alert.alert(
         "Decline Offer",
         "Are you sure you want to decline this team cleaning job?",
@@ -809,6 +840,8 @@ const SelectNewJobList = ({ state }) => {
   // Handle directly joining a multi-cleaner job (no modal, for edge large homes in team section)
   const handleDirectJoinMultiCleanerJob = useCallback(
     async (job) => {
+      if (requiresOnline("Joining a team job")) return;
+
       setMultiCleanerLoading(true);
       try {
         const result = await FetchData.joinMultiCleanerJob(
@@ -866,6 +899,7 @@ const SelectNewJobList = ({ state }) => {
   // Handle joining an open multi-cleaner job
   const handleJoinMultiCleanerJob = useCallback(async () => {
     if (!selectedMultiCleanerJob) return;
+    if (requiresOnline("Joining a team job")) return;
 
     setMultiCleanerLoading(true);
     try {
@@ -912,6 +946,8 @@ const SelectNewJobList = ({ state }) => {
   // Handle cancelling a multi-cleaner request
   const handleCancelMultiCleanerRequest = useCallback(
     (request) => {
+      if (requiresOnline("Cancelling a team request")) return;
+
       Alert.alert(
         "Cancel Request",
         "Are you sure you want to cancel this team cleaning request?",
@@ -982,8 +1018,8 @@ const SelectNewJobList = ({ state }) => {
       distanceFurthest: (a, b) => (b.distance ?? 0) - (a.distance ?? 0),
       priceLow: (a, b) => (Number(a.price) || 0) - (Number(b.price) || 0),
       priceHigh: (a, b) => (Number(b.price) || 0) - (Number(a.price) || 0),
-      dateNewest: (a, b) => new Date(a.date) - new Date(b.date),
-      dateOldest: (a, b) => new Date(b.date) - new Date(a.date),
+      dateNewest: (a, b) => new Date(a.date + "T12:00:00") - new Date(b.date + "T12:00:00"),
+      dateOldest: (a, b) => new Date(b.date + "T12:00:00") - new Date(a.date + "T12:00:00"),
     };
 
     return [...processed].sort((a, b) => {
@@ -1301,6 +1337,7 @@ const SelectNewJobList = ({ state }) => {
                           {...appointment}
                           cleanerId={userId}
                           removeRequest={async (employeeId, appointmentId) => {
+                            if (requiresOnline("Cancelling a job request")) return;
                             try {
                               await FetchData.removeRequest(
                                 employeeId,
@@ -1411,7 +1448,7 @@ const SelectNewJobList = ({ state }) => {
                             </Text>
                             <Text style={styles.multiCleanerRequestDate}>
                               {new Date(
-                                request.appointment?.date + "T00:00:00"
+                                request.appointment?.date + "T12:00:00"
                               ).toLocaleDateString("en-US", {
                                 weekday: "short",
                                 month: "short",
@@ -1544,8 +1581,9 @@ const SelectNewJobList = ({ state }) => {
                                   ((Number(request.appointment?.price) || 0) *
                                     cleanerSharePercent) /
                                   (request.multiCleanerJob
-                                    ?.totalCleanersRequired || 2)
-                                ).toFixed(0)}{" "}
+                                    ?.totalCleanersRequired || 2) /
+                                  100
+                                ).toFixed(2)}{" "}
                                 your share
                               </Text>
                             </View>
@@ -1752,6 +1790,7 @@ const SelectNewJobList = ({ state }) => {
                           isRequesting={requestingJobId === appointment.id}
                           addEmployee={handleBookingRequest}
                           removeEmployee={async (employeeId, appointmentId) => {
+                            if (requiresOnline("Cancelling a job assignment")) return;
                             try {
                               await FetchData.removeEmployee(
                                 employeeId,

@@ -198,48 +198,97 @@ class Email {
     email,
     address,
     userName,
-    appointmentDate
+    appointmentDate,
+    reason = "cancelled" // "cancelled", "account_issues", or "urgent_fill"
   ) {
     try {
       const transporter = createTransporter();
       const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipcode}`;
 
+      const isAccountIssue = reason === "account_issues" || reason === "urgent_fill";
+      const isUrgentFill = reason === "urgent_fill";
+
+      const title = isAccountIssue ? "Cleaner Removed" : "Appointment Cancelled";
+      const subtitle = isAccountIssue ? "Your cleaner has been removed" : "Your cleaner has cancelled";
+
+      let contentText;
+      if (isUrgentFill) {
+        contentText = `<p>We regret to inform you that the cleaner assigned to your appointment has been removed due to account issues.</p>
+          <p>We sincerely apologize for any inconvenience this may cause.</p>`;
+      } else if (isAccountIssue) {
+        contentText = `<p>We regret to inform you that the cleaner assigned to your appointment has been removed due to account issues.</p>
+          <p>We sincerely apologize for any inconvenience this may cause.</p>`;
+      } else {
+        contentText = `<p>We regret to inform you that your scheduled cleaning appointment has been cancelled by the assigned cleaner.</p>
+          <p>We sincerely apologize for any inconvenience this may cause.</p>`;
+      }
+
+      const infoBoxTitle = isAccountIssue ? "Affected Appointment Details" : "Cancelled Appointment Details";
+      const subjectLine = isUrgentFill
+        ? `🚨 Priority Fill in Progress - ${formatDate(appointmentDate)}`
+        : isAccountIssue
+        ? `⚠️ Cleaner Removed - ${formatDate(appointmentDate)}`
+        : `⚠️ Appointment Cancelled - ${formatDate(appointmentDate)}`;
+
+      // Different warning box for urgent fill
+      const warningBox = isUrgentFill
+        ? {
+            icon: "🚨",
+            text: "<strong>Priority Fill Activated:</strong> Kleanr is actively pushing your cleaning to top-rated cleaners within 10 miles. Your appointment has been marked as priority and we're working to fill it as quickly as possible. You will be notified as soon as a new cleaner confirms.",
+            bgColor: "#fef3c7",
+            borderColor: "#f59e0b",
+            textColor: "#92400e",
+          }
+        : {
+            icon: "ℹ️",
+            text: "<strong>Good News:</strong> Your appointment is still available for other cleaners to select. You will receive another email when a new cleaner confirms your appointment.",
+            bgColor: "#dbeafe",
+            borderColor: "#3b82f6",
+            textColor: "#1e40af",
+          };
+
       const htmlContent = createEmailTemplate({
-        title: "Appointment Cancelled",
-        subtitle: "Your cleaner has cancelled",
+        title,
+        subtitle,
         headerColor: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
         greeting: `Hi ${userName},`,
-        content: `<p>We regret to inform you that your scheduled cleaning appointment has been cancelled by the assigned cleaner.</p>
-          <p>We sincerely apologize for any inconvenience this may cause.</p>`,
+        content: contentText,
         infoBox: {
           icon: "📍",
-          title: "Cancelled Appointment Details",
+          title: infoBoxTitle,
           items: [
             { label: "Address", value: fullAddress },
             { label: "Date", value: formatDate(appointmentDate) },
           ],
         },
-        warningBox: {
-          icon: "ℹ️",
-          text: "<strong>Good News:</strong> Your appointment is still available for other cleaners to select. You will receive another email when a new cleaner confirms your appointment.",
-          bgColor: "#dbeafe",
-          borderColor: "#3b82f6",
-          textColor: "#1e40af",
-        },
+        warningBox,
         ctaText: "Log into the Kleanr app to view your appointment status.",
         footerMessage: "We appreciate your patience",
       });
 
+      const textContentBody = isAccountIssue
+        ? "We regret to inform you that the cleaner assigned to your appointment has been removed due to account issues."
+        : "We regret to inform you that your scheduled cleaning appointment has been cancelled.";
+
+      const urgentFillNote = isUrgentFill
+        ? `
+
+🚨 PRIORITY FILL ACTIVATED
+━━━━━━━━━━━━━━━━━━━━━━
+Kleanr is actively pushing your cleaning to top-rated cleaners within 10 miles. Your appointment has been marked as priority and we're working to fill it as quickly as possible. You will be notified as soon as a new cleaner confirms.`
+        : `
+
+Good News: Your appointment is still available for other cleaners to select. You will receive another email when a new cleaner confirms your appointment.`;
+
       const textContent = `Hi ${userName},
 
-We regret to inform you that your scheduled cleaning appointment has been cancelled.
+${textContentBody}
 
-CANCELLED APPOINTMENT DETAILS
+${isAccountIssue ? "AFFECTED" : "CANCELLED"} APPOINTMENT DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━
 Address: ${fullAddress}
 Date: ${formatDate(appointmentDate)}
-
-Good News: Your appointment is still available for other cleaners to select. You will receive another email when a new cleaner confirms your appointment.
+${urgentFillNote}
 
 Log into the Kleanr app to view your appointment status.
 
@@ -249,7 +298,7 @@ Kleanr Support Team`;
       const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
-        subject: `⚠️ Appointment Cancelled - ${formatDate(appointmentDate)}`,
+        subject: subjectLine,
         text: textContent,
         html: htmlContent,
       };
@@ -878,6 +927,57 @@ Kleanr Support Team`;
     }
   }
 
+  static async sendPasswordChangeConfirmation(email, username) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Password Changed",
+        subtitle: "Your password has been updated successfully",
+        headerColor: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+        greeting: `Hi ${username}! ✅`,
+        content: `<p>Your Kleanr account password has been successfully changed.</p>
+          <p>If you made this change, no further action is needed.</p>`,
+        warningBox: {
+          icon: "🚨",
+          text: "<strong>Didn't make this change?</strong> If you did not change your password, please contact our support team immediately and consider resetting your password.",
+          bgColor: "#fef2f2",
+          borderColor: "#ef4444",
+          textColor: "#991b1b",
+        },
+        footerMessage: "Your security is our priority",
+      });
+
+      const textContent = `Hi ${username}!
+
+Your Kleanr account password has been successfully changed.
+
+If you made this change, no further action is needed.
+
+🚨 DIDN'T MAKE THIS CHANGE?
+━━━━━━━━━━━━━━━━━━━━━━
+If you did not change your password, please contact our support team immediately and consider resetting your password.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "✅ Password Changed Successfully - Kleanr",
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Password change confirmation email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending password change confirmation email:", error);
+      throw error;
+    }
+  }
+
   static async sendRequestApproved(email, cleanerName, homeownerName, address, appointmentDate, linensConfig = {}) {
     try {
       const transporter = createTransporter();
@@ -1109,7 +1209,7 @@ Kleanr Support Team`;
         linensText = "\n\n✓ UPDATED: Sheets and towels will now be provided at the home - you don't need to bring any!\n";
       }
 
-      const payoutFormatted = typeof payout === 'number' ? `$${payout.toFixed(2)}` : payout;
+      const payoutFormatted = typeof payout === 'number' ? `$${(payout / 100).toFixed(2)}` : payout;
 
       const htmlContent = createEmailTemplate({
         title: "Appointment Update 📝",
@@ -1438,12 +1538,30 @@ Kleanr System`;
       const transporter = createTransporter();
       const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipcode}`;
 
+      // Calculate actual days until appointment
+      const now = new Date();
+      const apptDate = new Date(appointmentDate);
+      const timeDiff = apptDate.getTime() - now.getTime();
+      const daysUntil = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+
+      let daysText, daysTextPlain;
+      if (daysUntil <= 0) {
+        daysText = "<strong>today</strong>";
+        daysTextPlain = "today";
+      } else if (daysUntil === 1) {
+        daysText = "<strong>tomorrow</strong>";
+        daysTextPlain = "tomorrow";
+      } else {
+        daysText = `in <strong>${daysUntil} days</strong>`;
+        daysTextPlain = `in ${daysUntil} days`;
+      }
+
       const htmlContent = createEmailTemplate({
         title: "Appointment Notice",
         subtitle: "No cleaner assigned yet",
         headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
         greeting: `Hi ${userName},`,
-        content: `<p>Your upcoming cleaning appointment is in <strong>3 days</strong> and has not yet been assigned to a cleaner.</p>`,
+        content: `<p>Your upcoming cleaning appointment is ${daysText} and has not yet been assigned to a cleaner.</p>`,
         infoBox: {
           icon: "📅",
           title: "Appointment Details",
@@ -1474,7 +1592,7 @@ Kleanr System`;
 
       const textContent = `Hi ${userName},
 
-Your upcoming cleaning appointment is in 3 days and has not yet been assigned to a cleaner.
+Your upcoming cleaning appointment is ${daysTextPlain} and has not yet been assigned to a cleaner.
 
 APPOINTMENT DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -1538,12 +1656,12 @@ Kleanr Support Team`;
             { label: "Address", value: homeAddress },
             { label: "On File", value: `${originalBeds} bed, ${originalBaths} bath` },
             { label: "Reported", value: `${reportedBeds} bed, ${reportedBaths} bath` },
-            { label: "Price Difference", value: priceDifference > 0 ? `+$${priceDifference.toFixed(2)}` : `$${priceDifference.toFixed(2)}` },
+            { label: "Price Difference", value: priceDifference > 0 ? `+$${(priceDifference / 100).toFixed(2)}` : `$${(priceDifference / 100).toFixed(2)}` },
           ],
         },
         warningBox: priceDifference > 0 ? {
           icon: "💳",
-          text: `If you approve this change, $${priceDifference.toFixed(2)} will be charged to your payment method on file.`,
+          text: `If you approve this change, $${(priceDifference / 100).toFixed(2)} will be charged to your payment method on file.`,
           bgColor: "#fef3c7",
           borderColor: "#f59e0b",
           textColor: "#92400e",
@@ -1561,9 +1679,9 @@ HOME SIZE COMPARISON
 Address: ${homeAddress}
 On File: ${originalBeds} bed, ${originalBaths} bath
 Reported: ${reportedBeds} bed, ${reportedBaths} bath
-Price Difference: ${priceDifference > 0 ? '+' : ''}$${priceDifference.toFixed(2)}
+Price Difference: ${priceDifference > 0 ? '+' : ''}$${(priceDifference / 100).toFixed(2)}
 
-${priceDifference > 0 ? `If you approve this change, $${priceDifference.toFixed(2)} will be charged to your payment method.\n\n` : ''}Please respond within 24 hours by opening the Kleanr app.
+${priceDifference > 0 ? `If you approve this change, $${(priceDifference / 100).toFixed(2)} will be charged to your payment method.\n\n` : ''}Please respond within 24 hours by opening the Kleanr app.
 
 Best regards,
 Kleanr Support Team`;
@@ -1608,7 +1726,7 @@ Kleanr Support Team`;
           items: [
             { label: "Address", value: homeAddress },
             { label: "Updated Size", value: `${newBeds} bed, ${newBaths} bath` },
-            ...(amountCharged > 0 ? [{ label: "Amount Charged", value: `$${amountCharged.toFixed(2)}` }] : []),
+            ...(amountCharged > 0 ? [{ label: "Amount Charged", value: `$${(amountCharged / 100).toFixed(2)}` }] : []),
           ],
         },
         footerMessage: "Thank you for keeping your home details accurate",
@@ -1622,7 +1740,7 @@ UPDATED HOME DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━
 Address: ${homeAddress}
 Updated Size: ${newBeds} bed, ${newBaths} bath
-${amountCharged > 0 ? `Amount Charged: $${amountCharged.toFixed(2)}\n` : ''}
+${amountCharged > 0 ? `Amount Charged: $${(amountCharged / 100).toFixed(2)}\n` : ''}
 Your home details have been updated for all future appointments.
 
 Best regards,
@@ -1749,7 +1867,7 @@ Kleanr System`;
           title: "Updated Home Details",
           items: [
             { label: "Final Size", value: `${finalBeds} bed, ${finalBaths} bath` },
-            ...(amountCharged > 0 ? [{ label: "Amount Charged", value: `$${amountCharged.toFixed(2)}` }] : []),
+            ...(amountCharged > 0 ? [{ label: "Amount Charged", value: `$${(amountCharged / 100).toFixed(2)}` }] : []),
           ],
         } : null,
         warningBox: ownerNote ? {
@@ -1769,7 +1887,7 @@ A owner has reviewed the home size dispute and has ${isApproved ? 'approved' : '
 ${isApproved ? `UPDATED HOME DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━
 Final Size: ${finalBeds} bed, ${finalBaths} bath
-${amountCharged > 0 ? `Amount Charged: $${amountCharged.toFixed(2)}\n` : ''}` : 'The original home details will remain unchanged.'}
+${amountCharged > 0 ? `Amount Charged: $${(amountCharged / 100).toFixed(2)}\n` : ''}` : 'The original home details will remain unchanged.'}
 
 ${ownerNote ? `Owner's Note: "${ownerNote}"\n` : ''}
 Best regards,
@@ -1929,6 +2047,85 @@ Kleanr Support Team`;
       return info.response;
     } catch (error) {
       console.error("❌ Error sending payment failed reminder email:", error);
+    }
+  }
+
+  // Payment captured notification email to homeowner
+  static async sendPaymentCapturedEmail(email, firstName, amount, appointmentDate, cleanerName) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASSWORD,
+        },
+      });
+
+      // Format date nicely
+      let formattedDate;
+      if (appointmentDate instanceof Date) {
+        formattedDate = appointmentDate.toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        });
+      } else {
+        // If it's a string date like "2026-02-12"
+        const dateObj = new Date(appointmentDate + "T12:00:00");
+        formattedDate = dateObj.toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        });
+      }
+
+      // Format amount (assuming it's in cents)
+      const formattedAmount = typeof amount === "number"
+        ? `$${(amount / 100).toFixed(2)}`
+        : amount;
+
+      const htmlContent = createEmailTemplate({
+        title: "Payment Processed",
+        subtitle: "Your upcoming cleaning appointment is confirmed",
+        greeting: `Hi ${firstName},`,
+        content: `
+          <p>Your payment has been successfully processed for your upcoming cleaning appointment. Your home is all set to be cleaned!</p>
+        `,
+        infoBox: {
+          icon: "✅",
+          title: "Payment Details",
+          items: [
+            { label: "Amount", value: formattedAmount },
+            { label: "Appointment Date", value: formattedDate },
+            { label: "Cleaner", value: cleanerName },
+          ],
+        },
+        successBox: {
+          icon: "🏠",
+          text: "Your cleaner is scheduled and ready to make your home sparkle!",
+          bgColor: "#f0fdf4",
+          borderColor: "#22c55e",
+          textColor: "#166534",
+        },
+        footerMessage: "Thank you for choosing Kleanr! If you need to make any changes, please open the app.",
+        headerColor: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Payment Confirmed - ${formattedAmount} for ${formattedDate}`,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Payment captured email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment captured email:", error);
     }
   }
 
@@ -2106,7 +2303,7 @@ Kleanr Support Team`;
       // Create appointment list for the email
       const appointmentItems = appointments.map(appt => ({
         label: formatDate(appt.date),
-        value: `$${Number(appt.price).toFixed(2)} - ${appt.source}`,
+        value: `$${(Number(appt.price) / 100).toFixed(2)} - ${appt.source}`,
       }));
 
       const htmlContent = createEmailTemplate({
@@ -2124,7 +2321,7 @@ Kleanr Support Team`;
         },
         warningBox: {
           icon: "💳",
-          text: `<strong>Total Amount:</strong> $${totalAmount.toFixed(2)} has been added to your bill. A cleaner will be assigned shortly.`,
+          text: `<strong>Total Amount:</strong> $${(totalAmount / 100).toFixed(2)} has been added to your bill. A cleaner will be assigned shortly.`,
           bgColor: "#dbeafe",
           borderColor: "#3b82f6",
           textColor: "#1e40af",
@@ -2142,7 +2339,7 @@ Kleanr Support Team`;
       });
 
       const appointmentListText = appointments.map(appt =>
-        `  • ${formatDate(appt.date)} - $${Number(appt.price).toFixed(2)} (${appt.source})`
+        `  • ${formatDate(appt.date)} - $${(Number(appt.price) / 100).toFixed(2)} (${appt.source})`
       ).join('\n');
 
       const textContent = `Hi ${userName}!
@@ -2156,7 +2353,7 @@ APPOINTMENTS CREATED FOR ${homeAddress.toUpperCase()}
 ━━━━━━━━━━━━━━━━━━━━━━
 ${appointmentListText}
 
-Total Amount: $${totalAmount.toFixed(2)} (added to your bill)
+Total Amount: $${(totalAmount / 100).toFixed(2)} (added to your bill)
 
 WHAT'S NEXT?
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -2775,7 +2972,7 @@ The Kleanr Team`;
             { label: "Frequency", value: frequencyText },
             { label: "Day", value: `${dayName}s` },
             { label: "Starting", value: formatDate(startDate) },
-            { label: "Price", value: `$${parseFloat(price).toFixed(2)}` },
+            { label: "Price", value: `$${(parseFloat(price) / 100).toFixed(2)}` },
           ],
         },
         steps: nextDates && nextDates.length > 0 ? {
@@ -2802,7 +2999,7 @@ YOUR SCHEDULE
 Frequency: ${frequencyText}
 Day: ${dayName}s
 Starting: ${formatDate(startDate)}
-Price: $${parseFloat(price).toFixed(2)}
+Price: $${(parseFloat(price) / 100).toFixed(2)}
 
 ${nextDates && nextDates.length > 0 ? `UPCOMING CLEANINGS\n━━━━━━━━━━━━━━━━━━━━━━\n${nextDates.slice(0, 4).map(date => formatDate(date)).join('\n')}\n` : ''}
 
@@ -2865,7 +3062,7 @@ The Kleanr Team`;
             { label: "Date", value: formatDate(appointmentDate) },
             { label: "Address", value: homeAddress },
             { label: "Cleaner", value: cleanerName },
-            { label: "Amount", value: `$${parseFloat(price).toFixed(2)}` },
+            { label: "Amount", value: `$${(parseFloat(price) / 100).toFixed(2)}` },
             { label: "Status", value: isPaid ? '<span style="color: #10b981; font-weight: bold;">PAID</span>' : '<span style="color: #f59e0b; font-weight: bold;">PENDING</span>' },
             ...(paymentMethod ? [{ label: "Payment Method", value: paymentMethod }] : []),
           ],
@@ -2886,7 +3083,7 @@ Service: Home Cleaning
 Date: ${formatDate(appointmentDate)}
 Address: ${homeAddress}
 Cleaner: ${cleanerName}
-Amount: $${parseFloat(price).toFixed(2)}
+Amount: $${(parseFloat(price) / 100).toFixed(2)}
 Status: ${isPaid ? 'PAID' : 'PENDING'}
 ${paymentMethod ? `Payment Method: ${paymentMethod}` : ''}
 
@@ -2942,7 +3139,7 @@ The Kleanr Team`;
           items: [
             { label: "Date", value: formatDate(appointmentDate) },
             { label: "Address", value: homeAddress },
-            { label: "Amount Due", value: `<strong style="color: #dc2626;">$${parseFloat(price).toFixed(2)}</strong>` },
+            { label: "Amount Due", value: `<strong style="color: #dc2626;">$${(parseFloat(price) / 100).toFixed(2)}</strong>` },
             { label: "Days Overdue", value: `${daysOverdue} day${daysOverdue !== 1 ? 's' : ''}` },
           ],
         },
@@ -2960,7 +3157,7 @@ OUTSTANDING INVOICE
 ━━━━━━━━━━━━━━━━━━━━━━
 Date: ${formatDate(appointmentDate)}
 Address: ${homeAddress}
-Amount Due: $${parseFloat(price).toFixed(2)}
+Amount Due: $${(parseFloat(price) / 100).toFixed(2)}
 Days Overdue: ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''}
 
 Please log into the Kleanr app to complete payment.
@@ -2971,7 +3168,7 @@ The Kleanr Team`;
       const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
-        subject: `⚠️ Payment Reminder: $${parseFloat(price).toFixed(2)} due`,
+        subject: `⚠️ Payment Reminder: $${(parseFloat(price) / 100).toFixed(2)} due`,
         text: textContent,
         html: htmlContent,
       };
@@ -3027,9 +3224,9 @@ The Kleanr Team`;
             { label: "Client", value: clientName },
             { label: "Date", value: formatDate(appointmentDate) },
             { label: "Address", value: homeAddress },
-            { label: "Gross Amount", value: `$${parseFloat(grossAmount).toFixed(2)}` },
-            { label: feeLabel, value: `-$${parseFloat(platformFee).toFixed(2)}` },
-            { label: "Your Payout", value: `<strong style="color: #10b981;">$${parseFloat(netAmount).toFixed(2)}</strong>` },
+            { label: "Gross Amount", value: `$${(parseFloat(grossAmount) / 100).toFixed(2)}` },
+            { label: feeLabel, value: `-$${(parseFloat(platformFee) / 100).toFixed(2)}` },
+            { label: "Your Payout", value: `<strong style="color: #10b981;">$${(parseFloat(netAmount) / 100).toFixed(2)}</strong>` },
           ],
         },
         warningBox: {
@@ -3052,9 +3249,9 @@ PAYOUT DETAILS
 Client: ${clientName}
 Date: ${formatDate(appointmentDate)}
 Address: ${homeAddress}
-Gross Amount: $${parseFloat(grossAmount).toFixed(2)}
-${feeLabel}: -$${parseFloat(platformFee).toFixed(2)}
-Your Payout: $${parseFloat(netAmount).toFixed(2)}
+Gross Amount: $${(parseFloat(grossAmount) / 100).toFixed(2)}
+${feeLabel}: -$${(parseFloat(platformFee) / 100).toFixed(2)}
+Your Payout: $${(parseFloat(netAmount) / 100).toFixed(2)}
 
 🏦 Funds typically arrive in your bank account within 2-3 business days.
 
@@ -3064,7 +3261,7 @@ The Kleanr Team`;
       const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
-        subject: `💰 Payout: $${parseFloat(netAmount).toFixed(2)} for ${formatDate(appointmentDate)}`,
+        subject: `💰 Payout: $${(parseFloat(netAmount) / 100).toFixed(2)} for ${formatDate(appointmentDate)}`,
         text: textContent,
         html: htmlContent,
       };
@@ -3116,7 +3313,7 @@ The Kleanr Team`;
             { label: "Client", value: clientName },
             { label: "Date", value: formatDate(appointmentDate) },
             { label: "Address", value: homeAddress },
-            { label: "Price", value: `$${parseFloat(price).toFixed(2)}` },
+            { label: "Price", value: `$${(parseFloat(price) / 100).toFixed(2)}` },
           ],
         },
         steps: {
@@ -3146,7 +3343,7 @@ APPOINTMENT DETAILS
 Client: ${clientName}
 Date: ${formatDate(appointmentDate)}
 Address: ${homeAddress}
-Price: $${parseFloat(price).toFixed(2)}
+Price: $${(parseFloat(price) / 100).toFixed(2)}
 
 WHAT TO DO NEXT:
 1. Accept - If you can do this cleaning
@@ -4497,6 +4694,91 @@ Kleanr Team`;
     }
   }
 
+  /**
+   * Send urgent fill email to cleaners when a cleaner is removed due to account issues
+   * This is a priority fill with 10-mile radius
+   */
+  static async sendUrgentFillEmail(
+    email,
+    cleanerName,
+    appointmentDate,
+    price,
+    location,
+    distanceMiles,
+    daysUntil
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "PRIORITY: Urgent Fill Needed!",
+        subtitle: "High-Priority Cleaning Job",
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)",
+        greeting: `Hi ${cleanerName}!`,
+        content: `<p>A homeowner in your area needs an <strong>urgent fill</strong> - a cleaner was removed from this job and it needs to be filled <strong>within ${daysUntil} day${daysUntil !== 1 ? 's' : ''}</strong>!</p>
+          <p>You're only <strong>${distanceMiles} miles</strong> away and this is a <strong>priority booking</strong>. Kleanr is pushing this to top cleaners first!</p>`,
+        infoBox: {
+          icon: "🚨",
+          title: "Priority Job Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Your Earnings", value: price },
+            { label: "Location", value: location },
+            { label: "Distance", value: `${distanceMiles} miles from you` },
+            { label: "Time Left", value: `${daysUntil} day${daysUntil !== 1 ? 's' : ''} until cleaning` },
+          ],
+        },
+        warningBox: {
+          icon: "⚡",
+          text: "<strong>Priority Fill:</strong> This job is being sent to select cleaners within 10 miles first. Claim it now before it opens to the wider marketplace!",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: "Open the Kleanr app NOW to claim this priority job!",
+        footerMessage: "Be the hero this homeowner needs!",
+      });
+
+      const textContent = `🚨 PRIORITY: Urgent Fill Needed!
+
+Hi ${cleanerName},
+
+A homeowner near you needs an urgent fill - a cleaner was removed and this job must be filled within ${daysUntil} day${daysUntil !== 1 ? 's' : ''}!
+
+You're only ${distanceMiles} miles away and this is a PRIORITY booking!
+
+PRIORITY JOB DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Your Earnings: ${price}
+Location: ${location}
+Distance: ${distanceMiles} miles from you
+Time Left: ${daysUntil} day${daysUntil !== 1 ? 's' : ''} until cleaning
+
+⚡ PRIORITY FILL: This job is being sent to select cleaners within 10 miles first. Claim it now!
+
+Open the Kleanr app NOW to claim this job!
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🚨 PRIORITY FILL: ${price} job - ${daysUntil} day${daysUntil !== 1 ? 's' : ''} away - ${distanceMiles} mi`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Urgent fill email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending urgent fill email:", error);
+      throw error;
+    }
+  }
+
   // ============================================================================
   // EDGE CASE MULTI-CLEANER EMAILS
   // ============================================================================
@@ -5178,7 +5460,7 @@ Kleanr Support Team`;
     try {
       const transporter = createTransporter();
       const formattedPayout = payoutAmount
-        ? `$${parseFloat(payoutAmount).toFixed(2)}`
+        ? `$${(parseFloat(payoutAmount) / 100).toFixed(2)}`
         : "Your share";
 
       const htmlContent = createEmailTemplate({
@@ -6226,6 +6508,1134 @@ The Kleanr Team`;
       return info.response;
     } catch (error) {
       console.error("❌ Error sending new home declined email:", error);
+    }
+  }
+
+  /**
+   * Send IT dispute notification email to IT staff
+   * @param {string} email - IT staff email
+   * @param {string} staffFirstName - IT staff first name
+   * @param {string} reporterName - Name of the user who submitted the dispute
+   * @param {string} caseNumber - Case number (IT-YYYYMMDD-00001)
+   * @param {string} categoryLabel - Human-readable category label
+   * @param {string} priority - Dispute priority (low, normal, high, critical)
+   * @param {string} description - Brief description of the issue
+   */
+  static async sendITDisputeNotification(email, staffFirstName, reporterName, caseNumber, categoryLabel, priority, description) {
+    try {
+      const transporter = createTransporter();
+
+      // Determine urgency colors based on priority
+      const priorityColors = {
+        critical: { bg: "#dc2626", text: "#ffffff" },
+        high: { bg: "#f59e0b", text: "#ffffff" },
+        normal: { bg: "#3b82f6", text: "#ffffff" },
+        low: { bg: "#64748b", text: "#ffffff" },
+      };
+      const colors = priorityColors[priority] || priorityColors.normal;
+
+      const priorityLabel = priority.toUpperCase();
+      const isUrgent = priority === "critical" || priority === "high";
+
+      const htmlContent = createEmailTemplate({
+        title: "New IT Issue Reported",
+        subtitle: caseNumber,
+        headerColor: priority === "critical"
+          ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+          : priority === "high"
+          ? "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
+          : "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
+        greeting: `Hi ${staffFirstName},`,
+        content: `
+          <p>A new IT issue has been reported that requires your attention.</p>
+          <p><strong>${reporterName}</strong> has submitted a support request.</p>
+        `,
+        infoBox: {
+          icon: "🔧",
+          title: "Issue Details",
+          items: [
+            { label: "Case Number", value: caseNumber },
+            { label: "Category", value: categoryLabel },
+            { label: "Priority", value: `<span style="background-color: ${colors.bg}; color: ${colors.text}; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${priorityLabel}</span>` },
+            { label: "Description", value: description.length > 200 ? description.substring(0, 200) + "..." : description },
+          ],
+        },
+        warningBox: isUrgent ? {
+          bgColor: priority === "critical" ? "#fee2e2" : "#fef3c7",
+          borderColor: priority === "critical" ? "#dc2626" : "#f59e0b",
+          textColor: priority === "critical" ? "#991b1b" : "#92400e",
+          icon: priority === "critical" ? "🚨" : "⚠️",
+          text: priority === "critical"
+            ? "This is a CRITICAL issue requiring immediate attention. SLA: 4 hours."
+            : "This is a HIGH priority issue. SLA: 24 hours.",
+        } : null,
+        ctaText: "Log into the Kleanr app to review and respond to this issue.",
+        footerMessage: "Thank you for keeping Kleanr running smoothly!",
+      });
+
+      const textContent = `
+Hi ${staffFirstName},
+
+A new IT issue has been reported that requires your attention.
+
+CASE DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Case Number: ${caseNumber}
+Reporter: ${reporterName}
+Category: ${categoryLabel}
+Priority: ${priorityLabel}
+Description: ${description}
+
+${isUrgent ? `⚠️ This is a ${priorityLabel} priority issue. SLA: ${priority === "critical" ? "4 hours" : "24 hours"}.` : ""}
+
+Log into the Kleanr app to review and respond to this issue.
+
+Best regards,
+The Kleanr IT Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `${isUrgent ? `[${priorityLabel}] ` : ""}New IT Issue: ${categoryLabel} (${caseNumber})`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ IT dispute notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending IT dispute notification email:", error);
+    }
+  }
+
+  /**
+   * Send IT dispute resolution email to the reporter
+   * @param {string} email - Reporter's email
+   * @param {string} reporterFirstName - Reporter's first name
+   * @param {string} caseNumber - Case number
+   * @param {string} categoryLabel - Human-readable category label
+   * @param {string} resolutionNotes - Notes about the resolution
+   */
+  static async sendITDisputeResolved(email, reporterFirstName, caseNumber, categoryLabel, resolutionNotes) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "IT Issue Resolved",
+        subtitle: caseNumber,
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Hi ${reporterFirstName},`,
+        content: `
+          <p>Great news! Your IT issue has been resolved.</p>
+          <p>Our IT team has addressed your request and closed the case.</p>
+        `,
+        infoBox: {
+          icon: "✅",
+          title: "Resolution Details",
+          items: [
+            { label: "Case Number", value: caseNumber },
+            { label: "Category", value: categoryLabel },
+            { label: "Status", value: '<span style="background-color: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">RESOLVED</span>' },
+            ...(resolutionNotes ? [{ label: "Resolution Notes", value: resolutionNotes }] : []),
+          ],
+        },
+        ctaText: "If you have any further questions or the issue persists, please submit a new IT support request through the app.",
+        footerMessage: "Thank you for your patience!",
+      });
+
+      const textContent = `
+Hi ${reporterFirstName},
+
+Great news! Your IT issue has been resolved.
+
+CASE DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Case Number: ${caseNumber}
+Category: ${categoryLabel}
+Status: RESOLVED
+${resolutionNotes ? `Resolution Notes: ${resolutionNotes}` : ""}
+
+If you have any further questions or the issue persists, please submit a new IT support request through the app.
+
+Best regards,
+The Kleanr IT Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Your IT Issue Has Been Resolved (${caseNumber})`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ IT dispute resolved email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending IT dispute resolved email:", error);
+    }
+  }
+
+  // Unassigned Expired Appointment Email
+
+  static async sendUnassignedExpiredNotification(
+    email,
+    address,
+    userName,
+    appointmentDate
+  ) {
+    try {
+      const transporter = createTransporter();
+      const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipcode}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Appointment Cancelled",
+        subtitle: "No cleaner was available",
+        headerColor: "linear-gradient(135deg, #ef4444 0%, #f87171 100%)",
+        greeting: `Hi ${userName},`,
+        content: `<p>We're sorry, but your cleaning appointment scheduled for <strong>${formatDate(appointmentDate)}</strong> has been automatically cancelled because no cleaner was available to take this job.</p>
+          <p>We sincerely apologize for the inconvenience.</p>`,
+        infoBox: {
+          icon: "📅",
+          title: "Cancelled Appointment",
+          items: [
+            { label: "Address", value: fullAddress },
+            { label: "Original Date", value: formatDate(appointmentDate) },
+            { label: "Status", value: "❌ Cancelled" },
+          ],
+        },
+        warningBox: {
+          icon: "💡",
+          text: "<strong>Ready to rebook?</strong> Open the Kleanr app to schedule a new appointment. We recommend booking a few days in advance to ensure cleaner availability.",
+          bgColor: "#dbeafe",
+          borderColor: "#3b82f6",
+          textColor: "#1e40af",
+        },
+        steps: {
+          title: "📝 Next Steps",
+          items: [
+            "Open the Kleanr app",
+            "Navigate to your home and tap 'Book Cleaning'",
+            "Select a new date that works for you",
+          ],
+        },
+        ctaText: "We value your business and hope to serve you soon!",
+        footerMessage: "Thank you for your understanding",
+      });
+
+      const textContent = `Hi ${userName},
+
+We're sorry, but your cleaning appointment scheduled for ${formatDate(appointmentDate)} has been automatically cancelled because no cleaner was available to take this job.
+
+We sincerely apologize for the inconvenience.
+
+CANCELLED APPOINTMENT
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${fullAddress}
+Original Date: ${formatDate(appointmentDate)}
+Status: Cancelled
+
+READY TO REBOOK?
+━━━━━━━━━━━━━━━━━━━━━━
+Open the Kleanr app to schedule a new appointment. We recommend booking a few days in advance to ensure cleaner availability.
+
+NEXT STEPS
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Navigate to your home and tap 'Book Cleaning'
+3. Select a new date that works for you
+
+We value your business and hope to serve you soon!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `❌ Appointment Cancelled - No Cleaner Available for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Unassigned expired notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending unassigned expired notification email:", error);
+    }
+  }
+
+  // =============================================
+  // PAYMENT FAILURE EMAILS
+  // =============================================
+
+  /**
+   * Send initial payment failure notification
+   */
+  static async sendPaymentFailed(email, userName, appointmentDate, homeAddress, hoursRemaining) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Payment Failed",
+        subtitle: "Action Required",
+        greeting: `Hi ${userName},`,
+        content: `
+          <p>We were unable to process the payment for your upcoming cleaning. Don't worry – we'll automatically retry over the next ${hoursRemaining} hours.</p>
+          <p>To avoid cancellation, please update your payment method in the app as soon as possible.</p>
+        `,
+        infoBox: {
+          icon: "🏠",
+          title: "Appointment Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Address", value: homeAddress },
+            { label: "Status", value: "Payment Required" },
+          ],
+        },
+        steps: {
+          title: "How to Fix This",
+          items: [
+            "Open the Kleanr app",
+            "Go to Settings → Payment Methods",
+            "Add a new card or update your existing payment method",
+            "Your payment will be retried automatically",
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: `Your appointment will be automatically cancelled if payment cannot be processed within ${hoursRemaining} hours.`,
+          bgColor: "#fef2f2",
+          borderColor: "#ef4444",
+          textColor: "#991b1b",
+        },
+        headerColor: "linear-gradient(135deg, #ef4444 0%, #f97316 100%)",
+      });
+
+      const textContent = `Hi ${userName},
+
+PAYMENT FAILED - ACTION REQUIRED
+
+We were unable to process the payment for your upcoming cleaning.
+
+APPOINTMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Address: ${homeAddress}
+Status: Payment Required
+
+HOW TO FIX THIS
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Go to Settings → Payment Methods
+3. Add a new card or update your existing payment method
+
+⚠️ WARNING: Your appointment will be automatically cancelled if payment cannot be processed within ${hoursRemaining} hours.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⚠️ Payment Failed - Action Required for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Payment failed email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment failed email:", error);
+    }
+  }
+
+  /**
+   * Send payment retry failed notification
+   */
+  static async sendPaymentRetryFailed(email, userName, appointmentDate, homeAddress, hoursRemaining, retryCount) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Payment Retry Failed",
+        subtitle: `Attempt ${retryCount} of 4`,
+        greeting: `Hi ${userName},`,
+        content: `
+          <p>We've attempted to process your payment again, but it was unsuccessful. We'll continue retrying automatically.</p>
+          <p>Please update your payment method to ensure your cleaning appointment isn't cancelled.</p>
+        `,
+        infoBox: {
+          icon: "🏠",
+          title: "Appointment at Risk",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Address", value: homeAddress },
+            { label: "Time Remaining", value: `${hoursRemaining} hours` },
+            { label: "Retry Attempts", value: `${retryCount} of 4` },
+          ],
+        },
+        warningBox: {
+          icon: "🚨",
+          text: `URGENT: Only ${hoursRemaining} hours remaining before automatic cancellation. Please update your payment method now.`,
+          bgColor: "#fef2f2",
+          borderColor: "#dc2626",
+          textColor: "#991b1b",
+        },
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
+      });
+
+      const textContent = `Hi ${userName},
+
+PAYMENT RETRY FAILED - Attempt ${retryCount} of 4
+
+We've attempted to process your payment again, but it was unsuccessful.
+
+APPOINTMENT AT RISK
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Address: ${homeAddress}
+Time Remaining: ${hoursRemaining} hours
+Retry Attempts: ${retryCount} of 4
+
+🚨 URGENT: Only ${hoursRemaining} hours remaining before automatic cancellation. Please update your payment method now.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🚨 Payment Failed Again - ${hoursRemaining}h Until Cancellation`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Payment retry failed email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment retry failed email:", error);
+    }
+  }
+
+  /**
+   * Send payment retry success notification
+   */
+  static async sendPaymentRetrySuccess(email, userName, appointmentDate) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Payment Successful!",
+        subtitle: "Your appointment is confirmed",
+        greeting: `Great news, ${userName}!`,
+        content: `
+          <p>Your payment has been successfully processed. Your cleaning appointment is now confirmed!</p>
+          <p>Thank you for updating your payment method. We look forward to making your home sparkle.</p>
+        `,
+        infoBox: {
+          icon: "✅",
+          title: "Confirmed Appointment",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Payment", value: "Successfully Processed" },
+            { label: "Status", value: "Confirmed" },
+          ],
+        },
+        headerColor: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+      });
+
+      const textContent = `Great news, ${userName}!
+
+PAYMENT SUCCESSFUL
+
+Your payment has been successfully processed. Your cleaning appointment is now confirmed!
+
+CONFIRMED APPOINTMENT
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Payment: Successfully Processed
+Status: Confirmed
+
+Thank you for your business!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Payment Successful - Appointment Confirmed for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Payment retry success email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment retry success email:", error);
+    }
+  }
+
+  /**
+   * Send appointment cancelled due to payment failure (to homeowner)
+   */
+  static async sendPaymentFailureCancellation(email, userName, appointmentDate, homeAddress) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Appointment Cancelled",
+        subtitle: "Payment Could Not Be Processed",
+        greeting: `Hi ${userName},`,
+        content: `
+          <p>Unfortunately, we had to cancel your cleaning appointment because we were unable to process your payment after multiple attempts.</p>
+          <p>We apologize for any inconvenience this may cause. Please update your payment method and book a new appointment when you're ready.</p>
+        `,
+        infoBox: {
+          icon: "❌",
+          title: "Cancelled Appointment",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Address", value: homeAddress },
+            { label: "Reason", value: "Payment Failed" },
+          ],
+        },
+        steps: {
+          title: "To Book Again",
+          items: [
+            "Open the Kleanr app",
+            "Update your payment method in Settings",
+            "Navigate to your home and tap 'Book Cleaning'",
+            "Select a new date that works for you",
+          ],
+        },
+        headerColor: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
+      });
+
+      const textContent = `Hi ${userName},
+
+APPOINTMENT CANCELLED
+
+Unfortunately, we had to cancel your cleaning appointment because we were unable to process your payment after multiple attempts.
+
+CANCELLED APPOINTMENT
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Address: ${homeAddress}
+Reason: Payment Failed
+
+TO BOOK AGAIN
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Update your payment method in Settings
+3. Navigate to your home and tap 'Book Cleaning'
+4. Select a new date that works for you
+
+We apologize for any inconvenience.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `❌ Appointment Cancelled - Payment Issue for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Payment failure cancellation email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment failure cancellation email:", error);
+    }
+  }
+
+  /**
+   * Send job cancelled notification to cleaner due to client payment issue
+   */
+  static async sendJobCancelledPaymentIssue(email, cleanerName, appointmentDate, homeAddress) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Job Cancelled",
+        subtitle: "Client Payment Issue",
+        greeting: `Hi ${cleanerName},`,
+        content: `
+          <p>We wanted to let you know that a job you were assigned to has been cancelled due to a payment issue with the client.</p>
+          <p>This is not a reflection on you – the client's payment could not be processed after multiple attempts. Your schedule has been updated automatically.</p>
+        `,
+        infoBox: {
+          icon: "📅",
+          title: "Cancelled Job",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Location", value: homeAddress },
+            { label: "Reason", value: "Client Payment Failed" },
+          ],
+        },
+        ctaText: "Your availability has been restored for this time slot. Check the app for other available jobs!",
+        headerColor: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+      });
+
+      const textContent = `Hi ${cleanerName},
+
+JOB CANCELLED - Client Payment Issue
+
+A job you were assigned to has been cancelled due to a payment issue with the client.
+
+CANCELLED JOB
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Location: ${homeAddress}
+Reason: Client Payment Failed
+
+This is not a reflection on you. Your availability has been restored for this time slot.
+
+Check the app for other available jobs!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Job Cancelled - ${formatDate(appointmentDate)} (Client Payment Issue)`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Job cancelled payment issue email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending job cancelled payment issue email:", error);
+    }
+  }
+
+  /**
+   * Send account warning email to homeowner
+   */
+  static async sendAccountWarningEmail(email, warningNumber, maxWarnings, reason, isFinalWarning) {
+    try {
+      const headerColor = isFinalWarning
+        ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+        : "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)";
+
+      const htmlContent = createEmailTemplate({
+        title: isFinalWarning ? "Final Warning" : "Account Warning",
+        subtitle: `Warning ${warningNumber} of ${maxWarnings}`,
+        greeting: "Hello,",
+        content: `
+          <p>This is ${isFinalWarning ? "your <strong>final warning</strong>" : "a warning"} regarding your account activity.</p>
+          <p>${isFinalWarning
+            ? "If you receive one more violation, your account will be automatically suspended."
+            : "Additional violations may result in account suspension."
+          }</p>
+        `,
+        infoBox: {
+          icon: "⚠️",
+          title: "Warning Details",
+          items: [
+            { label: "Warning Number", value: `${warningNumber} of ${maxWarnings}` },
+            { label: "Reason", value: reason },
+          ],
+        },
+        warningBox: isFinalWarning ? {
+          icon: "🚨",
+          text: "This is your final warning. One more violation will result in automatic account suspension.",
+          bgColor: "#fee2e2",
+          borderColor: "#dc2626",
+          textColor: "#991b1b",
+        } : null,
+        ctaText: "Please review your account activity to avoid any further issues.",
+        headerColor,
+      });
+
+      const textContent = `Account Warning (${warningNumber}/${maxWarnings})
+
+Hello,
+
+This is ${isFinalWarning ? "your FINAL WARNING" : "a warning"} regarding your account activity.
+
+WARNING DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Warning Number: ${warningNumber} of ${maxWarnings}
+Reason: ${reason}
+
+${isFinalWarning
+  ? "🚨 This is your final warning. One more violation will result in automatic account suspension."
+  : "Additional violations may result in account suspension."
+}
+
+Please review your account activity to avoid any further issues.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: isFinalWarning ? `🚨 Final Warning - Account at Risk` : `⚠️ Account Warning (${warningNumber}/${maxWarnings})`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Account warning email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending account warning email:", error);
+    }
+  }
+
+  /**
+   * Send account frozen email to homeowner
+   */
+  static async sendAccountFrozenEmail(email, reason, appointmentsCancelled, appointmentsPaused, cancelledAppointments = []) {
+    try {
+      const cancelledList = cancelledAppointments.length > 0
+        ? cancelledAppointments.map(a => `${formatDate(a.date)} - ${a.address}`).join("<br>")
+        : "None";
+
+      const htmlContent = createEmailTemplate({
+        title: "Account Suspended",
+        subtitle: "Action Required",
+        greeting: "Hello,",
+        content: `
+          <p>Your account has been suspended due to the following reason:</p>
+          <p><strong>${reason}</strong></p>
+          <p>During this time, your cleaning appointments have been affected as follows:</p>
+        `,
+        infoBox: {
+          icon: "🛑",
+          title: "Account Status",
+          items: [
+            { label: "Status", value: "Suspended" },
+            { label: "Appointments Cancelled", value: appointmentsCancelled.toString() },
+            { label: "Appointments Paused", value: appointmentsPaused.toString() },
+          ],
+        },
+        warningBox: {
+          icon: "📋",
+          text: "Cancelled appointments (within 7 days): " + (cancelledAppointments.length > 0
+            ? cancelledAppointments.map(a => `${formatDate(a.date)}`).join(", ")
+            : "None"),
+          bgColor: "#fef2f2",
+          borderColor: "#ef4444",
+          textColor: "#991b1b",
+        },
+        steps: {
+          title: "What You Can Do",
+          items: [
+            "Submit an appeal through the app if you believe this is an error",
+            "Contact our support team for more information",
+            "Review the Terms of Service to understand our policies",
+          ],
+        },
+        ctaText: "You can submit an appeal through the app to contest this decision.",
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #991b1b 100%)",
+      });
+
+      const textContent = `Account Suspended
+
+Hello,
+
+Your account has been suspended.
+
+REASON: ${reason}
+
+IMPACT
+━━━━━━━━━━━━━━━━━━━━━━
+Appointments Cancelled: ${appointmentsCancelled}
+Appointments Paused: ${appointmentsPaused}
+
+${cancelledAppointments.length > 0 ? `Cancelled appointments:\n${cancelledAppointments.map(a => `- ${formatDate(a.date)} - ${a.address}`).join("\n")}` : ""}
+
+WHAT YOU CAN DO
+━━━━━━━━━━━━━━━━━━━━━━
+1. Submit an appeal through the app if you believe this is an error
+2. Contact our support team for more information
+3. Review the Terms of Service to understand our policies
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🛑 Account Suspended - Action Required`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Account frozen email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending account frozen email:", error);
+    }
+  }
+
+  /**
+   * Send account unfrozen email to homeowner
+   */
+  static async sendAccountUnfrozenEmail(email, appointmentsResumed) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Account Restored",
+        subtitle: "Welcome Back!",
+        greeting: "Hello,",
+        content: `
+          <p>Great news! Your account has been restored and you now have full access to all features.</p>
+          ${appointmentsResumed > 0
+            ? `<p><strong>${appointmentsResumed} paused appointment(s)</strong> have been automatically resumed and will proceed as scheduled.</p>`
+            : ""
+          }
+          <p>Thank you for your patience while we resolved this matter.</p>
+        `,
+        infoBox: {
+          icon: "✅",
+          title: "Account Status",
+          items: [
+            { label: "Status", value: "Active" },
+            { label: "Appointments Resumed", value: appointmentsResumed.toString() },
+          ],
+        },
+        ctaText: "You can now book new cleanings and access all features in the app.",
+        headerColor: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+      });
+
+      const textContent = `Account Restored
+
+Hello,
+
+Great news! Your account has been restored and you now have full access to all features.
+
+ACCOUNT STATUS
+━━━━━━━━━━━━━━━━━━━━━━
+Status: Active
+Appointments Resumed: ${appointmentsResumed}
+
+${appointmentsResumed > 0 ? `${appointmentsResumed} paused appointment(s) have been automatically resumed.` : ""}
+
+Thank you for your patience while we resolved this matter.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Account Restored - Welcome Back!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Account unfrozen email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending account unfrozen email:", error);
+    }
+  }
+
+  /**
+   * Send email to homeowner when a paused appointment is cancelled
+   * (because it's now within 7 days and their account is still frozen)
+   */
+  static async sendPausedAppointmentCancelledHomeowner(email, firstName, appointmentDate, homeAddress) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Paused Appointment Cancelled",
+        subtitle: "Your appointment has been cancelled",
+        greeting: `Hi ${firstName},`,
+        content: `
+          <p>Your cleaning appointment that was previously paused has now been cancelled because it is within 7 days of the scheduled date and your account remains suspended.</p>
+          <p>If your account is restored before the appointment date, you'll need to book a new appointment.</p>
+          <p>If you believe your account was suspended in error, please submit an appeal through the app.</p>
+        `,
+        infoBox: {
+          icon: "📅",
+          title: "Cancelled Appointment",
+          items: [
+            { label: "Date", value: appointmentDate },
+            { label: "Address", value: homeAddress },
+            { label: "Reason", value: "Account suspended" },
+          ],
+        },
+        ctaText: "Submit an appeal through the app to restore your account.",
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
+      });
+
+      const textContent = `Paused Appointment Cancelled
+
+Hi ${firstName},
+
+Your cleaning appointment that was previously paused has now been cancelled.
+
+CANCELLED APPOINTMENT
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${appointmentDate}
+Address: ${homeAddress}
+Reason: Account suspended
+
+Your appointment was cancelled because it is within 7 days of the scheduled date and your account remains suspended.
+
+If your account is restored, you'll need to book a new appointment.
+
+To restore your account, submit an appeal through the app.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Paused Appointment Cancelled - ${appointmentDate}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Paused appointment cancelled (homeowner) email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending paused appointment cancelled email:", error);
+    }
+  }
+
+  /**
+   * Send email to cleaner when an appointment is cancelled by the system
+   * (e.g., homeowner account frozen)
+   */
+  static async sendAppointmentCancelledCleaner(email, firstName, appointmentDate, homeAddress, reason) {
+    try {
+      const htmlContent = createEmailTemplate({
+        title: "Appointment Cancelled",
+        subtitle: "A scheduled job has been cancelled",
+        greeting: `Hi ${firstName},`,
+        content: `
+          <p>We're writing to let you know that a cleaning job you were assigned to has been cancelled.</p>
+          <p><strong>Reason:</strong> ${reason}</p>
+          <p>We apologize for any inconvenience. This job has been removed from your schedule and no action is required on your part.</p>
+          <p>Check the app for other available jobs in your area.</p>
+        `,
+        infoBox: {
+          icon: "🚫",
+          title: "Cancelled Job",
+          items: [
+            { label: "Date", value: appointmentDate },
+            { label: "Address", value: homeAddress },
+          ],
+        },
+        ctaText: "Open the app to find other available jobs.",
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+      });
+
+      const textContent = `Appointment Cancelled
+
+Hi ${firstName},
+
+A cleaning job you were assigned to has been cancelled.
+
+CANCELLED JOB
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${appointmentDate}
+Address: ${homeAddress}
+Reason: ${reason}
+
+This job has been removed from your schedule and no action is required on your part.
+
+Check the app for other available jobs in your area.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Job Cancelled - ${appointmentDate}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Appointment cancelled (cleaner) email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending appointment cancelled (cleaner) email:", error);
+    }
+  }
+
+  /**
+   * Send employee invitation email to a new business employee
+   * @param {string} email - Employee's email address
+   * @param {string} employeeName - Employee's first name
+   * @param {string} businessOwnerName - Name of the business owner inviting them
+   * @param {string} businessName - Name of the business (optional)
+   */
+  static async sendEmployeeInviteEmail(email, employeeName, businessOwnerName, businessName = null) {
+    try {
+      const transporter = createTransporter();
+      const appUrl = process.env.APP_URL || 'https://app.kleanr.com';
+
+      const htmlContent = createEmailTemplate({
+        title: "You're Invited!",
+        subtitle: "Join the team on Kleanr",
+        headerColor: "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
+        greeting: `Hi ${employeeName}! 👋`,
+        content: `
+          <p><strong>${businessOwnerName}</strong>${businessName ? ` from <strong>${businessName}</strong>` : ''} has invited you to join their team on Kleanr!</p>
+          <p>Kleanr makes it easy to manage your cleaning schedule, track your jobs, and get paid on time.</p>
+        `,
+        steps: {
+          title: "Getting Started",
+          items: [
+            "Download the Kleanr app from the App Store or Google Play",
+            "Create your account using this email address",
+            "You'll be automatically connected to your employer's team",
+          ],
+        },
+        infoBox: {
+          icon: "👤",
+          title: "Invitation Details",
+          items: [
+            { label: "Invited by", value: businessOwnerName },
+            { label: "Business", value: businessName || "Independent" },
+            { label: "Your Email", value: email },
+          ],
+        },
+        ctaText: `
+          <a href="${appUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Get Started</a>
+        `,
+        footerMessage: "Welcome to the team!",
+      });
+
+      const textContent = `You're Invited to Kleanr!
+
+Hi ${employeeName}!
+
+${businessOwnerName}${businessName ? ` from ${businessName}` : ''} has invited you to join their team on Kleanr!
+
+INVITATION DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Invited by: ${businessOwnerName}
+Business: ${businessName || "Independent"}
+Your Email: ${email}
+
+GETTING STARTED
+1. Download the Kleanr app from the App Store or Google Play
+2. Create your account using this email address
+3. You'll be automatically connected to your employer's team
+
+Visit ${appUrl} to get started.
+
+Welcome to the team!
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🎉 ${businessOwnerName} invited you to join their team on Kleanr`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Employee invite email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending employee invite email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send Stripe Connect setup invitation to an employee
+   * @param {string} email - Employee's email address
+   * @param {string} employeeName - Employee's first name
+   * @param {string} businessOwnerName - Name of the business owner
+   */
+  static async sendStripeSetupInvitation(email, employeeName, businessOwnerName) {
+    try {
+      const transporter = createTransporter();
+      const appUrl = process.env.APP_URL || 'https://app.kleanr.com';
+
+      const htmlContent = createEmailTemplate({
+        title: "Set Up Direct Payments",
+        subtitle: "Receive payments directly to your bank account",
+        headerColor: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+        greeting: `Hi ${employeeName}! 💰`,
+        content: `
+          <p><strong>${businessOwnerName}</strong> has enabled direct payments for you through Stripe Connect!</p>
+          <p>This means you can receive your earnings directly to your bank account - no more waiting for checks or manual transfers.</p>
+          <p><strong>Payments are processed bi-weekly</strong>, so you'll receive your earnings every two weeks directly to your connected bank account.</p>
+        `,
+        steps: {
+          title: "How to Set Up",
+          items: [
+            "Open the Kleanr app and go to your Dashboard",
+            "Tap on the 'Set Up Direct Payments' banner",
+            "Follow the Stripe Connect setup wizard",
+            "Enter your banking details securely",
+          ],
+        },
+        infoBox: {
+          icon: "📅",
+          title: "Payment Details",
+          items: [
+            { label: "Schedule", value: "Bi-weekly (every 2 weeks)" },
+            { label: "Processing", value: "1-2 business days" },
+            { label: "Security", value: "Bank-level encryption" },
+          ],
+        },
+        ctaText: `
+          <a href="${appUrl}" style="display: inline-block; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Set Up Now</a>
+        `,
+        footerMessage: "Get paid with direct deposit!",
+      });
+
+      const textContent = `Set Up Direct Payments
+
+Hi ${employeeName}!
+
+${businessOwnerName} has enabled direct payments for you through Stripe Connect!
+
+This means you can receive your earnings directly to your bank account.
+
+Payments are processed bi-weekly, so you'll receive your earnings every two weeks directly to your connected bank account.
+
+HOW TO SET UP
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app and go to your Dashboard
+2. Tap on the 'Set Up Direct Payments' banner
+3. Follow the Stripe Connect setup wizard
+4. Enter your banking details securely
+
+PAYMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Schedule: Bi-weekly (every 2 weeks)
+Processing: 1-2 business days
+Security: Bank-level encryption
+
+Visit ${appUrl} to set up direct payments.
+
+Get paid with direct deposit!
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `💰 Set up direct payments on Kleanr`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Stripe setup invitation email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending Stripe setup invitation email:", error);
+      throw error;
     }
   }
 }

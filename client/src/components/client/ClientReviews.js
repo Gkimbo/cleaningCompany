@@ -157,7 +157,7 @@ const ClientReviews = ({ state }) => {
         <View style={styles.aspectsCard}>
           <Text style={styles.sectionTitle}>Rating Breakdown</Text>
           {Object.entries(stats.aspectAverages).map(([aspect, value]) => {
-            if (value === null) return null;
+            if (value == null) return null;
             const label = aspect
               .replace(/([A-Z])/g, " $1")
               .replace(/^./, (str) => str.toUpperCase());
@@ -208,7 +208,7 @@ const ClientReviews = ({ state }) => {
 
               <View style={styles.reviewRating}>
                 <View style={styles.starsRow}>{renderStars(review.review)}</View>
-                <Text style={styles.ratingValue}>{review.review.toFixed(1)}</Text>
+                <Text style={styles.ratingValue}>{(review.review || 0).toFixed(1)}</Text>
               </View>
 
               {review.reviewComment && (

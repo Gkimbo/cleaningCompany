@@ -1,35 +1,6 @@
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class GuestNotLeftService {
-  // ==================
-  // Helper Methods
-  // ==================
-  static async fetchWithAuth(url, token, options = {}) {
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          ...options.headers,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: data.error || "Request failed" };
-      }
-
-      return { success: true, ...data };
-    } catch (error) {
-      console.error("[GuestNotLeftService] Request failed:", error);
-      return { success: false, error: "Network error. Please try again." };
-    }
-  }
-
   // ==================
   // Cleaner Endpoints
   // ==================
@@ -38,79 +9,110 @@ class GuestNotLeftService {
    * Report tenant still present at property
    */
   static async reportTenantPresent(token, appointmentId, gpsData = {}, notes = null) {
-    return this.fetchWithAuth(`${baseURL}/api/v1/guest-not-left/report`, token, {
-      method: "POST",
-      body: JSON.stringify({
+    const result = await HttpClient.post(
+      "/guest-not-left/report",
+      {
         appointmentId,
         latitude: gpsData.latitude,
         longitude: gpsData.longitude,
         notes,
-      }),
-    });
+      },
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] reportTenantPresent failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Cleaner will wait on-site
    */
   static async cleanerWillWait(token, reportId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/guest-not-left/${reportId}/wait`,
-      token,
-      { method: "POST" }
+    const result = await HttpClient.post(
+      `/guest-not-left/${reportId}/wait`,
+      {},
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] cleanerWillWait failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Cleaner will return later
    */
   static async cleanerWillReturn(token, reportId, estimatedReturnTime = null) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/guest-not-left/${reportId}/will-return`,
-      token,
-      {
-        method: "POST",
-        body: JSON.stringify({ estimatedReturnTime }),
-      }
+    const result = await HttpClient.post(
+      `/guest-not-left/${reportId}/will-return`,
+      { estimatedReturnTime },
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] cleanerWillReturn failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Cleaner cancels - no penalty
    */
   static async cleanerCancel(token, reportId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/guest-not-left/${reportId}/cancel`,
-      token,
-      { method: "POST" }
+    const result = await HttpClient.post(
+      `/guest-not-left/${reportId}/cancel`,
+      {},
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] cleanerCancel failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Cleaner has returned to property
    */
   static async cleanerReturned(token, reportId, gpsData = {}) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/guest-not-left/${reportId}/returned`,
-      token,
+    const result = await HttpClient.post(
+      `/guest-not-left/${reportId}/returned`,
       {
-        method: "POST",
-        body: JSON.stringify({
-          latitude: gpsData.latitude,
-          longitude: gpsData.longitude,
-        }),
-      }
+        latitude: gpsData.latitude,
+        longitude: gpsData.longitude,
+      },
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] cleanerReturned failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Cleaner proceeding with job (tenant left)
    */
   static async cleanerProceed(token, reportId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/guest-not-left/${reportId}/proceed`,
-      token,
-      { method: "POST" }
+    const result = await HttpClient.post(
+      `/guest-not-left/${reportId}/proceed`,
+      {},
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] cleanerProceed failed:", result.error);
+    }
+
+    return result;
   }
 
   // ==================
@@ -121,39 +123,51 @@ class GuestNotLeftService {
    * Homeowner: tenant is leaving (resolved)
    */
   static async homeownerResolved(token, reportId, note = null) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/guest-not-left/${reportId}/resolved`,
-      token,
-      {
-        method: "POST",
-        body: JSON.stringify({ note }),
-      }
+    const result = await HttpClient.post(
+      `/guest-not-left/${reportId}/resolved`,
+      { note },
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] homeownerResolved failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Homeowner: need more time
    */
   static async homeownerNeedsTime(token, reportId, additionalMinutes, note = null) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/guest-not-left/${reportId}/need-time`,
-      token,
-      {
-        method: "POST",
-        body: JSON.stringify({ additionalMinutes, note }),
-      }
+    const result = await HttpClient.post(
+      `/guest-not-left/${reportId}/need-time`,
+      { additionalMinutes, note },
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] homeownerNeedsTime failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Homeowner: cannot resolve today
    */
   static async homeownerCannotResolve(token, reportId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/guest-not-left/${reportId}/cannot-resolve`,
-      token,
-      { method: "POST" }
+    const result = await HttpClient.post(
+      `/guest-not-left/${reportId}/cannot-resolve`,
+      {},
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] homeownerCannotResolve failed:", result.error);
+    }
+
+    return result;
   }
 
   // ==================
@@ -164,30 +178,48 @@ class GuestNotLeftService {
    * Get active report for an appointment
    */
   static async getActiveReport(token, appointmentId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/guest-not-left/active/${appointmentId}`,
-      token
+    const result = await HttpClient.get(
+      `/guest-not-left/active/${appointmentId}`,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] getActiveReport failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Get pending reports for homeowner
    */
   static async getPendingReports(token) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/guest-not-left/pending`,
-      token
+    const result = await HttpClient.get(
+      "/guest-not-left/pending",
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] getPendingReports failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Get report details by ID
    */
   static async getReport(token, reportId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/guest-not-left/${reportId}`,
-      token
+    const result = await HttpClient.get(
+      `/guest-not-left/${reportId}`,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[GuestNotLeftService] getReport failed:", result.error);
+    }
+
+    return result;
   }
 }
 

@@ -2,6 +2,9 @@ import NetInfo from "@react-native-community/netinfo";
 import { NETWORK_DEBOUNCE_MS, NETWORK_STATUS } from "./constants";
 import AnalyticsService from "../AnalyticsService";
 
+// Maximum listeners to prevent memory leaks
+const MAX_LISTENERS = 50;
+
 class NetworkMonitor {
   constructor() {
     this._isOnline = true;
@@ -79,14 +82,23 @@ class NetworkMonitor {
             status: newStatus,
           });
         } catch (error) {
-          console.error("NetworkMonitor listener error:", error);
+          console.error("[NetworkMonitor] Listener error:", error);
         }
       });
     }
   }
 
   // Subscribe to network changes
+  // IMPORTANT: Callers must call the returned unsubscribe function on cleanup
+  // to prevent memory leaks (e.g., in useEffect cleanup or componentWillUnmount)
   subscribe(listener) {
+    // Guard against too many listeners (memory leak protection)
+    if (this._listeners.size >= MAX_LISTENERS) {
+      console.warn(`[NetworkMonitor] Max listeners (${MAX_LISTENERS}) reached. Subscription rejected. ` +
+        `Ensure components unsubscribe on unmount.`);
+      return () => {}; // Return no-op unsubscribe
+    }
+
     this._listeners.add(listener);
 
     // Return unsubscribe function

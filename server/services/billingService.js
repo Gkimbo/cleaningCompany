@@ -4,6 +4,8 @@
  */
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { notifyInitialPaymentFailure } = require("./cron/PaymentRetryMonitor");
+const TimezoneService = require("./TimezoneService");
 
 class BillingService {
   /**
@@ -51,7 +53,7 @@ class BillingService {
       }
 
       // Calculate amount in cents
-      const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+      const priceInCents = appointment.price; // Already in cents
 
       let paymentIntent;
 
@@ -97,12 +99,11 @@ class BillingService {
       });
 
       if (userBill) {
-        const paidAmount = (paymentIntent.amount_received || paymentIntent.amount) / 100;
+        // Stripe amounts are in cents, UserBills stores in cents - no conversion needed
+        const paidAmountCents = paymentIntent.amount_received || paymentIntent.amount;
         await userBill.update({
-          appointmentPaid: parseFloat(userBill.appointmentPaid || 0) + paidAmount,
-          totalPaid: parseFloat(userBill.totalPaid || 0) + paidAmount,
-          appointmentDue: Math.max(0, parseFloat(userBill.appointmentDue || 0) - paidAmount),
-          totalDue: Math.max(0, parseFloat(userBill.totalDue || 0) - paidAmount),
+          appointmentDue: Math.max(0, parseInt(userBill.appointmentDue || 0, 10) - paidAmountCents),
+          totalDue: Math.max(0, parseInt(userBill.totalDue || 0, 10) - paidAmountCents),
         });
       }
 
@@ -126,11 +127,20 @@ class BillingService {
     } catch (error) {
       console.error("Error processing auto-payment:", error);
 
-      // Mark payment as failed
+      // Mark payment as failed and initialize retry tracking
       await appointment.update({
         paymentCaptureFailed: true,
         paymentStatus: "failed",
+        paymentFirstFailedAt: new Date(),
+        paymentRetryCount: 0,
       });
+
+      // Send initial payment failure notifications to both parties
+      try {
+        await notifyInitialPaymentFailure(appointment);
+      } catch (notifyError) {
+        console.error("Error sending payment failure notification:", notifyError);
+      }
 
       return {
         success: false,
@@ -169,7 +179,7 @@ class BillingService {
     const taxYear = new Date().getFullYear();
 
     await Payment.create({
-      transactionId: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      transactionId: Payment.generateTransactionId(),
       type: transactionData.type,
       status: transactionData.status,
       amount: transactionData.amount,
@@ -194,26 +204,31 @@ class BillingService {
 
   /**
    * Process cleaner payout after payment is captured
+   * Uses row-level locking to prevent race conditions and duplicate payouts
    */
   static async processCleanerPayout(appointment, models) {
-    const { StripeConnectAccount, Payout, EmployeeJobAssignment, BusinessEmployee } = models;
+    const { StripeConnectAccount, Payout, EmployeeJobAssignment, BusinessEmployee, sequelize } = models;
     const { getPricingConfig } = require("../config/businessConfig");
     const PreferredCleanerPerksService = require("./PreferredCleanerPerksService");
     const BusinessVolumeService = require("./BusinessVolumeService");
 
     try {
       const pricing = await getPricingConfig();
-      // Base platform fee percentages from database config
-      const regularFeePercent = pricing.platform?.feePercent || 0.10;
-      const businessOwnerFeePercent = pricing.platform?.businessOwnerFeePercent || regularFeePercent;
-      const largeBusinessFeePercent = pricing.platform?.largeBusinessFeePercent || 0.07;
+      if (!pricing?.platform) {
+        console.error("[BillingService] CRITICAL: No pricing config found!");
+        throw new Error("Pricing configuration not available");
+      }
+      // Platform fee percentages from database config (PricingConfig)
+      const regularFeePercent = pricing.platform.feePercent;
+      const businessOwnerFeePercent = pricing.platform.businessOwnerFeePercent;
+      const largeBusinessFeePercent = pricing.platform.largeBusinessFeePercent;
 
       const cleanerIds = appointment.employeesAssigned || [];
       if (cleanerIds.length === 0) {
         return { success: false, error: "No cleaners assigned" };
       }
 
-      const priceInCents = appointment.amountPaid || Math.round(parseFloat(appointment.price) * 100);
+      const priceInCents = appointment.amountPaid || appointment.price; // Both in cents
       const perCleanerGross = Math.round(priceInCents / cleanerIds.length);
 
       const payoutResults = [];
@@ -250,58 +265,96 @@ class BillingService {
           }
         }
 
-        let payout = await Payout.findOne({
-          where: { appointmentId: appointment.id, cleanerId },
-        });
+        // Use transaction with row-level locking to prevent race conditions
+        // This ensures only one process can create/update a payout at a time
+        let payout;
+        let isNewPayout = false;
 
-        // Calculate preferred cleaner bonus if applicable
-        const bonusInfo = await PreferredCleanerPerksService.calculatePayoutBonus(
-          cleanerId,
-          appointment.homeId,
-          perCleanerGross,
-          platformFeePercent * 100, // Convert to percentage for this service
-          models
-        );
+        try {
+          payout = await sequelize.transaction(async (t) => {
+            // Try to find existing payout with lock
+            let existingPayout = await Payout.findOne({
+              where: { appointmentId: appointment.id, cleanerId },
+              lock: t.LOCK.UPDATE,
+              transaction: t,
+            });
 
-        const platformFee = bonusInfo.adjustedPlatformFee;
-        const netAmount = bonusInfo.adjustedNetAmount;
+            // If already completed, skip (idempotent)
+            if (existingPayout && existingPayout.status === "completed") {
+              return existingPayout;
+            }
 
-        // Determine payout priority based on tier perks
-        const payoutPriority = bonusInfo.fasterPayouts ? "high" : "normal";
-        const expectedPayoutHours = bonusInfo.payoutHours || 48;
+            // Calculate preferred cleaner bonus if applicable
+            const bonusInfo = await PreferredCleanerPerksService.calculatePayoutBonus(
+              cleanerId,
+              appointment.homeId,
+              perCleanerGross,
+              platformFeePercent * 100, // Convert to percentage for this service
+              models
+            );
 
-        if (payout) {
-          await payout.update({
-            amount: netAmount / 100,
-            platformFee: platformFee / 100,
-            status: "processing",
-            // Preferred perk fields
-            isPreferredHomeJob: bonusInfo.isPreferredJob,
-            preferredBonusApplied: bonusInfo.bonusApplied,
-            preferredBonusPercent: bonusInfo.bonusApplied ? bonusInfo.bonusPercent : null,
-            preferredBonusAmount: bonusInfo.bonusApplied ? bonusInfo.bonusAmountCents : null,
-            cleanerTierAtPayout: bonusInfo.tierLevel,
-            // Payout priority fields
-            payoutPriority,
-            expectedPayoutHours,
+            const platformFee = bonusInfo.adjustedPlatformFee;
+            const netAmount = bonusInfo.adjustedNetAmount;
+
+            // Determine payout priority based on tier perks
+            const payoutPriority = bonusInfo.fasterPayouts ? "high" : "normal";
+            const expectedPayoutHours = bonusInfo.payoutHours || 48;
+
+            const payoutData = {
+              netAmount: netAmount, // Already in cents from PreferredCleanerPerksService
+              platformFee: platformFee, // Already in cents
+              status: "processing",
+              // Preferred perk fields
+              isPreferredHomeJob: bonusInfo.isPreferredJob,
+              preferredBonusApplied: bonusInfo.bonusApplied,
+              preferredBonusPercent: bonusInfo.bonusApplied ? bonusInfo.bonusPercent : null,
+              preferredBonusAmount: bonusInfo.bonusApplied ? bonusInfo.bonusAmountCents : null,
+              cleanerTierAtPayout: bonusInfo.tierLevel,
+              // Payout priority fields
+              payoutPriority,
+              expectedPayoutHours,
+            };
+
+            if (existingPayout) {
+              await existingPayout.update(payoutData, { transaction: t });
+              return existingPayout;
+            } else {
+              isNewPayout = true;
+              return await Payout.create({
+                appointmentId: appointment.id,
+                cleanerId,
+                grossAmount: perCleanerGross, // Original gross amount in cents
+                ...payoutData,
+              }, { transaction: t });
+            }
           });
-        } else {
-          payout = await Payout.create({
-            appointmentId: appointment.id,
+        } catch (lockError) {
+          // Handle unique constraint violation (another process created the payout)
+          if (lockError.name === "SequelizeUniqueConstraintError") {
+            console.log(`[BillingService] Payout already exists for appointment ${appointment.id}, cleaner ${cleanerId} (race condition handled)`);
+            // Fetch the existing payout
+            payout = await Payout.findOne({
+              where: { appointmentId: appointment.id, cleanerId },
+            });
+            if (payout && payout.status === "completed") {
+              payoutResults.push({ cleanerId, success: true, alreadyCompleted: true });
+              continue;
+            }
+          } else {
+            throw lockError;
+          }
+        }
+
+        // If payout was already completed, skip transfer
+        if (payout.status === "completed") {
+          payoutResults.push({
             cleanerId,
-            amount: netAmount / 100,
-            platformFee: platformFee / 100,
-            status: "processing",
-            // Preferred perk fields
-            isPreferredHomeJob: bonusInfo.isPreferredJob,
-            preferredBonusApplied: bonusInfo.bonusApplied,
-            preferredBonusPercent: bonusInfo.bonusApplied ? bonusInfo.bonusPercent : null,
-            preferredBonusAmount: bonusInfo.bonusApplied ? bonusInfo.bonusAmountCents : null,
-            cleanerTierAtPayout: bonusInfo.tierLevel,
-            // Payout priority fields
-            payoutPriority,
-            expectedPayoutHours,
+            success: true,
+            alreadyCompleted: true,
+            amount: payout.netAmount / 100,
+            transferId: payout.stripeTransferId,
           });
+          continue;
         }
 
         try {
@@ -312,7 +365,7 @@ class BillingService {
           }
 
           const transferParams = {
-            amount: netAmount,
+            amount: payout.netAmount,
             currency: "usd",
             destination: connectAccount.stripeAccountId,
             metadata: {
@@ -320,33 +373,75 @@ class BillingService {
               cleanerId: cleanerId.toString(),
               payoutId: payout.id.toString(),
             },
+            // Use idempotency key to prevent duplicate transfers
+            // Format: payout-{appointmentId}-{cleanerId}-{payoutId}
           };
 
           if (chargeId) {
             transferParams.source_transaction = chargeId;
           }
 
-          const transfer = await stripe.transfers.create(transferParams);
+          // Generate idempotency key to prevent duplicate Stripe transfers
+          const idempotencyKey = `payout-${appointment.id}-${cleanerId}-${payout.id}`;
 
-          await payout.update({ stripeTransferId: transfer.id, status: "completed" });
+          let transfer;
+          try {
+            transfer = await stripe.transfers.create(transferParams, { idempotencyKey });
+          } catch (stripeError) {
+            // Handle Stripe transfer errors gracefully
+            const errorMessage = stripeError.message || "Unknown Stripe error";
+            const errorCode = stripeError.code || "unknown";
+
+            console.error(`[BillingService] Stripe transfer failed for cleaner ${cleanerId}:`, {
+              code: errorCode,
+              message: errorMessage,
+              type: stripeError.type,
+            });
+
+            // Update payout status to failed with reason
+            await payout.update({
+              status: "failed",
+              failureReason: `Stripe transfer failed: ${errorCode} - ${errorMessage}`,
+              completedAt: new Date(),
+            });
+
+            // Return graceful error response
+            const failureDetails = {
+              cleanerId,
+              success: false,
+              error: errorMessage,
+              errorCode,
+              canRetry: errorCode !== "account_invalid",
+            };
+
+            if (errorCode === "balance_insufficient") {
+              failureDetails.error = "Platform has insufficient funds in Stripe account. Please add funds and retry the payout.";
+              failureDetails.reason = "insufficient_stripe_balance";
+            }
+
+            payoutResults.push(failureDetails);
+            continue; // Skip to next cleaner
+          }
+
+          await payout.update({ stripeTransferId: transfer.id, status: "completed", completedAt: new Date() });
 
           await this.recordPaymentTransaction(models, {
             type: "payout",
             status: "succeeded",
-            amount: netAmount,
+            amount: payout.netAmount,
             cleanerId,
             appointmentId: appointment.id,
             payoutId: payout.id,
             stripeTransferId: transfer.id,
-            platformFeeAmount: platformFee,
-            netAmount,
+            platformFeeAmount: payout.platformFee,
+            netAmount: payout.netAmount,
             description: "Cleaner payout for completed cleaning",
           });
 
           await this.recordPaymentTransaction(models, {
             type: "platform_fee",
             status: "succeeded",
-            amount: platformFee,
+            amount: payout.platformFee,
             appointmentId: appointment.id,
             payoutId: payout.id,
             description: "Platform fee",
@@ -357,10 +452,14 @@ class BillingService {
             await BusinessVolumeService.incrementVolumeStats(businessOwnerId, perCleanerGross);
           }
 
-          payoutResults.push({ cleanerId, success: true, amount: netAmount / 100, transferId: transfer.id });
+          payoutResults.push({ cleanerId, success: true, amount: payout.netAmount / 100, transferId: transfer.id });
         } catch (transferError) {
-          console.error(`Transfer failed for cleaner ${cleanerId}:`, transferError);
-          await payout.update({ status: "failed" });
+          console.error(`[BillingService] Unexpected error processing payout for cleaner ${cleanerId}:`, transferError);
+          await payout.update({
+            status: "failed",
+            failureReason: `Unexpected error: ${transferError.message}`,
+            completedAt: new Date(),
+          });
           payoutResults.push({ cleanerId, success: false, error: transferError.message });
         }
       }
@@ -382,6 +481,16 @@ class BillingService {
       const appointment = await UserAppointments.findByPk(appointmentId);
       if (!appointment) {
         return { success: false, error: "Appointment not found" };
+      }
+
+      // Check if appointment is paused (homeowner account frozen)
+      if (appointment.isPaused) {
+        return { success: false, error: "This appointment is currently paused", isPaused: true };
+      }
+
+      // Check if appointment was cancelled
+      if (appointment.wasCancelled) {
+        return { success: false, error: "This appointment has been cancelled" };
       }
 
       const cleanerAssignment = await UserCleanerAppointments.findOne({
@@ -488,7 +597,7 @@ class BillingService {
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysOverdue);
-    const cutoffDateStr = cutoffDate.toISOString().split("T")[0];
+    const cutoffDateStr = TimezoneService.formatDateInTimezone(cutoffDate);
 
     try {
       const appointments = await UserAppointments.findAll({

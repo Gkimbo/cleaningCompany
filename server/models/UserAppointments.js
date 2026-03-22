@@ -25,8 +25,9 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 		},
 		price: {
-			type: DataTypes.STRING,
+			type: DataTypes.INTEGER,
 			allowNull: false,
+			comment: "Price in cents (e.g., 15000 = $150.00)",
 		},
 		paid: {
 			type: DataTypes.BOOLEAN,
@@ -60,7 +61,7 @@ module.exports = (sequelize, DataTypes) => {
 			type:  DataTypes.ARRAY(DataTypes.STRING),
 			allowNull: true,
 		},
-		empoyeesNeeded: {
+		employeesNeeded: {
 			type: DataTypes.INTEGER,
 			allowNull: false,
 		},
@@ -76,6 +77,7 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 			defaultValue: "pending",
+			// Valid statuses: pending, capture_in_progress, captured, succeeded, failed, cancelled, refunded
 		},
 		amountPaid: {
 			type: DataTypes.INTEGER,
@@ -116,6 +118,23 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: false,
 		},
+		// Payment retry tracking
+		paymentRetryCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Number of payment retry attempts made",
+		},
+		paymentFirstFailedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Timestamp of first payment failure (for 2-day auto-cancel window)",
+		},
+		lastPaymentRetryAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Timestamp of last payment retry attempt",
+		},
 		// Track if customer manually pre-paid (vs auto-captured by cron)
 		manuallyPaid: {
 			type: DataTypes.BOOLEAN,
@@ -138,8 +157,9 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 		},
 		originalPrice: {
-			type: DataTypes.STRING,
+			type: DataTypes.INTEGER,
 			allowNull: true,
+			comment: "Original price in cents before adjustments (e.g., 15000 = $150.00)",
 		},
 		// Cleaner-initiated booking fields
 		bookedByCleanerId: {
@@ -211,8 +231,9 @@ module.exports = (sequelize, DataTypes) => {
 			comment: "When backup notification window expires",
 		},
 		businessOwnerPrice: {
-			type: DataTypes.DECIMAL(10, 2),
+			type: DataTypes.INTEGER,
 			allowNull: true,
+			comment: "Business owner custom price in cents (e.g., 15000 = $150.00)",
 		},
 		// Client response fields for business owner bookings
 		clientRespondedAt: {
@@ -292,7 +313,7 @@ module.exports = (sequelize, DataTypes) => {
 		lastMinuteFeeApplied: {
 			type: DataTypes.INTEGER,
 			allowNull: true,
-			comment: "Last-minute fee amount in dollars (null if not applicable)",
+			comment: "Last-minute fee amount in cents (e.g., 5000 = $50.00, null if not applicable)",
 		},
 		lastMinuteNotificationsSentAt: {
 			type: DataTypes.DATE,
@@ -303,6 +324,18 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.DATE,
 			allowNull: true,
 			comment: "When replacement notifications were sent after cleaner cancellation",
+		},
+		// Urgent fill tracking (when cleaner removed within 7 days)
+		isUrgentFill: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if appointment was flagged for urgent fill due to cleaner removal within 7 days",
+		},
+		urgentFillNotificationsSentAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When urgent fill notifications were sent to cleaners within 10 miles",
 		},
 		// Early access for platinum tier cleaners
 		earlyAccessUntil: {
@@ -461,6 +494,23 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: false,
 			comment: "True if created by demo account - excluded from marketplace",
+		},
+		// Homeowner account freeze - paused appointment tracking
+		isPaused: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if appointment is paused due to homeowner account freeze",
+		},
+		pausedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When the appointment was paused",
+		},
+		pauseReason: {
+			type: DataTypes.STRING(100),
+			allowNull: true,
+			comment: "Reason for pausing (e.g., homeowner_account_frozen)",
 		},
 	});
 

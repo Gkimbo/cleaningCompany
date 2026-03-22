@@ -1,12 +1,13 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors, spacing, typography } from "../../services/styles/theme";
+import { formatCurrency } from "../../services/formatters";
 
 /**
  * DiscountedPrice - Displays a crossed-off original price with discounted price in green
  *
- * @param {string|number} originalPrice - The original price before discount
- * @param {string|number} discountedPrice - The final price after discount
+ * @param {string|number} originalPrice - The original price before discount (in cents)
+ * @param {string|number} discountedPrice - The final price after discount (in cents)
  * @param {boolean} showOriginal - Whether to show the original price (default: true)
  * @param {string} size - Size variant: "sm", "md", "lg" (default: "md")
  */
@@ -16,15 +17,15 @@ const DiscountedPrice = ({
   showOriginal = true,
   size = "md",
 }) => {
-  // Parse prices to ensure they're numbers
-  const original = parseFloat(originalPrice);
-  const discounted = parseFloat(discountedPrice);
+  // Parse prices to ensure they're numbers (in cents)
+  const originalCents = parseFloat(originalPrice) || 0;
+  const discountedCents = parseFloat(discountedPrice) || 0;
 
   // If no discount was actually applied, just show the price normally
-  if (!originalPrice || original === discounted) {
+  if (!originalPrice || originalCents === discountedCents) {
     return (
       <Text style={[styles.price, styles[`price_${size}`]]}>
-        ${discounted.toFixed(2)}
+        {formatCurrency(discountedCents)}
       </Text>
     );
   }
@@ -33,11 +34,11 @@ const DiscountedPrice = ({
     <View style={styles.container}>
       {showOriginal && (
         <Text style={[styles.originalPrice, styles[`originalPrice_${size}`]]}>
-          ${original.toFixed(2)}
+          {formatCurrency(originalCents)}
         </Text>
       )}
       <Text style={[styles.discountedPrice, styles[`discountedPrice_${size}`]]}>
-        ${discounted.toFixed(2)}
+        {formatCurrency(discountedCents)}
       </Text>
     </View>
   );

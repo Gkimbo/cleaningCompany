@@ -8,9 +8,10 @@ import {
   Text,
   View,
 } from "react-native";
-import { useNavigate, useParams } from "react-router-native";
+import { useParams } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -18,6 +19,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { toLocalDateString } from "../../services/formatters";
 
 // Date range presets
 const DATE_PRESETS = [
@@ -39,8 +41,8 @@ const getDateRange = (preset) => {
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
       return {
-        startDate: start.toISOString().split("T")[0],
-        endDate: end.toISOString().split("T")[0],
+        startDate: toLocalDateString(start),
+        endDate: toLocalDateString(end),
       };
     }
     case "lastWeek": {
@@ -49,16 +51,16 @@ const getDateRange = (preset) => {
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
       return {
-        startDate: start.toISOString().split("T")[0],
-        endDate: end.toISOString().split("T")[0],
+        startDate: toLocalDateString(start),
+        endDate: toLocalDateString(end),
       };
     }
     case "month": {
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
       const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       return {
-        startDate: start.toISOString().split("T")[0],
-        endDate: end.toISOString().split("T")[0],
+        startDate: toLocalDateString(start),
+        endDate: toLocalDateString(end),
       };
     }
     case "all":
@@ -66,8 +68,8 @@ const getDateRange = (preset) => {
       const start = new Date(now);
       start.setDate(now.getDate() - 30);
       return {
-        startDate: start.toISOString().split("T")[0],
-        endDate: now.toISOString().split("T")[0],
+        startDate: toLocalDateString(start),
+        endDate: toLocalDateString(now),
       };
     }
   }
@@ -76,7 +78,8 @@ const getDateRange = (preset) => {
 // Format date for display
 const formatDate = (dateStr) => {
   if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+  return new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -85,7 +88,8 @@ const formatDate = (dateStr) => {
 
 const formatShortDate = (dateStr) => {
   if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+  return new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
@@ -101,18 +105,18 @@ const WeeklySummaryCard = ({ week }) => (
     </View>
     <View style={styles.weekStats}>
       <View style={styles.weekStat}>
-        <Text style={styles.weekStatValue}>{week.hours.toFixed(1)}</Text>
+        <Text style={styles.weekStatValue}>{(week.hours || 0).toFixed(1)}</Text>
         <Text style={styles.weekStatLabel}>hours</Text>
       </View>
       <View style={styles.weekStatDivider} />
       <View style={styles.weekStat}>
-        <Text style={styles.weekStatValue}>{week.jobCount}</Text>
+        <Text style={styles.weekStatValue}>{week.jobCount || 0}</Text>
         <Text style={styles.weekStatLabel}>jobs</Text>
       </View>
       <View style={styles.weekStatDivider} />
       <View style={styles.weekStat}>
         <Text style={[styles.weekStatValue, styles.payValue]}>
-          ${(week.pay / 100).toFixed(2)}
+          ${((week.pay || 0) / 100).toFixed(2)}
         </Text>
         <Text style={styles.weekStatLabel}>earned</Text>
       </View>
@@ -140,8 +144,8 @@ const DayCard = ({ day, expanded, onToggle }) => {
           </Text>
         </View>
         <View style={styles.dayStats}>
-          <Text style={styles.dayHours}>{day.hours.toFixed(1)} hrs</Text>
-          <Text style={styles.dayPay}>${(day.pay / 100).toFixed(2)}</Text>
+          <Text style={styles.dayHours}>{(day.hours || 0).toFixed(1)} hrs</Text>
+          <Text style={styles.dayPay}>${((day.pay || 0) / 100).toFixed(2)}</Text>
         </View>
         <Icon
           name={expanded ? "chevron-up" : "chevron-down"}
@@ -202,7 +206,7 @@ const DayCard = ({ day, expanded, onToggle }) => {
 
 // Main Component
 const EmployeeHoursScreen = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const { employeeId } = useParams();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -281,7 +285,7 @@ const EmployeeHoursScreen = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <View style={styles.headerTitle}>

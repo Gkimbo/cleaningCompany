@@ -1,11 +1,16 @@
-// Mock fetch globally
-global.fetch = jest.fn();
-
-// Mock config
-jest.mock("../../src/services/config", () => ({
-  API_BASE: "http://localhost:5000/api/v1",
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
+import HttpClient from "../../src/services/HttpClient";
 import FetchData from "../../src/services/fetchRequests/fetchData";
 
 describe("Cancellation Service Methods", () => {
@@ -26,30 +31,17 @@ describe("Cancellation Service Methods", () => {
         isHomeowner: true,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await FetchData.getCancellationInfo(1, mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/appointments/cancellation-info/1"),
-        expect.objectContaining({
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        })
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/appointments/cancellation-info/1", { token: mockToken });
 
       expect(result).toEqual(mockResponse);
     });
 
     it("should return error on failed response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: "Appointment not found" }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Appointment not found" });
 
       const result = await FetchData.getCancellationInfo(999, mockToken);
 
@@ -57,11 +49,11 @@ describe("Cancellation Service Methods", () => {
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await FetchData.getCancellationInfo(1, mockToken);
 
-      expect(result).toEqual({ error: "Failed to get cancellation info" });
+      expect(result).toEqual({ error: "Network request failed" });
     });
   });
 
@@ -74,22 +66,14 @@ describe("Cancellation Service Methods", () => {
         refund: { amount: 200 },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await FetchData.cancelAsHomeowner(1, mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/appointments/1/cancel-homeowner"),
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mockToken}`,
-          },
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/appointments/1/cancel-homeowner",
+        {},
+        { token: mockToken }
       );
 
       expect(result).toEqual(mockResponse);
@@ -108,10 +92,7 @@ describe("Cancellation Service Methods", () => {
         },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await FetchData.cancelAsHomeowner(1, mockToken);
 
@@ -121,10 +102,7 @@ describe("Cancellation Service Methods", () => {
     });
 
     it("should return error on failed response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: "Cannot cancel a completed appointment" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Cannot cancel a completed appointment" });
 
       const result = await FetchData.cancelAsHomeowner(1, mockToken);
 
@@ -132,11 +110,11 @@ describe("Cancellation Service Methods", () => {
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await FetchData.cancelAsHomeowner(1, mockToken);
 
-      expect(result).toEqual({ error: "Failed to cancel appointment" });
+      expect(result).toEqual({ error: "Network request failed" });
     });
   });
 
@@ -150,23 +128,14 @@ describe("Cancellation Service Methods", () => {
         accountFrozen: false,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/appointments/1/cancel-cleaner"),
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mockToken}`,
-          },
-          body: JSON.stringify({ acknowledged: true }),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/appointments/1/cancel-cleaner",
+        { acknowledged: true },
+        { token: mockToken }
       );
 
       expect(result.success).toBe(true);
@@ -179,18 +148,14 @@ describe("Cancellation Service Methods", () => {
         wasWithinPenaltyWindow: false,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       await FetchData.cancelAsCleaner(1, mockToken);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/appointments/1/cancel-cleaner"),
-        expect.objectContaining({
-          body: JSON.stringify({ acknowledged: false }),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/appointments/1/cancel-cleaner",
+        { acknowledged: false },
+        { token: mockToken }
       );
     });
 
@@ -204,10 +169,7 @@ describe("Cancellation Service Methods", () => {
         accountFrozen: false,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
@@ -226,10 +188,7 @@ describe("Cancellation Service Methods", () => {
         accountFrozen: true,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
@@ -237,14 +196,11 @@ describe("Cancellation Service Methods", () => {
     });
 
     it("should return acknowledgment required error when not acknowledged", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () =>
-          Promise.resolve({
-            error: "Acknowledgment required",
-            requiresAcknowledgment: true,
-            message: "You must acknowledge the penalties before cancelling.",
-          }),
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
+        error: "Acknowledgment required",
+        requiresAcknowledgment: true,
+        message: "You must acknowledge the penalties before cancelling.",
       });
 
       const result = await FetchData.cancelAsCleaner(1, mockToken, false);
@@ -255,10 +211,7 @@ describe("Cancellation Service Methods", () => {
     });
 
     it("should return error when not assigned to appointment", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: "You are not assigned to this appointment" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "You are not assigned to this appointment" });
 
       const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
@@ -266,11 +219,7 @@ describe("Cancellation Service Methods", () => {
     });
 
     it("should return error when account is frozen", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () =>
-          Promise.resolve({ error: "Your account is frozen. Please contact support." }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Your account is frozen. Please contact support." });
 
       const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
@@ -278,11 +227,11 @@ describe("Cancellation Service Methods", () => {
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
-      expect(result).toEqual({ error: "Failed to cancel job" });
+      expect(result.error).toBe("Network request failed");
     });
   });
 });

@@ -100,7 +100,7 @@ const AdjustmentCard = ({ adjustment, onPress }) => {
         <View style={styles.comparisonItem}>
           <Text style={styles.comparisonLabel}>Difference</Text>
           <Text style={[styles.comparisonValue, priceDifference > 0 && styles.pricePositive]}>
-            {priceDifference > 0 ? `+$${priceDifference.toFixed(2)}` : "$0.00"}
+            {priceDifference > 0 ? `+$${(priceDifference / 100).toFixed(2)}` : "$0.00"}
           </Text>
         </View>
       </View>
@@ -222,6 +222,7 @@ const HomeSizeAdjustmentReview = ({ state }) => {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const options = { weekday: "short", month: "short", day: "numeric", year: "numeric" };
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
@@ -432,7 +433,7 @@ const HomeSizeAdjustmentReview = ({ state }) => {
                           {selectedAdjustment.originalNumBeds} bed / {selectedAdjustment.originalNumBaths} bath
                         </Text>
                         <Text style={styles.comparisonCardPrice}>
-                          ${Number(selectedAdjustment.originalPrice).toFixed(2)}
+                          ${((Number(selectedAdjustment.originalPrice) || 0) / 100).toFixed(2)}
                         </Text>
                       </View>
                       <View style={[styles.comparisonCard, styles.comparisonCardHighlight]}>
@@ -441,7 +442,7 @@ const HomeSizeAdjustmentReview = ({ state }) => {
                           {selectedAdjustment.reportedNumBeds} bed / {selectedAdjustment.reportedNumBaths} bath
                         </Text>
                         <Text style={styles.comparisonCardPrice}>
-                          ${Number(selectedAdjustment.calculatedNewPrice).toFixed(2)}
+                          ${((Number(selectedAdjustment.calculatedNewPrice) || 0) / 100).toFixed(2)}
                         </Text>
                       </View>
                     </View>
@@ -449,7 +450,7 @@ const HomeSizeAdjustmentReview = ({ state }) => {
                     <View style={styles.priceDifferenceBox}>
                       <Text style={styles.priceDifferenceLabel}>Price Difference</Text>
                       <Text style={styles.priceDifferenceValue}>
-                        +${Number(selectedAdjustment.priceDifference).toFixed(2)}
+                        +${((Number(selectedAdjustment.priceDifference) || 0) / 100).toFixed(2)}
                       </Text>
                     </View>
 

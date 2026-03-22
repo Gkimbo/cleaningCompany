@@ -1,144 +1,93 @@
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class IncentivesService {
   /**
    * Get current incentive configuration (public endpoint)
-   * Used by landing pages to show promotional banners
    */
   static async getCurrentIncentives() {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/incentives/current`);
-      if (!response.ok) {
-        console.warn(`[IncentivesService] getCurrentIncentives returned ${response.status}`);
-        return null;
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn("[IncentivesService] getCurrentIncentives failed:", error.message);
+    const result = await HttpClient.get("/incentives/current", { skipAuth: true });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[IncentivesService] getCurrentIncentives failed:", result.error);
       return null;
     }
+
+    return result;
   }
 
   /**
    * Get full incentive configuration with metadata (owner only)
-   * Includes audit info and all fields
    */
   static async getFullConfig(token) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/incentives/config`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        console.warn(`[IncentivesService] getFullConfig returned ${response.status}`);
-        return null;
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn("[IncentivesService] getFullConfig failed:", error.message);
+    const result = await HttpClient.get("/incentives/config", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[IncentivesService] getFullConfig failed:", result.error);
       return null;
     }
+
+    return result;
   }
 
   /**
    * Update incentive configuration (owner only)
-   * @param {string} token - Auth token
-   * @param {object} incentiveData - New incentive values
-   * @returns {object} { success, message, config } or { success: false, error }
    */
   static async updateIncentives(token, incentiveData) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/incentives/config`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(incentiveData),
-      });
+    const result = await HttpClient.put("/incentives/config", incentiveData, { token });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: data.error || "Failed to update incentives",
-        };
-      }
-
+    if (result.success === false) {
       return {
-        success: true,
-        message: data.message,
-        config: data.config,
-        formattedConfig: data.formattedConfig,
+        success: false,
+        error: result.error || "Failed to update incentives",
       };
-    } catch (error) {
-      console.error("[IncentivesService] updateIncentives failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
     }
+
+    return {
+      success: true,
+      message: result.message,
+      config: result.config,
+      formattedConfig: result.formattedConfig,
+    };
   }
 
   /**
    * Get incentive change history (owner only)
-   * @param {string} token - Auth token
-   * @param {number} limit - Max number of history items to return
    */
   static async getIncentiveHistory(token, limit = 20) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/incentives/history?limit=${limit}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (!response.ok) {
-        console.warn(`[IncentivesService] getIncentiveHistory returned ${response.status}`);
-        return { count: 0, history: [] };
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn("[IncentivesService] getIncentiveHistory failed:", error.message);
+    const result = await HttpClient.get(`/incentives/history?limit=${limit}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[IncentivesService] getIncentiveHistory failed:", result.error);
       return { count: 0, history: [] };
     }
+
+    return result;
   }
 
   /**
    * Check if current user is eligible for cleaner incentives
-   * @param {string} token - Auth token
    */
   static async checkCleanerEligibility(token) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/incentives/cleaner-eligibility`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        return { eligible: false, remainingCleanings: 0 };
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn("[IncentivesService] checkCleanerEligibility failed:", error.message);
+    const result = await HttpClient.get("/incentives/cleaner-eligibility", { token });
+
+    if (result.success === false) {
       return { eligible: false, remainingCleanings: 0 };
     }
+
+    return result;
   }
 
   /**
    * Check if current user is eligible for homeowner incentives
-   * @param {string} token - Auth token
    */
   static async checkHomeownerEligibility(token) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/incentives/homeowner-eligibility`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        return { eligible: false, remainingCleanings: 0 };
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn("[IncentivesService] checkHomeownerEligibility failed:", error.message);
+    const result = await HttpClient.get("/incentives/homeowner-eligibility", { token });
+
+    if (result.success === false) {
       return { eligible: false, remainingCleanings: 0 };
     }
+
+    return result;
   }
 }
 

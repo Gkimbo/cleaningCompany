@@ -106,7 +106,7 @@ class BusinessVerificationService {
 			});
 
 			const avgRating = ratingResult?.avgRating ? parseFloat(ratingResult.avgRating) : null;
-			const reviewCount = parseInt(ratingResult?.reviewCount) || 0;
+			const reviewCount = parseInt(ratingResult?.reviewCount, 10) || 0;
 
 			// Count completed jobs
 			const completedJobsCount = await EmployeeJobAssignment.count({

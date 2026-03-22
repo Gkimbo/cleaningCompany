@@ -8,8 +8,20 @@
  * - Username recovery with multiple accounts
  */
 
-// Mock fetch globally
-global.fetch = jest.fn();
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+	__esModule: true,
+	default: {
+		get: jest.fn(),
+		post: jest.fn(),
+		put: jest.fn(),
+		patch: jest.fn(),
+		delete: jest.fn(),
+		request: jest.fn(),
+	},
+}));
+
+import HttpClient from "../../src/services/HttpClient";
 
 // Mock config
 jest.mock("../../src/services/config", () => ({
@@ -22,7 +34,6 @@ const FetchData = require("../../src/services/fetchRequests/fetchData").default;
 describe("Multi-Account Authentication - FetchData Service", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
-		global.fetch.mockReset();
 	});
 
 	describe("Login with multiple accounts", () => {
@@ -32,19 +43,15 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 		};
 
 		it("should handle successful single account login", async () => {
-			global.fetch.mockResolvedValueOnce({
-				ok: true,
-				status: 201,
-				json: async () => ({
-					user: {
-						id: 1,
-						username: "testuser",
-						email: "test@example.com",
-						type: "cleaner",
-						isMarketplaceCleaner: true,
-					},
-					token: "jwt-token-123",
-				}),
+			HttpClient.post.mockResolvedValueOnce({
+				user: {
+					id: 1,
+					username: "testuser",
+					email: "test@example.com",
+					type: "cleaner",
+					isMarketplaceCleaner: true,
+				},
+				token: "jwt-token-123",
 			});
 
 			const result = await FetchData.login(loginData);
@@ -55,6 +62,7 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 
 		it("should return account options when 300 status received", async () => {
 			const multiAccountResponse = {
+				status: 300,
 				message: "Multiple accounts found. Please select account type.",
 				requiresAccountSelection: true,
 				accountOptions: [
@@ -63,29 +71,18 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 				],
 			};
 
-			global.fetch.mockResolvedValueOnce({
-				ok: false,
-				status: 300,
-				json: async () => multiAccountResponse,
-			});
+			HttpClient.post.mockResolvedValueOnce(multiAccountResponse);
 
-			// Note: Current implementation may not handle 300 status correctly
-			// This test defines the expected behavior for when it's implemented
 			const result = await FetchData.login(loginData);
 
-			// When properly implemented, should return the account options
-			// expect(result.requiresAccountSelection).toBe(true);
-			// expect(result.accountOptions).toHaveLength(2);
+			expect(result.requiresAccountSelection).toBe(true);
+			expect(result.accountOptions).toHaveLength(2);
 		});
 
 		it("should send accountType when provided", async () => {
-			global.fetch.mockResolvedValueOnce({
-				ok: true,
-				status: 201,
-				json: async () => ({
-					user: { id: 2, type: "cleaner", isMarketplaceCleaner: true },
-					token: "jwt-token-456",
-				}),
+			HttpClient.post.mockResolvedValueOnce({
+				user: { id: 2, type: "cleaner", isMarketplaceCleaner: true },
+				token: "jwt-token-456",
 			});
 
 			const loginDataWithAccountType = {
@@ -94,23 +91,24 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 				accountType: "marketplace_cleaner",
 			};
 
-			// Note: This would require FetchData.login to accept accountType
-			// await FetchData.login(loginDataWithAccountType);
+			await FetchData.login(loginDataWithAccountType);
 
-			// Expected fetch call should include accountType
-			// expect(global.fetch).toHaveBeenCalledWith(
-			//   expect.any(String),
-			//   expect.objectContaining({
-			//     body: expect.stringContaining("marketplace_cleaner"),
-			//   })
-			// );
+			expect(HttpClient.post).toHaveBeenCalledWith(
+				"/user-sessions/login",
+				{
+					username: "test@example.com",
+					password: "SecurePass1!",
+					accountType: "marketplace_cleaner",
+				},
+				{ skipAuth: true }
+			);
 		});
 
 		it("should handle 401 unauthorized error", async () => {
-			global.fetch.mockResolvedValueOnce({
-				ok: false,
+			HttpClient.post.mockResolvedValueOnce({
+				success: false,
 				status: 401,
-				json: async () => ({ error: "Invalid credentials" }),
+				error: "Invalid credentials",
 			});
 
 			const result = await FetchData.login(loginData);
@@ -119,31 +117,26 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 		});
 
 		it("should handle 423 locked account error", async () => {
-			global.fetch.mockResolvedValueOnce({
-				ok: false,
+			HttpClient.post.mockResolvedValueOnce({
+				success: false,
 				status: 423,
-				json: async () => ({ error: "Account temporarily locked. Try again in 15 minutes." }),
+				error: "Account temporarily locked. Try again in 15 minutes.",
 			});
 
-			// The service should be updated to handle 423 status
 			const result = await FetchData.login(loginData);
-			// Expected: result should indicate account is locked
+			expect(result).toBe("Account temporarily locked. Try again in 15 minutes.");
 		});
 
 		it("should handle terms acceptance requirement", async () => {
-			global.fetch.mockResolvedValueOnce({
-				ok: true,
-				status: 201,
-				json: async () => ({
-					user: { id: 1, type: "cleaner" },
-					token: "jwt-token",
-					requiresTermsAcceptance: true,
-					terms: {
-						id: 2,
-						title: "Updated Terms",
-						version: 2,
-					},
-				}),
+			HttpClient.post.mockResolvedValueOnce({
+				user: { id: 1, type: "cleaner" },
+				token: "jwt-token",
+				requiresTermsAcceptance: true,
+				terms: {
+					id: 2,
+					title: "Updated Terms",
+					version: 2,
+				},
 			});
 
 			const result = await FetchData.login(loginData);
@@ -155,27 +148,22 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 
 	describe("Password Recovery with multiple accounts", () => {
 		it("should send password recovery request successfully", async () => {
-			global.fetch.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => ({
-					message: "If an account with that email exists, we've sent password reset instructions to it.",
-				}),
+			HttpClient.post.mockResolvedValueOnce({
+				message: "If an account with that email exists, we've sent password reset instructions to it.",
 			});
 
-			const result = await FetchData.forgotPassword({ email: "test@example.com" });
+			const result = await FetchData.forgotPassword("test@example.com");
 
-			expect(global.fetch).toHaveBeenCalledWith(
-				expect.stringContaining("/forgot-password"),
-				expect.objectContaining({
-					method: "POST",
-					body: expect.stringContaining("test@example.com"),
-				})
+			expect(HttpClient.post).toHaveBeenCalledWith(
+				"/user-sessions/forgot-password",
+				{ email: "test@example.com" },
+				{ skipAuth: true }
 			);
 		});
 
 		it("should handle 300 status when multiple accounts exist", async () => {
 			const multiAccountResponse = {
+				status: 300,
 				message: "Multiple accounts found. Please select which account to reset.",
 				requiresAccountSelection: true,
 				accountOptions: [
@@ -184,27 +172,23 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 				],
 			};
 
-			global.fetch.mockResolvedValueOnce({
-				ok: false,
-				status: 300,
-				json: async () => multiAccountResponse,
-			});
+			HttpClient.post.mockResolvedValueOnce(multiAccountResponse);
 
 			// Expected behavior: return account options for selection
-			const result = await FetchData.forgotPassword({ email: "test@example.com" });
+			const result = await FetchData.forgotPassword("test@example.com");
 
-			// When properly implemented:
-			// expect(result.requiresAccountSelection).toBe(true);
-			// expect(result.accountOptions).toHaveLength(2);
+			// The current implementation may not fully handle this yet
+			// but we verify the call was made correctly
+			expect(HttpClient.post).toHaveBeenCalledWith(
+				"/user-sessions/forgot-password",
+				{ email: "test@example.com" },
+				{ skipAuth: true }
+			);
 		});
 
 		it("should send accountType when resetting specific account", async () => {
-			global.fetch.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => ({
-					message: "If an account with that email exists, we've sent password reset instructions to it.",
-				}),
+			HttpClient.post.mockResolvedValueOnce({
+				message: "If an account with that email exists, we've sent password reset instructions to it.",
 			});
 
 			// When properly implemented:
@@ -219,37 +203,27 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 
 	describe("Username Recovery with multiple accounts", () => {
 		it("should send username recovery request successfully", async () => {
-			global.fetch.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => ({
-					message: "If an account with that email exists, we've sent the username to it.",
-				}),
+			HttpClient.post.mockResolvedValueOnce({
+				message: "If an account with that email exists, we've sent the username to it.",
 			});
 
-			const result = await FetchData.forgotUsername({ email: "test@example.com" });
+			const result = await FetchData.forgotUsername("test@example.com");
 
-			expect(global.fetch).toHaveBeenCalledWith(
-				expect.stringContaining("/forgot-username"),
-				expect.objectContaining({
-					method: "POST",
-					body: expect.stringContaining("test@example.com"),
-				})
+			expect(HttpClient.post).toHaveBeenCalledWith(
+				"/user-sessions/forgot-username",
+				{ email: "test@example.com" },
+				{ skipAuth: true }
 			);
 		});
 
 		it("should handle response when multiple usernames sent", async () => {
 			// When multiple accounts exist, the backend sends all usernames
 			// The frontend just receives a success message (for security)
-			global.fetch.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => ({
-					message: "If an account with that email exists, we've sent the username to it.",
-				}),
+			HttpClient.post.mockResolvedValueOnce({
+				message: "If an account with that email exists, we've sent the username to it.",
 			});
 
-			const result = await FetchData.forgotUsername({ email: "test@example.com" });
+			const result = await FetchData.forgotUsername("test@example.com");
 
 			// Success response - usernames are sent via email, not returned in response
 			expect(result.message).toBeDefined();
@@ -266,18 +240,14 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 		};
 
 		it("should successfully create marketplace cleaner account", async () => {
-			global.fetch.mockResolvedValueOnce({
-				ok: true,
-				status: 201,
-				json: async () => ({
-					user: {
-						id: 1,
-						username: "johndoe123",
-						type: "cleaner",
-						isMarketplaceCleaner: true,
-					},
-					token: "jwt-token",
-				}),
+			HttpClient.post.mockResolvedValueOnce({
+				user: {
+					id: 1,
+					username: "johndoe123",
+					type: "cleaner",
+					isMarketplaceCleaner: true,
+				},
+				token: "jwt-token",
 			});
 
 			// When implemented:
@@ -287,18 +257,14 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 
 		it("should allow signup with email used by employee account", async () => {
 			// This is the key feature - employee can create a separate marketplace account
-			global.fetch.mockResolvedValueOnce({
-				ok: true,
-				status: 201,
-				json: async () => ({
-					user: {
-						id: 2,
-						username: "johndoe_marketplace",
-						type: "cleaner",
-						isMarketplaceCleaner: true,
-					},
-					token: "jwt-token",
-				}),
+			HttpClient.post.mockResolvedValueOnce({
+				user: {
+					id: 2,
+					username: "johndoe_marketplace",
+					type: "cleaner",
+					isMarketplaceCleaner: true,
+				},
+				token: "jwt-token",
 			});
 
 			// Should succeed even if email is used by employee account
@@ -310,12 +276,10 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 		});
 
 		it("should reject signup when marketplace account already exists with email", async () => {
-			global.fetch.mockResolvedValueOnce({
-				ok: false,
+			HttpClient.post.mockResolvedValueOnce({
+				success: false,
 				status: 409,
-				json: async () => ({
-					error: "A marketplace cleaner account already exists with this email",
-				}),
+				error: "A marketplace cleaner account already exists with this email",
 			});
 
 			// const result = await FetchData.makeNewMarketplaceCleaner(signupData);
@@ -323,12 +287,10 @@ describe("Multi-Account Authentication - FetchData Service", () => {
 		});
 
 		it("should reject signup when username already exists", async () => {
-			global.fetch.mockResolvedValueOnce({
-				ok: false,
+			HttpClient.post.mockResolvedValueOnce({
+				success: false,
 				status: 410,
-				json: async () => ({
-					error: "Username already exists",
-				}),
+				error: "Username already exists",
 			});
 
 			// const result = await FetchData.makeNewMarketplaceCleaner(signupData);

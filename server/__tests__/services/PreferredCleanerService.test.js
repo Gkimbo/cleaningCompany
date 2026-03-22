@@ -7,6 +7,11 @@
 jest.mock("../../services/sendNotifications/EmailClass");
 jest.mock("../../services/sendNotifications/PushNotificationClass");
 jest.mock("../../services/EncryptionService");
+jest.mock("nodemailer", () => ({
+  createTransport: jest.fn().mockReturnValue({
+    sendMail: jest.fn().mockResolvedValue({ messageId: "test-message-id" }),
+  }),
+}));
 
 const Email = require("../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../services/sendNotifications/PushNotificationClass");

@@ -14,6 +14,7 @@ import { useNavigate, useLocation } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { AuthContext } from "../../services/AuthContext";
 import ConflictService from "../../services/fetchRequests/ConflictService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -24,7 +25,7 @@ import {
 
 const UserCasesView = () => {
   const { user } = useContext(AuthContext);
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const location = useLocation();
 
   const { users: initialUsers, searchQuery } = location.state || {};
@@ -264,7 +265,7 @@ const UserCasesView = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigate(-1)}>
+        <TouchableOpacity style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </TouchableOpacity>
         <View style={styles.headerContent}>

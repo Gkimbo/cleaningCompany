@@ -363,7 +363,7 @@ const AppealDetailPage = () => {
                   <Icon name="check" size={14} color={colors.success[600]} />
                   <Text style={styles.resolutionItemText}>
                     Cancellation fee refunded: $
-                    {(appeal.resolution.refundAmount / 100).toFixed(2)}
+                    {((appeal.resolution.refundAmount || 0) / 100).toFixed(2)}
                   </Text>
                 </View>
               )}

@@ -20,7 +20,8 @@ import OfflineMessage from "./models/OfflineMessage";
 const isExpoGo = Constants.appOwnership === "expo";
 
 // Check if running in SSR/Node.js context (expo-router server rendering)
-const isSSR = typeof window === "undefined" && Platform.OS === "web";
+// Use optional chaining for Platform.OS in case react-native isn't fully initialized
+const isSSR = typeof window === "undefined" && (Platform?.OS === "web" || Platform?.OS === undefined);
 
 let database = null;
 
@@ -28,8 +29,8 @@ if (isSSR) {
   // Skip database initialization during server-side rendering
   console.log("WatermelonDB skipped during SSR");
 } else if (isExpoGo) {
-  console.warn(
-    "WatermelonDB offline database is not available in Expo Go. " +
+  console.log(
+    "[OfflineDB] WatermelonDB offline database is not available in Expo Go. " +
     "Use a development build for offline functionality: npx expo run:ios"
   );
 } else {
@@ -104,8 +105,11 @@ export async function getPendingSyncCount() {
 // Get all jobs requiring sync
 export async function getJobsRequiringSync() {
   if (!offlineJobsCollection) return [];
-  return await offlineJobsCollection
-    .query()
-    .fetch()
-    .then((jobs) => jobs.filter((job) => job.requiresSync));
+  try {
+    const jobs = await offlineJobsCollection.query().fetch();
+    return jobs.filter((job) => job.requiresSync);
+  } catch (error) {
+    console.error("[database] Failed to get jobs requiring sync:", error);
+    return [];
+  }
 }

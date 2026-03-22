@@ -38,7 +38,7 @@ const ReviewsOverview = ({ state, dispatch }) => {
 
   const getAverageRating = () => {
     if (allReviews.length === 0) return 0;
-    const totalRating = allReviews.reduce((sum, review) => sum + review.review, 0);
+    const totalRating = allReviews.reduce((sum, review) => sum + (review.review || 0), 0);
     return totalRating / allReviews.length;
   };
 

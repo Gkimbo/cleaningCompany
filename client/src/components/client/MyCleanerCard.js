@@ -27,7 +27,11 @@ const MyCleanerCard = ({ cleaner, relationship, home, onMessage, onViewProfile }
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
+    // Only add noon suffix for YYYY-MM-DD strings (no 'T' present)
+    // Full ISO timestamps can be parsed directly
+    const date = dateString.includes("T")
+      ? new Date(dateString)
+      : new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
   };
 
@@ -87,13 +91,13 @@ const MyCleanerCard = ({ cleaner, relationship, home, onMessage, onViewProfile }
           <View style={styles.pricingSection}>
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Your Rate</Text>
-              <Text style={styles.priceValue}>${cleanerPrice}/cleaning</Text>
+              <Text style={styles.priceValue}>${(cleanerPrice / 100).toFixed(0)}/cleaning</Text>
             </View>
             {savings > 0 && (
               <View style={styles.savingsRow}>
                 <Feather name="check-circle" size={14} color={colors.success[600]} />
                 <Text style={styles.savingsText}>
-                  Save ${savings} vs platform rate
+                  Save ${(savings / 100).toFixed(0)} vs platform rate
                 </Text>
               </View>
             )}

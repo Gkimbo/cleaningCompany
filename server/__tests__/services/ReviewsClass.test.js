@@ -14,6 +14,7 @@ jest.mock("../../models", () => ({
   },
   UserAppointments: {
     findAll: jest.fn(),
+    findByPk: jest.fn(),
   },
   UserHomes: {
     findAll: jest.fn(),
@@ -44,10 +45,19 @@ describe("ReviewsClass", () => {
 
     it("should create a new review successfully", async () => {
       UserReviews.findOne.mockResolvedValue(null);
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        completed: true,
+        cancelled: false,
+        home: { userId: 1 },
+        employeesAssigned: ["2"],
+      });
+      User.findByPk.mockResolvedValue({ id: 1, firstName: "enc_John", lastName: "enc_Doe" });
       UserReviews.create.mockResolvedValue({
         id: 1,
         ...baseReviewData,
         isPublished: false,
+        toJSON: () => ({ id: 1, ...baseReviewData, isPublished: false }),
       });
       UserReviews.findAll.mockResolvedValue([
         { id: 1, reviewType: "homeowner_to_cleaner" },
@@ -74,6 +84,14 @@ describe("ReviewsClass", () => {
     });
 
     it("should throw error if review already exists", async () => {
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        completed: true,
+        cancelled: false,
+        home: { userId: 1 },
+        employeesAssigned: ["2"],
+      });
+      User.findByPk.mockResolvedValue({ id: 1, firstName: "enc_John", lastName: "enc_Doe" });
       UserReviews.findOne.mockResolvedValue({
         id: 1,
         ...baseReviewData,
@@ -100,6 +118,14 @@ describe("ReviewsClass", () => {
       };
 
       UserReviews.findOne.mockResolvedValue(null);
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        completed: true,
+        cancelled: false,
+        home: { userId: 1 },
+        employeesAssigned: ["2"],
+      });
+      User.findByPk.mockResolvedValue({ id: 2, firstName: "enc_Jane", lastName: "enc_Cleaner" });
       UserReviews.create.mockResolvedValue({
         id: 2,
         ...cleanerReviewData,
@@ -451,6 +477,15 @@ describe("ReviewsClass", () => {
         comment: "Good cleaning",
       };
 
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        completed: true,
+        cancelled: false,
+        home: { userId: 1 },
+        employeesAssigned: ["2"],
+      });
+      User.findByPk.mockResolvedValue({ id: 1, firstName: "enc_John", lastName: "enc_Doe" });
+      UserReviews.findOne.mockResolvedValue(null);
       UserReviews.create.mockResolvedValue({
         id: 1,
         userId: 2,

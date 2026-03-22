@@ -25,8 +25,9 @@ class ReferralService {
       const prefix = firstName.slice(0, 4).padEnd(4, "X");
 
       // Generate 4 random alphanumeric characters
+      // Use 6 bytes to ensure enough alphanumeric chars after filtering base64 special chars
       const randomChars = crypto
-        .randomBytes(3)
+        .randomBytes(6)
         .toString("base64")
         .replace(/[^A-Z0-9]/gi, "")
         .toUpperCase()
@@ -383,8 +384,20 @@ class ReferralService {
         return { success: false, error: "User or appointment not found" };
       }
 
+      // Check if appointment is paused (homeowner account frozen)
+      if (appointment.isPaused) {
+        await transaction.rollback();
+        return { success: false, error: "This appointment is currently paused", isPaused: true };
+      }
+
+      // Check if appointment was cancelled
+      if (appointment.wasCancelled) {
+        await transaction.rollback();
+        return { success: false, error: "This appointment has been cancelled" };
+      }
+
       const availableCredits = user.referralCredits || 0;
-      const appointmentPrice = parseInt(appointment.price) * 100; // Convert to cents
+      const appointmentPrice = appointment.price || 0; // Already stored in cents
 
       // Calculate how much to apply (can't apply more than available or more than price)
       const maxApplicable = Math.min(availableCredits, appointmentPrice, amountCents);
@@ -400,10 +413,10 @@ class ReferralService {
         { where: { id: userId }, transaction }
       );
 
-      // Update appointment price (store original if not already stored)
-      const newPrice = (appointmentPrice - maxApplicable) / 100; // Convert back to dollars
+      // Update appointment price (stored in cents)
+      const newPrice = appointmentPrice - maxApplicable;
       await UserAppointments.update(
-        { price: newPrice.toString() },
+        { price: newPrice },
         { where: { id: appointmentId }, transaction }
       );
 

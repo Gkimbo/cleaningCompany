@@ -24,6 +24,7 @@ const EncryptionService = require("../../../services/EncryptionService");
 const { getPricingConfig } = require("../../../config/businessConfig");
 const RecurringScheduleSerializer = require("../../../serializers/RecurringScheduleSerializer");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
+const TimezoneService = require("../../../services/TimezoneService");
 
 const recurringSchedulesRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -52,21 +53,132 @@ const verifyCleaner = async (req, res, next) => {
 };
 
 /**
- * Generate appointments for a recurring schedule
- * Creates appointments up to a certain horizon based on frequency
- * @param {RecurringSchedule} schedule - The schedule to generate for
- * @param {number} weeksAhead - How many weeks ahead to generate (default: 4 for weekly, 8 for biweekly, 12 for monthly)
- * @returns {Array} Created appointments
+ * Delete all future uncompleted appointments for a recurring schedule
+ * Also cleans up related records: Payouts, UserBills adjustments, cleaner assignments
+ * NOTE: Paid appointments are NOT deleted - they require manual cancellation with refund processing
+ * @param {number} scheduleId - The recurring schedule ID
+ * @returns {Object} { deleted: number, skippedPaid: number }
  */
-async function generateAppointmentsForSchedule(schedule, weeksAhead = null) {
-  // Determine how far ahead to generate
-  if (!weeksAhead) {
-    weeksAhead = schedule.frequency === "weekly" ? 4 :
-                 schedule.frequency === "biweekly" ? 8 : 12;
+async function deleteFutureAppointments(scheduleId) {
+  const { sequelize } = models;
+
+  // Use transaction if available (may not be in test environment with mocked models)
+  let transaction = null;
+  if (sequelize && typeof sequelize.transaction === 'function') {
+    transaction = await sequelize.transaction();
   }
 
+  try {
+    const today = TimezoneService.getTodayInTimezone();
+    const txnOpts = transaction ? { transaction } : {};
+
+    // Find all future uncompleted appointments for this schedule
+    // Exclude cancelled appointments as they've already been processed
+    // Exclude paid appointments - they require manual cancellation with refund
+    const appointmentsToDelete = await UserAppointments.findAll({
+      where: {
+        recurringScheduleId: scheduleId,
+        date: { [Op.gt]: today },
+        completed: false,
+        wasCancelled: { [Op.ne]: true },
+        paid: { [Op.ne]: true },
+      },
+      attributes: ["id", "userId", "price"],
+      ...txnOpts,
+    });
+
+    // Also count paid appointments that couldn't be deleted
+    const paidAppointments = await UserAppointments.findAll({
+      where: {
+        recurringScheduleId: scheduleId,
+        date: { [Op.gt]: today },
+        completed: false,
+        wasCancelled: { [Op.ne]: true },
+        paid: true,
+      },
+      attributes: ["id"],
+      ...txnOpts,
+    });
+    const skippedPaidCount = paidAppointments.length;
+
+    if (appointmentsToDelete.length === 0) {
+      if (transaction) await transaction.commit();
+      return { deleted: 0, skippedPaid: skippedPaidCount };
+    }
+
+    const appointmentIds = appointmentsToDelete.map(a => a.id);
+
+    // Group appointments by userId to batch UserBills updates
+    const userBillAdjustments = {};
+    for (const appt of appointmentsToDelete) {
+      // appt.price is already in cents (INTEGER)
+      const priceCents = appt.price || 0;
+      if (!userBillAdjustments[appt.userId]) {
+        userBillAdjustments[appt.userId] = 0;
+      }
+      userBillAdjustments[appt.userId] += priceCents;
+    }
+
+    // Delete related records first to avoid foreign key constraint errors
+    await UserCleanerAppointments.destroy({
+      where: { appointmentId: { [Op.in]: appointmentIds } },
+      ...txnOpts,
+    });
+
+    await EmployeeJobAssignment.destroy({
+      where: { appointmentId: { [Op.in]: appointmentIds } },
+      ...txnOpts,
+    });
+
+    // Delete Payout records for these appointments
+    await Payout.destroy({
+      where: { appointmentId: { [Op.in]: appointmentIds } },
+      ...txnOpts,
+    });
+
+    // Adjust UserBills for each affected user (use usersId field, not userId)
+    for (const [usersId, totalToSubtract] of Object.entries(userBillAdjustments)) {
+      const userBill = await UserBills.findOne({ where: { usersId }, ...txnOpts });
+      if (userBill && totalToSubtract > 0) {
+        const newAppointmentDue = Math.max(0, parseFloat(userBill.appointmentDue || 0) - totalToSubtract);
+        const newTotalDue = Math.max(0, parseFloat(userBill.totalDue || 0) - totalToSubtract);
+        const updateData = {
+          appointmentDue: newAppointmentDue,
+          totalDue: newTotalDue,
+        };
+        // Only pass transaction options if we have a transaction
+        if (transaction) {
+          await userBill.update(updateData, { transaction });
+        } else {
+          await userBill.update(updateData);
+        }
+      }
+    }
+
+    // Now delete the appointments
+    await UserAppointments.destroy({
+      where: { id: { [Op.in]: appointmentIds } },
+      ...txnOpts,
+    });
+
+    if (transaction) await transaction.commit();
+    return { deleted: appointmentIds.length, skippedPaid: skippedPaidCount };
+  } catch (error) {
+    if (transaction) await transaction.rollback();
+    throw error;
+  }
+}
+
+/**
+ * Generate appointments for a recurring schedule
+ * Creates appointments up to 84 days ahead for all frequencies
+ * @param {RecurringSchedule} schedule - The schedule to generate for
+ * @param {number} daysAhead - How many days ahead to generate (default: 84)
+ * @returns {Array} Created appointments
+ */
+async function generateAppointmentsForSchedule(schedule, daysAhead = 84) {
   const horizon = new Date();
-  horizon.setDate(horizon.getDate() + (weeksAhead * 7));
+  horizon.setDate(horizon.getDate() + daysAhead);
 
   // Get client and home for appointment creation
   const cleanerClient = await CleanerClient.findByPk(schedule.cleanerClientId, {
@@ -78,6 +190,12 @@ async function generateAppointmentsForSchedule(schedule, weeksAhead = null) {
 
   if (!cleanerClient || !cleanerClient.client || !cleanerClient.home) {
     throw new Error("Client or home not found");
+  }
+
+  // Don't generate appointments for frozen homeowners
+  if (cleanerClient.client.accountFrozen) {
+    console.log(`[RecurringSchedules] Skipping appointment generation for schedule ${schedule.id} - client account frozen`);
+    return [];
   }
 
   const client = cleanerClient.client;
@@ -166,16 +284,16 @@ async function generateAppointmentsForSchedule(schedule, weeksAhead = null) {
         userId: client.id,
         homeId: home.id,
         date: dateString,
-        price: schedule.price.toString(),
-        originalPrice: schedule.price.toString(),
+        price: schedule.price, // Already INTEGER cents
+        originalPrice: schedule.price,
         completed: false,
         paid: false,
         hasBeenAssigned: true,
-        employeesAssigned: [schedule.cleanerId.toString()],
-        empoyeesNeeded: home.cleanersNeeded || 1,
+        employeesAssigned: [schedule.cleanerId], // Store as integer for type consistency
+        employeesNeeded: home.cleanersNeeded || 1,
         timeToBeCompleted: schedule.timeWindow || "anytime",
-        bringSheets: home.bringSheets || "no",
-        bringTowels: home.bringTowels || "no",
+        bringSheets: home.sheetsProvided === true || home.sheetsProvided === "yes" ? "no" : "yes",
+        bringTowels: home.towelsProvided === true || home.towelsProvided === "yes" ? "no" : "yes",
         keyPadCode: home.keyPadCode || null,
         keyLocation: home.keyLocation || null,
         bookedByCleanerId: schedule.cleanerId,
@@ -195,27 +313,25 @@ async function generateAppointmentsForSchedule(schedule, weeksAhead = null) {
         where: { userId: client.id },
       });
 
-      const appointmentPrice = parseFloat(schedule.price);
+      // schedule.price is already INTEGER cents
+      const appointmentPriceCents = schedule.price;
 
       if (!userBill) {
         userBill = await UserBills.create({
           userId: client.id,
-          appointmentDue: appointmentPrice,
-          cancellationDue: 0,
-          totalDue: appointmentPrice,
-          appointmentPaid: 0,
-          cancellationPaid: 0,
-          totalPaid: 0,
+          appointmentDue: appointmentPriceCents,
+          cancellationFee: 0,
+          totalDue: appointmentPriceCents,
         });
       } else {
         await userBill.update({
-          appointmentDue: parseFloat(userBill.appointmentDue || 0) + appointmentPrice,
-          totalDue: parseFloat(userBill.totalDue || 0) + appointmentPrice,
+          appointmentDue: (userBill.appointmentDue || 0) + appointmentPriceCents,
+          totalDue: (userBill.totalDue || 0) + appointmentPriceCents,
         });
       }
 
       // Create payout record - calculate fee using IncentiveService for potential discounts
-      const appointmentPriceInCents = Math.round(appointmentPrice * 100);
+      const appointmentPriceInCents = appointmentPriceCents;
       const feeResult = await IncentiveService.calculateCleanerFee(
         schedule.cleanerId,
         appointmentPriceInCents,
@@ -342,15 +458,31 @@ recurringSchedulesRouter.post("/", verifyCleaner, async (req, res) => {
       return res.status(400).json({ error: "Client must have account and home set up" });
     }
 
-    // Calculate price if not provided
-    let schedulePrice = price;
-    if (!schedulePrice && cleanerClient.defaultPrice) {
-      schedulePrice = cleanerClient.defaultPrice;
+    // Check if the client's account is frozen
+    if (cleanerClient.client.accountFrozen) {
+      return res.status(403).json({
+        error: "This client's account has been suspended. You cannot create recurring schedules for them.",
+        accountSuspended: true,
+      });
     }
-    if (!schedulePrice) {
+
+    // Calculate price if not provided (all prices in cents)
+    let schedulePrice;
+    if (price) {
+      // User input is in dollars, convert to cents
+      schedulePrice = Math.round(parseFloat(price) * 100);
+    } else if (cleanerClient.defaultPrice) {
+      // defaultPrice is already in cents
+      schedulePrice = cleanerClient.defaultPrice;
+    } else {
+      // calculatePrice returns cents
+      // sheetsProvided/towelsProvided indicate if client provides them
+      // bringSheets/bringTowels for price calc indicate if cleaner should bring them
+      const bringSheets = cleanerClient.home.sheetsProvided === true || cleanerClient.home.sheetsProvided === "yes" ? "no" : "yes";
+      const bringTowels = cleanerClient.home.towelsProvided === true || cleanerClient.home.towelsProvided === "yes" ? "no" : "yes";
       schedulePrice = await calculatePrice(
-        cleanerClient.home.bringSheets || "no",
-        cleanerClient.home.bringTowels || "no",
+        bringSheets,
+        bringTowels,
         cleanerClient.home.numBeds,
         cleanerClient.home.numBaths,
         timeWindow || "anytime"
@@ -384,7 +516,7 @@ recurringSchedulesRouter.post("/", verifyCleaner, async (req, res) => {
         frequency: schedule.frequency,
         dayOfWeek: schedule.dayOfWeek,
         timeWindow: schedule.timeWindow,
-        price: schedule.price,
+        price: schedule.price, // Return cents, frontend handles conversion
         startDate: schedule.startDate,
         endDate: schedule.endDate,
         nextScheduledDate: schedule.nextScheduledDate,
@@ -485,8 +617,10 @@ const verifyHomeowner = async (req, res, next) => {
     const decoded = jwt.verify(token, secretKey);
     const user = await User.findByPk(decoded.userId);
 
-    // In this codebase, homeowners have type: null
-    if (!user || user.type !== null) {
+    // Homeowners can have type: null, "homeowner", or undefined
+    // Reject cleaner, owner, businessEmployee types
+    const restrictedTypes = ["cleaner", "owner", "businessEmployee", "itEmployee"];
+    if (!user || restrictedTypes.includes(user.type)) {
       return res.status(403).json({ error: "Homeowner access required" });
     }
 
@@ -589,7 +723,7 @@ recurringSchedulesRouter.get("/:id", verifyCleaner, async (req, res) => {
           model: UserAppointments,
           as: "appointments",
           where: {
-            date: { [Op.gte]: new Date().toISOString().split("T")[0] },
+            date: { [Op.gte]: TimezoneService.getTodayInTimezone() },
           },
           required: false,
           order: [["date", "ASC"]],
@@ -634,7 +768,7 @@ recurringSchedulesRouter.get("/:id", verifyCleaner, async (req, res) => {
 
 /**
  * PATCH /:id
- * Update a recurring schedule
+ * Update a recurring schedule - deletes future appointments and regenerates with new settings
  */
 recurringSchedulesRouter.patch("/:id", verifyCleaner, async (req, res) => {
   try {
@@ -649,13 +783,23 @@ recurringSchedulesRouter.patch("/:id", verifyCleaner, async (req, res) => {
       return res.status(404).json({ error: "Schedule not found" });
     }
 
+    // Delete all future appointments - they'll be regenerated with new settings
+    // Note: Paid appointments are skipped and require manual cancellation
+    const { deleted: cancelledCount, skippedPaid } = await deleteFutureAppointments(id);
+
     // Build update object
     const updates = {};
     if (frequency !== undefined) updates.frequency = frequency;
     if (dayOfWeek !== undefined) updates.dayOfWeek = dayOfWeek;
     if (timeWindow !== undefined) updates.timeWindow = timeWindow;
-    if (price !== undefined) updates.price = price;
+    if (price !== undefined) {
+      // User input is in dollars, convert to cents
+      updates.price = Math.round(parseFloat(price) * 100);
+    }
     if (endDate !== undefined) updates.endDate = endDate;
+
+    // Reset lastGeneratedDate so appointments regenerate from today
+    updates.lastGeneratedDate = null;
 
     await schedule.update(updates);
 
@@ -664,14 +808,25 @@ recurringSchedulesRouter.patch("/:id", verifyCleaner, async (req, res) => {
       const nextScheduled = schedule.calculateNextDate(new Date());
       if (nextScheduled) {
         await schedule.update({
-          nextScheduledDate: nextScheduled.toISOString().split("T")[0],
+          nextScheduledDate: TimezoneService.formatDateInTimezone(nextScheduled),
         });
       }
     }
 
+    // Regenerate appointments with new settings (if schedule is active and not paused)
+    let newAppointments = [];
+    if (schedule.isActive && !schedule.isPaused) {
+      newAppointments = await generateAppointmentsForSchedule(schedule);
+    }
+
     res.json({
       success: true,
-      message: "Schedule updated successfully",
+      message: skippedPaid > 0
+        ? `Schedule updated. ${skippedPaid} paid appointment(s) were not deleted and require manual cancellation.`
+        : "Schedule updated successfully",
+      cancelledAppointments: cancelledCount,
+      skippedPaidAppointments: skippedPaid,
+      newAppointmentsCreated: newAppointments.length,
       schedule: RecurringScheduleSerializer.serializeOne(schedule),
     });
   } catch (err) {
@@ -682,12 +837,11 @@ recurringSchedulesRouter.patch("/:id", verifyCleaner, async (req, res) => {
 
 /**
  * DELETE /:id
- * Deactivate a recurring schedule (soft delete)
+ * Deactivate a recurring schedule (soft delete) and delete all future appointments
  */
 recurringSchedulesRouter.delete("/:id", verifyCleaner, async (req, res) => {
   try {
     const { id } = req.params;
-    const { cancelFutureAppointments } = req.query;
 
     const schedule = await RecurringSchedule.findOne({
       where: { id, cleanerId: req.user.id },
@@ -697,47 +851,20 @@ recurringSchedulesRouter.delete("/:id", verifyCleaner, async (req, res) => {
       return res.status(404).json({ error: "Schedule not found" });
     }
 
+    // Delete all future appointments for this schedule
+    // Note: Paid appointments are skipped and require manual cancellation
+    const { deleted: cancelledCount, skippedPaid } = await deleteFutureAppointments(id);
+
     // Deactivate the schedule
     await schedule.update({ isActive: false });
 
-    // Optionally cancel future appointments
-    let cancelledCount = 0;
-    if (cancelFutureAppointments === "true") {
-      const today = new Date().toISOString().split("T")[0];
-
-      // First, get the appointment IDs that will be deleted
-      const appointmentsToDelete = await UserAppointments.findAll({
-        where: {
-          recurringScheduleId: id,
-          date: { [Op.gt]: today },
-          completed: false,
-        },
-        attributes: ["id"],
-      });
-      const appointmentIds = appointmentsToDelete.map(a => a.id);
-
-      if (appointmentIds.length > 0) {
-        // Delete related records first to avoid foreign key constraint errors
-        await UserCleanerAppointments.destroy({
-          where: { appointmentId: { [Op.in]: appointmentIds } },
-        });
-
-        await EmployeeJobAssignment.destroy({
-          where: { appointmentId: { [Op.in]: appointmentIds } },
-        });
-
-        // Now delete the appointments
-        const result = await UserAppointments.destroy({
-          where: { id: { [Op.in]: appointmentIds } },
-        });
-        cancelledCount = result;
-      }
-    }
-
     res.json({
       success: true,
-      message: "Schedule deactivated",
+      message: skippedPaid > 0
+        ? `Schedule deactivated. ${skippedPaid} paid appointment(s) were not deleted and require manual cancellation.`
+        : "Schedule deactivated",
       cancelledAppointments: cancelledCount,
+      skippedPaidAppointments: skippedPaid,
     });
   } catch (err) {
     console.error("Error deactivating schedule:", err);
@@ -747,7 +874,7 @@ recurringSchedulesRouter.delete("/:id", verifyCleaner, async (req, res) => {
 
 /**
  * POST /:id/pause
- * Pause a recurring schedule
+ * Pause a recurring schedule and delete all future appointments
  */
 recurringSchedulesRouter.post("/:id/pause", verifyCleaner, async (req, res) => {
   try {
@@ -762,15 +889,24 @@ recurringSchedulesRouter.post("/:id/pause", verifyCleaner, async (req, res) => {
       return res.status(404).json({ error: "Active schedule not found" });
     }
 
+    // Delete all future appointments for this schedule
+    // Note: Paid appointments are skipped and require manual cancellation
+    const { deleted: cancelledCount, skippedPaid } = await deleteFutureAppointments(id);
+
     await schedule.update({
       isPaused: true,
       pausedUntil: until || null,
       pauseReason: reason || null,
     });
 
+    const baseMessage = until ? `Schedule paused until ${until}` : "Schedule paused indefinitely";
     res.json({
       success: true,
-      message: until ? `Schedule paused until ${until}` : "Schedule paused indefinitely",
+      message: skippedPaid > 0
+        ? `${baseMessage}. ${skippedPaid} paid appointment(s) were not deleted and require manual cancellation.`
+        : baseMessage,
+      cancelledAppointments: cancelledCount,
+      skippedPaidAppointments: skippedPaid,
       schedule: RecurringScheduleSerializer.serializeOne(schedule),
     });
   } catch (err) {
@@ -823,7 +959,7 @@ recurringSchedulesRouter.post("/:id/resume", verifyCleaner, async (req, res) => 
 recurringSchedulesRouter.post("/:id/generate", verifyCleaner, async (req, res) => {
   try {
     const { id } = req.params;
-    const { weeksAhead } = req.body;
+    const { daysAhead } = req.body;
 
     const schedule = await RecurringSchedule.findOne({
       where: { id, cleanerId: req.user.id, isActive: true },
@@ -837,7 +973,7 @@ recurringSchedulesRouter.post("/:id/generate", verifyCleaner, async (req, res) =
       return res.status(400).json({ error: "Cannot generate for paused schedule" });
     }
 
-    const appointments = await generateAppointmentsForSchedule(schedule, weeksAhead);
+    const appointments = await generateAppointmentsForSchedule(schedule, daysAhead);
 
     res.json({
       success: true,

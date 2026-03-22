@@ -115,12 +115,12 @@ describe("BusinessAnalyticsService", () => {
 			{
 				id: 1,
 				status: "completed",
-				appointment: { id: 1, date: "2024-01-15", price: "150.00" },
+				appointment: { id: 1, date: "2024-01-15", price: 15000 }, // $150 in cents
 			},
 			{
 				id: 2,
 				status: "completed",
-				appointment: { id: 2, date: "2024-01-16", price: "200.00" },
+				appointment: { id: 2, date: "2024-01-16", price: 20000 }, // $200 in cents
 			},
 		];
 
@@ -226,7 +226,7 @@ describe("BusinessAnalyticsService", () => {
 				status: "completed",
 				payAmount: 5000,
 				appointmentId: 100,
-				appointment: { id: 100, date: "2024-01-15", price: "150.00", userId: 10 },
+				appointment: { id: 100, date: "2024-01-15", price: 15000, userId: 10 }, // $150 in cents
 			},
 			{
 				id: 2,
@@ -234,7 +234,7 @@ describe("BusinessAnalyticsService", () => {
 				status: "completed",
 				payAmount: 6000,
 				appointmentId: 101,
-				appointment: { id: 101, date: "2024-01-16", price: "200.00", userId: 11 },
+				appointment: { id: 101, date: "2024-01-16", price: 20000, userId: 11 }, // $200 in cents
 			},
 			{
 				id: 3,
@@ -242,7 +242,7 @@ describe("BusinessAnalyticsService", () => {
 				status: "no_show",
 				payAmount: 0,
 				appointmentId: 102,
-				appointment: { id: 102, date: "2024-01-17", price: "175.00", userId: 12 },
+				appointment: { id: 102, date: "2024-01-17", price: 17500, userId: 12 }, // $175 in cents
 			},
 		];
 
@@ -418,14 +418,14 @@ describe("BusinessAnalyticsService", () => {
 				status: "completed",
 				payAmount: 5000,
 				payoutStatus: "paid",
-				appointment: { id: 1, date: "2024-01-15", price: "150.00" },
+				appointment: { id: 1, date: "2024-01-15", price: 15000 }, // $150 in cents
 			},
 			{
 				id: 2,
 				status: "completed",
 				payAmount: 6000,
 				payoutStatus: "pending",
-				appointment: { id: 2, date: "2024-01-16", price: "200.00" },
+				appointment: { id: 2, date: "2024-01-16", price: 20000 }, // $200 in cents
 			},
 		];
 
@@ -506,12 +506,12 @@ describe("BusinessAnalyticsService", () => {
 			{
 				id: 1,
 				status: "completed",
-				appointment: { id: 1, date: "2024-01-15", price: "150.00" },
+				appointment: { id: 1, date: "2024-01-15", price: 15000 }, // $150 in cents
 			},
 			{
 				id: 2,
 				status: "completed",
-				appointment: { id: 2, date: "2024-02-10", price: "200.00" },
+				appointment: { id: 2, date: "2024-02-10", price: 20000 }, // $200 in cents
 			},
 		];
 

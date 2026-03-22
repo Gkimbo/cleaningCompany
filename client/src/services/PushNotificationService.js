@@ -1,6 +1,6 @@
 import * as Device from "expo-device";
 import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import SecureStorage from "./SecureStorage";
 import { API_BASE } from "./config";
 
 // Try to import expo-notifications, but gracefully handle if unavailable (Expo Go SDK 53+)
@@ -78,7 +78,7 @@ class PushNotificationService {
       });
       token = tokenData.data;
       this.expoPushToken = token;
-      console.log("[Push] Expo push token:", token);
+      if (__DEV__) console.log("[Push] Expo push token obtained successfully");
 
       // Android requires a notification channel
       if (Platform.OS === "android") {
@@ -120,16 +120,16 @@ class PushNotificationService {
       });
 
       if (response.ok) {
-        console.log("[Push] Token registered with backend");
-        await AsyncStorage.setItem("expoPushToken", expoPushToken);
+        if (__DEV__) console.log("[Push] Token registered with backend");
+        await SecureStorage.setItem("expoPushToken", expoPushToken);
         return true;
       } else {
         const error = await response.json();
-        console.error("[Push] Failed to register token:", error);
+        if (__DEV__) console.error("[Push] Failed to register token:", error);
         return false;
       }
     } catch (error) {
-      console.error("[Push] Error registering token:", error);
+      if (__DEV__) console.error("[Push] Error registering token:", error);
       return false;
     }
   }
@@ -150,15 +150,15 @@ class PushNotificationService {
       });
 
       if (response.ok) {
-        console.log("[Push] Token removed from backend");
-        await AsyncStorage.removeItem("expoPushToken");
+        if (__DEV__) console.log("[Push] Token removed from backend");
+        await SecureStorage.removeItem("expoPushToken");
         return true;
       } else {
-        console.error("[Push] Failed to remove token");
+        if (__DEV__) console.error("[Push] Failed to remove token");
         return false;
       }
     } catch (error) {
-      console.error("[Push] Error removing token:", error);
+      if (__DEV__) console.error("[Push] Error removing token:", error);
       return false;
     }
   }
@@ -178,7 +178,7 @@ class PushNotificationService {
     // Listen for notifications when app is in foreground
     this.notificationListener = Notifications.addNotificationReceivedListener(
       (notification) => {
-        console.log("[Push] Notification received:", notification);
+        if (__DEV__) console.log("[Push] Notification received");
         if (onNotificationReceived) {
           onNotificationReceived(notification);
         }
@@ -188,7 +188,7 @@ class PushNotificationService {
     // Listen for notification responses (user taps on notification)
     this.responseListener = Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        console.log("[Push] Notification response:", response);
+        if (__DEV__) console.log("[Push] Notification response received");
         if (onNotificationResponse) {
           onNotificationResponse(response);
         }
@@ -249,7 +249,7 @@ class PushNotificationService {
       }
       return null;
     } catch (error) {
-      console.error("[Push] Error getting preferences:", error);
+      if (__DEV__) console.error("[Push] Error getting preferences:", error);
       return null;
     }
   }
@@ -273,7 +273,7 @@ class PushNotificationService {
 
       return response.ok;
     } catch (error) {
-      console.error("[Push] Error updating preferences:", error);
+      if (__DEV__) console.error("[Push] Error updating preferences:", error);
       return false;
     }
   }

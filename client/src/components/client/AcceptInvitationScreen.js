@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Image,
 } from "react-native";
 import { TextInput, Checkbox } from "react-native-paper";
 import { useNavigate, useParams } from "react-router-native";
@@ -61,6 +62,12 @@ const AcceptInvitationScreen = ({ inviteToken: propToken }) => {
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [privacyId, setPrivacyId] = useState(null);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [paymentTermsAccepted, setPaymentTermsAccepted] = useState(false);
+  const [paymentTermsId, setPaymentTermsId] = useState(null);
+  const [showPaymentTermsModal, setShowPaymentTermsModal] = useState(false);
+  const [damageProtectionAccepted, setDamageProtectionAccepted] = useState(false);
+  const [damageProtectionId, setDamageProtectionId] = useState(null);
+  const [showDamageProtectionModal, setShowDamageProtectionModal] = useState(false);
 
   const [formErrors, setFormErrors] = useState([]);
 
@@ -149,6 +156,14 @@ const AcceptInvitationScreen = ({ inviteToken: propToken }) => {
       errors.push("You must accept the Privacy Policy.");
     }
 
+    if (!paymentTermsAccepted) {
+      errors.push("You must accept the Payment Terms.");
+    }
+
+    if (!damageProtectionAccepted) {
+      errors.push("You must accept the Damage Protection Policy.");
+    }
+
     setFormErrors(errors);
     return errors.length === 0;
   };
@@ -168,6 +183,8 @@ const AcceptInvitationScreen = ({ inviteToken: propToken }) => {
         addressCorrections: showAddressCorrection ? addressCorrections : null,
         termsId,
         privacyPolicyId: privacyId,
+        paymentTermsId,
+        damageProtectionId,
       });
 
       if (result.success) {
@@ -234,6 +251,18 @@ const AcceptInvitationScreen = ({ inviteToken: propToken }) => {
     setPrivacyId(acceptedPrivacyId);
     setPrivacyAccepted(true);
     setShowPrivacyModal(false);
+  };
+
+  const handlePaymentTermsAccepted = (acceptedPaymentTermsId) => {
+    setPaymentTermsId(acceptedPaymentTermsId);
+    setPaymentTermsAccepted(true);
+    setShowPaymentTermsModal(false);
+  };
+
+  const handleDamageProtectionAccepted = (acceptedDamageProtectionId) => {
+    setDamageProtectionId(acceptedDamageProtectionId);
+    setDamageProtectionAccepted(true);
+    setShowDamageProtectionModal(false);
   };
 
   // Loading state
@@ -329,13 +358,20 @@ const AcceptInvitationScreen = ({ inviteToken: propToken }) => {
         {invitation && (
           <View style={styles.invitationCard}>
             <View style={styles.inviterSection}>
-              <View style={styles.inviterAvatar}>
-                <Feather name="user" size={24} color={colors.primary[600]} />
-              </View>
+              {invitation.cleaner?.businessLogo ? (
+                <Image
+                  source={{ uri: invitation.cleaner.businessLogo }}
+                  style={styles.inviterLogo}
+                />
+              ) : (
+                <View style={styles.inviterAvatar}>
+                  <Feather name="user" size={24} color={colors.primary[600]} />
+                </View>
+              )}
               <View style={styles.inviterInfo}>
                 <Text style={styles.inviterLabel}>Invited by</Text>
                 <Text style={styles.inviterName}>
-                  {invitation.cleaner?.businessName || invitation.cleaner?.name || "Your Cleaning Service"}
+                  {invitation.cleaner?.businessName || invitation.cleanerName || "Your Cleaning Service"}
                 </Text>
               </View>
             </View>
@@ -539,6 +575,66 @@ const AcceptInvitationScreen = ({ inviteToken: propToken }) => {
           {privacyAccepted && (
             <Text style={styles.acceptedText}>Privacy Policy accepted</Text>
           )}
+
+          <View style={[styles.termsRow, { marginTop: spacing.sm }]}>
+            <Checkbox
+              status={paymentTermsAccepted ? "checked" : "unchecked"}
+              onPress={() => {
+                if (!paymentTermsAccepted) {
+                  setShowPaymentTermsModal(true);
+                } else {
+                  setPaymentTermsAccepted(false);
+                  setPaymentTermsId(null);
+                }
+              }}
+              color={colors.primary[600]}
+            />
+            <View style={styles.termsTextContainer}>
+              <Text style={styles.termsText}>
+                I agree to the{" "}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => setShowPaymentTermsModal(true)}
+                >
+                  Payment Terms
+                </Text>
+                {" *"}
+              </Text>
+            </View>
+          </View>
+          {paymentTermsAccepted && (
+            <Text style={styles.acceptedText}>Payment Terms accepted</Text>
+          )}
+
+          <View style={[styles.termsRow, { marginTop: spacing.sm }]}>
+            <Checkbox
+              status={damageProtectionAccepted ? "checked" : "unchecked"}
+              onPress={() => {
+                if (!damageProtectionAccepted) {
+                  setShowDamageProtectionModal(true);
+                } else {
+                  setDamageProtectionAccepted(false);
+                  setDamageProtectionId(null);
+                }
+              }}
+              color={colors.primary[600]}
+            />
+            <View style={styles.termsTextContainer}>
+              <Text style={styles.termsText}>
+                I agree to the{" "}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => setShowDamageProtectionModal(true)}
+                >
+                  Damage Protection Policy
+                </Text>
+                {" *"}
+              </Text>
+            </View>
+          </View>
+          {damageProtectionAccepted && (
+            <Text style={styles.acceptedText}>Damage Protection Policy accepted</Text>
+          )}
         </View>
 
         {/* Decline Link */}
@@ -586,6 +682,26 @@ const AcceptInvitationScreen = ({ inviteToken: propToken }) => {
         type="privacy_policy"
         required={true}
         title="Privacy Policy"
+      />
+
+      {/* Payment Terms Modal */}
+      <TermsModal
+        visible={showPaymentTermsModal}
+        onClose={() => setShowPaymentTermsModal(false)}
+        onAccept={handlePaymentTermsAccepted}
+        type="payment_terms"
+        required={true}
+        title="Payment Terms"
+      />
+
+      {/* Damage Protection Policy Modal */}
+      <TermsModal
+        visible={showDamageProtectionModal}
+        onClose={() => setShowDamageProtectionModal(false)}
+        onAccept={handleDamageProtectionAccepted}
+        type="damage_protection"
+        required={true}
+        title="Damage Protection Policy"
       />
     </KeyboardAvoidingView>
   );
@@ -755,6 +871,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[100],
     alignItems: "center",
     justifyContent: "center",
+  },
+  inviterLogo: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   inviterInfo: {
     marginLeft: spacing.md,

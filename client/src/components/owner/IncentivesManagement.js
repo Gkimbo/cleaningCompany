@@ -9,7 +9,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import {
   colors,
@@ -20,8 +19,9 @@ import {
 } from "../../services/styles/theme";
 import IncentivesService from "../../services/fetchRequests/IncentivesService";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const IncentivesManagement = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -213,7 +213,7 @@ const IncentivesManagement = ({ state }) => {
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+        <Pressable onPress={() => goBack()} style={styles.backButton}>
           <Icon name="arrow-left" size={16} color={colors.primary[600]} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>

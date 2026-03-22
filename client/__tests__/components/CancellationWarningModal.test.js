@@ -12,7 +12,7 @@ jest.mock("../../src/context/PricingContext", () => ({
   usePricing: () => ({
     pricing: {
       cancellation: {
-        fee: 25,
+        fee: 2500,
         windowDays: 7,
         homeownerPenaltyDays: 3,
         refundPercentage: 0.5,
@@ -57,7 +57,7 @@ describe("CancellationWarningModal", () => {
 
   const defaultCancellationInfo = {
     isWithinPenaltyWindow: false,
-    price: 200,
+    price: 20000,
     estimatedRefund: "200.00",
     cleanerPayout: "0.00",
     warningMessage: "You can cancel this appointment for a full refund.",
@@ -67,7 +67,7 @@ describe("CancellationWarningModal", () => {
 
   const penaltyWindowCancellationInfo = {
     isWithinPenaltyWindow: true,
-    price: 200,
+    price: 20000,
     estimatedRefund: "100.00",
     cleanerPayout: "90.00",
     warningMessage:
@@ -459,54 +459,54 @@ describe("CancellationWarningModal", () => {
   describe("Cancellation Fee Warning", () => {
     const cancellationFeeInfo = {
       isWithinPenaltyWindow: false,
-      price: 200,
+      price: 20000,
       estimatedRefund: "200.00",
       cleanerPayout: "0.00",
       warningMessage: "A $25 cancellation fee will be charged to your card on file for cancelling within 7 days of the appointment.",
       daysUntilAppointment: 5,
       hasCleanerAssigned: false,
       willChargeCancellationFee: true,
-      cancellationFee: 25,
+      cancellationFee: 2500,
       hasPaymentMethod: true,
     };
 
     const cancellationFeeWithPenaltyInfo = {
       isWithinPenaltyWindow: true,
-      price: 200,
+      price: 20000,
       estimatedRefund: "100.00",
       cleanerPayout: "90.00",
       warningMessage: "Cancelling within 3 days of the cleaning means the assigned cleaner will receive $90.00. Additionally, a $25 cancellation fee will be charged to your card on file.",
       daysUntilAppointment: 2,
       hasCleanerAssigned: true,
       willChargeCancellationFee: true,
-      cancellationFee: 25,
+      cancellationFee: 2500,
       hasPaymentMethod: true,
       refundPercent: 50,
     };
 
     const noCancellationFeeInfo = {
       isWithinPenaltyWindow: false,
-      price: 200,
+      price: 20000,
       estimatedRefund: "200.00",
       cleanerPayout: "0.00",
       warningMessage: "You can cancel this appointment for a full refund.",
       daysUntilAppointment: 10,
       hasCleanerAssigned: false,
       willChargeCancellationFee: false,
-      cancellationFee: 25,
+      cancellationFee: 2500,
       hasPaymentMethod: true,
     };
 
     const noPaymentMethodInfo = {
       isWithinPenaltyWindow: false,
-      price: 200,
+      price: 20000,
       estimatedRefund: "200.00",
       cleanerPayout: "0.00",
       warningMessage: "You can cancel this appointment.",
       daysUntilAppointment: 5,
       hasCleanerAssigned: false,
       willChargeCancellationFee: true,
-      cancellationFee: 25,
+      cancellationFee: 2500,
       hasPaymentMethod: false,
     };
 
@@ -535,7 +535,7 @@ describe("CancellationWarningModal", () => {
 
       expect(getByText("Card Will Be Charged")).toBeTruthy();
       expect(getByText("Cancellation Fee")).toBeTruthy();
-      expect(getByText("$25")).toBeTruthy();
+      expect(getByText("$25.00")).toBeTruthy();
     });
 
     it("should show fee note about immediate charge", () => {
@@ -563,7 +563,7 @@ describe("CancellationWarningModal", () => {
         />
       );
 
-      expect(getByText("I agree to pay the $25 cancellation fee")).toBeTruthy();
+      expect(getByText("I agree to pay the $25.00 cancellation fee")).toBeTruthy();
     });
 
     it("should not show fee section when outside 7-day window", () => {
@@ -607,7 +607,7 @@ describe("CancellationWarningModal", () => {
 
       // Fee warning should be shown
       expect(getByText("Card Will Be Charged")).toBeTruthy();
-      expect(getByText("$25")).toBeTruthy();
+      expect(getByText("$25.00")).toBeTruthy();
 
       // Financial breakdown should also be shown
       expect(getByText("Financial Breakdown")).toBeTruthy();
@@ -632,7 +632,7 @@ describe("CancellationWarningModal", () => {
     it("should display cancellation fee amount correctly", () => {
       const customFeeInfo = {
         ...cancellationFeeInfo,
-        cancellationFee: 35,
+        cancellationFee: 3500,
       };
 
       const { getByText } = render(
@@ -644,35 +644,35 @@ describe("CancellationWarningModal", () => {
         />
       );
 
-      expect(getByText("$35")).toBeTruthy();
-      expect(getByText("I agree to pay the $35 cancellation fee")).toBeTruthy();
+      expect(getByText("$35.00")).toBeTruthy();
+      expect(getByText("I agree to pay the $35.00 cancellation fee")).toBeTruthy();
     });
   });
 
   describe("No Cancellation Fee When No Cleaner Assigned", () => {
     const noCleanerAssignedInfo = {
       isWithinPenaltyWindow: false,
-      price: 200,
+      price: 20000,
       estimatedRefund: "200.00",
       cleanerPayout: "0.00",
       warningMessage: "You can cancel this appointment for a full refund. No cancellation fee applies since no cleaner has been assigned.",
       daysUntilAppointment: 3, // Within 7-day window
       hasCleanerAssigned: false,
       willChargeCancellationFee: false, // Key: no fee because no cleaner
-      cancellationFee: 25,
+      cancellationFee: 2500,
       hasPaymentMethod: true,
     };
 
     const cleanerAssignedWithinWindowInfo = {
       isWithinPenaltyWindow: false,
-      price: 200,
+      price: 20000,
       estimatedRefund: "200.00",
       cleanerPayout: "0.00",
       warningMessage: "A $25 cancellation fee will be charged.",
       daysUntilAppointment: 3, // Within 7-day window
       hasCleanerAssigned: true,
       willChargeCancellationFee: true, // Fee charged because cleaner assigned
-      cancellationFee: 25,
+      cancellationFee: 2500,
       hasPaymentMethod: true,
     };
 
@@ -689,7 +689,7 @@ describe("CancellationWarningModal", () => {
       // Should not show fee-related UI
       expect(queryByText("Card Will Be Charged")).toBeNull();
       expect(queryByText("Cancellation Fee Required")).toBeNull();
-      expect(queryByText("$25")).toBeNull();
+      expect(queryByText("$25.00")).toBeNull();
 
       // Should show normal cancel title
       expect(getAllByText("Cancel Appointment").length).toBeGreaterThan(0);
@@ -708,7 +708,7 @@ describe("CancellationWarningModal", () => {
       // Should show fee-related UI
       expect(getByText("Card Will Be Charged")).toBeTruthy();
       expect(getByText("Cancellation Fee Required")).toBeTruthy();
-      expect(getByText("$25")).toBeTruthy();
+      expect(getByText("$25.00")).toBeTruthy();
     });
 
     it("should show simple checkbox label when no cleaner assigned", () => {
@@ -737,7 +737,7 @@ describe("CancellationWarningModal", () => {
       );
 
       // Should show fee agreement checkbox
-      expect(getByText("I agree to pay the $25 cancellation fee")).toBeTruthy();
+      expect(getByText("I agree to pay the $25.00 cancellation fee")).toBeTruthy();
     });
 
     it("should indicate no payment method required when no cleaner assigned", () => {

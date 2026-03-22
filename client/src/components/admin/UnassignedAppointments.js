@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
+import { parseDateString } from "../../services/formatters";
 
 const UnassignedAppointments = ({ state }) => {
   const [unassignedAppointments, setUnassignedAppointments] = useState([]);
@@ -92,7 +93,7 @@ const UnassignedAppointments = ({ state }) => {
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    const date = parseDateString(dateString);
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -102,7 +103,7 @@ const UnassignedAppointments = ({ state }) => {
   };
 
   const formatPrice = (price) => {
-    return `$${Number(price).toFixed(2)}`;
+    return `$${((Number(price) || 0) / 100).toFixed(2)}`;
   };
 
   const getStatusInfo = (employeesAssigned) => {
@@ -116,7 +117,7 @@ const UnassignedAppointments = ({ state }) => {
 
   // Sort and group by date
   const sortedAppointments = [...unassignedAppointments].sort(
-    (a, b) => new Date(a.date) - new Date(b.date)
+    (a, b) => a.date.localeCompare(b.date)
   );
 
   const groupedByDate = sortedAppointments.reduce((groups, appointment) => {

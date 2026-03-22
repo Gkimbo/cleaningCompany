@@ -56,13 +56,17 @@ jest.mock("../../models", () => ({
   },
   RecurringSchedule: {
     update: jest.fn(),
+    findAll: jest.fn(),
   },
   UserAppointments: {
     findOne: jest.fn(),
+    findAll: jest.fn(),
     create: jest.fn(),
+    destroy: jest.fn(),
   },
   UserCleanerAppointments: {
     create: jest.fn(),
+    destroy: jest.fn(),
   },
   UserBills: {
     findOne: jest.fn(),
@@ -70,13 +74,17 @@ jest.mock("../../models", () => ({
   },
   Payout: {
     create: jest.fn(),
+    destroy: jest.fn(),
+  },
+  EmployeeJobAssignment: {
+    destroy: jest.fn(),
   },
   Review: {
     findAll: jest.fn(),
   },
 }));
 
-const { User, CleanerClient, RecurringSchedule } = require("../../models");
+const { User, CleanerClient, RecurringSchedule, UserAppointments, UserCleanerAppointments, Payout, EmployeeJobAssignment, UserBills } = require("../../models");
 const InvitationService = require("../../services/InvitationService");
 
 describe("Cleaner Clients Router", () => {
@@ -166,6 +174,7 @@ describe("Cleaner Clients Router", () => {
         });
 
         CleanerClient.findOne.mockResolvedValue(mockCleanerClient);
+        RecurringSchedule.findAll.mockResolvedValue([]); // No schedules
         RecurringSchedule.update.mockResolvedValue([1]);
 
         const res = await request(app)
@@ -178,7 +187,7 @@ describe("Cleaner Clients Router", () => {
         expect(mockCleanerClient.update).toHaveBeenCalledWith({ status: "inactive" });
       });
 
-      it("should deactivate recurring schedules for active clients", async () => {
+      it("should deactivate recurring schedules and delete future appointments for active clients", async () => {
         const token = jwt.sign({ userId: cleanerId }, secretKey);
         const mockCleanerClient = {
           id: 2,
@@ -193,12 +202,34 @@ describe("Cleaner Clients Router", () => {
         });
 
         CleanerClient.findOne.mockResolvedValue(mockCleanerClient);
-        RecurringSchedule.update.mockResolvedValue([1]);
 
-        await request(app)
+        // Mock finding schedules for this client
+        RecurringSchedule.findAll.mockResolvedValue([{ id: 10 }, { id: 11 }]);
+        RecurringSchedule.update.mockResolvedValue([2]);
+
+        // Mock finding and deleting future appointments
+        UserAppointments.findAll.mockResolvedValue([
+          { id: 101, userId: 200, price: "150" },
+          { id: 102, userId: 200, price: "150" },
+        ]);
+        UserAppointments.destroy.mockResolvedValue(2);
+        UserCleanerAppointments.destroy.mockResolvedValue(2);
+        EmployeeJobAssignment.destroy.mockResolvedValue(2);
+        Payout.destroy.mockResolvedValue(2);
+
+        const mockUserBill = {
+          appointmentDue: 300,
+          totalDue: 300,
+          update: jest.fn().mockResolvedValue(true),
+        };
+        UserBills.findOne.mockResolvedValue(mockUserBill);
+
+        const res = await request(app)
           .delete("/api/v1/cleaner-clients/2")
           .set("Authorization", `Bearer ${token}`);
 
+        expect(res.status).toBe(200);
+        expect(res.body.cancelledAppointments).toBe(4); // 2 appointments x 2 schedules
         expect(RecurringSchedule.update).toHaveBeenCalledWith(
           { isActive: false },
           { where: { cleanerClientId: "2" } }
@@ -302,10 +333,10 @@ describe("Cleaner Clients Router", () => {
       it("should return isCancelled flag for cancelled invitations", async () => {
         const mockCleanerClient = {
           id: 1,
-          invitedName: "John Doe",
-          invitedEmail: "john@example.com",
-          invitedPhone: "555-1234",
-          invitedAddress: { address: "123 Main St", city: "Boston" },
+          invitedName: "encrypted_John Doe",
+          invitedEmail: "encrypted_john@example.com",
+          invitedPhone: "encrypted_555-1234",
+          invitedAddress: JSON.stringify({ address: "123 Main St", city: "Boston" }),
           invitedBeds: 3,
           invitedBaths: 2,
           isCancelled: true,

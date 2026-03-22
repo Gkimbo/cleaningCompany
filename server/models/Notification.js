@@ -70,12 +70,25 @@ module.exports = (sequelize, DataTypes) => {
             // Client notifications
             "client_booked_appointment",
             "price_change",
+            "payment_captured",
             // Business owner reminders
             "unassigned_reminder_bo",
             // New home request notifications (client adds home, BO accepts/declines)
             "new_home_request",
             "new_home_accepted",
             "new_home_declined",
+            // IT dispute notifications
+            "it_dispute_submitted",
+            "it_dispute_assigned",
+            "it_dispute_updated",
+            "it_dispute_resolved",
+            // Unassigned appointment expiration
+            "appointment_expired_unassigned",
+            // Payment failure notifications
+            "payment_failed",
+            "payment_retry_failed",
+            "payment_retry_success",
+            "appointment_cancelled_payment",
           ],
         ],
       },

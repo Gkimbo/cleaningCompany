@@ -6,6 +6,7 @@
 const Email = require("./sendNotifications/EmailClass");
 const PushNotification = require("./sendNotifications/PushNotificationClass");
 const EncryptionService = require("./EncryptionService");
+const TimezoneService = require("./TimezoneService");
 
 // Helper to decrypt home fields
 const decryptHomeField = (value) => {
@@ -283,13 +284,14 @@ class PreferredCleanerService {
         message: "Appointment has been cancelled",
       };
     } else if (action === "open_to_market") {
-      // Calculate platform pricing
+      // Calculate platform pricing (returns price in cents)
       const home = appointment.home;
       const platformPrice = await calculatePrice(
+        appointment.bringSheets || "no",
+        appointment.bringTowels || "no",
         home.numBeds,
         home.numBaths,
-        appointment.bringSheets === "true",
-        appointment.bringTowels === "true",
+        home.timeToBeCompleted,
         home.bedConfigurations,
         home.bathroomConfigurations
       );
@@ -300,7 +302,7 @@ class PreferredCleanerService {
         openToMarket: true,
         openedToMarketAt: new Date(),
         businessOwnerPrice: appointment.price,
-        price: platformPrice.toString(),
+        price: platformPrice, // Already in cents from calculatePrice()
         // Clear the preferred cleaner assignment so it shows up in the market
         hasBeenAssigned: false,
         employeesAssigned: [],
@@ -331,7 +333,7 @@ class PreferredCleanerService {
     const { UserAppointments, UserHomes, User, CleanerClient } = models;
     const { Op } = require("sequelize");
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = TimezoneService.getTodayInTimezone();
 
     // Get all homes where this cleaner is the preferred cleaner
     const homes = await UserHomes.findAll({
@@ -351,6 +353,8 @@ class PreferredCleanerService {
         homeId: { [Op.in]: homeIds },
         date: { [Op.gte]: today },
         openToMarket: false, // Only show appointments not yet on open market
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
+        wasCancelled: { [Op.ne]: true }, // Skip cancelled appointments
       },
       include: [
         { model: UserHomes, as: "home" },

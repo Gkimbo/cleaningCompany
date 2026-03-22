@@ -61,6 +61,7 @@ const InviteClientModal = ({ visible, onClose, onSuccess, token }) => {
   };
 
   // Calculate platform price based on beds/baths
+  // Returns price in dollars for display
   const platformPrice = useMemo(() => {
     if (!formData.beds || !formData.baths) return null;
     if (!pricing?.basePrice) return null;
@@ -68,19 +69,23 @@ const InviteClientModal = ({ visible, onClose, onSuccess, token }) => {
     const numBeds = parseInt(formData.beds) || 1;
     const numBaths = parseFloat(formData.baths) || 1;
 
-    const basePrice = pricing.basePrice || 150;
-    const extraBedBathFee = pricing.extraBedBathFee || 50;
-    const halfBathFee = pricing.halfBathFee || 25;
+    // Prices from API are in cents - fallbacks also in cents
+    const basePrice = pricing.basePrice || 15000;
+    const extraBedBathFee = pricing.extraBedBathFee || 5000;
+    const halfBathFee = pricing.halfBathFee || 2500;
 
     const extraBeds = Math.max(0, numBeds - 1);
     const fullBaths = Math.floor(numBaths);
     const halfBaths = numBaths % 1 >= 0.5 ? 1 : 0;
     const extraFullBaths = Math.max(0, fullBaths - 1);
 
-    return basePrice +
+    // Calculate in cents, then convert to dollars for display
+    const totalCents = basePrice +
            (extraBeds * extraBedBathFee) +
            (extraFullBaths * extraBedBathFee) +
            (halfBaths * halfBathFee);
+
+    return Math.round(totalCents / 100);
   }, [formData.beds, formData.baths, pricing]);
 
   const handleUsePlatformPrice = () => {
@@ -140,7 +145,8 @@ const InviteClientModal = ({ visible, onClose, onSuccess, token }) => {
         beds: formData.beds ? parseInt(formData.beds) : null,
         baths: formData.baths ? parseFloat(formData.baths) : null,
         frequency: formData.frequency || null,
-        price: formData.price ? parseFloat(formData.price) : null,
+        // Convert dollars to cents for storage (server expects cents)
+        price: formData.price ? Math.round(parseFloat(formData.price) * 100) : null,
         notes: formData.notes.trim() || null,
       };
 

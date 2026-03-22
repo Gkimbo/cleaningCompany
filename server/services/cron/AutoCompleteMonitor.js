@@ -108,6 +108,7 @@ async function processReminders(io = null) {
         autoCompleteAt: { [Op.gt]: now },
         completed: false,
         wasCancelled: false,
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
         hasBeenAssigned: true,
         isMultiCleanerJob: false,
       },
@@ -242,6 +243,7 @@ async function processMultiCleanerReminders(io = null) {
           where: {
             scheduledEndTime: { [Op.lt]: now },
             wasCancelled: false,
+            isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
           },
           include: [
             {
@@ -362,6 +364,7 @@ async function processAutoCompletions(io = null) {
         autoCompleteAt: { [Op.lt]: now },
         completed: false,
         wasCancelled: false,
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
         hasBeenAssigned: true,
         isMultiCleanerJob: false,
       },
@@ -517,6 +520,7 @@ async function processMultiCleanerAutoCompletions(io = null) {
           as: "appointment",
           where: {
             wasCancelled: false,
+            isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
           },
           include: [
             {

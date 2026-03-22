@@ -23,12 +23,25 @@ const HomeSizeAdjustmentSerializer = require("../../../serializers/HomeSizeAdjus
 
 const hrDashboardRouter = express.Router();
 
+// Helper to safely decrypt a field with error handling
+const safeDecrypt = (value) => {
+  if (!value) return null;
+  try {
+    return EncryptionService.decrypt(value);
+  } catch (error) {
+    console.error("Decryption failed:", error.message);
+    return "[encrypted]";
+  }
+};
+
 /**
  * GET /disputes/pending
  * Get all disputes that need HR attention
  */
 hrDashboardRouter.get("/disputes/pending", verifyHROrOwner, async (req, res) => {
   try {
+    const { includeDemoData } = req.query;
+
     const requests = await HomeSizeAdjustmentRequest.findAll({
       where: {
         status: {
@@ -44,7 +57,10 @@ hrDashboardRouter.get("/disputes/pending", verifyHROrOwner, async (req, res) => 
         {
           model: UserAppointments,
           as: "appointment",
-          attributes: ["id", "date", "price"],
+          attributes: ["id", "date", "price", "isDemoAppointment"],
+          // Filter out demo appointments unless explicitly requested
+          where: includeDemoData === "true" ? {} : { [Op.or]: [{ isDemoAppointment: false }, { isDemoAppointment: null }] },
+          required: true,
         },
         {
           model: User,
@@ -179,12 +195,12 @@ hrDashboardRouter.get("/support-conversations", verifyHROrOwner, async (req, res
         lastMessage: conv.messages?.[0]?.content?.substring(0, 100),
         lastMessageAt: conv.messages?.[0]?.createdAt,
         lastMessageSender: conv.messages?.[0]?.sender
-          ? `${EncryptionService.decrypt(conv.messages[0].sender.firstName)} ${EncryptionService.decrypt(conv.messages[0].sender.lastName)}`
+          ? `${safeDecrypt(conv.messages[0].sender.firstName)} ${safeDecrypt(conv.messages[0].sender.lastName)}`
           : null,
         customer: customer?.user
           ? {
               id: customer.user.id,
-              name: `${EncryptionService.decrypt(customer.user.firstName)} ${EncryptionService.decrypt(customer.user.lastName)}`,
+              name: `${safeDecrypt(customer.user.firstName)} ${safeDecrypt(customer.user.lastName)}`,
               type: customer.user.type,
             }
           : null,
@@ -366,12 +382,19 @@ hrDashboardRouter.get("/appeals/overview", verifyHROrOwner, async (req, res) => 
 
     let avgResolutionHours = null;
     if (closedAppeals.length > 0) {
-      const totalHours = closedAppeals.reduce((sum, appeal) => {
-        const submitted = new Date(appeal.submittedAt);
-        const closed = new Date(appeal.closedAt);
-        return sum + (closed - submitted) / (1000 * 60 * 60);
-      }, 0);
-      avgResolutionHours = Math.round(totalHours / closedAppeals.length);
+      // Filter out appeals with null dates to avoid NaN calculations
+      const validAppeals = closedAppeals.filter(
+        (appeal) => appeal.submittedAt && appeal.closedAt
+      );
+
+      if (validAppeals.length > 0) {
+        const totalHours = validAppeals.reduce((sum, appeal) => {
+          const submitted = new Date(appeal.submittedAt);
+          const closed = new Date(appeal.closedAt);
+          return sum + (closed - submitted) / (1000 * 60 * 60);
+        }, 0);
+        avgResolutionHours = Math.round(totalHours / validAppeals.length);
+      }
     }
 
     return res.json({
@@ -424,6 +447,12 @@ hrDashboardRouter.get("/appeals/sla-summary", verifyHROrOwner, async (req, res) 
     const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     pendingAppeals.forEach(appeal => {
+      // Handle null slaDeadline - appeals without a deadline go to onTrack
+      if (!appeal.slaDeadline) {
+        onTrack.push(appeal);
+        return;
+      }
+
       const deadline = new Date(appeal.slaDeadline);
       if (deadline < now) {
         breached.push(appeal);
@@ -491,7 +520,18 @@ hrDashboardRouter.get("/appeals/my-assigned", verifyHROrOwner, async (req, res) 
       order: [["slaDeadline", "ASC"]],
     });
 
-    return res.json({ appeals });
+    // Serialize appeals with decrypted PII
+    const serializedAppeals = appeals.map((appeal) => ({
+      ...appeal.toJSON(),
+      appealer: appeal.appealer ? {
+        id: appeal.appealer.id,
+        username: appeal.appealer.username,
+        firstName: safeDecrypt(appeal.appealer.firstName),
+        lastName: safeDecrypt(appeal.appealer.lastName),
+      } : null,
+    }));
+
+    return res.json({ appeals: serializedAppeals });
   } catch (error) {
     console.error("Error fetching assigned appeals:", error);
     return res.status(500).json({ error: "Failed to fetch assigned appeals" });

@@ -5,10 +5,12 @@
 
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const models = require("../../../models");
 const { User } = models;
 const BillingService = require("../../../services/BillingService");
 const EncryptionService = require("../../../services/EncryptionService");
+const TimezoneService = require("../../../services/TimezoneService");
 
 const billingRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -123,21 +125,43 @@ billingRouter.post("/complete-with-autopay", verifyCleaner, async (req, res) => 
  */
 billingRouter.get("/pending-reminders", async (req, res) => {
   try {
-    // Verify admin access
+    // Verify access via either JWT (owner) or internal API key (cron jobs)
     const authHeader = req.headers.authorization;
-    if (authHeader) {
-      const token = authHeader.split(" ")[1];
-      const decoded = jwt.verify(token, secretKey);
-      const user = await User.findByPk(decoded.userId);
-      if (!user || user.type !== "owner") {
-        return res.status(403).json({ error: "Admin access required" });
+    const apiKey = req.headers["x-api-key"];
+
+    let isAuthorized = false;
+
+    // Option 1: Internal API key for cron jobs/internal services
+    // Use timing-safe comparison to prevent timing attacks
+    if (apiKey && process.env.INTERNAL_API_KEY) {
+      try {
+        const apiKeyBuffer = Buffer.from(apiKey);
+        const expectedBuffer = Buffer.from(process.env.INTERNAL_API_KEY);
+        if (apiKeyBuffer.length === expectedBuffer.length &&
+            crypto.timingSafeEqual(apiKeyBuffer, expectedBuffer)) {
+          isAuthorized = true;
+        }
+      } catch {
+        // Buffer comparison failed (different lengths or invalid input)
       }
-    } else {
-      // Check for internal API key
-      const apiKey = req.headers["x-api-key"];
-      if (apiKey !== process.env.INTERNAL_API_KEY) {
-        return res.status(401).json({ error: "Authentication required" });
+    }
+
+    // Option 2: JWT authentication for owner
+    if (!isAuthorized && authHeader?.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.split(" ")[1];
+        const decoded = jwt.verify(token, secretKey);
+        const user = await User.findByPk(decoded.userId);
+        if (user && user.type === "owner") {
+          isAuthorized = true;
+        }
+      } catch {
+        // JWT verification failed - will fall through to unauthorized
       }
+    }
+
+    if (!isAuthorized) {
+      return res.status(401).json({ error: "Authentication required" });
     }
 
     const daysOverdue = parseInt(req.query.days) || 3;
@@ -187,7 +211,7 @@ billingRouter.get("/summary", verifyUser, async (req, res) => {
     });
 
     // Get upcoming appointments count
-    const today = new Date().toISOString().split("T")[0];
+    const today = TimezoneService.getTodayInTimezone();
     const upcomingAppointments = await UserAppointments.count({
       where: {
         userId: req.user.id,
@@ -203,16 +227,15 @@ billingRouter.get("/summary", verifyUser, async (req, res) => {
       where: {
         userId: req.user.id,
         completed: true,
-        date: { [Op.gte]: firstOfMonth.toISOString().split("T")[0] },
+        date: { [Op.gte]: TimezoneService.formatDateInTimezone(firstOfMonth) },
       },
     });
 
     res.json({
       summary: {
         totalDue: bill ? parseFloat(bill.totalDue || 0) : 0,
-        totalPaid: bill ? parseFloat(bill.totalPaid || 0) : 0,
         appointmentDue: bill ? parseFloat(bill.appointmentDue || 0) : 0,
-        cancellationDue: bill ? parseFloat(bill.cancellationDue || 0) : 0,
+        cancellationFee: bill ? parseFloat(bill.cancellationFee || 0) : 0,
         upcomingAppointments,
         completedThisMonth,
       },

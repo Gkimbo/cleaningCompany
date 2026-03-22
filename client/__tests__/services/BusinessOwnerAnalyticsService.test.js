@@ -3,10 +3,20 @@
  * Tests all analytics and verification API calls
  */
 
-import BusinessOwnerService from "../../src/services/fetchRequests/BusinessOwnerService";
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
 
-// Mock global fetch
-global.fetch = jest.fn();
+import HttpClient from "../../src/services/HttpClient";
+import BusinessOwnerService from "../../src/services/fetchRequests/BusinessOwnerService";
 
 describe("BusinessOwnerService - Analytics", () => {
   const mockToken = "test-business-owner-token";
@@ -54,25 +64,17 @@ describe("BusinessOwnerService - Analytics", () => {
     };
 
     it("should fetch analytics access successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockPremiumAccess,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockPremiumAccess);
 
       const result = await BusinessOwnerService.getAnalyticsAccess(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/analytics/access"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/business-owner/analytics/access", { token: mockToken });
       expect(result.tier).toBe("premium");
       expect(result.features.employeeAnalytics).toBe(true);
     });
 
     it("should return fallback on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.getAnalyticsAccess(mockToken);
 
@@ -106,28 +108,17 @@ describe("BusinessOwnerService - Analytics", () => {
     };
 
     it("should fetch all analytics successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockAllAnalytics,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockAllAnalytics);
 
       const result = await BusinessOwnerService.getAllAnalytics(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/analytics"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/business-owner/analytics", { token: mockToken });
       expect(result.access.tier).toBe("premium");
       expect(result.overview.bookings.thisMonth).toBe(50);
     });
 
     it("should pass options as query params", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockAllAnalytics,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockAllAnalytics);
 
       await BusinessOwnerService.getAllAnalytics(mockToken, {
         months: 6,
@@ -135,33 +126,22 @@ describe("BusinessOwnerService - Analytics", () => {
         churnDays: 30,
       });
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/months=6.*topClientsLimit=10.*churnDays=30/),
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/business-owner/analytics?months=6&topClientsLimit=10&churnDays=30",
+        { token: mockToken }
       );
     });
 
     it("should handle empty options", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockAllAnalytics,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockAllAnalytics);
 
       await BusinessOwnerService.getAllAnalytics(mockToken, {});
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/analytics"),
-        expect.any(Object)
-      );
-      // Should not have query params
-      expect(fetch).not.toHaveBeenCalledWith(
-        expect.stringContaining("?"),
-        expect.any(Object)
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/business-owner/analytics", { token: mockToken });
     });
 
     it("should return fallback on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.getAllAnalytics(mockToken);
 
@@ -185,24 +165,16 @@ describe("BusinessOwnerService - Analytics", () => {
     };
 
     it("should fetch overview analytics successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockOverview,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockOverview);
 
       const result = await BusinessOwnerService.getOverviewAnalytics(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/analytics/overview"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/business-owner/analytics/overview", { token: mockToken });
       expect(result.bookings.thisMonth).toBe(45);
     });
 
     it("should return empty object on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.getOverviewAnalytics(mockToken);
 
@@ -232,39 +204,30 @@ describe("BusinessOwnerService - Analytics", () => {
     };
 
     it("should fetch employee analytics successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockEmployeeAnalytics,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockEmployeeAnalytics);
 
       const result = await BusinessOwnerService.getEmployeeAnalytics(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/analytics/employees"),
-        expect.any(Object)
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/business-owner/analytics/employees", { token: mockToken });
       expect(result.employees[0].name).toBe("John Doe");
     });
 
     it("should pass options as query params", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockEmployeeAnalytics,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockEmployeeAnalytics);
 
       await BusinessOwnerService.getEmployeeAnalytics(mockToken, {
         months: 3,
         limit: 10,
       });
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/months=3.*limit=10/),
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/business-owner/analytics/employees?months=3&limit=10",
+        { token: mockToken }
       );
     });
 
     it("should return fallback on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.getEmployeeAnalytics(mockToken);
 
@@ -272,13 +235,11 @@ describe("BusinessOwnerService - Analytics", () => {
     });
 
     it("should handle 403 premium required response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
         status: 403,
-        json: async () => ({
-          error: "Employee analytics requires premium tier",
-          requiredTier: "premium",
-        }),
+        error: "Employee analytics requires premium tier",
+        requiredTier: "premium",
       });
 
       const result = await BusinessOwnerService.getEmployeeAnalytics(mockToken);
@@ -307,39 +268,30 @@ describe("BusinessOwnerService - Analytics", () => {
     };
 
     it("should fetch client analytics successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockClientAnalytics,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockClientAnalytics);
 
       const result = await BusinessOwnerService.getClientAnalytics(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/analytics/clients"),
-        expect.any(Object)
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/business-owner/analytics/clients", { token: mockToken });
       expect(result.totalClients).toBe(25);
     });
 
     it("should pass options as query params", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockClientAnalytics,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockClientAnalytics);
 
       await BusinessOwnerService.getClientAnalytics(mockToken, {
         topClientsLimit: 5,
         churnDays: 60,
       });
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/topClientsLimit=5.*churnDays=60/),
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/business-owner/analytics/clients?topClientsLimit=5&churnDays=60",
+        { token: mockToken }
       );
     });
 
     it("should return empty object on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.getClientAnalytics(mockToken);
 
@@ -365,22 +317,16 @@ describe("BusinessOwnerService - Analytics", () => {
     };
 
     it("should fetch financial analytics successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockFinancials,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockFinancials);
 
       const result = await BusinessOwnerService.getFinancialAnalytics(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/analytics/financials"),
-        expect.any(Object)
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/business-owner/analytics/financials", { token: mockToken });
       expect(result.summary.profitMargin).toBe(40.0);
     });
 
     it("should return empty object on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.getFinancialAnalytics(mockToken);
 
@@ -403,39 +349,30 @@ describe("BusinessOwnerService - Analytics", () => {
     };
 
     it("should fetch trends successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockTrends,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockTrends);
 
       const result = await BusinessOwnerService.getTrends(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/analytics/trends"),
-        expect.any(Object)
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/business-owner/analytics/trends", { token: mockToken });
       expect(result.data.length).toBe(2);
     });
 
     it("should pass period and months options", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockTrends,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockTrends);
 
       await BusinessOwnerService.getTrends(mockToken, {
         period: "weekly",
         months: 12,
       });
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/period=weekly.*months=12/),
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/business-owner/analytics/trends?period=weekly&months=12",
+        { token: mockToken }
       );
     });
 
     it("should return fallback on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.getTrends(mockToken);
 
@@ -467,25 +404,17 @@ describe("BusinessOwnerService - Verification", () => {
     };
 
     it("should fetch verification status successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockVerifiedStatus,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockVerifiedStatus);
 
       const result = await BusinessOwnerService.getVerificationStatus(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/verification/status"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/business-owner/verification/status", { token: mockToken });
       expect(result.isVerified).toBe(true);
       expect(result.businessName).toBe("CleanPro Services");
     });
 
     it("should return not found on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.getVerificationStatus(mockToken);
 
@@ -509,23 +438,17 @@ describe("BusinessOwnerService - Verification", () => {
     };
 
     it("should check eligibility successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockEligible,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockEligible);
 
       const result = await BusinessOwnerService.checkVerificationEligibility(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/verification/eligibility"),
-        expect.any(Object)
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/business-owner/verification/eligibility", { token: mockToken });
       expect(result.eligible).toBe(true);
       expect(result.criteria.activeClients.met).toBe(true);
     });
 
     it("should return ineligible on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.checkVerificationEligibility(mockToken);
 
@@ -538,38 +461,28 @@ describe("BusinessOwnerService - Verification", () => {
   // =============================================
   describe("requestVerification", () => {
     it("should request verification successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          status: "pending",
-          message: "Verification request submitted",
-        }),
+      HttpClient.post.mockResolvedValueOnce({
+        success: true,
+        status: "pending",
+        message: "Verification request submitted",
       });
 
       const result = await BusinessOwnerService.requestVerification(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/verification/request"),
-        expect.objectContaining({
-          method: "POST",
-          headers: expect.objectContaining({
-            Authorization: `Bearer ${mockToken}`,
-          }),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/business-owner/verification/request",
+        {},
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.status).toBe("pending");
     });
 
     it("should handle already verified error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
         status: 400,
-        json: async () => ({
-          success: false,
-          error: "Business is already verified",
-        }),
+        error: "Business is already verified",
       });
 
       const result = await BusinessOwnerService.requestVerification(mockToken);
@@ -579,7 +492,7 @@ describe("BusinessOwnerService - Verification", () => {
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.requestVerification(mockToken);
 
@@ -592,15 +505,12 @@ describe("BusinessOwnerService - Verification", () => {
   // =============================================
   describe("updateBusinessProfile", () => {
     it("should update profile successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          updated: {
-            businessDescription: "Professional cleaning",
-            businessHighlightOptIn: true,
-          },
-        }),
+      HttpClient.put.mockResolvedValueOnce({
+        success: true,
+        updated: {
+          businessDescription: "Professional cleaning",
+          businessHighlightOptIn: true,
+        },
       });
 
       const result = await BusinessOwnerService.updateBusinessProfile(mockToken, {
@@ -608,25 +518,19 @@ describe("BusinessOwnerService - Verification", () => {
         businessHighlightOptIn: true,
       });
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/verification/profile"),
-        expect.objectContaining({
-          method: "PUT",
-          headers: expect.objectContaining({
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mockToken}`,
-          }),
-          body: JSON.stringify({
-            businessDescription: "Professional cleaning",
-            businessHighlightOptIn: true,
-          }),
-        })
+      expect(HttpClient.put).toHaveBeenCalledWith(
+        "/business-owner/verification/profile",
+        {
+          businessDescription: "Professional cleaning",
+          businessHighlightOptIn: true,
+        },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.put.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.updateBusinessProfile(mockToken, {});
 
@@ -646,23 +550,17 @@ describe("BusinessOwnerService - Verification", () => {
     };
 
     it("should fetch verification config successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockConfig,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockConfig);
 
       const result = await BusinessOwnerService.getVerificationConfig(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/business-owner/verification/config"),
-        expect.any(Object)
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/business-owner/verification/config", { token: mockToken });
       expect(result.minActiveClients).toBe(10);
       expect(result.minAverageRating).toBe(4.0);
     });
 
     it("should return empty object on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await BusinessOwnerService.getVerificationConfig(mockToken);
 

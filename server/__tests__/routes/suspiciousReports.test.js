@@ -18,6 +18,18 @@ jest.mock("../../models", () => ({
   Message: {},
   Conversation: {},
   UserAppointments: {},
+  UserCleanerAppointments: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+  Payout: {
+    destroy: jest.fn().mockResolvedValue(0),
+  },
+  UserPendingRequests: {
+    update: jest.fn().mockResolvedValue([0]),
+  },
+  UserHomes: {
+    findByPk: jest.fn(),
+  },
   ConversationParticipant: {},
   Op: {
     in: Symbol("in"),
@@ -25,6 +37,19 @@ jest.mock("../../models", () => ({
     gt: Symbol("gt"),
     ne: Symbol("ne"),
   },
+}));
+
+// Mock services
+jest.mock("../../services/EncryptionService", () => ({
+  decrypt: jest.fn((val) => val),
+}));
+
+jest.mock("../../services/sendNotifications/EmailClass", () => ({
+  sendEmailCancellation: jest.fn().mockResolvedValue(true),
+}));
+
+jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
+  sendPushCancellation: jest.fn().mockResolvedValue(true),
 }));
 
 const {

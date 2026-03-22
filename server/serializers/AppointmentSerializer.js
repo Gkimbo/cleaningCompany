@@ -5,6 +5,9 @@ class AppointmentSerializer {
 	// Fields that are encrypted in the database
 	static encryptedFields = ["keyPadCode", "keyLocation", "contact"];
 
+	// Fields that are stored in cents and should be converted to dollars for display
+	static centsFields = ["price", "originalPrice", "lastMinuteFeeApplied"];
+
 	static getValue(data, attribute) {
 		const value = data[attribute];
 		// EncryptionService.decrypt() safely handles both encrypted and unencrypted data
@@ -14,6 +17,10 @@ class AppointmentSerializer {
 		// Parse DECIMAL fields to ensure they're numbers, not strings
 		if (this.decimalFields.includes(attribute) && value !== null && value !== undefined) {
 			return parseFloat(value);
+		}
+		// Return cents fields as-is (frontend handles conversion to dollars for display)
+		if (this.centsFields.includes(attribute) && value !== null && value !== undefined) {
+			return value;
 		}
 		return value;
 	}
@@ -36,7 +43,7 @@ class AppointmentSerializer {
 			"completed",
 			"hasBeenAssigned",
 			"employeesAssigned",
-			"empoyeesNeeded",
+			"employeesNeeded",
 			"timeToBeCompleted",
 			"paymentCaptureFailed",
 			"contact",
@@ -66,7 +73,15 @@ class AppointmentSerializer {
 			// Completion status fields
 			"completionStatus",
 			"completionSubmittedAt",
-			"autoApprovalExpiresAt"
+			"autoApprovalExpiresAt",
+			// Paused state fields (homeowner account frozen)
+			"isPaused",
+			"pausedAt",
+			"pauseReason",
+			// Cancellation fields
+			"wasCancelled",
+			"cancellationType",
+			"cancellationReason"
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};
@@ -95,7 +110,7 @@ class AppointmentSerializer {
 			"completed",
 			"hasBeenAssigned",
 			"employeesAssigned",
-			"empoyeesNeeded",
+			"employeesNeeded",
 			"timeToBeCompleted",
 			"paymentCaptureFailed",
 			"contact",
@@ -125,7 +140,15 @@ class AppointmentSerializer {
 			// Completion status fields
 			"completionStatus",
 			"completionSubmittedAt",
-			"autoApprovalExpiresAt"
+			"autoApprovalExpiresAt",
+			// Paused state fields (homeowner account frozen)
+			"isPaused",
+			"pausedAt",
+			"pauseReason",
+			// Cancellation fields
+			"wasCancelled",
+			"cancellationType",
+			"cancellationReason"
 		];
 		const newAppointment = {};
 		// Handle both Sequelize instances and plain objects
@@ -168,6 +191,8 @@ class AppointmentSerializer {
 						// Include home location for distance calculations
 						latitude: home.latitude,
 						longitude: home.longitude,
+						// Include home timezone for date handling
+						timezone: home.timezone || "America/New_York",
 					};
 				}
 

@@ -1,23 +1,18 @@
-import { API_BASE } from "../config";
+import HttpClient from "../HttpClient";
 
 class PaymentDisputeService {
   /**
    * Submit a new payment dispute
    */
   static async submitDispute(token, data) {
-    const response = await fetch(`${API_BASE}/payment-disputes`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
+    const result = await HttpClient.post("/payment-disputes", data, { token });
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || "Failed to submit dispute");
+    if (result.success === false) {
+      __DEV__ && console.warn("[PaymentDisputeService] submitDispute failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to submit dispute",
+      };
     }
 
     return result;
@@ -27,16 +22,14 @@ class PaymentDisputeService {
    * Get cleaner's own payment disputes
    */
   static async getMyDisputes(token) {
-    const response = await fetch(`${API_BASE}/payment-disputes/my-disputes`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const result = await HttpClient.get("/payment-disputes/my-disputes", { token });
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || "Failed to fetch disputes");
+    if (result.success === false) {
+      __DEV__ && console.warn("[PaymentDisputeService] getMyDisputes failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to fetch disputes",
+      };
     }
 
     return result;
@@ -46,16 +39,14 @@ class PaymentDisputeService {
    * Get a specific payment dispute
    */
   static async getDispute(token, disputeId) {
-    const response = await fetch(`${API_BASE}/payment-disputes/${disputeId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const result = await HttpClient.get(`/payment-disputes/${disputeId}`, { token });
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || "Failed to fetch dispute");
+    if (result.success === false) {
+      __DEV__ && console.warn("[PaymentDisputeService] getDispute failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to fetch dispute",
+      };
     }
 
     return result;

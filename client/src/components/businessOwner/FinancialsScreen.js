@@ -19,8 +19,10 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { toLocalDateString } from "../../services/formatters";
 import ExportModal from "./ExportModal";
 import TaxFormsSection from "../tax/TaxFormsSection";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   generateCSV,
   generatePDF,
@@ -148,7 +150,7 @@ const EmployeeEarningsRow = ({ employee, earnings, onPress }) => (
 
 // Main Component
 const FinancialsScreen = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const { pricing } = usePricing();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -202,8 +204,8 @@ const FinancialsScreen = ({ state }) => {
 
       const result = await BusinessOwnerService.getFinancials(
         state.currentUser.token,
-        startDate.toISOString().split("T")[0],
-        endDate.toISOString().split("T")[0]
+        toLocalDateString(startDate),
+        toLocalDateString(endDate)
       );
 
       setFinancials(result.financials || {});
@@ -356,7 +358,7 @@ const FinancialsScreen = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.title}>Financials</Text>

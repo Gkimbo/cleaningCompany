@@ -11,21 +11,21 @@ jest.mock("../../src/services/fetchRequests/PricingService", () => ({
 jest.mock("../../src/services/data/companyInfo", () => ({
   cleaningCompany: {
     pricing: {
-      basePrice: 150,
-      extraBedBathFee: 50,
+      basePrice: 15000,
+      extraBedBathFee: 5000,
       linens: {
-        sheetFeePerBed: 30,
-        towelFee: 5,
-        faceClothFee: 2,
+        sheetFeePerBed: 3000,
+        towelFee: 500,
+        faceClothFee: 200,
       },
       timeWindows: {
         anytime: 0,
-        "10-3": 25,
-        "11-4": 25,
-        "12-2": 30,
+        "10-3": 2500,
+        "11-4": 2500,
+        "12-2": 3000,
       },
       cancellation: {
-        fee: 25,
+        fee: 2500,
         windowDays: 7,
         homeownerPenaltyDays: 3,
         cleanerPenaltyDays: 4,
@@ -35,7 +35,7 @@ jest.mock("../../src/services/data/companyInfo", () => ({
         feePercent: 0.1,
         businessOwnerFeePercent: 0.1,
       },
-      highVolumeFee: 50,
+      highVolumeFee: 5000,
     },
   },
 }));
@@ -67,7 +67,7 @@ describe("PricingContext", () => {
     it("should render children", async () => {
       PricingService.getCurrentPricing.mockResolvedValue({
         source: "database",
-        pricing: { basePrice: 175 },
+        pricing: { basePrice: 17500 },
       });
 
       const { getByText } = render(
@@ -97,15 +97,15 @@ describe("PricingContext", () => {
 
       // Resolve the promise
       await act(async () => {
-        resolvePromise({ source: "config", pricing: { basePrice: 150 } });
+        resolvePromise({ source: "config", pricing: { basePrice: 15000 } });
       });
     });
 
     it("should fetch pricing from API on mount", async () => {
       const mockPricing = {
-        basePrice: 175,
-        extraBedBathFee: 60,
-        cancellation: { fee: 30 },
+        basePrice: 17500,
+        extraBedBathFee: 6000,
+        cancellation: { fee: 3000 },
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -125,7 +125,7 @@ describe("PricingContext", () => {
 
       expect(PricingService.getCurrentPricing).toHaveBeenCalledTimes(1);
       expect(getByTestId("source").children[0]).toBe("database");
-      expect(getByTestId("basePrice").children[0]).toBe("175");
+      expect(getByTestId("basePrice").children[0]).toBe("17500");
     });
 
     it("should fall back to static config when API returns null", async () => {
@@ -142,7 +142,7 @@ describe("PricingContext", () => {
       });
 
       expect(getByTestId("source").children[0]).toBe("config");
-      expect(getByTestId("basePrice").children[0]).toBe("150"); // Default value
+      expect(getByTestId("basePrice").children[0]).toBe("15000"); // Default value
     });
 
     it("should fall back to static config on API error", async () => {
@@ -162,13 +162,13 @@ describe("PricingContext", () => {
 
       expect(getByTestId("error").children[0]).toBe("Network error");
       expect(getByTestId("source").children[0]).toBe("config");
-      expect(getByTestId("basePrice").children[0]).toBe("150");
+      expect(getByTestId("basePrice").children[0]).toBe("15000");
     });
 
     it("should provide refreshPricing function", async () => {
       PricingService.getCurrentPricing.mockResolvedValue({
         source: "database",
-        pricing: { basePrice: 175, cancellation: { fee: 25 } },
+        pricing: { basePrice: 17500, cancellation: { fee: 2500 } },
       });
 
       const { getByTestId } = render(
@@ -199,10 +199,10 @@ describe("PricingContext", () => {
 
     it("should return pricing data", async () => {
       const mockPricing = {
-        basePrice: 200,
-        extraBedBathFee: 75,
-        linens: { sheetFeePerBed: 35, towelFee: 7, faceClothFee: 3 },
-        cancellation: { fee: 30, windowDays: 7 },
+        basePrice: 20000,
+        extraBedBathFee: 7500,
+        linens: { sheetFeePerBed: 3500, towelFee: 700, faceClothFee: 300 },
+        cancellation: { fee: 3000, windowDays: 7 },
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -220,29 +220,29 @@ describe("PricingContext", () => {
         expect(getByTestId("loading").children[0]).toBe("loaded");
       });
 
-      expect(getByTestId("basePrice").children[0]).toBe("200");
-      expect(getByTestId("cancellationFee").children[0]).toBe("30");
+      expect(getByTestId("basePrice").children[0]).toBe("20000");
+      expect(getByTestId("cancellationFee").children[0]).toBe("3000");
     });
   });
 
   describe("Pricing Data Structure", () => {
     it("should have all required pricing fields from database", async () => {
       const fullPricing = {
-        basePrice: 175,
-        extraBedBathFee: 60,
+        basePrice: 17500,
+        extraBedBathFee: 6000,
         linens: {
-          sheetFeePerBed: 35,
-          towelFee: 6,
-          faceClothFee: 3,
+          sheetFeePerBed: 3500,
+          towelFee: 600,
+          faceClothFee: 300,
         },
         timeWindows: {
           anytime: 0,
-          "10-3": 30,
-          "11-4": 30,
-          "12-2": 40,
+          "10-3": 3000,
+          "11-4": 3000,
+          "12-2": 4000,
         },
         cancellation: {
-          fee: 30,
+          fee: 3000,
           windowDays: 7,
           homeownerPenaltyDays: 3,
           cleanerPenaltyDays: 4,
@@ -251,7 +251,7 @@ describe("PricingContext", () => {
         platform: {
           feePercent: 0.12,
         },
-        highVolumeFee: 60,
+        highVolumeFee: 6000,
       };
 
       PricingService.getCurrentPricing.mockResolvedValue({
@@ -277,10 +277,10 @@ describe("PricingContext", () => {
         expect(capturedPricing).not.toBeNull();
       });
 
-      expect(capturedPricing.basePrice).toBe(175);
-      expect(capturedPricing.linens.sheetFeePerBed).toBe(35);
-      expect(capturedPricing.timeWindows["10-3"]).toBe(30);
-      expect(capturedPricing.cancellation.fee).toBe(30);
+      expect(capturedPricing.basePrice).toBe(17500);
+      expect(capturedPricing.linens.sheetFeePerBed).toBe(3500);
+      expect(capturedPricing.timeWindows["10-3"]).toBe(3000);
+      expect(capturedPricing.cancellation.fee).toBe(3000);
       expect(capturedPricing.platform.feePercent).toBe(0.12);
     });
 
@@ -325,7 +325,7 @@ describe("PricingContext", () => {
     it("should set source to database when API returns data", async () => {
       PricingService.getCurrentPricing.mockResolvedValue({
         source: "database",
-        pricing: { basePrice: 175 },
+        pricing: { basePrice: 17500 },
       });
 
       const { getByTestId } = render(
@@ -342,7 +342,7 @@ describe("PricingContext", () => {
     it("should set source to config when using fallback", async () => {
       PricingService.getCurrentPricing.mockResolvedValue({
         source: "config",
-        pricing: { basePrice: 150 },
+        pricing: { basePrice: 15000 },
       });
 
       const { getByTestId } = render(
@@ -389,38 +389,38 @@ describe("PricingContext Helper Functions", () => {
       const pricing = {
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime" },
-          "10-3": { surcharge: 25, label: "10am - 3pm" },
-          "11-4": { surcharge: 25, label: "11am - 4pm" },
-          "12-2": { surcharge: 30, label: "12pm - 2pm" },
+          "10-3": { surcharge: 2500, label: "10am - 3pm" },
+          "11-4": { surcharge: 2500, label: "11am - 4pm" },
+          "12-2": { surcharge: 3000, label: "12pm - 2pm" },
         },
       };
 
       expect(getTimeWindowSurcharge(pricing, "anytime")).toBe(0);
-      expect(getTimeWindowSurcharge(pricing, "10-3")).toBe(25);
-      expect(getTimeWindowSurcharge(pricing, "11-4")).toBe(25);
-      expect(getTimeWindowSurcharge(pricing, "12-2")).toBe(30);
+      expect(getTimeWindowSurcharge(pricing, "10-3")).toBe(2500);
+      expect(getTimeWindowSurcharge(pricing, "11-4")).toBe(2500);
+      expect(getTimeWindowSurcharge(pricing, "12-2")).toBe(3000);
     });
 
     it("should return surcharge when timeWindows values are plain numbers", () => {
       const pricing = {
         timeWindows: {
           anytime: 0,
-          "10-3": 25,
-          "11-4": 25,
-          "12-2": 30,
+          "10-3": 2500,
+          "11-4": 2500,
+          "12-2": 3000,
         },
       };
 
       expect(getTimeWindowSurcharge(pricing, "anytime")).toBe(0);
-      expect(getTimeWindowSurcharge(pricing, "10-3")).toBe(25);
-      expect(getTimeWindowSurcharge(pricing, "11-4")).toBe(25);
-      expect(getTimeWindowSurcharge(pricing, "12-2")).toBe(30);
+      expect(getTimeWindowSurcharge(pricing, "10-3")).toBe(2500);
+      expect(getTimeWindowSurcharge(pricing, "11-4")).toBe(2500);
+      expect(getTimeWindowSurcharge(pricing, "12-2")).toBe(3000);
     });
 
     it("should return 0 for unknown time window", () => {
       const pricing = {
         timeWindows: {
-          "10-3": 25,
+          "10-3": 2500,
         },
       };
 
@@ -430,13 +430,13 @@ describe("PricingContext Helper Functions", () => {
     });
 
     it("should use default pricing when pricing is null or undefined", () => {
-      expect(getTimeWindowSurcharge(null, "10-3")).toBe(25);
-      expect(getTimeWindowSurcharge(undefined, "10-3")).toBe(25);
+      expect(getTimeWindowSurcharge(null, "10-3")).toBe(2500);
+      expect(getTimeWindowSurcharge(undefined, "10-3")).toBe(2500);
     });
 
     it("should use default pricing when timeWindows is missing", () => {
-      const pricing = { basePrice: 150 };
-      expect(getTimeWindowSurcharge(pricing, "10-3")).toBe(25);
+      const pricing = { basePrice: 15000 };
+      expect(getTimeWindowSurcharge(pricing, "10-3")).toBe(2500);
     });
   });
 
@@ -468,20 +468,20 @@ describe("PricingContext Helper Functions", () => {
     it("should return correct label and surcharge for object format", () => {
       const pricing = {
         timeWindows: {
-          "10-3": { surcharge: 25, label: "10am - 3pm" },
-          "11-4": { surcharge: 25, label: "11am - 4pm" },
-          "12-2": { surcharge: 30, label: "12pm - 2pm" },
+          "10-3": { surcharge: 2500, label: "10am - 3pm" },
+          "11-4": { surcharge: 2500, label: "11am - 4pm" },
+          "12-2": { surcharge: 3000, label: "12pm - 2pm" },
         },
       };
 
       expect(getTimeWindowLabel(pricing, "10-3")).toEqual({
         label: "10am - 3pm",
-        surcharge: 25,
+        surcharge: 2500,
         shortLabel: "10-3",
       });
       expect(getTimeWindowLabel(pricing, "12-2")).toEqual({
         label: "12pm - 2pm",
-        surcharge: 30,
+        surcharge: 3000,
         shortLabel: "12-2",
       });
     });
@@ -489,14 +489,14 @@ describe("PricingContext Helper Functions", () => {
     it("should return correct label and surcharge for number format", () => {
       const pricing = {
         timeWindows: {
-          "10-3": 25,
-          "11-4": 25,
-          "12-2": 30,
+          "10-3": 2500,
+          "11-4": 2500,
+          "12-2": 3000,
         },
       };
 
       const result = getTimeWindowLabel(pricing, "10-3");
-      expect(result.surcharge).toBe(25);
+      expect(result.surcharge).toBe(2500);
       expect(result.label).toBe("10am - 3pm"); // Uses fallback label
       expect(result.shortLabel).toBe("10-3");
     });
@@ -504,7 +504,7 @@ describe("PricingContext Helper Functions", () => {
     it("should return Anytime for unknown time window", () => {
       const pricing = {
         timeWindows: {
-          "10-3": 25,
+          "10-3": 2500,
         },
       };
 
@@ -518,9 +518,9 @@ describe("PricingContext Helper Functions", () => {
     it("should use fallback labels for known time windows when label is missing", () => {
       const pricing = {
         timeWindows: {
-          "10-3": 25,
-          "11-4": 25,
-          "12-2": 30,
+          "10-3": 2500,
+          "11-4": 2500,
+          "12-2": 3000,
         },
       };
 
@@ -535,7 +535,7 @@ describe("PricingContext Helper Functions", () => {
       const pricing = {
         timeWindows: {
           anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
-          "10-3": { surcharge: 25, label: "10am - 3pm", description: "+$25" },
+          "10-3": { surcharge: 2500, label: "10am - 3pm", description: "+$25" },
         },
       };
 
@@ -552,22 +552,22 @@ describe("PricingContext Helper Functions", () => {
       const tenToThreeOption = options.find(o => o.value === "10-3");
       expect(tenToThreeOption).toBeDefined();
       expect(tenToThreeOption.label).toBe("10am - 3pm");
-      expect(tenToThreeOption.surcharge).toBe(25);
+      expect(tenToThreeOption.surcharge).toBe(2500);
     });
 
     it("should handle number format timeWindows", () => {
       const pricing = {
         timeWindows: {
           anytime: 0,
-          "10-3": 25,
+          "10-3": 2500,
         },
       };
 
       const options = getTimeWindowOptions(pricing);
 
       const tenToThreeOption = options.find(o => o.value === "10-3");
-      expect(tenToThreeOption.surcharge).toBe(25);
-      expect(tenToThreeOption.description).toBe("+$25 per cleaning");
+      expect(tenToThreeOption.surcharge).toBe(2500);
+      expect(tenToThreeOption.description).toBe("+$25.00 per cleaning");
     });
 
     it("should use default pricing when pricing is null", () => {
@@ -606,7 +606,7 @@ describe("PricingContext Business Owner Fee", () => {
   describe("API Response with businessOwnerFeePercent", () => {
     it("should parse businessOwnerFeePercent from API response", async () => {
       const mockPricing = {
-        basePrice: 175,
+        basePrice: 17500,
         platform: {
           feePercent: 0.1,
           businessOwnerFeePercent: 0.08,
@@ -641,7 +641,7 @@ describe("PricingContext Business Owner Fee", () => {
 
     it("should handle different businessOwnerFeePercent and feePercent values", async () => {
       const mockPricing = {
-        basePrice: 175,
+        basePrice: 17500,
         platform: {
           feePercent: 0.1,
           businessOwnerFeePercent: 0.05, // Lower fee for business owners
@@ -680,25 +680,25 @@ describe("PricingContext Business Owner Fee", () => {
   describe("Fee Calculations", () => {
     it("should calculate correct cleaner share for business owners", () => {
       const businessOwnerFeePercent = 0.1;
-      const jobPrice = 200;
+      const jobPrice = 20000;
 
       const fee = jobPrice * businessOwnerFeePercent;
       const cleanerShare = jobPrice - fee;
 
-      expect(fee).toBe(20);
-      expect(cleanerShare).toBe(180);
+      expect(fee).toBe(2000);
+      expect(cleanerShare).toBe(18000);
     });
 
     it("should calculate higher earnings for lower business owner fee", () => {
       const regularFeePercent = 0.1;
       const businessOwnerFeePercent = 0.08;
-      const jobPrice = 200;
+      const jobPrice = 20000;
 
       const regularEarnings = jobPrice * (1 - regularFeePercent);
       const businessOwnerEarnings = jobPrice * (1 - businessOwnerFeePercent);
 
-      expect(regularEarnings).toBe(180);
-      expect(businessOwnerEarnings).toBe(184);
+      expect(regularEarnings).toBe(18000);
+      expect(businessOwnerEarnings).toBe(18400);
       expect(businessOwnerEarnings).toBeGreaterThan(regularEarnings);
     });
 
@@ -782,7 +782,7 @@ describe("PricingContext Last-Minute Booking", () => {
 
     it("should identify booking within threshold as last-minute", () => {
       const pricing = {
-        lastMinute: { fee: 50, thresholdHours: 48 },
+        lastMinute: { fee: 5000, thresholdHours: 48 },
       };
 
       // 24 hours from now
@@ -791,14 +791,14 @@ describe("PricingContext Last-Minute Booking", () => {
       const result = isLastMinuteBooking(appointmentDate, pricing);
 
       expect(result.isLastMinute).toBe(true);
-      expect(result.fee).toBe(50);
+      expect(result.fee).toBe(5000);
       expect(result.hoursUntil).toBe(24);
       expect(result.thresholdHours).toBe(48);
     });
 
     it("should NOT identify booking outside threshold as last-minute", () => {
       const pricing = {
-        lastMinute: { fee: 50, thresholdHours: 48 },
+        lastMinute: { fee: 5000, thresholdHours: 48 },
       };
 
       // 72 hours from now
@@ -813,7 +813,7 @@ describe("PricingContext Last-Minute Booking", () => {
 
     it("should NOT identify past dates as last-minute", () => {
       const pricing = {
-        lastMinute: { fee: 50, thresholdHours: 48 },
+        lastMinute: { fee: 5000, thresholdHours: 48 },
       };
 
       // Yesterday
@@ -833,13 +833,13 @@ describe("PricingContext Last-Minute Booking", () => {
       const result = isLastMinuteBooking(appointmentDate, null);
 
       expect(result.isLastMinute).toBe(true);
-      expect(result.fee).toBe(50); // default
+      expect(result.fee).toBe(5000); // default
       expect(result.thresholdHours).toBe(48); // default
     });
 
     it("should handle date strings", () => {
       const pricing = {
-        lastMinute: { fee: 50, thresholdHours: 48 },
+        lastMinute: { fee: 5000, thresholdHours: 48 },
       };
 
       const result = isLastMinuteBooking("2026-01-09T12:00:00Z", pricing);
@@ -849,7 +849,7 @@ describe("PricingContext Last-Minute Booking", () => {
 
     it("should handle exactly at threshold boundary", () => {
       const pricing = {
-        lastMinute: { fee: 50, thresholdHours: 48 },
+        lastMinute: { fee: 5000, thresholdHours: 48 },
       };
 
       // Exactly 48 hours from now
@@ -862,7 +862,7 @@ describe("PricingContext Last-Minute Booking", () => {
 
     it("should handle custom fee and threshold", () => {
       const pricing = {
-        lastMinute: { fee: 75, thresholdHours: 72 },
+        lastMinute: { fee: 7500, thresholdHours: 72 },
       };
 
       // 60 hours from now (within 72 hour threshold)
@@ -871,7 +871,7 @@ describe("PricingContext Last-Minute Booking", () => {
       const result = isLastMinuteBooking(appointmentDate, pricing);
 
       expect(result.isLastMinute).toBe(true);
-      expect(result.fee).toBe(75);
+      expect(result.fee).toBe(7500);
       expect(result.thresholdHours).toBe(72);
     });
   });
@@ -880,7 +880,7 @@ describe("PricingContext Last-Minute Booking", () => {
     it("should return last-minute configuration from pricing", () => {
       const pricing = {
         lastMinute: {
-          fee: 75,
+          fee: 7500,
           thresholdHours: 72,
           notificationRadiusMiles: 30,
         },
@@ -888,7 +888,7 @@ describe("PricingContext Last-Minute Booking", () => {
 
       const result = getLastMinuteInfo(pricing);
 
-      expect(result.fee).toBe(75);
+      expect(result.fee).toBe(7500);
       expect(result.thresholdHours).toBe(72);
       expect(result.notificationRadiusMiles).toBe(30);
     });
@@ -896,7 +896,7 @@ describe("PricingContext Last-Minute Booking", () => {
     it("should use defaults when pricing is null", () => {
       const result = getLastMinuteInfo(null);
 
-      expect(result.fee).toBe(50);
+      expect(result.fee).toBe(5000);
       expect(result.thresholdHours).toBe(48);
       expect(result.notificationRadiusMiles).toBe(25);
     });
@@ -904,7 +904,7 @@ describe("PricingContext Last-Minute Booking", () => {
     it("should use defaults when lastMinute is missing", () => {
       const result = getLastMinuteInfo({});
 
-      expect(result.fee).toBe(50);
+      expect(result.fee).toBe(5000);
       expect(result.thresholdHours).toBe(48);
       expect(result.notificationRadiusMiles).toBe(25);
     });
@@ -912,13 +912,13 @@ describe("PricingContext Last-Minute Booking", () => {
     it("should use partial defaults for missing fields", () => {
       const pricing = {
         lastMinute: {
-          fee: 60, // Only fee provided
+          fee: 6000, // Only fee provided
         },
       };
 
       const result = getLastMinuteInfo(pricing);
 
-      expect(result.fee).toBe(60);
+      expect(result.fee).toBe(6000);
       expect(result.thresholdHours).toBe(48); // default
       expect(result.notificationRadiusMiles).toBe(25); // default
     });
@@ -927,7 +927,7 @@ describe("PricingContext Last-Minute Booking", () => {
   describe("defaultPricing last-minute configuration", () => {
     it("should have lastMinute configuration in defaults", () => {
       expect(defaultPricing.lastMinute).toBeDefined();
-      expect(defaultPricing.lastMinute.fee).toBe(50);
+      expect(defaultPricing.lastMinute.fee).toBe(5000);
       expect(defaultPricing.lastMinute.thresholdHours).toBe(48);
       expect(defaultPricing.lastMinute.notificationRadiusMiles).toBe(25);
     });
@@ -935,19 +935,19 @@ describe("PricingContext Last-Minute Booking", () => {
 
   describe("Last-Minute Fee Calculation", () => {
     it("should calculate total price with last-minute fee", () => {
-      const basePrice = 200;
-      const lastMinuteFee = 50;
+      const basePrice = 20000;
+      const lastMinuteFee = 5000;
 
       const totalPrice = basePrice + lastMinuteFee;
 
-      expect(totalPrice).toBe(250);
+      expect(totalPrice).toBe(25000);
     });
 
     it("should display fee breakdown correctly", () => {
-      const basePrice = 200;
-      const lastMinuteFee = 50;
+      const basePrice = 20000;
+      const lastMinuteFee = 5000;
 
-      const feeDisplay = `+$${lastMinuteFee} last-minute fee`;
+      const feeDisplay = `+$${lastMinuteFee / 100} last-minute fee`;
       expect(feeDisplay).toBe("+$50 last-minute fee");
     });
   });
@@ -956,99 +956,99 @@ describe("PricingContext Last-Minute Booking", () => {
 describe("calculateBasePrice helper", () => {
   it("should calculate base price for 1 bed 1 bath", () => {
     const pricing = {
-      basePrice: 150,
-      extraBedBathFee: 50,
-      halfBathFee: 25,
+      basePrice: 15000,
+      extraBedBathFee: 5000,
+      halfBathFee: 2500,
     };
 
     const result = calculateBasePrice(pricing, 1, 1);
 
-    expect(result).toBe(150);
+    expect(result).toBe(15000);
   });
 
   it("should add extra bed fee", () => {
     const pricing = {
-      basePrice: 150,
-      extraBedBathFee: 50,
-      halfBathFee: 25,
+      basePrice: 15000,
+      extraBedBathFee: 5000,
+      halfBathFee: 2500,
     };
 
     const result = calculateBasePrice(pricing, 3, 1);
 
-    // 150 + (2 extra beds * 50) = 250
-    expect(result).toBe(250);
+    // 15000 + (2 extra beds * 5000) = 25000
+    expect(result).toBe(25000);
   });
 
   it("should add extra bath fee", () => {
     const pricing = {
-      basePrice: 150,
-      extraBedBathFee: 50,
-      halfBathFee: 25,
+      basePrice: 15000,
+      extraBedBathFee: 5000,
+      halfBathFee: 2500,
     };
 
     const result = calculateBasePrice(pricing, 1, 3);
 
-    // 150 + (2 extra full baths * 50) = 250
-    expect(result).toBe(250);
+    // 15000 + (2 extra full baths * 5000) = 25000
+    expect(result).toBe(25000);
   });
 
   it("should handle half baths", () => {
     const pricing = {
-      basePrice: 150,
-      extraBedBathFee: 50,
-      halfBathFee: 25,
+      basePrice: 15000,
+      extraBedBathFee: 5000,
+      halfBathFee: 2500,
     };
 
     const result = calculateBasePrice(pricing, 2, 2.5);
 
-    // 150 + (1 extra bed * 50) + (1 extra full bath * 50) + (1 half bath * 25) = 275
-    expect(result).toBe(275);
+    // 15000 + (1 extra bed * 5000) + (1 extra full bath * 5000) + (1 half bath * 2500) = 27500
+    expect(result).toBe(27500);
   });
 
   it("should handle string bath values", () => {
     const pricing = {
-      basePrice: 150,
-      extraBedBathFee: 50,
-      halfBathFee: 25,
+      basePrice: 15000,
+      extraBedBathFee: 5000,
+      halfBathFee: 2500,
     };
 
     const result = calculateBasePrice(pricing, 2, "2.5");
 
-    expect(result).toBe(275);
+    expect(result).toBe(27500);
   });
 
   it("should use defaults when pricing is null", () => {
     const result = calculateBasePrice(null, 2, 2);
 
-    // Default: 150 + (1 * 50) + (1 * 50) = 250
-    expect(result).toBe(250);
+    // Default: 15000 + (1 * 5000) + (1 * 5000) = 25000
+    expect(result).toBe(25000);
   });
 
   it("should handle only half bath (0.5 baths)", () => {
     const pricing = {
-      basePrice: 150,
-      extraBedBathFee: 50,
-      halfBathFee: 25,
+      basePrice: 15000,
+      extraBedBathFee: 5000,
+      halfBathFee: 2500,
     };
 
     const result = calculateBasePrice(pricing, 1, 0.5);
 
-    // 150 + (0 extra full baths) + (1 half bath * 25) = 175
+    // 15000 + (0 extra full baths) + (1 half bath * 2500) = 17500
     // Note: The base includes 1 bath, but 0.5 means only a half bath
-    // So: 150 + 25 = 175
-    expect(result).toBe(175);
+    // So: 15000 + 2500 = 17500
+    expect(result).toBe(17500);
   });
 
   it("should handle large homes", () => {
     const pricing = {
-      basePrice: 150,
-      extraBedBathFee: 50,
-      halfBathFee: 25,
+      basePrice: 15000,
+      extraBedBathFee: 5000,
+      halfBathFee: 2500,
     };
 
     const result = calculateBasePrice(pricing, 5, 4);
 
-    // 150 + (4 extra beds * 50) + (3 extra baths * 50) = 150 + 200 + 150 = 500
-    expect(result).toBe(500);
+    // 15000 + (4 extra beds * 5000) + (3 extra baths * 5000) = 15000 + 20000 + 15000 = 50000
+    expect(result).toBe(50000);
   });
 });

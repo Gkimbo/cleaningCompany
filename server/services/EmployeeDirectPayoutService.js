@@ -190,13 +190,37 @@ class EmployeeDirectPayoutService {
           `[EmployeeDirectPayout] Paying business owner IMMEDIATELY: $${(businessOwnerAmount / 100).toFixed(2)} to ${businessOwnerConnect.stripeAccountId}`
         );
 
-        const businessOwnerTransfer = await stripe.transfers.create(
-          businessOwnerTransferParams
-        );
-        result.businessOwnerPayout = {
-          transferId: businessOwnerTransfer.id,
-          amount: businessOwnerAmount,
-        };
+        let businessOwnerTransfer;
+        try {
+          businessOwnerTransfer = await stripe.transfers.create(
+            businessOwnerTransferParams
+          );
+          result.businessOwnerPayout = {
+            transferId: businessOwnerTransfer.id,
+            amount: businessOwnerAmount,
+          };
+        } catch (stripeError) {
+          // Handle Stripe transfer errors gracefully
+          const errorMessage = stripeError.message || "Unknown Stripe error";
+          const errorCode = stripeError.code || "unknown";
+
+          console.error(`[EmployeeDirectPayout] Stripe transfer failed for business owner:`, {
+            code: errorCode,
+            message: errorMessage,
+            type: stripeError.type,
+          });
+
+          // If Stripe transfer fails, fall back to business owner (they can retry manually)
+          result.payoutMethod = "business_owner_fallback";
+          result.fallbackReason = `stripe_transfer_failed_${errorCode}`;
+          result.error = errorMessage;
+
+          if (errorCode === "balance_insufficient") {
+            result.error = "Platform has insufficient funds in Stripe account. Please add funds and retry the payout.";
+          }
+
+          return result;
+        }
       }
 
       // 2. QUEUE EMPLOYEE PAYOUT FOR BI-WEEKLY BATCH

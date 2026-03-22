@@ -2,7 +2,7 @@
  * BillingService - Client-side service for billing API calls
  */
 
-import { API_BASE } from "../config";
+import HttpClient from "../HttpClient";
 
 class BillingService {
   /**
@@ -12,23 +12,21 @@ class BillingService {
    * @returns {Object} { transactions, total, hasMore }
    */
   static async getBillingHistory(token, options = {}) {
-    try {
-      const params = new URLSearchParams();
-      if (options.limit) params.append("limit", options.limit);
-      if (options.offset) params.append("offset", options.offset);
+    const params = new URLSearchParams();
+    if (options.limit) params.append("limit", options.limit);
+    if (options.offset) params.append("offset", options.offset);
 
-      const queryStr = params.toString();
-      const url = queryStr ? API_BASE + "/billing/history?" + queryStr : API_BASE + "/billing/history";
-      const response = await fetch(url, {
-        headers: {
-          Authorization: "Bearer " + token,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching billing history:", error);
-      return { transactions: [], total: 0, error: "Failed to fetch billing history" };
+    const queryStr = params.toString();
+    const url = queryStr ? `/billing/history?${queryStr}` : "/billing/history";
+
+    const result = await HttpClient.get(url, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BillingService] getBillingHistory failed:", result.error);
+      return { transactions: [], total: 0, error: result.error || "Failed to fetch billing history" };
     }
+
+    return result;
   }
 
   /**
@@ -37,17 +35,14 @@ class BillingService {
    * @returns {Object} { summary }
    */
   static async getBillingSummary(token) {
-    try {
-      const response = await fetch(API_BASE + "/billing/summary", {
-        headers: {
-          Authorization: "Bearer " + token,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching billing summary:", error);
-      return { summary: null, error: "Failed to fetch billing summary" };
+    const result = await HttpClient.get("/billing/summary", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BillingService] getBillingSummary failed:", result.error);
+      return { summary: null, error: result.error || "Failed to fetch billing summary" };
     }
+
+    return result;
   }
 
   /**
@@ -57,20 +52,14 @@ class BillingService {
    * @returns {Object} { success, payment, payouts, error }
    */
   static async completeWithAutoPay(token, appointmentId) {
-    try {
-      const response = await fetch(API_BASE + "/billing/complete-with-autopay", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + token,
-        },
-        body: JSON.stringify({ appointmentId }),
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("Error completing with autopay:", error);
-      return { success: false, error: "Failed to complete appointment" };
+    const result = await HttpClient.post("/billing/complete-with-autopay", { appointmentId }, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BillingService] completeWithAutoPay failed:", result.error);
+      return { success: false, error: result.error || "Failed to complete appointment" };
     }
+
+    return result;
   }
 }
 

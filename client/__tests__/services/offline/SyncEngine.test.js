@@ -37,6 +37,7 @@ jest.mock("../../../src/services/offline/NetworkMonitor", () => ({
   __esModule: true,
   default: {
     isOnline: true,
+    subscribe: jest.fn(() => jest.fn()), // Returns unsubscribe function
   },
 }));
 
@@ -45,6 +46,7 @@ jest.mock("../../../src/services/offline/PhotoStorage", () => ({
   default: {
     markAsUploaded: jest.fn(),
     incrementUploadAttempts: jest.fn(),
+    deleteMismatchPhotosForJob: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -84,8 +86,9 @@ describe("SyncEngine", () => {
       await SyncEngine.initialize();
       await SyncEngine.initialize();
 
-      // Query should only be called once for recovery check
-      expect(syncQueueCollection.query).toHaveBeenCalledTimes(1);
+      // Query is called twice on first init: once for recovery, once for orphan cleanup
+      // Second initialize() is a no-op because _initialized is true
+      expect(syncQueueCollection.query).toHaveBeenCalledTimes(2);
     });
 
     it("should recover interrupted operations on initialize", async () => {
@@ -367,6 +370,60 @@ describe("SyncEngine", () => {
       expect(operation.markCompleted).toHaveBeenCalled();
     });
 
+    it("should sync home size mismatch operation", async () => {
+      const operation = {
+        id: "op-1",
+        jobId: "job-1",
+        operationType: SYNC_OPERATION_TYPES.HOME_SIZE_MISMATCH,
+        sequenceNumber: 2,
+        status: "pending",
+        payload: {
+          appointmentId: 1,
+          reportedNumBeds: "3",
+          reportedNumBaths: "2",
+          cleanerNote: "Extra bedroom found",
+          photos: [], // Empty for simplicity - no file reads needed
+        },
+        markInProgress: jest.fn(),
+        markCompleted: jest.fn(),
+        markFailed: jest.fn(),
+        attempts: 0,
+      };
+
+      const job = {
+        id: "job-1",
+        serverId: 100,
+        appointmentId: 1,
+        requiresSync: true,
+        update: jest.fn(),
+      };
+
+      syncQueueCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([operation]),
+      });
+
+      offlineJobsCollection.find.mockResolvedValue(job);
+      offlineJobsCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([job]),
+      });
+
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ success: true }),
+      });
+
+      const PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
+
+      await SyncEngine.startSync();
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/size-adjustment"),
+        expect.objectContaining({ method: "POST" })
+      );
+      expect(operation.markCompleted).toHaveBeenCalled();
+      expect(PhotoStorage.deleteMismatchPhotosForJob).toHaveBeenCalledWith(job.serverId);
+    });
+
     it("should sync job complete operation", async () => {
       const operation = {
         id: "op-1",
@@ -398,10 +455,22 @@ describe("SyncEngine", () => {
         fetch: jest.fn().mockResolvedValue([job]),
       });
 
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: jest.fn().mockResolvedValue({ job: { status: "completed" } }),
-      });
+      // First fetch: conflict check - return job as started (not completed)
+      global.fetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ job: { status: "started" } }),
+        })
+        // Second fetch: server state check in _syncJobComplete - return job as started
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ job: { status: "started" } }),
+        })
+        // Third fetch: actual complete-job call
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({ success: true }),
+        });
 
       await SyncEngine.startSync();
 
@@ -500,12 +569,13 @@ describe("SyncEngine", () => {
       expect(syncConflictsCollection.create).toHaveBeenCalled();
     });
 
-    it("should skip operations for non-existent jobs", async () => {
+    it("should mark operations as orphaned for non-existent jobs", async () => {
       const operation = {
         id: "op-1",
         jobId: "non-existent",
         operationType: SYNC_OPERATION_TYPES.START,
         status: "pending",
+        update: jest.fn(),
       };
 
       syncQueueCollection.query.mockReturnValue({
@@ -513,10 +583,16 @@ describe("SyncEngine", () => {
       });
 
       offlineJobsCollection.find.mockRejectedValue(new Error("Not found"));
+      offlineJobsCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([]),
+      });
 
       const result = await SyncEngine.startSync();
 
-      expect(result.success).toBe(true);
+      // Now returns status: "failed" because orphaned operations count as errors
+      expect(result.status).toBe("failed");
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].orphaned).toBe(true);
     });
   });
 

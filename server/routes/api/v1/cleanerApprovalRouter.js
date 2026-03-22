@@ -88,7 +88,7 @@ cleanerApprovalRouter.get("/my-requests", async (req, res) => {
                     address: EncryptionService.decrypt(r.appointment.home.address),
                     city: EncryptionService.decrypt(r.appointment.home.city),
                     state: EncryptionService.decrypt(r.appointment.home.state),
-                    zipcode: r.appointment.home.zipcode,
+                    zipcode: EncryptionService.decrypt(r.appointment.home.zipcode),
                     numBeds: r.appointment.home.numBeds,
                     numBaths: r.appointment.home.numBaths,
                     latitude: r.appointment.home.latitude,
@@ -152,10 +152,34 @@ cleanerApprovalRouter.get("/pending", async (req, res) => {
 /**
  * GET /appointment/:appointmentId
  * Get pending join requests for a specific appointment
+ * Only the homeowner or assigned cleaners can view these requests
  */
 cleanerApprovalRouter.get("/appointment/:appointmentId", async (req, res) => {
   try {
     const { appointmentId } = req.params;
+    const { UserAppointments, UserCleanerAppointments } = require("../../../models");
+
+    // Verify the appointment exists and check authorization
+    const appointment = await UserAppointments.findByPk(parseInt(appointmentId));
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Check if user is the homeowner
+    const isHomeowner = appointment.userId === req.userId;
+
+    // Check if user is an assigned cleaner
+    const isAssignedCleaner = await UserCleanerAppointments.findOne({
+      where: {
+        appointmentId: parseInt(appointmentId),
+        employeeId: req.userId,
+      },
+    });
+
+    if (!isHomeowner && !isAssignedCleaner) {
+      return res.status(403).json({ error: "You don't have permission to view requests for this appointment" });
+    }
+
     const requests = await CleanerApprovalService.getPendingRequestsForAppointment(
       parseInt(appointmentId)
     );
@@ -186,9 +210,11 @@ cleanerApprovalRouter.get("/appointment/:appointmentId", async (req, res) => {
 cleanerApprovalRouter.post("/:requestId/approve", async (req, res) => {
   try {
     const { requestId } = req.params;
+    const io = req.app.get("io");
     const result = await CleanerApprovalService.approveRequest(
       parseInt(requestId),
-      req.userId
+      req.userId,
+      io
     );
     return res.json(result);
   } catch (error) {
@@ -205,10 +231,12 @@ cleanerApprovalRouter.post("/:requestId/decline", async (req, res) => {
   try {
     const { requestId } = req.params;
     const { reason } = req.body;
+    const io = req.app.get("io");
     const result = await CleanerApprovalService.declineRequest(
       parseInt(requestId),
       req.userId,
-      reason
+      reason,
+      io
     );
     return res.json(result);
   } catch (error) {

@@ -261,7 +261,8 @@ const EmployeeJobsCalendarViewOnly = ({ state }) => {
   // Get jobs for a specific date
   const getJobsForDate = useCallback((date) => {
     return jobs.filter(job => {
-      const jobDate = new Date(job.appointment?.date + "T00:00:00");
+      if (!job.appointment?.date) return false;
+      const jobDate = new Date(job.appointment.date + "T12:00:00");
       return jobDate.toDateString() === date.toDateString();
     });
   }, [jobs]);
@@ -326,7 +327,8 @@ const EmployeeJobsCalendarViewOnly = ({ state }) => {
 
   // Get all jobs for current month for stats
   const monthJobs = jobs.filter(job => {
-    const jobDate = new Date(job.appointment?.date + "T00:00:00");
+    if (!job.appointment?.date) return false;
+    const jobDate = new Date(job.appointment.date + "T12:00:00");
     return jobDate.getMonth() === currentMonth.getMonth() &&
            jobDate.getFullYear() === currentMonth.getFullYear();
   });

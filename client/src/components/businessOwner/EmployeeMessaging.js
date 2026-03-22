@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -20,8 +21,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
-
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/v1";
+import { API_BASE } from "../../services/config";
 
 // Quick Action Card Component
 const QuickActionCard = ({ icon, label, sublabel, color, onPress, badge }) => (
@@ -118,6 +118,7 @@ const ConversationItem = ({ conversation, onPress }) => {
   };
 
   const formatTime = (dateStr) => {
+    if (!dateStr) return "—";
     const date = new Date(dateStr);
     const now = new Date();
     const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
@@ -303,7 +304,7 @@ const EmptyState = ({ icon, title, message, action, actionLabel }) => (
 
 // Main Component
 const EmployeeMessaging = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState([]);
   const [conversations, setConversations] = useState([]);
@@ -439,7 +440,7 @@ const EmployeeMessaging = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <View style={styles.headerCenter}>

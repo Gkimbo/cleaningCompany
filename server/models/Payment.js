@@ -54,6 +54,7 @@ module.exports = (sequelize, DataTypes) => {
         "capture",
         "refund",
         "payout",
+        "payout_reversal",
         "platform_fee"
       ),
       allowNull: false,
@@ -181,20 +182,21 @@ module.exports = (sequelize, DataTypes) => {
     });
   };
 
-  // Helper to generate unique transaction ID
+  // Helper to generate unique transaction ID using cryptographically secure random bytes
   Payment.generateTransactionId = () => {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 10);
-    return `txn_${timestamp}_${random}`;
+    const crypto = require("crypto");
+    return `txn_${crypto.randomBytes(16).toString("hex")}`;
   };
 
   // Get all reportable payments for a cleaner in a tax year
+  // Includes both payouts and payout_reversals for complete tax reporting
   Payment.getReportableForCleaner = async (cleanerId, taxYear) => {
+    const { Op } = require("sequelize");
     return Payment.findAll({
       where: {
         cleanerId,
         taxYear,
-        type: "payout",
+        type: { [Op.in]: ["payout", "payout_reversal"] },
         status: "succeeded",
         reportable: true,
       },
@@ -203,8 +205,12 @@ module.exports = (sequelize, DataTypes) => {
   };
 
   // Get total reportable amount for a cleaner in a tax year
+  // Calculates net amount: payouts minus payout_reversals
   Payment.getTotalReportableAmount = async (cleanerId, taxYear) => {
-    const result = await Payment.findOne({
+    const { Op } = require("sequelize");
+
+    // Get payout totals
+    const payoutResult = await Payment.findOne({
       where: {
         cleanerId,
         taxYear,
@@ -218,10 +224,38 @@ module.exports = (sequelize, DataTypes) => {
       ],
       raw: true,
     });
+
+    // Get payout_reversal totals (amounts to subtract)
+    const reversalResult = await Payment.findOne({
+      where: {
+        cleanerId,
+        taxYear,
+        type: "payout_reversal",
+        status: "succeeded",
+        reportable: true,
+      },
+      attributes: [
+        [sequelize.fn("SUM", sequelize.col("amount")), "totalAmount"],
+        [sequelize.fn("COUNT", sequelize.col("id")), "transactionCount"],
+      ],
+      raw: true,
+    });
+
+    const payoutAmountCents = parseInt(payoutResult?.totalAmount, 10) || 0;
+    const reversalAmountCents = parseInt(reversalResult?.totalAmount, 10) || 0;
+    const netAmountCents = payoutAmountCents - reversalAmountCents;
+    const payoutCount = parseInt(payoutResult?.transactionCount, 10) || 0;
+    const reversalCount = parseInt(reversalResult?.transactionCount, 10) || 0;
+
     return {
-      totalAmountCents: parseInt(result.totalAmount) || 0,
-      totalAmountDollars: ((parseInt(result.totalAmount) || 0) / 100).toFixed(2),
-      transactionCount: parseInt(result.transactionCount) || 0,
+      totalAmountCents: netAmountCents,
+      totalAmountDollars: (netAmountCents / 100).toFixed(2),
+      transactionCount: payoutCount + reversalCount,
+      // Additional breakdown for transparency
+      grossPayoutsCents: payoutAmountCents,
+      reversalsCents: reversalAmountCents,
+      payoutCount,
+      reversalCount,
     };
   };
 

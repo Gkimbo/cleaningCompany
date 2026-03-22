@@ -391,12 +391,82 @@ class AppealService {
 		// Unfreeze account
 		if (actions.accountUnfrozen) {
 			const user = await User.findByPk(appeal.appealerId, { transaction });
-			if (user && user.isFrozen) {
+			if (user && user.accountFrozen) {
+				const isHomeowner = user.type === "client" || user.type === "homeowner";
+
+				// Update user record within transaction
 				await user.update({
-					isFrozen: false,
-					frozenReason: null,
-					unfrozenAt: new Date(),
+					accountFrozen: false,
+					accountFrozenAt: null,
+					accountFrozenReason: null,
+					warningCount: 0, // Reset warnings on unfreeze
 				}, { transaction });
+
+				// For homeowners, also resume paused appointments and schedules
+				// Note: These operations are outside the transaction but are idempotent
+				if (isHomeowner) {
+					try {
+						const { UserAppointments, UserHomes, RecurringSchedule } = require("../models");
+						const { Op } = require("sequelize");
+
+						// Get homeowner's homes
+						const homes = await UserHomes.findAll({
+							where: { userId: appeal.appealerId },
+							attributes: ["id"],
+						});
+						const homeIds = homes.map(h => h.id);
+
+						if (homeIds.length > 0) {
+							// Resume paused appointments
+							const todayStr = new Date().toISOString().split("T")[0];
+							await UserAppointments.update(
+								{ isPaused: false, pausedAt: null, pauseReason: null },
+								{
+									where: {
+										homeId: { [Op.in]: homeIds },
+										isPaused: true,
+										pauseReason: "homeowner_account_frozen",
+										date: { [Op.gte]: todayStr },
+										wasCancelled: false,
+									},
+								}
+							);
+
+							// Re-enable marketplace visibility
+							await UserHomes.update(
+								{ isMarketplaceEnabled: true },
+								{ where: { id: { [Op.in]: homeIds } } }
+							);
+						}
+
+						// Resume recurring schedules (only those paused due to freeze)
+						await RecurringSchedule.update(
+							{ isPaused: false, pauseReason: null },
+							{ where: { clientId: appeal.appealerId, isPaused: true, pauseReason: "homeowner_account_frozen" } }
+						);
+
+						console.log(`[AppealService] Homeowner ${appeal.appealerId} unfrozen via appeal - appointments and schedules resumed`);
+					} catch (resumeErr) {
+						console.error("[AppealService] Error resuming homeowner appointments:", resumeErr);
+					}
+				}
+
+				// Notify user that their account has been restored
+				try {
+					const NotificationService = require("./NotificationService");
+					await NotificationService.notifyUser({
+						userId: appeal.appealerId,
+						type: "account_unfrozen",
+						title: "Account Restored - Appeal Approved",
+						message: "Your appeal has been approved and your account has been restored. You now have full access to the platform.",
+						data: {
+							unfrozenAt: new Date().toISOString(),
+							appealId: appeal.id,
+						},
+					});
+				} catch (notifyErr) {
+					console.error("[AppealService] Error sending unfreeze notification:", notifyErr);
+				}
 			}
 		}
 
@@ -448,7 +518,7 @@ class AppealService {
 		});
 		const categoryCounts = {};
 		categoryResults.forEach(r => {
-			categoryCounts[r.category] = parseInt(r.dataValues.count);
+			categoryCounts[r.category] = parseInt(r.dataValues.count, 10);
 		});
 
 		await user.update({
@@ -512,19 +582,39 @@ class AppealService {
 		let scrutinyLevel = "none";
 		let reason = null;
 
-		if (recentAppeals >= 5 || deniedAppeals >= 3) {
+		if (recentAppeals >= 10 || deniedAppeals >= 5) {
 			scrutinyLevel = "high_risk";
 			reason = `${recentAppeals} appeals in 6 months, ${deniedAppeals} denied`;
-		} else if (recentAppeals >= 3 || deniedAppeals >= 2) {
+		} else if (recentAppeals >= 5 || deniedAppeals >= 3) {
 			scrutinyLevel = "watch";
 			reason = `${recentAppeals} appeals in 6 months`;
 		}
+
+		// Check if transitioning to high_risk - issue warning to homeowners
+		const wasHighRisk = user.appealScrutinyLevel === "high_risk";
+		const isNowHighRisk = scrutinyLevel === "high_risk";
 
 		await user.update({
 			appealScrutinyLevel: scrutinyLevel,
 			appealScrutinyReason: reason,
 			appealScrutinySetAt: scrutinyLevel !== "none" ? new Date() : null,
 		}, { transaction });
+
+		// Issue warning to homeowners when they reach high_risk scrutiny level
+		if (!wasHighRisk && isNowHighRisk && (user.type === "client" || user.type === "homeowner")) {
+			try {
+				const HomeownerFreezeService = require("./HomeownerFreezeService");
+				await HomeownerFreezeService.checkAndWarnHomeowner(
+					userId,
+					"appeal_abuse",
+					0, // System-triggered
+					null // No socket.io in transaction context
+				);
+				console.log(`[AppealService] Warning issued to homeowner ${userId} for appeal abuse (high_risk scrutiny)`);
+			} catch (warnError) {
+				console.error(`[AppealService] Error issuing warning for appeal abuse:`, warnError.message);
+			}
+		}
 	}
 
 	/**
@@ -644,8 +734,8 @@ class AppealService {
 			total,
 			pending,
 			pastSLA,
-			byStatus: byStatus.reduce((acc, r) => ({ ...acc, [r.status]: parseInt(r.dataValues.count) }), {}),
-			byPriority: byPriority.reduce((acc, r) => ({ ...acc, [r.priority]: parseInt(r.dataValues.count) }), {}),
+			byStatus: byStatus.reduce((acc, r) => ({ ...acc, [r.status]: parseInt(r.dataValues.count, 10) }), {}),
+			byPriority: byPriority.reduce((acc, r) => ({ ...acc, [r.priority]: parseInt(r.dataValues.count, 10) }), {}),
 		};
 	}
 

@@ -35,6 +35,20 @@ const syncSingleCalendar = async (sync, sendEmail = false) => {
   };
 
   try {
+    // Check if homeowner account is frozen - skip sync if so
+    const homeowner = await User.findByPk(sync.userId, {
+      attributes: ["id", "accountFrozen"],
+    });
+    if (homeowner && homeowner.accountFrozen) {
+      result.error = "Homeowner account suspended - sync skipped";
+      await sync.update({
+        lastSyncAt: new Date(),
+        lastSyncStatus: "skipped",
+        lastSyncError: "Account suspended",
+      });
+      return result;
+    }
+
     // Fetch checkout dates from iCal
     const checkoutDates = await getCheckoutDates(sync.icalUrl);
     result.checkoutsFound = checkoutDates.length;
@@ -124,7 +138,7 @@ const syncSingleCalendar = async (sync, sendEmail = false) => {
           keyLocation: home.keyLocation,
           completed: false,
           hasBeenAssigned: false,
-          empoyeesNeeded: home.cleanersNeeded || 1,
+          employeesNeeded: home.cleanersNeeded || 1,
           timeToBeCompleted: home.timeToBeCompleted,
         });
 

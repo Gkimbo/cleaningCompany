@@ -53,14 +53,31 @@ class PushNotification {
   }
 
   // 1. Cancellation notification (to homeowner)
-  static async sendPushCancellation(expoPushToken, userName, appointmentDate, address) {
+  static async sendPushCancellation(expoPushToken, userName, appointmentDate, address, reason = "cancelled") {
     const fullAddress = `${address.street}, ${address.city}`;
-    const title = "Appointment Cancelled";
-    const body = `Hi ${userName}, your cleaning on ${formatDate(appointmentDate)} at ${fullAddress} has been cancelled. The appointment is still open for other cleaners.`;
+    const isAccountIssue = reason === "account_issues" || reason === "urgent_fill";
+    const isUrgentFill = reason === "urgent_fill";
+
+    let title, body, type;
+
+    if (isUrgentFill) {
+      title = "🚨 Priority Fill in Progress";
+      body = `Hi ${userName}, the cleaner for your ${formatDate(appointmentDate)} cleaning at ${fullAddress} was removed. Kleanr is pushing your appointment to priority cleaners within 10 miles now!`;
+      type = "urgent_fill_priority";
+    } else if (isAccountIssue) {
+      title = "Cleaner Removed";
+      body = `Hi ${userName}, the cleaner for your ${formatDate(appointmentDate)} cleaning at ${fullAddress} has been removed due to account issues. The appointment is still open for other cleaners.`;
+      type = "cleaner_removed";
+    } else {
+      title = "Appointment Cancelled";
+      body = `Hi ${userName}, your cleaning on ${formatDate(appointmentDate)} at ${fullAddress} has been cancelled. The appointment is still open for other cleaners.`;
+      type = "appointment_cancelled";
+    }
 
     return this.sendPushNotification(expoPushToken, title, body, {
-      type: "appointment_cancelled",
+      type,
       appointmentDate,
+      isPriority: isUrgentFill,
     });
   }
 
@@ -195,7 +212,7 @@ class PushNotification {
   // 13. Home size adjustment request (to homeowner)
   static async sendPushHomeSizeAdjustment(expoPushToken, userName, cleanerName, priceDifference) {
     const title = "Home Size Discrepancy";
-    const priceText = priceDifference > 0 ? ` (+$${priceDifference.toFixed(2)})` : "";
+    const priceText = priceDifference > 0 ? ` (+$${(priceDifference / 100).toFixed(2)})` : "";
     const body = `Hi ${userName}, ${cleanerName} reports your home is larger than on file${priceText}. Tap to review and respond.`;
 
     return this.sendPushNotification(expoPushToken, title, body, {
@@ -245,6 +262,20 @@ class PushNotification {
     return this.sendPushNotification(expoPushToken, title, body, {
       type: "payment_failed",
       daysRemaining,
+    });
+  }
+
+  // 17b. Payment captured notification (to homeowner)
+  static async sendPushPaymentCaptured(expoPushToken, amount, appointmentDate, cleanerName) {
+    const formattedAmount = typeof amount === "number" ? `$${(amount / 100).toFixed(2)}` : amount;
+    const title = "✅ Payment Processed";
+    const body = `Your payment of ${formattedAmount} was taken for your appointment on ${appointmentDate}. Being cleaned by ${cleanerName}.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "payment_captured",
+      amount,
+      appointmentDate,
+      cleanerName,
     });
   }
 
@@ -343,7 +374,7 @@ class PushNotification {
   // 25. Auto-payment processed (to client)
   static async sendPushAutoPaymentProcessed(expoPushToken, clientName, amount, appointmentDate) {
     const title = "Payment Processed ✅";
-    const body = `Hi ${clientName}! $${amount.toFixed(2)} was charged for your cleaning on ${formatDate(appointmentDate)}. View receipt in app.`;
+    const body = `Hi ${clientName}! $${(amount / 100).toFixed(2)} was charged for your cleaning on ${formatDate(appointmentDate)}. View receipt in app.`;
 
     return this.sendPushNotification(expoPushToken, title, body, {
       type: "auto_payment_processed",
@@ -355,7 +386,7 @@ class PushNotification {
   // 26. Payout received (to cleaner)
   static async sendPushPayoutReceived(expoPushToken, cleanerName, amount, clientName) {
     const title = "Payout on the Way! 💰";
-    const body = `Hi ${cleanerName}! $${amount.toFixed(2)} is being sent to your bank for the ${clientName} cleaning.`;
+    const body = `Hi ${cleanerName}! $${(amount / 100).toFixed(2)} is being sent to your bank for the ${clientName} cleaning.`;
 
     return this.sendPushNotification(expoPushToken, title, body, {
       type: "payout_received",
@@ -543,7 +574,7 @@ class PushNotification {
 
   // 40. Completion approved (to cleaner)
   static async sendPushCompletionApproved(expoPushToken, appointmentDate, payoutAmount) {
-    const formattedPayout = payoutAmount ? `$${parseFloat(payoutAmount).toFixed(2)}` : "your payment";
+    const formattedPayout = payoutAmount ? `$${(parseFloat(payoutAmount) / 100).toFixed(2)}` : "your payment";
     const title = "Job Approved! 🎉";
     const body = `Your cleaning on ${appointmentDate} was approved! ${formattedPayout} is on the way.`;
 
@@ -793,6 +824,50 @@ class PushNotification {
       disputeId: String(disputeId),
       issueType,
       priority,
+      actionRequired: true,
+    });
+  }
+
+  // 54. IT dispute submitted (to IT staff)
+  static async sendPushITDispute(expoPushToken, reporterName, categoryLabel, caseNumber, priority) {
+    const priorityEmoji = {
+      critical: "🚨",
+      high: "🔴",
+      normal: "🔵",
+      low: "⚪",
+    };
+    const emoji = priorityEmoji[priority] || "🔵";
+    const title = `${emoji} New IT Issue`;
+    const body = `${reporterName} reported: ${categoryLabel}. Case: ${caseNumber}`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "it_dispute_submitted",
+      caseNumber,
+      priority,
+      actionRequired: true,
+    });
+  }
+
+  // 55. IT dispute resolved (to reporter)
+  static async sendPushITDisputeResolved(expoPushToken, caseNumber) {
+    const title = "IT Issue Resolved";
+    const body = `Your IT issue (${caseNumber}) has been resolved. Tap for details.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "it_dispute_resolved",
+      caseNumber,
+      actionRequired: false,
+    });
+  }
+
+  // 56. Stripe Connect setup invitation (to employee)
+  static async sendPushStripeSetupInvitation(expoPushToken, businessOwnerName) {
+    const title = "Set Up Direct Payments 💰";
+    const body = `${businessOwnerName} has enabled bi-weekly direct payments for you. Tap to connect your bank account and get paid!`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "stripe_setup_invitation",
+      screen: "PaymentSettings",
       actionRequired: true,
     });
   }

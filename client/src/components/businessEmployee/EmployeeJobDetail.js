@@ -11,7 +11,8 @@ import {
 } from "react-native";
 import { useNavigate, useParams } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import BusinessEmployeeService from "../../services/fetchRequests/BusinessEmployeeService";
+import OfflineBusinessEmployeeService from "../../services/offline/OfflineBusinessEmployeeService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -81,7 +82,7 @@ const CoWorkerCard = ({ employee, isSelf }) => (
 
 // Main Component
 const EmployeeJobDetail = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const { assignmentId } = useParams();
   const [loading, setLoading] = useState(true);
   const [job, setJob] = useState(null);
@@ -91,7 +92,7 @@ const EmployeeJobDetail = ({ state }) => {
 
   const fetchJobFlow = async () => {
     try {
-      const flow = await BusinessEmployeeService.getJobFlow(
+      const flow = await OfflineBusinessEmployeeService.getJobFlow(
         state.currentUser.token,
         assignmentId
       );
@@ -106,7 +107,7 @@ const EmployeeJobDetail = ({ state }) => {
     setError(null);
 
     try {
-      const result = await BusinessEmployeeService.getJobDetails(
+      const result = await OfflineBusinessEmployeeService.getJobDetails(
         state.currentUser.token,
         assignmentId
       );
@@ -133,7 +134,7 @@ const EmployeeJobDetail = ({ state }) => {
     setActionLoading(true);
 
     try {
-      const result = await BusinessEmployeeService.startJob(
+      const result = await OfflineBusinessEmployeeService.startJob(
         state.currentUser.token,
         job.id
       );
@@ -163,7 +164,7 @@ const EmployeeJobDetail = ({ state }) => {
             setActionLoading(true);
 
             try {
-              const result = await BusinessEmployeeService.completeJob(
+              const result = await OfflineBusinessEmployeeService.completeJob(
                 state.currentUser.token,
                 job.id
               );
@@ -202,7 +203,8 @@ const EmployeeJobDetail = ({ state }) => {
   };
 
   const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
+    // Add T12:00:00 to treat date as local time, not UTC
+    const date = new Date(dateStr + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       month: "long",
@@ -216,6 +218,14 @@ const EmployeeJobDetail = ({ state }) => {
     const [hours, minutes] = timeStr.split(":");
     const h = parseInt(hours);
     return `${h > 12 ? h - 12 : h}:${minutes} ${h >= 12 ? "PM" : "AM"}`;
+  };
+
+  const getEstimatedDuration = (home) => {
+    if (!home) return 2;
+    const beds = parseInt(home.numBeds) || 2;
+    const baths = parseInt(home.numBaths) || 1;
+    // Formula: base 1hr + 0.25hr/bed + 0.5hr/bath, rounded to nearest half hour
+    return Math.ceil((1 + beds * 0.25 + baths * 0.5) * 2) / 2;
   };
 
   if (loading) {
@@ -233,7 +243,7 @@ const EmployeeJobDetail = ({ state }) => {
         <Icon name="exclamation-circle" size={48} color={colors.error[400]} />
         <Text style={styles.errorTitle}>Error</Text>
         <Text style={styles.errorText}>{error || "Job not found"}</Text>
-        <Pressable style={styles.retryButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.retryButton} onPress={() => goBack()}>
           <Text style={styles.retryButtonText}>Go Back</Text>
         </Pressable>
       </View>
@@ -248,13 +258,13 @@ const EmployeeJobDetail = ({ state }) => {
   const hasCoWorkers = coWorkers.length > 0;
 
   // Check if job is today
-  const isToday = new Date(appointment.date + "T00:00:00").toDateString() === new Date().toDateString();
+  const isToday = new Date(appointment.date + "T12:00:00").toDateString() === new Date().toDateString();
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.headerTitle}>Job Details</Text>
@@ -285,16 +295,16 @@ const EmployeeJobDetail = ({ state }) => {
           <View style={styles.dateTimeHeader}>
             <View style={styles.dateBadge}>
               <Text style={styles.dateBadgeDay}>
-                {new Date(appointment.date + "T00:00:00").getDate()}
+                {new Date(appointment.date + "T12:00:00").getDate()}
               </Text>
               <Text style={styles.dateBadgeMonth}>
-                {new Date(appointment.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+                {new Date(appointment.date + "T12:00:00").toLocaleDateString("en-US", { month: "short" })}
               </Text>
             </View>
             <View style={styles.dateTimeInfo}>
               <Text style={styles.dateText}>{formatDate(appointment.date)}</Text>
               <Text style={styles.timeText}>
-                {formatTime(appointment.startTime)} - {appointment.duration || 2} hours
+                ~{getEstimatedDuration(home)} hours
               </Text>
             </View>
           </View>
@@ -306,10 +316,10 @@ const EmployeeJobDetail = ({ state }) => {
             <View style={styles.payCardContent}>
               <Text style={styles.payLabel}>Your Pay</Text>
               <Text style={styles.payAmount}>
-                ${(job.payAmount / 100).toFixed(2)}
+                ${((job.payAmount || 0) / 100).toFixed(2)}
               </Text>
-              {job.payType === "hourly" && (
-                <Text style={styles.payType}>Hourly rate</Text>
+              {job.payBreakdown && (
+                <Text style={styles.payBreakdown}>{job.payBreakdown}</Text>
               )}
             </View>
             <View style={styles.payStatusBadge}>
@@ -690,9 +700,10 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.success[700],
   },
-  payType: {
-    fontSize: typography.fontSize.xs,
+  payBreakdown: {
+    fontSize: typography.fontSize.sm,
     color: colors.success[600],
+    marginTop: spacing.xs,
   },
   payStatusBadge: {
     backgroundColor: colors.success[100],

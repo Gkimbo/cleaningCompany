@@ -8,13 +8,13 @@ import {
   Pressable,
   Switch,
 } from "react-native";
-import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { usePricing } from "../../context/PricingContext";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const BusinessCalculator = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const { pricing } = usePricing();
 
   // Determine fee based on user type
@@ -109,7 +109,7 @@ const BusinessCalculator = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Feather name="arrow-left" size={20} color={colors.primary[600]} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>

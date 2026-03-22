@@ -13,6 +13,7 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
 import EmployeeWorkloadCard from "./EmployeeWorkloadCard";
 import AssignJobModal from "./AssignJobModal";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -20,6 +21,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { toLocalDateString } from "../../services/formatters";
 
 // View modes for the screen
 const VIEW_MODES = [
@@ -47,8 +49,8 @@ const getDateRange = (preset) => {
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
       return {
-        startDate: start.toISOString().split("T")[0],
-        endDate: end.toISOString().split("T")[0],
+        startDate: toLocalDateString(start),
+        endDate: toLocalDateString(end),
       };
     }
     case "lastWeek": {
@@ -57,24 +59,24 @@ const getDateRange = (preset) => {
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
       return {
-        startDate: start.toISOString().split("T")[0],
-        endDate: end.toISOString().split("T")[0],
+        startDate: toLocalDateString(start),
+        endDate: toLocalDateString(end),
       };
     }
     case "month": {
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
       const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       return {
-        startDate: start.toISOString().split("T")[0],
-        endDate: end.toISOString().split("T")[0],
+        startDate: toLocalDateString(start),
+        endDate: toLocalDateString(end),
       };
     }
     case "lastMonth": {
       const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const end = new Date(now.getFullYear(), now.getMonth(), 0);
       return {
-        startDate: start.toISOString().split("T")[0],
-        endDate: end.toISOString().split("T")[0],
+        startDate: toLocalDateString(start),
+        endDate: toLocalDateString(end),
       };
     }
     default:
@@ -85,7 +87,8 @@ const getDateRange = (preset) => {
 // Format date for display
 const formatDate = (dateStr) => {
   if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+  return new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
@@ -111,7 +114,7 @@ const EmployeeHoursCard = ({ employee, summary, onViewDetails }) => {
         </Text>
       </View>
       <View style={styles.employeeHours}>
-        <Text style={styles.hoursValue}>{summary.totalHours.toFixed(1)}</Text>
+        <Text style={styles.hoursValue}>{(summary.totalHours || 0).toFixed(1)}</Text>
         <Text style={styles.hoursLabel}>hours</Text>
       </View>
       <View style={styles.employeePay}>
@@ -159,7 +162,7 @@ const JobRow = ({ job }) => {
 
 // Main Component
 const TimesheetScreen = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timesheetData, setTimesheetData] = useState(null);
@@ -292,7 +295,7 @@ const TimesheetScreen = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.title}>

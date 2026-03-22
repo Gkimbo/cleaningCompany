@@ -24,6 +24,7 @@ jest.mock("@stripe/stripe-react-native", () => ({
 // Mock navigation
 jest.mock("react-router-native", () => ({
   useNavigate: () => jest.fn(),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 // Mock fetch

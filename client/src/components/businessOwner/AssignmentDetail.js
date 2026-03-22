@@ -14,6 +14,7 @@ import {
 import { useNavigate, useParams } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -302,7 +303,7 @@ const AddEmployeeModal = ({
   const existingTeamPay = (recalculatedExistingPay || 0) / 100;
   const newEmployeePay = selectedEmployee ? (selectedEmployee.calculatedPay || 0) / 100 : 0;
   const totalEmployeePay = existingTeamPay + newEmployeePay;
-  const projectedProfit = jobPrice - platformFee - totalEmployeePay;
+  const projectedProfit = (jobPrice || 0) - (platformFee || 0) - totalEmployeePay;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -432,7 +433,7 @@ const AddEmployeeModal = ({
 
 // Main Component
 const AssignmentDetail = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const { assignmentId } = useParams();
   const [loading, setLoading] = useState(true);
   const [assignment, setAssignment] = useState(null);
@@ -573,7 +574,7 @@ const AssignmentDetail = ({ state }) => {
                 if (remainingAssignment) {
                   navigate(`/business-owner/assignments/${remainingAssignment.id}`, { replace: true });
                 } else {
-                  navigate(-1);
+                  goBack();
                 }
               } else {
                 fetchAssignmentDetails();
@@ -608,7 +609,7 @@ const AssignmentDetail = ({ state }) => {
   };
 
   const formatDate = (dateStr) => {
-    const date = new Date(dateStr + "T00:00:00");
+    const date = new Date(dateStr + "T12:00:00");
     return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   };
 
@@ -636,7 +637,7 @@ const AssignmentDetail = ({ state }) => {
         </View>
         <Text style={styles.errorTitle}>Something went wrong</Text>
         <Text style={styles.errorText}>{error || "Assignment not found"}</Text>
-        <Pressable style={styles.errorButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.errorButton} onPress={() => goBack()}>
           <Text style={styles.errorButtonText}>Go Back</Text>
         </Pressable>
       </View>
@@ -648,7 +649,7 @@ const AssignmentDetail = ({ state }) => {
   const home = appointment.home || {};
   const client = home.user || {};
   const employee = assignment.employee || {};
-  const isToday = appointment.date && new Date(appointment.date + "T00:00:00").toDateString() === new Date().toDateString();
+  const isToday = appointment.date && new Date(appointment.date + "T12:00:00").toDateString() === new Date().toDateString();
   const existingEmployeeIds = allAssignments.map((a) => a.businessEmployeeId).filter(Boolean);
 
   // Calculate financials
@@ -661,7 +662,7 @@ const AssignmentDetail = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <View style={styles.headerCenter}>
@@ -681,10 +682,10 @@ const AssignmentDetail = ({ state }) => {
           <View style={styles.heroDateSection}>
             <View style={styles.heroDateBadge}>
               <Text style={styles.heroDateDay}>
-                {appointment.date ? new Date(appointment.date + "T00:00:00").getDate() : "-"}
+                {appointment.date ? new Date(appointment.date + "T12:00:00").getDate() : "-"}
               </Text>
               <Text style={styles.heroDateMonth}>
-                {appointment.date ? new Date(appointment.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" }).toUpperCase() : ""}
+                {appointment.date ? new Date(appointment.date + "T12:00:00").toLocaleDateString("en-US", { month: "short" }).toUpperCase() : ""}
               </Text>
             </View>
             <View style={styles.heroDateInfo}>
@@ -719,6 +720,21 @@ const AssignmentDetail = ({ state }) => {
             </View>
           </View>
         </View>
+
+        {/* Payment Issue Warning */}
+        {appointment.paymentCaptureFailed && !appointment.completed && (
+          <View style={styles.paymentWarningBanner}>
+            <View style={styles.paymentWarningIcon}>
+              <Icon name="exclamation-circle" size={18} color={colors.error[500]} />
+            </View>
+            <View style={styles.paymentWarningContent}>
+              <Text style={styles.paymentWarningTitle}>Payment Issue</Text>
+              <Text style={styles.paymentWarningText}>
+                The homeowner's payment method has failed. They've been notified to update it.
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Team Section */}
         <View style={styles.section}>
@@ -1013,6 +1029,40 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.lg,
     ...shadows.sm,
+  },
+  // Payment Warning
+  paymentWarningBanner: {
+    flexDirection: "row",
+    backgroundColor: colors.error[50],
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.error[200],
+  },
+  paymentWarningIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.error[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  paymentWarningContent: {
+    flex: 1,
+  },
+  paymentWarningTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.error[700],
+    marginBottom: 2,
+  },
+  paymentWarningText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.error[600],
+    lineHeight: 16,
   },
   heroDateSection: {
     flexDirection: "row",

@@ -89,6 +89,13 @@ const PREVIEW_ROLES = [
 		icon: "home",
 		color: colors.success[400],
 	},
+	{
+		role: "it",
+		label: "IT Support",
+		description: "Handle tech support tickets and disputes",
+		icon: "headphones",
+		color: colors.primary[400],
+	},
 ];
 
 const RoleCard = ({ role, isSelected, onSelect, disabled }) => {

@@ -279,7 +279,8 @@ describe("Payment Router Cron - Push Notifications", () => {
       const twoDaysFromNow = new Date(now);
       twoDaysFromNow.setDate(twoDaysFromNow.getDate() + 2);
 
-      const diffInDays = Math.floor(
+      // Use Math.round to handle DST transitions (e.g., 4 days during "spring forward" = 95 hours = 3.958 days)
+      const diffInDays = Math.round(
         (twoDaysFromNow - now) / (1000 * 60 * 60 * 24)
       );
 
@@ -292,7 +293,8 @@ describe("Payment Router Cron - Push Notifications", () => {
       const oneDayFromNow = new Date(now);
       oneDayFromNow.setDate(oneDayFromNow.getDate() + 1);
 
-      const diffInDays = Math.floor(
+      // Use Math.round to handle DST transitions
+      const diffInDays = Math.round(
         (oneDayFromNow - now) / (1000 * 60 * 60 * 24)
       );
 
@@ -305,7 +307,8 @@ describe("Payment Router Cron - Push Notifications", () => {
       const fourDaysFromNow = new Date(now);
       fourDaysFromNow.setDate(fourDaysFromNow.getDate() + 4);
 
-      const diffInDays = Math.floor(
+      // Use Math.round to handle DST transitions (95 hours / 24 = 3.958, rounds to 4)
+      const diffInDays = Math.round(
         (fourDaysFromNow - now) / (1000 * 60 * 60 * 24)
       );
 

@@ -113,8 +113,8 @@ module.exports = (sequelize, DataTypes) => {
 			raw: true,
 		});
 		return {
-			total: parseInt(result.total) || 0,
-			count: parseInt(result.count) || 0,
+			total: parseInt(result.total, 10) || 0,
+			count: parseInt(result.count, 10) || 0,
 		};
 	};
 

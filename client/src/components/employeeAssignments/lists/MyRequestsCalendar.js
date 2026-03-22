@@ -28,6 +28,7 @@ import * as Location from "expo-location";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import RequestedTile from "../tiles/RequestedTile";
+import { useOffline } from "../../../services/offline/OfflineContext";
 import {
   colors,
   spacing,
@@ -38,9 +39,17 @@ import {
 import { usePricing } from "../../../context/PricingContext";
 import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
 
-// Format time constraint for display: "10-3" → "10am - 3pm"
+import useSafeNavigation from "../../../hooks/useSafeNavigation";
+import { toLocalDateString, getTodayString } from "../../../services/formatters";
+// Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (time) => {
   if (!time || time.toLowerCase() === "anytime") return "Anytime";
+  // Check if it's a numeric hours limit (e.g., "2.5", "3")
+  const numericValue = parseFloat(time);
+  if (!isNaN(numericValue) && numericValue > 0 && numericValue <= 12) {
+    const unit = numericValue === 1 ? "hr" : "hrs";
+    return `Within ${numericValue} ${unit}`;
+  }
   const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
   if (!match) return time;
   const startHour = parseInt(match[1], 10);
@@ -97,7 +106,21 @@ const MyRequestsCalendar = ({ state }) => {
   // Track which request linens dropdowns are expanded
   const [expandedLinens, setExpandedLinens] = useState({});
 
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
+  const { isOffline } = useOffline();
+
+  // Helper to check offline and show alert
+  const requiresOnline = (action = "This action") => {
+    if (isOffline) {
+      Alert.alert(
+        "Internet Required",
+        `${action} requires an internet connection. Please connect to the internet and try again.`,
+        [{ text: "OK" }]
+      );
+      return true;
+    }
+    return false;
+  };
 
   const toggleLinens = useCallback((requestId) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -124,7 +147,7 @@ const MyRequestsCalendar = ({ state }) => {
 
         const now = new Date();
         const isUpcoming = (item) =>
-          new Date(item.date + "T00:00:00") >= new Date(now.toDateString());
+          new Date(item.date + "T12:00:00") >= new Date(now.toDateString());
 
         setRequests((res.requested || []).filter(isUpcoming));
         setUserId(user.user.id);
@@ -234,6 +257,7 @@ const MyRequestsCalendar = ({ state }) => {
   // Handle cancelling a team request
   const handleCancelTeamRequest = useCallback(
     (request) => {
+      if (requiresOnline("Cancelling a team request")) return;
       Alert.alert(
         "Cancel Request",
         "Are you sure you want to cancel this team cleaning request?",
@@ -276,7 +300,7 @@ const MyRequestsCalendar = ({ state }) => {
         ]
       );
     },
-    [state.currentUser.token]
+    [state.currentUser.token, requiresOnline]
   );
 
   // Sort helper
@@ -340,7 +364,8 @@ const MyRequestsCalendar = ({ state }) => {
 
   const formatSelectedDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateString + "T12:00:00");
     const options = { weekday: "long", month: "long", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
   };
@@ -367,9 +392,8 @@ const MyRequestsCalendar = ({ state }) => {
   // Calendar day render
   const renderDay = useCallback(
     ({ date }) => {
-      const today = new Date();
-      const dayDate = new Date(date.dateString);
-      const isPast = dayDate < new Date(today.toDateString());
+      const todayString = getTodayString();
+      const isPast = date.dateString < todayString;
 
       const soloCount = requests.filter(
         (r) => r.date === date.dateString
@@ -434,7 +458,7 @@ const MyRequestsCalendar = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="angle-left" size={20} color={colors.primary[600]} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
@@ -469,7 +493,7 @@ const MyRequestsCalendar = ({ state }) => {
             </Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{totalEarnings.toFixed(0)}</Text>
+            <Text style={styles.statValue}>{(totalEarnings / 100).toFixed(0)}</Text>
             <Text style={styles.statLabel}>Potential</Text>
           </View>
           <View style={styles.statCard}>
@@ -489,7 +513,7 @@ const MyRequestsCalendar = ({ state }) => {
         {/* Calendar */}
         <View style={styles.calendarContainer}>
           <Calendar
-            current={new Date().toISOString().split("T")[0]}
+            current={toLocalDateString(new Date())}
             onDayPress={handleDateSelect}
             dayComponent={renderDay}
             renderArrow={(direction) => (
@@ -648,14 +672,14 @@ const MyRequestsCalendar = ({ state }) => {
                             {req.appointment?.home?.state}
                           </Text>
                           <Text style={styles.teamRequestDate}>
-                            {new Date(req.appointment?.date + "T00:00:00").toLocaleDateString(
+                            {req.appointment?.date ? new Date(req.appointment.date + "T12:00:00").toLocaleDateString(
                               "en-US",
                               {
                                 weekday: "short",
                                 month: "short",
                                 day: "numeric",
                               }
-                            )}
+                            ) : "—"}
                           </Text>
                           <View style={styles.teamRequestDetails}>
                             <Text style={styles.teamRequestDetail}>

@@ -118,8 +118,8 @@ stripeTaxRouter.get("/earnings/:year", async (req, res) => {
 
   try {
     // Get date range for the tax year
-    const start = new Date(`${taxYear}-01-01T00:00:00Z`);
-    const end = new Date(`${taxYear + 1}-01-01T00:00:00Z`);
+    const start = new Date(`${taxYear}-01-01T12:00:00Z`);
+    const end = new Date(`${taxYear + 1}-01-01T12:00:00Z`);
 
     // Get all completed payouts for the year
     const payments = await Payment.findAll({
@@ -345,8 +345,8 @@ stripeTaxRouter.get("/contractor/tax-summary/:year", async (req, res) => {
   const userId = decoded.userId;
 
   try {
-    const start = new Date(`${taxYear}-01-01T00:00:00Z`);
-    const end = new Date(`${taxYear + 1}-01-01T00:00:00Z`);
+    const start = new Date(`${taxYear}-01-01T12:00:00Z`);
+    const end = new Date(`${taxYear + 1}-01-01T12:00:00Z`);
 
     const payments = await Payment.findAll({
       where: {
@@ -730,8 +730,8 @@ stripeTaxRouter.get("/admin/verify-setup", requireBusinessOwner, async (req, res
   // Check 5: Current year earnings tracking
   try {
     const currentYear = new Date().getFullYear();
-    const yearStart = new Date(`${currentYear}-01-01T00:00:00Z`);
-    const yearEnd = new Date(`${currentYear + 1}-01-01T00:00:00Z`);
+    const yearStart = new Date(`${currentYear}-01-01T12:00:00Z`);
+    const yearEnd = new Date(`${currentYear + 1}-01-01T12:00:00Z`);
 
     const yearPayments = await Payment.findAll({
       where: {
@@ -825,8 +825,8 @@ stripeTaxRouter.get("/admin/connected-accounts-summary", requireBusinessOwner, a
 
   try {
     const currentYear = new Date().getFullYear();
-    const yearStart = new Date(`${currentYear}-01-01T00:00:00Z`);
-    const yearEnd = new Date(`${currentYear + 1}-01-01T00:00:00Z`);
+    const yearStart = new Date(`${currentYear}-01-01T12:00:00Z`);
+    const yearEnd = new Date(`${currentYear + 1}-01-01T12:00:00Z`);
 
     // Get all connected accounts from database
     const dbAccounts = await StripeConnectAccount.findAll({

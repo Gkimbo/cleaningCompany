@@ -81,7 +81,7 @@ const getNextVersion = async (type) => {
 };
 
 // Valid document types
-const VALID_TYPES = ["homeowner", "cleaner", "privacy_policy"];
+const VALID_TYPES = ["homeowner", "cleaner", "privacy_policy", "payment_terms", "damage_protection"];
 
 /**
  * Get current T&C for a type (public - no auth required)
@@ -91,7 +91,7 @@ termsRouter.get("/current/:type", async (req, res) => {
   const { type } = req.params;
 
   if (!VALID_TYPES.includes(type)) {
-    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', or 'privacy_policy'" });
+    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', 'payment_terms', or 'damage_protection'" });
   }
 
   try {
@@ -155,6 +155,18 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       order: [["version", "DESC"]],
     });
 
+    // Get current payment terms (applies to ALL user types)
+    const currentPaymentTerms = await TermsAndConditions.findOne({
+      where: { type: "payment_terms" },
+      order: [["version", "DESC"]],
+    });
+
+    // Get current damage protection policy (applies to homeowners only)
+    const currentDamageProtection = await TermsAndConditions.findOne({
+      where: { type: "damage_protection" },
+      order: [["version", "DESC"]],
+    });
+
     // Check if user needs to accept terms
     let requiresTermsAcceptance = false;
     let termsData = null;
@@ -205,12 +217,64 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       }
     }
 
-    const requiresAcceptance = requiresTermsAcceptance || requiresPrivacyAcceptance;
+    // Check if user needs to accept payment terms (ALL users must accept)
+    let requiresPaymentTermsAcceptance = false;
+    let paymentTermsData = null;
+    if (currentPaymentTerms) {
+      const userPaymentTermsVersion = user.paymentTermsAcceptedVersion;
+      requiresPaymentTermsAcceptance = !userPaymentTermsVersion || userPaymentTermsVersion < currentPaymentTerms.version;
+
+      if (requiresPaymentTermsAcceptance) {
+        paymentTermsData = {
+          id: currentPaymentTerms.id,
+          type: currentPaymentTerms.type,
+          version: currentPaymentTerms.version,
+          title: currentPaymentTerms.title,
+          contentType: currentPaymentTerms.contentType,
+          effectiveDate: currentPaymentTerms.effectiveDate,
+        };
+        if (currentPaymentTerms.contentType === "text") {
+          paymentTermsData.content = currentPaymentTerms.content;
+        } else {
+          paymentTermsData.pdfFileName = currentPaymentTerms.pdfFileName;
+          paymentTermsData.pdfUrl = `/api/v1/terms/pdf/${currentPaymentTerms.id}`;
+        }
+      }
+    }
+
+    // Check if user needs to accept damage protection (homeowners only)
+    let requiresDamageProtectionAcceptance = false;
+    let damageProtectionData = null;
+    if (currentDamageProtection && user.type === "homeowner") {
+      const userDamageProtectionVersion = user.damageProtectionAcceptedVersion;
+      requiresDamageProtectionAcceptance = !userDamageProtectionVersion || userDamageProtectionVersion < currentDamageProtection.version;
+
+      if (requiresDamageProtectionAcceptance) {
+        damageProtectionData = {
+          id: currentDamageProtection.id,
+          type: currentDamageProtection.type,
+          version: currentDamageProtection.version,
+          title: currentDamageProtection.title,
+          contentType: currentDamageProtection.contentType,
+          effectiveDate: currentDamageProtection.effectiveDate,
+        };
+        if (currentDamageProtection.contentType === "text") {
+          damageProtectionData.content = currentDamageProtection.content;
+        } else {
+          damageProtectionData.pdfFileName = currentDamageProtection.pdfFileName;
+          damageProtectionData.pdfUrl = `/api/v1/terms/pdf/${currentDamageProtection.id}`;
+        }
+      }
+    }
+
+    const requiresAcceptance = requiresTermsAcceptance || requiresPrivacyAcceptance || requiresPaymentTermsAcceptance || requiresDamageProtectionAcceptance;
 
     const response = {
       requiresAcceptance,
       termsAcceptedVersion: user.termsAcceptedVersion,
       privacyPolicyAcceptedVersion: user.privacyPolicyAcceptedVersion,
+      paymentTermsAcceptedVersion: user.paymentTermsAcceptedVersion,
+      damageProtectionAcceptedVersion: user.damageProtectionAcceptedVersion,
     };
 
     if (requiresTermsAcceptance) {
@@ -223,8 +287,18 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       response.currentPrivacyVersion = currentPrivacyPolicy?.version;
     }
 
+    if (requiresPaymentTermsAcceptance) {
+      response.paymentTerms = paymentTermsData;
+      response.currentPaymentTermsVersion = currentPaymentTerms?.version;
+    }
+
+    if (requiresDamageProtectionAcceptance) {
+      response.damageProtection = damageProtectionData;
+      response.currentDamageProtectionVersion = currentDamageProtection?.version;
+    }
+
     // For backwards compatibility, also include the old format if only terms need acceptance
-    if (requiresTermsAcceptance && !requiresPrivacyAcceptance) {
+    if (requiresTermsAcceptance && !requiresPrivacyAcceptance && !requiresPaymentTermsAcceptance && !requiresDamageProtectionAcceptance) {
       response.currentVersion = currentTerms?.version;
       response.acceptedVersion = user.termsAcceptedVersion;
     }
@@ -304,13 +378,27 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
     // Update user's accepted version based on document type
     if (terms.type === "privacy_policy") {
       await user.update({ privacyPolicyAcceptedVersion: terms.version });
+    } else if (terms.type === "payment_terms") {
+      await user.update({ paymentTermsAcceptedVersion: terms.version });
+    } else if (terms.type === "damage_protection") {
+      await user.update({ damageProtectionAcceptedVersion: terms.version });
     } else {
       await user.update({ termsAcceptedVersion: terms.version });
     }
 
+    // Generate appropriate success message
+    let message = "Terms accepted successfully";
+    if (terms.type === "privacy_policy") {
+      message = "Privacy Policy accepted successfully";
+    } else if (terms.type === "payment_terms") {
+      message = "Payment Terms accepted successfully";
+    } else if (terms.type === "damage_protection") {
+      message = "Damage Protection Policy accepted successfully";
+    }
+
     return res.json({
       success: true,
-      message: terms.type === "privacy_policy" ? "Privacy Policy accepted successfully" : "Terms accepted successfully",
+      message,
       acceptedVersion: terms.version,
       type: terms.type,
     });
@@ -377,7 +465,7 @@ termsRouter.get("/history/:type", authenticateToken, requireOwner, async (req, r
   const { type } = req.params;
 
   if (!VALID_TYPES.includes(type)) {
-    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', or 'privacy_policy'" });
+    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', 'payment_terms', or 'damage_protection'" });
   }
 
   try {
@@ -427,7 +515,7 @@ termsRouter.post("/", authenticateToken, requireOwner, async (req, res) => {
   }
 
   if (!VALID_TYPES.includes(type)) {
-    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', or 'privacy_policy'" });
+    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', 'payment_terms', or 'damage_protection'" });
   }
 
   try {
@@ -488,7 +576,7 @@ termsRouter.post(
     }
 
     if (!VALID_TYPES.includes(type)) {
-      return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', or 'privacy_policy'" });
+      return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', or 'payment_terms'" });
     }
 
     if (!req.file) {

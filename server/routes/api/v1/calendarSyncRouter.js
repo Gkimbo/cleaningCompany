@@ -212,6 +212,18 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
   const { id } = req.params;
 
   try {
+    // Check if user account is frozen
+    const user = await User.findByPk(req.userId, {
+      attributes: ["id", "accountFrozen", "accountFrozenReason"],
+    });
+    if (user && user.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. Calendar sync is disabled.",
+        reason: user.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
+
     const sync = await CalendarSync.findOne({
       where: { id, userId: req.userId },
       include: [{ model: UserHomes, as: "home" }],
@@ -325,7 +337,7 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
           keyLocation: home.keyLocation,
           completed: false,
           hasBeenAssigned: false,
-          empoyeesNeeded: home.cleanersNeeded || 1,
+          employeesNeeded: home.cleanersNeeded || 1,
           timeToBeCompleted: home.timeToBeCompleted,
         });
 

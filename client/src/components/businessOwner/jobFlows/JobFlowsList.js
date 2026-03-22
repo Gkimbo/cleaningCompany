@@ -16,8 +16,9 @@ import JobFlowService from "../../../services/fetchRequests/JobFlowService";
 import JobFlowListItem from "./JobFlowListItem";
 import CreateEditFlowModal from "./CreateEditFlowModal";
 
+import useSafeNavigation from "../../../hooks/useSafeNavigation";
 const JobFlowsList = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [flows, setFlows] = useState([]);
@@ -182,7 +183,7 @@ const JobFlowsList = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={16} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.headerTitle}>Job Flows</Text>

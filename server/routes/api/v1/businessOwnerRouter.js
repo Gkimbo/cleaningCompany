@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const rateLimit = require("express-rate-limit");
 const verifyBusinessOwner = require("../../../middleware/verifyBusinessOwner");
 const BusinessEmployeeService = require("../../../services/BusinessEmployeeService");
 const EmployeeJobAssignmentService = require("../../../services/EmployeeJobAssignmentService");
@@ -18,8 +19,142 @@ const ClientJobFlowAssignmentSerializer = require("../../../serializers/ClientJo
 const CustomJobFlowChecklistSerializer = require("../../../serializers/CustomJobFlowChecklistSerializer");
 const TimesheetSerializer = require("../../../serializers/TimesheetSerializer");
 const EncryptionService = require("../../../services/EncryptionService");
+const TimezoneService = require("../../../services/TimezoneService");
+const Email = require("../../../services/sendNotifications/EmailClass");
+const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { UserAppointments, UserHomes, User, Payout, CleanerClient, sequelize, EmployeeJobAssignment, BusinessEmployee, RecurringSchedule, PricingConfig, UserCleanerAppointments } = require("../../../models");
 const { Op } = require("sequelize");
+
+// ============================================
+// Constants - extracted magic numbers
+// ============================================
+const TIME_CONSTANTS = {
+  MS_IN_DAY: 24 * 60 * 60 * 1000,
+  MS_IN_MONTH: 30 * 24 * 60 * 60 * 1000,
+  DAYS_IN_MONTH: 30,
+};
+
+const FINANCIAL_CONSTANTS = {
+  CENTS_PER_DOLLAR: 100,
+  DEFAULT_BUSINESS_OWNER_FEE_PERCENT: 0.10, // 10%
+  DEFAULT_CLEANER_PAYOUT_PERCENT: 0.80, // 80%
+  MAX_PAY_AMOUNT_CENTS: 10000000, // $100,000 max per job (sanity check)
+};
+
+// Rate limiter for employee invite endpoint - prevent bulk invitation spam
+const employeeInviteLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // Max 20 invitations per hour per IP
+  message: { error: "Too many employee invitations, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Helper function for date formatting (YYYY-MM-DD) - timezone-safe
+const formatDateYMD = (date) => {
+  const d = date instanceof Date ? date : new Date(date);
+  return TimezoneService.formatDateInTimezone(d);
+};
+
+// Helper function to convert dollars to cents
+const dollarsToCents = (dollars) => Math.round(parseFloat(dollars) * FINANCIAL_CONSTANTS.CENTS_PER_DOLLAR);
+
+// Helper function to convert cents to dollars
+const centsToDollars = (cents) => (cents / FINANCIAL_CONSTANTS.CENTS_PER_DOLLAR).toFixed(2);
+
+/**
+ * Standardized error response helper
+ * @param {object} res - Express response object
+ * @param {number} statusCode - HTTP status code
+ * @param {string} message - Error message
+ * @param {object} details - Optional additional details
+ */
+const sendErrorResponse = (res, statusCode, message, details = null) => {
+  const response = { error: message };
+  if (details) {
+    response.details = details;
+  }
+  return res.status(statusCode).json(response);
+};
+
+/**
+ * Helper to safely decrypt employee name
+ * @param {object} employee - Employee object with firstName/lastName
+ * @returns {string} Decrypted full name or "Unknown"
+ */
+const decryptEmployeeName = (employee) => {
+  if (!employee) return "Unknown";
+  const firstName = employee.firstName || "";
+  const lastName = employee.lastName || "";
+  return `${firstName} ${lastName}`.trim() || "Unknown";
+};
+
+/**
+ * Standardized logger for business owner operations
+ * Consistent format: [BusinessOwner:{operation}] message
+ */
+const logger = {
+  info: (operation, message, data = null) => {
+    const logMsg = `[BusinessOwner:${operation}] ${message}`;
+    if (data) {
+      console.log(logMsg, JSON.stringify(data));
+    } else {
+      console.log(logMsg);
+    }
+  },
+  error: (operation, message, error = null) => {
+    const logMsg = `[BusinessOwner:${operation}] ERROR: ${message}`;
+    if (error) {
+      console.error(logMsg, error.message || error);
+    } else {
+      console.error(logMsg);
+    }
+  },
+  debug: (operation, message, data = null) => {
+    if (process.env.NODE_ENV !== "production") {
+      const logMsg = `[BusinessOwner:${operation}] DEBUG: ${message}`;
+      if (data) {
+        console.log(logMsg, JSON.stringify(data));
+      } else {
+        console.log(logMsg);
+      }
+    }
+  },
+};
+
+/**
+ * Helper to fetch client IDs for a business owner
+ * @param {number} businessOwnerId - The business owner's user ID
+ * @returns {Promise<number[]>} Array of client IDs
+ */
+const getClientIdsForBusinessOwner = async (businessOwnerId) => {
+  const clientRelationships = await CleanerClient.findAll({
+    where: { cleanerId: businessOwnerId },
+    attributes: ["clientId"],
+  });
+  return clientRelationships.map((c) => c.clientId);
+};
+
+/**
+ * Helper to safely parse integer parameters with validation
+ * Returns null if the value is not a valid positive integer
+ * @param {string|number} value - The value to parse
+ * @param {string} paramName - Name of the parameter (for error messages)
+ * @returns {{ value: number, error: string|null }}
+ */
+const parseIntParam = (value, paramName = "parameter") => {
+  if (value === undefined || value === null || value === "") {
+    return { value: null, error: `${paramName} is required` };
+  }
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed)) {
+    return { value: null, error: `Invalid ${paramName}: must be a number` };
+  }
+  if (parsed < 0) {
+    return { value: null, error: `Invalid ${paramName}: must be non-negative` };
+  }
+  return { value: parsed, error: null };
+};
 
 // All routes require business owner authentication
 router.use(verifyBusinessOwner);
@@ -34,7 +169,31 @@ router.use(verifyBusinessOwner);
 router.get("/employees", async (req, res) => {
   try {
     const { status } = req.query;
-    const statusFilter = status ? status.split(",") : undefined;
+    let statusFilter = undefined;
+
+    // Validate status filter against whitelist
+    if (status && typeof status === "string" && status.trim() !== "") {
+      const validStatuses = ["active", "inactive", "pending_invite", "terminated", "declined"];
+      const requestedStatuses = status.split(",")
+        .map(s => s.trim().toLowerCase())
+        .filter(s => s.length > 0); // Remove empty strings
+
+      // Reject if no valid statuses provided after parsing
+      if (requestedStatuses.length === 0) {
+        return res.status(400).json({
+          error: "Invalid status filter format"
+        });
+      }
+
+      const invalidStatuses = requestedStatuses.filter(s => !validStatuses.includes(s));
+
+      if (invalidStatuses.length > 0) {
+        return res.status(400).json({
+          error: `Invalid status filter. Valid values: ${validStatuses.join(", ")}`
+        });
+      }
+      statusFilter = requestedStatuses;
+    }
 
     const employees = await BusinessEmployeeService.getEmployeesByBusinessOwner(
       req.businessOwnerId,
@@ -56,7 +215,14 @@ router.get("/employees", async (req, res) => {
  */
 router.get("/employees/for-job/:appointmentId", async (req, res) => {
   try {
-    const appointmentId = parseInt(req.params.appointmentId);
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.appointmentId,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
+
     const mode = req.query.mode || "add"; // "add" or "reassign"
 
     // Get the appointment with home details
@@ -67,7 +233,22 @@ router.get("/employees/for-job/:appointmentId", async (req, res) => {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
-    const jobPriceInCents = appointment.price ? Math.round(parseFloat(appointment.price) * 100) : 0;
+    // Verify the business owner has access to this appointment
+    // Either they booked it or they have an employee assigned to it
+    const hasAccess = appointment.bookedByCleanerId === req.businessOwnerId;
+    if (!hasAccess) {
+      const hasEmployeeAssigned = await EmployeeJobAssignment.findOne({
+        where: {
+          appointmentId: appointmentId,
+          businessOwnerId: req.businessOwnerId,
+        },
+      });
+      if (!hasEmployeeAssigned) {
+        return res.status(403).json({ error: "Not authorized to access this appointment" });
+      }
+    }
+
+    const jobPriceInCents = appointment.price || 0; // Already stored in cents
 
     // Get home size for duration estimation
     const numBeds = appointment.home?.numBeds || 2;
@@ -105,19 +286,6 @@ router.get("/employees/for-job/:appointmentId", async (req, res) => {
         numBaths,
         totalCleaners
       );
-
-      // Debug logging for first employee
-      if (employees.indexOf(emp) === 0) {
-        console.log("[employees-for-job] Pay calculation inputs:", {
-          numBeds,
-          numBaths,
-          totalCleaners,
-          estimatedHours,
-          jobPriceInCents,
-          employeePayType: emp.payType,
-          employeeHourlyRate: emp.defaultHourlyRate,
-        });
-      }
 
       const { payAmount, payType } = EmployeeJobAssignmentService.calculateEmployeePay(
         emp,
@@ -188,12 +356,34 @@ router.get("/employees/for-job/:appointmentId", async (req, res) => {
 /**
  * POST /employees/invite - Invite a new employee
  */
-router.post("/employees/invite", async (req, res) => {
+router.post("/employees/invite", employeeInviteLimiter, async (req, res) => {
   try {
     const { firstName, lastName, email, phone, defaultHourlyRate, paymentMethod, notes } = req.body;
 
     if (!firstName || !lastName || !email) {
       return res.status(400).json({ error: "First name, last name, and email are required" });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+
+    // Validate phone format if provided (basic check for digits and common separators)
+    if (phone) {
+      const phoneDigits = phone.replace(/[\s\-\(\)\+\.]/g, "");
+      if (phoneDigits.length < 10 || phoneDigits.length > 15 || !/^\d+$/.test(phoneDigits)) {
+        return res.status(400).json({ error: "Invalid phone number format" });
+      }
+    }
+
+    // Validate pay rates if provided
+    if (defaultHourlyRate !== undefined && defaultHourlyRate !== null) {
+      const rate = parseInt(defaultHourlyRate, 10);
+      if (isNaN(rate) || rate < 0) {
+        return res.status(400).json({ error: "Hourly rate must be a non-negative number" });
+      }
     }
 
     const employee = await BusinessEmployeeService.inviteEmployee(req.businessOwnerId, {
@@ -206,7 +396,27 @@ router.post("/employees/invite", async (req, res) => {
       notes,
     });
 
-    // TODO: Send invitation email
+    // Get business owner info for the email
+    const businessOwner = await User.findByPk(req.businessOwnerId, {
+      attributes: ["firstName", "lastName", "businessName"],
+    });
+    const businessOwnerName = businessOwner
+      ? `${EncryptionService.decrypt(businessOwner.firstName) || ""} ${EncryptionService.decrypt(businessOwner.lastName) || ""}`.trim()
+      : "Your employer";
+    const businessName = businessOwner?.businessName || null;
+
+    // Send invitation email (don't fail the request if email fails)
+    try {
+      await Email.sendEmployeeInviteEmail(
+        email,
+        firstName,
+        businessOwnerName,
+        businessName
+      );
+    } catch (emailError) {
+      console.error("Failed to send employee invite email:", emailError);
+      // Continue - don't fail the invite just because email failed
+    }
 
     res.status(201).json({
       message: "Invitation sent successfully",
@@ -249,8 +459,16 @@ router.get("/employees/available", async (req, res) => {
  */
 router.get("/employees/:employeeId", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const employee = await BusinessEmployeeService.getEmployeeById(
-      parseInt(req.params.employeeId),
+      employeeId,
       req.businessOwnerId
     );
 
@@ -270,8 +488,16 @@ router.get("/employees/:employeeId", async (req, res) => {
  */
 router.put("/employees/:employeeId", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const employee = await BusinessEmployeeService.updateEmployee(
-      parseInt(req.params.employeeId),
+      employeeId,
       req.businessOwnerId,
       req.body
     );
@@ -288,10 +514,18 @@ router.put("/employees/:employeeId", async (req, res) => {
  */
 router.delete("/employees/:employeeId", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const { reason } = req.body;
 
     const employee = await BusinessEmployeeService.terminateEmployee(
-      parseInt(req.params.employeeId),
+      employeeId,
       req.businessOwnerId,
       reason
     );
@@ -308,8 +542,16 @@ router.delete("/employees/:employeeId", async (req, res) => {
  */
 router.post("/employees/:employeeId/reactivate", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const employee = await BusinessEmployeeService.reactivateEmployee(
-      parseInt(req.params.employeeId),
+      employeeId,
       req.businessOwnerId
     );
 
@@ -325,12 +567,46 @@ router.post("/employees/:employeeId/reactivate", async (req, res) => {
  */
 router.post("/employees/:employeeId/resend-invite", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const employee = await BusinessEmployeeService.resendInvite(
-      parseInt(req.params.employeeId),
+      employeeId,
       req.businessOwnerId
     );
 
-    // TODO: Send invitation email
+    // Get business owner info for the email
+    const businessOwner = await User.findByPk(req.businessOwnerId, {
+      attributes: ["firstName", "lastName", "businessName"],
+    });
+    const businessOwnerName = businessOwner
+      ? `${EncryptionService.decrypt(businessOwner.firstName) || ""} ${EncryptionService.decrypt(businessOwner.lastName) || ""}`.trim()
+      : "Your employer";
+    const businessName = businessOwner?.businessName || null;
+
+    // Decrypt employee email for sending
+    const employeeEmail = employee.email ? EncryptionService.decrypt(employee.email) : null;
+    const employeeFirstName = employee.firstName ? EncryptionService.decrypt(employee.firstName) : "Team Member";
+
+    // Send invitation email (don't fail the request if email fails)
+    if (employeeEmail) {
+      try {
+        await Email.sendEmployeeInviteEmail(
+          employeeEmail,
+          employeeFirstName,
+          businessOwnerName,
+          businessName
+        );
+      } catch (emailError) {
+        console.error("Failed to send employee invite email:", emailError);
+        // Continue - don't fail the resend just because email failed
+      }
+    }
 
     res.json({ message: "Invitation resent", employee: BusinessEmployeeSerializer.serializeOne(employee) });
   } catch (error) {
@@ -344,8 +620,15 @@ router.post("/employees/:employeeId/resend-invite", async (req, res) => {
  */
 router.put("/employees/:employeeId/availability", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const { schedule, defaultJobTypes, maxJobsPerDay } = req.body;
-    const employeeId = parseInt(req.params.employeeId);
 
     // Update availability schedule if provided
     if (schedule) {
@@ -396,8 +679,8 @@ router.get("/assignments", async (req, res) => {
   try {
     const { startDate, endDate, status } = req.query;
 
-    const start = startDate || new Date().toISOString().split("T")[0];
-    const end = endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const start = startDate || TimezoneService.getTodayInTimezone();
+    const end = endDate || formatDateYMD(new Date(Date.now() + TIME_CONSTANTS.MS_IN_MONTH));
 
     const assignments = await EmployeeJobAssignmentService.getUpcomingAssignments(
       req.businessOwnerId,
@@ -423,10 +706,35 @@ router.post("/assignments", async (req, res) => {
       return res.status(400).json({ error: "Employee ID and appointment ID are required" });
     }
 
+    // Validate payAmount if provided
+    let validatedPayAmount = 0;
+    if (payAmount !== undefined && payAmount !== null) {
+      const parsedPayAmount = parseFloat(payAmount);
+      if (isNaN(parsedPayAmount) || !isFinite(parsedPayAmount)) {
+        return res.status(400).json({ error: "Pay amount must be a valid number" });
+      }
+      if (parsedPayAmount < 0) {
+        return res.status(400).json({ error: "Pay amount cannot be negative" });
+      }
+      // Max bounds check to prevent unreasonable values
+      if (parsedPayAmount > FINANCIAL_CONSTANTS.MAX_PAY_AMOUNT_CENTS) {
+        return res.status(400).json({ error: "Pay amount exceeds maximum allowed value" });
+      }
+      // Ensure integer precision (cents)
+      validatedPayAmount = Math.round(parsedPayAmount);
+    }
+
+    // Reject $0 pay assignments - employee rates must be configured
+    if (validatedPayAmount === 0) {
+      return res.status(400).json({
+        error: "Pay amount cannot be $0. Please configure employee pay rates or specify a pay amount."
+      });
+    }
+
     const io = req.app.get("io");
     const assignment = await EmployeeJobAssignmentService.assignEmployeeToJob(
       req.businessOwnerId,
-      { employeeId, appointmentId, payAmount: Math.floor(payAmount || 0), payType },
+      { employeeId, appointmentId, payAmount: validatedPayAmount, payType },
       io
     );
 
@@ -442,9 +750,17 @@ router.post("/assignments", async (req, res) => {
  */
 router.get("/assignments/:assignmentId", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
-        id: parseInt(req.params.assignmentId),
+        id: assignmentId,
         businessOwnerId: req.businessOwnerId,
       },
       include: [
@@ -498,9 +814,7 @@ router.get("/assignments/:assignmentId", async (req, res) => {
     const numBeds = assignment.appointment?.home?.numBeds || 2;
     const numBaths = assignment.appointment?.home?.numBaths || 1;
     const totalCleaners = allAssignments.length;
-    const jobPriceInCents = assignment.appointment?.price
-      ? Math.round(parseFloat(assignment.appointment.price) * 100)
-      : 0;
+    const jobPriceInCents = assignment.appointment?.price || 0; // Already stored in cents
 
     // Estimate hours based on home size and number of cleaners
     const estimatedHours = EmployeeJobAssignmentService.estimateJobDuration(numBeds, numBaths, totalCleaners);
@@ -508,23 +822,6 @@ router.get("/assignments/:assignmentId", async (req, res) => {
     // Add calculated pay to each assignment
     const assignmentsWithCalculatedPay = allAssignments.map((a, idx) => {
       const serialized = EmployeeJobAssignmentSerializer.serializeOne(a);
-
-      // Debug logging for first assignment
-      if (idx === 0) {
-        console.log("[assignment-detail] Calculating pay for assignment:", {
-          numBeds,
-          numBaths,
-          totalCleaners,
-          estimatedHours,
-          jobPriceInCents,
-          isSelfAssignment: a.isSelfAssignment,
-          employeeId: a.employee?.id,
-          employeePayType: a.employee?.payType,
-          employeeHourlyRate: a.employee?.defaultHourlyRate,
-          storedPayAmount: a.payAmount,
-          storedPayType: a.payType,
-        });
-      }
 
       // For self-assignments or if employee data is missing, use the stored pay
       let calculatedPay = serialized.payAmount || 0;
@@ -539,10 +836,6 @@ router.get("/assignments/:assignmentId", async (req, res) => {
         );
         calculatedPay = result.payAmount;
         calculatedPayType = result.payType;
-      }
-
-      if (idx === 0) {
-        console.log("[assignment-detail] Calculated:", { calculatedPay, calculatedPayType });
       }
 
       // Add employee rate info for display
@@ -596,9 +889,17 @@ router.get("/assignments/:assignmentId", async (req, res) => {
  */
 router.delete("/assignments/:assignmentId", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const io = req.app.get("io");
     await EmployeeJobAssignmentService.unassignFromJob(
-      parseInt(req.params.assignmentId),
+      assignmentId,
       req.businessOwnerId,
       io
     );
@@ -616,9 +917,17 @@ router.delete("/assignments/:assignmentId", async (req, res) => {
  */
 router.delete("/appointments/:appointmentId/assignments", async (req, res) => {
   try {
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.appointmentId,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
+
     const io = req.app.get("io");
     const result = await EmployeeJobAssignmentService.bulkUnassignFromJob(
-      parseInt(req.params.appointmentId),
+      appointmentId,
       req.businessOwnerId,
       io
     );
@@ -635,15 +944,31 @@ router.delete("/appointments/:appointmentId/assignments", async (req, res) => {
  */
 router.post("/assignments/:assignmentId/reassign", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const { newEmployeeId } = req.body;
 
     if (!newEmployeeId) {
       return res.status(400).json({ error: "New employee ID is required" });
     }
 
-    const assignment = await EmployeeJobAssignmentService.reassignJob(
-      parseInt(req.params.assignmentId),
+    const { value: parsedNewEmployeeId, error: newEmployeeIdError } = parseIntParam(
       newEmployeeId,
+      "newEmployeeId"
+    );
+    if (newEmployeeIdError) {
+      return res.status(400).json({ error: newEmployeeIdError });
+    }
+
+    const assignment = await EmployeeJobAssignmentService.reassignJob(
+      assignmentId,
+      parsedNewEmployeeId,
       req.businessOwnerId
     );
 
@@ -659,10 +984,18 @@ router.post("/assignments/:assignmentId/reassign", async (req, res) => {
  */
 router.post("/self-assign/:appointmentId", async (req, res) => {
   try {
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.appointmentId,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
+
     const io = req.app.get("io");
     const assignment = await EmployeeJobAssignmentService.assignSelfToJob(
       req.businessOwnerId,
-      parseInt(req.params.appointmentId),
+      appointmentId,
       io
     );
 
@@ -858,6 +1191,7 @@ router.get("/my-jobs", async (req, res) => {
         assignedTo,
         assignmentId: assignment?.id || null,
         assignmentStatus: assignment?.status || null,
+        paymentCaptureFailed: apt.paymentCaptureFailed || false,
         // Available actions
         actions: {
           canSelfAssign: !isAssigned,
@@ -1080,6 +1414,7 @@ router.get("/all-jobs", async (req, res) => {
         assignedTo,
         assignmentId: assignment?.id || null,
         assignmentStatus: assignment?.status || null,
+        paymentCaptureFailed: apt.paymentCaptureFailed || false,
       };
     }).filter(Boolean);
 
@@ -1119,7 +1454,13 @@ router.get("/all-jobs", async (req, res) => {
  */
 router.get("/my-jobs/:appointmentId", async (req, res) => {
   try {
-    const appointmentId = parseInt(req.params.appointmentId);
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.appointmentId,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
 
     // Get list of client IDs for this business owner
     const clientRelationships = await CleanerClient.findAll({
@@ -1181,6 +1522,12 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
       return res.status(404).json({ error: "Job not found or not accessible" });
     }
 
+    // Get active pricing config for platform fee calculation
+    const pricingConfig = await PricingConfig.getActive();
+    const platformFeePercent = pricingConfig
+      ? parseFloat(pricingConfig.businessOwnerFeePercent || pricingConfig.platformFeePercent)
+      : FINANCIAL_CONSTANTS.DEFAULT_BUSINESS_OWNER_FEE_PERCENT;
+
     // Check for active assignments (supports multi-cleaner jobs)
     const allAssignments = await EmployeeJobAssignment.findAll({
       where: {
@@ -1191,11 +1538,13 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
         {
           model: BusinessEmployee,
           as: "employee",
+          required: false, // Don't exclude assignments without employee (e.g., self-assignments)
           include: [
             {
               model: User,
               as: "user",
               attributes: ["firstName", "lastName"],
+              required: false,
             },
           ],
         },
@@ -1290,6 +1639,8 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
           name: "You (Business Owner)",
           isSelfAssignment: true,
           payAmount: a.payAmount || 0,
+          // Self-assignment means no employee pay needed
+          payConfig: null,
         });
       } else if (a.employee) {
         const empFirstName = a.employee.user?.firstName
@@ -1305,6 +1656,25 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
           name: `${empFirstName} ${empLastName}`.trim(),
           isSelfAssignment: false,
           payAmount: a.payAmount || 0,
+          // Include employee pay configuration for profit calculation
+          payConfig: {
+            payType: a.employee.payType || "hourly",
+            hourlyRate: a.employee.defaultHourlyRate || 0, // in cents
+            jobRate: a.employee.defaultJobRate || 0, // in cents
+            percentageRate: a.employee.payRate ? parseFloat(a.employee.payRate) : 0, // as decimal (0.50 = 50%)
+          },
+        });
+      } else {
+        // Assignment exists but employee relationship not loaded (edge case)
+        // Still include it so UI can show something
+        assignees.push({
+          id: a.id,
+          type: "employee",
+          employeeId: a.businessEmployeeId,
+          name: "Employee",
+          isSelfAssignment: false,
+          payAmount: a.payAmount || 0,
+          payConfig: null, // Unknown pay config
         });
       }
     });
@@ -1324,6 +1694,12 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
     const isAssigned = assignees.length > 0;
     const isMultiCleaner = assignees.length > 1;
 
+    // Calculate estimated duration from beds/baths (same formula as calendar endpoint)
+    const numBeds = appointment.home?.numBeds || 2;
+    const numBaths = appointment.home?.numBaths || 1;
+    const rawDuration = 1 + (numBeds * 0.25) + (numBaths * 0.5);
+    const estimatedDuration = Math.ceil(rawDuration * 2) / 2; // Round UP to nearest 0.5
+
     res.json({
       job: {
         id: appointment.id,
@@ -1331,9 +1707,11 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
         startTime: appointment.startTime,
         timeToBeCompleted: appointment.timeToBeCompleted,
         timeWindow: appointment.recurringSchedule?.timeWindow || null,
+        duration: estimatedDuration, // Estimated hours based on home size
         price: appointment.price,
         paid: appointment.paid,
         paymentStatus: appointment.paymentStatus,
+        paymentCaptureFailed: appointment.paymentCaptureFailed || false,
         completed: appointment.completed,
         wasCancelled: appointment.wasCancelled,
         bringTowels: appointment.bringTowels,
@@ -1355,6 +1733,8 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
           canReassign: isAssigned && assignment?.status === "assigned",
           canUnassign: isAssigned && assignment?.status === "assigned",
         },
+        // Profit breakdown data
+        platformFeePercent,
       },
       home: {
         id: appointment.home?.id,
@@ -1407,16 +1787,40 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
  */
 router.put("/assignments/:assignmentId/pay", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const { newPayAmount, reason } = req.body;
 
     if (newPayAmount === undefined || newPayAmount === null) {
       return res.status(400).json({ error: "New pay amount is required" });
     }
 
+    // Validate pay amount is an integer (cents) - no floats allowed for precision
+    const parsedPayAmount = parseInt(newPayAmount, 10);
+    if (isNaN(parsedPayAmount) || !isFinite(parsedPayAmount)) {
+      return res.status(400).json({ error: "Pay amount must be a valid integer (in cents)" });
+    }
+    if (String(newPayAmount).includes(".")) {
+      return res.status(400).json({ error: "Pay amount must be an integer (in cents). Do not include decimal places." });
+    }
+    if (parsedPayAmount < 0) {
+      return res.status(400).json({ error: "Pay amount cannot be negative" });
+    }
+    // Maximum sanity check
+    if (parsedPayAmount > FINANCIAL_CONSTANTS.MAX_PAY_AMOUNT_CENTS) {
+      return res.status(400).json({ error: "Pay amount exceeds maximum allowed value" });
+    }
+
     const assignment = await EmployeeJobAssignmentService.updateJobPay(
-      parseInt(req.params.assignmentId),
+      assignmentId,
       req.businessOwnerId,
-      { newPayAmount: Math.floor(newPayAmount), reason }
+      { newPayAmount: parsedPayAmount, reason }
     );
 
     res.json({ message: "Pay updated", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
@@ -1432,8 +1836,16 @@ router.put("/assignments/:assignmentId/pay", async (req, res) => {
  */
 router.post("/assignments/:assignmentId/recalculate-pay", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const assignment = await EmployeeJobAssignmentService.recalculatePay(
-      parseInt(req.params.assignmentId),
+      assignmentId,
       req.businessOwnerId
     );
 
@@ -1452,13 +1864,25 @@ router.post("/assignments/:assignmentId/recalculate-pay", async (req, res) => {
  */
 router.get("/assignments/:assignmentId/pay-history", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const history = await EmployeeJobAssignmentService.getPayChangeHistory(
-      parseInt(req.params.assignmentId)
+      assignmentId,
+      req.businessOwnerId
     );
 
     res.json({ history: EmployeeJobAssignmentSerializer.serializePayHistoryArray(history) });
   } catch (error) {
     console.error("Error fetching pay history:", error);
+    if (error.message === "Assignment not found or unauthorized") {
+      return res.status(404).json({ error: error.message });
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -1469,16 +1893,31 @@ router.get("/assignments/:assignmentId/pay-history", async (req, res) => {
  */
 router.put("/assignments/:assignmentId/hours", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const { hoursWorked } = req.body;
 
-    if (hoursWorked === undefined || hoursWorked === null || hoursWorked < 0) {
+    const parsedHours = parseFloat(hoursWorked);
+    if (hoursWorked === undefined || hoursWorked === null || isNaN(parsedHours)) {
       return res.status(400).json({ error: "Valid hours worked value is required" });
+    }
+    if (parsedHours < 0) {
+      return res.status(400).json({ error: "Hours worked cannot be negative" });
+    }
+    if (parsedHours > 24) {
+      return res.status(400).json({ error: "Hours worked cannot exceed 24 hours per job" });
     }
 
     const assignment = await EmployeeJobAssignmentService.updateHoursWorked(
-      parseInt(req.params.assignmentId),
+      assignmentId,
       req.businessOwnerId,
-      parseFloat(hoursWorked)
+      parsedHours
     );
 
     res.json({
@@ -1498,9 +1937,28 @@ router.post("/calculate-pay", async (req, res) => {
   try {
     const { appointmentId, employeePayAmount } = req.body;
 
+    if (!appointmentId) {
+      return res.status(400).json({ error: "Appointment ID is required" });
+    }
+
     const appointment = await UserAppointments.findByPk(appointmentId);
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify the business owner has access to this appointment
+    // Either they booked it or they have an employee assigned to it
+    const hasAccess = appointment.bookedByCleanerId === req.businessOwnerId;
+    if (!hasAccess) {
+      const hasEmployeeAssigned = await EmployeeJobAssignment.findOne({
+        where: {
+          appointmentId: appointmentId,
+          businessOwnerId: req.businessOwnerId,
+        },
+      });
+      if (!hasEmployeeAssigned) {
+        return res.status(403).json({ error: "Not authorized to access this appointment" });
+      }
     }
 
     const financials = await PayCalculatorService.calculateJobFinancials(
@@ -1522,9 +1980,21 @@ router.post("/validate-pay", async (req, res) => {
   try {
     const { employeePayAmount, jobTotal } = req.body;
 
+    // Validate input parameters
+    const parsedPayAmount = parseFloat(employeePayAmount);
+    const parsedJobTotal = parseFloat(jobTotal);
+
+    if (isNaN(parsedPayAmount) || isNaN(parsedJobTotal)) {
+      return res.status(400).json({ error: "Invalid pay amount or job total" });
+    }
+
+    if (parsedPayAmount < 0 || parsedJobTotal < 0) {
+      return res.status(400).json({ error: "Pay amounts cannot be negative" });
+    }
+
     const validation = await PayCalculatorService.validatePayAmount(
-      employeePayAmount,
-      jobTotal
+      parsedPayAmount,
+      parsedJobTotal
     );
 
     res.json(validation);
@@ -1539,12 +2009,32 @@ router.post("/validate-pay", async (req, res) => {
  */
 router.get("/suggested-pay/:appointmentId", async (req, res) => {
   try {
-    const appointment = await UserAppointments.findByPk(req.params.appointmentId, {
+    const appointmentId = parseInt(req.params.appointmentId, 10);
+    if (isNaN(appointmentId)) {
+      return res.status(400).json({ error: "Invalid appointment ID" });
+    }
+
+    const appointment = await UserAppointments.findByPk(appointmentId, {
       include: [{ model: UserHomes, as: "home" }],
     });
 
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify the business owner has access to this appointment
+    const hasAccess = appointment.bookedByCleanerId === req.businessOwnerId;
+    if (!hasAccess) {
+      // Check if they have an employee assigned to this appointment
+      const hasEmployeeAssigned = await EmployeeJobAssignment.findOne({
+        where: {
+          appointmentId: appointmentId,
+          businessOwnerId: req.businessOwnerId,
+        },
+      });
+      if (!hasEmployeeAssigned) {
+        return res.status(403).json({ error: "Not authorized to access this appointment" });
+      }
     }
 
     const suggestions = await PayCalculatorService.calculateSuggestedPay(appointment);
@@ -1674,7 +2164,7 @@ router.get("/dashboard", async (req, res) => {
               ? `${clientFirstName} ${clientLastName}`
               : "Unknown Client",
             address,
-            totalPrice: parseFloat(assignment.appointment?.price || 0) * 100,
+            totalPrice: assignment.appointment?.price || 0,
           });
         } else {
           // Add additional assignee for multi-cleaner jobs
@@ -1788,7 +2278,7 @@ router.get("/dashboard", async (req, res) => {
             ? `${clientFirstName} ${clientLastName}`
             : "Unknown Client",
           address,
-          totalPrice: parseFloat(apt.price) * 100,
+          totalPrice: apt.price || 0,
         };
       });
     };
@@ -1879,7 +2369,7 @@ router.get("/dashboard", async (req, res) => {
               ? `${clientFirstName} ${clientLastName}`
               : "Unknown Client",
             address,
-            totalPrice: parseFloat(apt.price) * 100,
+            totalPrice: apt.price || 0,
           };
         });
     };
@@ -2026,11 +2516,11 @@ router.get("/calendar", async (req, res) => {
   try {
     const { month, year } = req.query;
     const now = new Date();
-    const targetMonth = month ? parseInt(month) - 1 : now.getMonth();
-    const targetYear = year ? parseInt(year) : now.getFullYear();
+    const targetMonth = month ? parseInt(month, 10) - 1 : now.getMonth();
+    const targetYear = year ? parseInt(year, 10) : now.getFullYear();
 
-    const startDate = new Date(targetYear, targetMonth, 1).toISOString().split("T")[0];
-    const endDate = new Date(targetYear, targetMonth + 1, 0).toISOString().split("T")[0];
+    const startDate = formatDateYMD(new Date(targetYear, targetMonth, 1));
+    const endDate = formatDateYMD(new Date(targetYear, targetMonth + 1, 0));
 
     // Get all assigned jobs
     const assignments = await EmployeeJobAssignmentService.getUpcomingAssignments(
@@ -2137,7 +2627,7 @@ router.get("/calendar", async (req, res) => {
         address,
         city: apt.home?.city || "",
         state: apt.home?.state || "",
-        totalPrice: parseFloat(apt.price) * 100,
+        totalPrice: apt.price || 0,
         status: apt.status,
         duration,
         numBeds,
@@ -2222,7 +2712,7 @@ router.get("/calendar", async (req, res) => {
           appointmentId: apt.id,
           businessEmployeeId: assignedEmp.id,
           status: "assigned",
-          payAmount: parseFloat(apt.price || 0) * 100,
+          payAmount: apt.price || 0,
           isSelfAssignment: assignedEmp.isSelf || false,
           isMarketplacePickup: true,
           assignedCount: 1,
@@ -2237,7 +2727,7 @@ router.get("/calendar", async (req, res) => {
             address,
             city: apt.home?.city || "",
             state: apt.home?.state || "",
-            totalPrice: parseFloat(apt.price || 0) * 100,
+            totalPrice: apt.price || 0,
             status: apt.status,
           },
         };
@@ -2292,6 +2782,13 @@ router.get("/calendar", async (req, res) => {
           id: a.employee.id,
           firstName: empFirstName,
           lastName: empLastName,
+          // Include pay config for profit calculation
+          payConfig: {
+            payType: a.employee.payType || "hourly",
+            hourlyRate: a.employee.defaultHourlyRate || 0,
+            jobRate: a.employee.defaultJobRate || 0,
+            percentageRate: a.employee.payRate ? parseFloat(a.employee.payRate) : 0,
+          },
         } : null,
       });
     });
@@ -2337,6 +2834,13 @@ router.get("/calendar", async (req, res) => {
           id: assignment.employee.id,
           firstName: employeeFirstName,
           lastName: employeeLastName,
+          // Include pay config for profit calculation
+          payConfig: {
+            payType: assignment.employee.payType || "hourly",
+            hourlyRate: assignment.employee.defaultHourlyRate || 0,
+            jobRate: assignment.employee.defaultJobRate || 0,
+            percentageRate: assignment.employee.payRate ? parseFloat(assignment.employee.payRate) : 0,
+          },
         } : null,
         appointment: {
           id: assignment.appointment?.id,
@@ -2351,7 +2855,7 @@ router.get("/calendar", async (req, res) => {
           address,
           city: assignment.appointment?.home?.city || "",
           state: assignment.appointment?.home?.state || "",
-          totalPrice: parseFloat(assignment.appointment?.price || 0) * 100,
+          totalPrice: assignment.appointment?.price || 0,
           status: assignment.appointment?.status,
         },
         // Include all assignments for this appointment (for multi-cleaner display)
@@ -2381,8 +2885,8 @@ router.get("/financials", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const now = new Date();
-    const start = startDate || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const end = endDate || now.toISOString().split("T")[0];
+    const start = startDate || formatDateYMD(new Date(now.getFullYear(), now.getMonth(), 1));
+    const end = endDate || TimezoneService.getTodayInTimezone();
 
     const financials = await PayCalculatorService.getFinancialSummary(
       req.businessOwnerId,
@@ -2404,8 +2908,8 @@ router.get("/payroll-summary", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const now = new Date();
-    const start = startDate || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const end = endDate || now.toISOString().split("T")[0];
+    const start = startDate || formatDateYMD(new Date(now.getFullYear(), now.getMonth(), 1));
+    const end = endDate || TimezoneService.getTodayInTimezone();
 
     const payroll = await PayCalculatorService.getPayrollSummary(
       req.businessOwnerId,
@@ -2425,8 +2929,9 @@ router.get("/payroll-summary", async (req, res) => {
  */
 router.get("/payroll/history", async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 50;
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    // Bounds checking for limit parameter
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const thirtyDaysAgo = formatDateYMD(new Date(Date.now() - TIME_CONSTANTS.MS_IN_MONTH));
 
     const paidAssignments = await EmployeeJobAssignment.findAll({
       where: {
@@ -2504,7 +3009,13 @@ router.post("/payroll/early-payout/:employeeId", async (req, res) => {
     const EmployeeBatchPayoutService = require("../../../services/EmployeeBatchPayoutService");
     const { BusinessEmployee } = require("../../../models");
 
-    const employeeId = parseInt(req.params.employeeId);
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
 
     // Verify the employee belongs to this business owner
     const employee = await BusinessEmployee.findOne({
@@ -2530,9 +3041,14 @@ router.post("/payroll/early-payout/:employeeId", async (req, res) => {
       });
     }
 
+    // Decrypt employee names (BusinessEmployee has encrypted PII fields)
+    const employeeFirstName = employee.firstName ? EncryptionService.decrypt(employee.firstName) : "";
+    const employeeLastName = employee.lastName ? EncryptionService.decrypt(employee.lastName) : "";
+    const employeeFullName = `${employeeFirstName} ${employeeLastName}`.trim() || "Employee";
+
     res.json({
       success: true,
-      message: `Paid ${result.formattedAmount || `$${(result.totalAmount / 100).toFixed(2)}`} to ${employee.firstName} ${employee.lastName}`,
+      message: `Paid ${result.formattedAmount || `$${(result.totalAmount / 100).toFixed(2)}`} to ${employeeFullName}`,
       ...result,
     });
   } catch (error) {
@@ -2547,7 +3063,7 @@ router.post("/payroll/early-payout/:employeeId", async (req, res) => {
  */
 router.get("/tax-export/:year", async (req, res) => {
   try {
-    const year = parseInt(req.params.year);
+    const year = parseInt(req.params.year, 10);
     const currentYear = new Date().getFullYear();
 
     // Validate year (only allow current year and 2 years back)
@@ -2613,8 +3129,8 @@ router.get("/timesheet", async (req, res) => {
     const defaultEnd = new Date(defaultStart);
     defaultEnd.setDate(defaultStart.getDate() + 6);
 
-    const start = startDate || defaultStart.toISOString().split("T")[0];
-    const end = endDate || defaultEnd.toISOString().split("T")[0];
+    const start = startDate || formatDateYMD(defaultStart);
+    const end = endDate || formatDateYMD(defaultEnd);
 
     const timesheetData = await EmployeeJobAssignmentService.getTimesheetData(
       req.businessOwnerId,
@@ -2669,6 +3185,14 @@ router.get("/unassigned-jobs", async (req, res) => {
  */
 router.get("/employees/:employeeId/hours", async (req, res) => {
   try {
+    const { value: employeeId, error: employeeIdError } = parseIntParam(
+      req.params.employeeId,
+      "employeeId"
+    );
+    if (employeeIdError) {
+      return res.status(400).json({ error: employeeIdError });
+    }
+
     const { startDate, endDate } = req.query;
     const now = new Date();
 
@@ -2676,12 +3200,12 @@ router.get("/employees/:employeeId/hours", async (req, res) => {
     const defaultStart = new Date(now);
     defaultStart.setDate(now.getDate() - 30);
 
-    const start = startDate || defaultStart.toISOString().split("T")[0];
-    const end = endDate || now.toISOString().split("T")[0];
+    const start = startDate || formatDateYMD(defaultStart);
+    const end = endDate || TimezoneService.getTodayInTimezone();
 
     const hoursDetail = await EmployeeJobAssignmentService.getEmployeeHoursDetail(
       req.businessOwnerId,
-      parseInt(req.params.employeeId),
+      employeeId,
       start,
       end
     );
@@ -2707,13 +3231,14 @@ router.get("/employees/:employeeId/hours", async (req, res) => {
  */
 router.get("/analytics", async (req, res) => {
   try {
+    // Bounds checking for analytics parameters
+    const months = req.query.months ? Math.min(Math.max(parseInt(req.query.months, 10), 1), 60) : undefined;
+    const topClientsLimit = req.query.topClientsLimit ? Math.min(Math.max(parseInt(req.query.topClientsLimit, 10), 1), 100) : undefined;
+    const churnDays = req.query.churnDays ? Math.min(Math.max(parseInt(req.query.churnDays, 10), 1), 365) : undefined;
+
     const analytics = await BusinessAnalyticsService.getAllAnalytics(
       req.businessOwnerId,
-      {
-        months: parseInt(req.query.months) || undefined,
-        topClientsLimit: parseInt(req.query.topClientsLimit) || undefined,
-        churnDays: parseInt(req.query.churnDays) || undefined,
-      }
+      { months, topClientsLimit, churnDays }
     );
 
     res.json(analytics);
@@ -2764,12 +3289,13 @@ router.get("/analytics/employees", async (req, res) => {
       });
     }
 
+    // Bounds checking for analytics parameters
+    const months = req.query.months ? Math.min(Math.max(parseInt(req.query.months, 10), 1), 60) : undefined;
+    const limit = req.query.limit ? Math.min(Math.max(parseInt(req.query.limit, 10), 1), 100) : undefined;
+
     const employees = await BusinessAnalyticsService.getEmployeeAnalytics(
       req.businessOwnerId,
-      {
-        months: parseInt(req.query.months) || undefined,
-        limit: parseInt(req.query.limit) || undefined,
-      }
+      { months, limit }
     );
 
     res.json(employees);
@@ -2797,8 +3323,8 @@ router.get("/analytics/clients", async (req, res) => {
     const clients = await BusinessAnalyticsService.getClientAnalytics(
       req.businessOwnerId,
       {
-        topClientsLimit: parseInt(req.query.topClientsLimit) || undefined,
-        churnDays: parseInt(req.query.churnDays) || undefined,
+        topClientsLimit: parseInt(req.query.topClientsLimit, 10) || undefined,
+        churnDays: parseInt(req.query.churnDays, 10) || undefined,
       }
     );
 
@@ -2817,7 +3343,7 @@ router.get("/analytics/financials", async (req, res) => {
     const financials = await BusinessAnalyticsService.getFinancialAnalytics(
       req.businessOwnerId,
       {
-        months: parseInt(req.query.months) || undefined,
+        months: parseInt(req.query.months, 10) || undefined,
       }
     );
 
@@ -2838,7 +3364,7 @@ router.get("/analytics/trends", async (req, res) => {
     // Check if premium tier for extended history
     const access = await BusinessAnalyticsService.getAnalyticsAccess(req.businessOwnerId);
     const maxMonths = access.tier === "premium" ? 24 : 6;
-    const requestedMonths = Math.min(parseInt(months), maxMonths);
+    const requestedMonths = Math.min(parseInt(months, 10), maxMonths);
 
     const trends = await BusinessAnalyticsService.getTrends(
       req.businessOwnerId,
@@ -2919,6 +3445,21 @@ router.put("/verification/profile", async (req, res) => {
   try {
     const { businessDescription, businessHighlightOptIn } = req.body;
 
+    // Validate businessDescription length
+    if (businessDescription !== undefined && businessDescription !== null) {
+      if (typeof businessDescription !== "string") {
+        return res.status(400).json({ error: "Business description must be a string" });
+      }
+      if (businessDescription.length > 1000) {
+        return res.status(400).json({ error: "Business description must be 1000 characters or less" });
+      }
+    }
+
+    // Validate businessHighlightOptIn type
+    if (businessHighlightOptIn !== undefined && typeof businessHighlightOptIn !== "boolean") {
+      return res.status(400).json({ error: "businessHighlightOptIn must be a boolean" });
+    }
+
     const result = await BusinessVerificationService.updateBusinessProfile(
       req.businessOwnerId,
       { businessDescription, businessHighlightOptIn }
@@ -2972,17 +3513,32 @@ router.get("/payouts/pending", async (req, res) => {
 
 /**
  * POST /payouts/:assignmentId/mark-paid-outside - Mark as paid outside platform
+ *
+ * Handles both:
+ * - "pending" assignments (direct payouts disabled or employee has no Stripe)
+ * - "pending_batch" assignments (queued for bi-weekly batch payout)
+ *
+ * For "pending_batch", also cancels the corresponding EmployeePendingPayout
+ * to prevent double payment.
  */
 router.post("/payouts/:assignmentId/mark-paid-outside", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     const { note } = req.body;
 
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
-        id: parseInt(req.params.assignmentId),
+        id: assignmentId,
         businessOwnerId: req.businessOwnerId,
         status: "completed",
-        payoutStatus: "pending",
+        payoutStatus: { [Op.in]: ["pending", "pending_batch"] },
       },
     });
 
@@ -2990,10 +3546,21 @@ router.post("/payouts/:assignmentId/mark-paid-outside", async (req, res) => {
       return res.status(404).json({ error: "Assignment not found or not eligible" });
     }
 
+    // If assignment was queued for bi-weekly batch, cancel the pending payout
+    if (assignment.payoutStatus === "pending_batch" && assignment.pendingPayoutId) {
+      const EmployeeBatchPayoutService = require("../../../services/EmployeeBatchPayoutService");
+      const cancelResult = await EmployeeBatchPayoutService.cancelPendingPayout(
+        assignment.id,
+        `Marked as paid outside platform by business owner: ${note || "No note provided"}`
+      );
+      console.log(`[BusinessOwner] Cancelled pending batch payout for assignment ${assignment.id}:`, cancelResult);
+    }
+
     await assignment.update({
       payoutStatus: "paid_outside_platform",
       paidOutsidePlatformAt: new Date(),
       paidOutsidePlatformNote: note,
+      pendingPayoutId: null, // Clear the reference
     });
 
     res.json({ message: "Marked as paid outside platform", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
@@ -3016,14 +3583,26 @@ router.post("/bonuses", async (req, res) => {
   try {
     const { employeeId, amount, reason } = req.body;
 
-    if (!employeeId || !amount) {
+    if (!employeeId || amount === undefined || amount === null) {
       return res.status(400).json({ error: "employeeId and amount are required" });
+    }
+
+    // Validate amount
+    const parsedAmount = parseInt(amount, 10);
+    if (isNaN(parsedAmount)) {
+      return res.status(400).json({ error: "Invalid bonus amount" });
+    }
+    if (parsedAmount <= 0) {
+      return res.status(400).json({ error: "Bonus amount must be greater than 0" });
+    }
+    if (parsedAmount > 1000000) { // Max $10,000
+      return res.status(400).json({ error: "Bonus amount cannot exceed $10,000" });
     }
 
     const bonus = await EmployeeBonusService.createBonus(
       req.businessOwnerId,
-      parseInt(employeeId),
-      parseInt(amount),
+      parseInt(employeeId, 10),
+      parsedAmount,
       reason
     );
 
@@ -3045,8 +3624,8 @@ router.get("/bonuses", async (req, res) => {
       req.businessOwnerId,
       {
         status,
-        employeeId: employeeId ? parseInt(employeeId) : undefined,
-        limit: limit ? parseInt(limit) : 50,
+        employeeId: employeeId ? parseInt(employeeId, 10) : undefined,
+        limit: limit ? parseInt(limit, 10) : 50,
       }
     );
 
@@ -3088,10 +3667,18 @@ router.get("/bonuses/summary", async (req, res) => {
  */
 router.put("/bonuses/:id/paid", async (req, res) => {
   try {
+    const { value: bonusId, error: bonusIdError } = parseIntParam(
+      req.params.id,
+      "bonusId"
+    );
+    if (bonusIdError) {
+      return res.status(400).json({ error: bonusIdError });
+    }
+
     const { note } = req.body;
 
     const bonus = await EmployeeBonusService.markBonusPaid(
-      parseInt(req.params.id),
+      bonusId,
       req.businessOwnerId,
       note
     );
@@ -3108,8 +3695,16 @@ router.put("/bonuses/:id/paid", async (req, res) => {
  */
 router.delete("/bonuses/:id", async (req, res) => {
   try {
+    const { value: bonusId, error: bonusIdError } = parseIntParam(
+      req.params.id,
+      "bonusId"
+    );
+    if (bonusIdError) {
+      return res.status(400).json({ error: bonusIdError });
+    }
+
     const result = await EmployeeBonusService.cancelBonus(
-      parseInt(req.params.id),
+      bonusId,
       req.businessOwnerId
     );
 
@@ -3173,7 +3768,7 @@ router.get("/client-payments", async (req, res) => {
       return {
         id: apt.id,
         date: apt.date,
-        price: apt.price,
+        price: apt.price || 0, // Return cents, frontend handles conversion
         paymentStatus: apt.paymentStatus,
         clientName: clientFirstName && clientLastName
           ? `${clientFirstName} ${clientLastName}`
@@ -3183,9 +3778,10 @@ router.get("/client-payments", async (req, res) => {
       };
     });
 
-    const totalUnpaid = unpaidAppointments.reduce((sum, a) => sum + (a.price || 0), 0);
+    // Calculate total in cents
+    const totalUnpaid = appointments.reduce((sum, a) => sum + (a.price || 0), 0);
 
-    res.json({ unpaidAppointments, totalUnpaid });
+    res.json({ unpaidAppointments, totalUnpaid }); // Return cents, frontend handles conversion
   } catch (error) {
     console.error("Error fetching client payments:", error);
     res.status(500).json({ error: error.message });
@@ -3197,7 +3793,13 @@ router.get("/client-payments", async (req, res) => {
  */
 router.post("/appointments/:id/mark-paid", async (req, res) => {
   try {
-    const appointmentId = parseInt(req.params.id);
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.id,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
 
     const appointment = await UserAppointments.findOne({
       where: {
@@ -3227,7 +3829,13 @@ router.post("/appointments/:id/mark-paid", async (req, res) => {
  */
 router.post("/appointments/:id/send-reminder", async (req, res) => {
   try {
-    const appointmentId = parseInt(req.params.id);
+    const { value: appointmentId, error: appointmentIdError } = parseIntParam(
+      req.params.id,
+      "appointmentId"
+    );
+    if (appointmentIdError) {
+      return res.status(400).json({ error: appointmentIdError });
+    }
 
     const appointment = await UserAppointments.findOne({
       where: {
@@ -3533,8 +4141,13 @@ router.get("/job-flows/assignments", async (req, res) => {
  */
 router.get("/job-flows/:flowId", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const flow = await CustomJobFlowService.getFlowById(
-      parseInt(req.params.flowId),
+      flowId,
       req.businessOwnerId
     );
 
@@ -3550,8 +4163,13 @@ router.get("/job-flows/:flowId", async (req, res) => {
  */
 router.put("/job-flows/:flowId", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const flow = await CustomJobFlowService.updateFlow(
-      parseInt(req.params.flowId),
+      flowId,
       req.businessOwnerId,
       req.body
     );
@@ -3568,17 +4186,22 @@ router.put("/job-flows/:flowId", async (req, res) => {
  */
 router.delete("/job-flows/:flowId", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const { permanent } = req.query;
 
     if (permanent === "true") {
       await CustomJobFlowService.deleteFlow(
-        parseInt(req.params.flowId),
+        flowId,
         req.businessOwnerId
       );
       res.json({ message: "Job flow deleted permanently" });
     } else {
       const flow = await CustomJobFlowService.archiveFlow(
-        parseInt(req.params.flowId),
+        flowId,
         req.businessOwnerId
       );
       res.json({ message: "Job flow archived", flow: CustomJobFlowSerializer.serializeOne(flow) });
@@ -3594,9 +4217,14 @@ router.delete("/job-flows/:flowId", async (req, res) => {
  */
 router.post("/job-flows/:flowId/set-default", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const flow = await CustomJobFlowService.setDefaultFlow(
       req.businessOwnerId,
-      parseInt(req.params.flowId)
+      flowId
     );
 
     res.json({ message: "Default flow updated", flow: CustomJobFlowSerializer.serializeOne(flow) });
@@ -3628,8 +4256,13 @@ router.post("/job-flows/clear-default", async (req, res) => {
  */
 router.get("/job-flows/:flowId/checklist", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const flow = await CustomJobFlowService.getFlowById(
-      parseInt(req.params.flowId),
+      flowId,
       req.businessOwnerId
     );
 
@@ -3645,6 +4278,11 @@ router.get("/job-flows/:flowId/checklist", async (req, res) => {
  */
 router.post("/job-flows/:flowId/checklist", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const { sections } = req.body;
 
     if (!sections || !Array.isArray(sections)) {
@@ -3652,7 +4290,7 @@ router.post("/job-flows/:flowId/checklist", async (req, res) => {
     }
 
     const checklist = await CustomJobFlowService.createChecklistFromScratch(
-      parseInt(req.params.flowId),
+      flowId,
       req.businessOwnerId,
       { sections }
     );
@@ -3669,6 +4307,11 @@ router.post("/job-flows/:flowId/checklist", async (req, res) => {
  */
 router.put("/job-flows/:flowId/checklist", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(req.params.flowId, "flowId");
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const { sections } = req.body;
 
     if (!sections || !Array.isArray(sections)) {
@@ -3676,7 +4319,7 @@ router.put("/job-flows/:flowId/checklist", async (req, res) => {
     }
 
     const checklist = await CustomJobFlowService.updateChecklist(
-      parseInt(req.params.flowId),
+      flowId,
       req.businessOwnerId,
       { sections }
     );
@@ -3693,8 +4336,16 @@ router.put("/job-flows/:flowId/checklist", async (req, res) => {
  */
 router.delete("/job-flows/:flowId/checklist", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(
+      req.params.flowId,
+      "flowId"
+    );
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     await CustomJobFlowService.deleteChecklist(
-      parseInt(req.params.flowId),
+      flowId,
       req.businessOwnerId
     );
 
@@ -3710,10 +4361,18 @@ router.delete("/job-flows/:flowId/checklist", async (req, res) => {
  */
 router.post("/job-flows/:flowId/checklist/fork-platform", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(
+      req.params.flowId,
+      "flowId"
+    );
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const { versionId } = req.body;
 
     const checklist = await CustomJobFlowService.forkPlatformChecklist(
-      parseInt(req.params.flowId),
+      flowId,
       req.businessOwnerId,
       versionId
     );
@@ -3730,10 +4389,18 @@ router.post("/job-flows/:flowId/checklist/fork-platform", async (req, res) => {
  */
 router.put("/job-flows/:flowId/checklist/items/:itemId/notes", async (req, res) => {
   try {
+    const { value: flowId, error: flowIdError } = parseIntParam(
+      req.params.flowId,
+      "flowId"
+    );
+    if (flowIdError) {
+      return res.status(400).json({ error: flowIdError });
+    }
+
     const { notes } = req.body;
 
     const checklist = await CustomJobFlowService.addItemNotes(
-      parseInt(req.params.flowId),
+      flowId,
       req.businessOwnerId,
       req.params.itemId,
       notes
@@ -3755,6 +4422,14 @@ router.put("/job-flows/:flowId/checklist/items/:itemId/notes", async (req, res) 
  */
 router.post("/job-flows/assignments/client/:clientId", async (req, res) => {
   try {
+    const { value: clientId, error: clientIdError } = parseIntParam(
+      req.params.clientId,
+      "clientId"
+    );
+    if (clientIdError) {
+      return res.status(400).json({ error: clientIdError });
+    }
+
     const { flowId } = req.body;
 
     if (!flowId) {
@@ -3763,7 +4438,7 @@ router.post("/job-flows/assignments/client/:clientId", async (req, res) => {
 
     const assignment = await CustomJobFlowService.assignFlowToClient(
       req.businessOwnerId,
-      parseInt(req.params.clientId),
+      clientId,
       flowId
     );
 
@@ -3779,6 +4454,14 @@ router.post("/job-flows/assignments/client/:clientId", async (req, res) => {
  */
 router.post("/job-flows/assignments/home/:homeId", async (req, res) => {
   try {
+    const { value: homeId, error: homeIdError } = parseIntParam(
+      req.params.homeId,
+      "homeId"
+    );
+    if (homeIdError) {
+      return res.status(400).json({ error: homeIdError });
+    }
+
     const { flowId } = req.body;
 
     if (!flowId) {
@@ -3787,7 +4470,7 @@ router.post("/job-flows/assignments/home/:homeId", async (req, res) => {
 
     const assignment = await CustomJobFlowService.assignFlowToHome(
       req.businessOwnerId,
-      parseInt(req.params.homeId),
+      homeId,
       flowId
     );
 
@@ -3803,8 +4486,16 @@ router.post("/job-flows/assignments/home/:homeId", async (req, res) => {
  */
 router.delete("/job-flows/assignments/:assignmentId", async (req, res) => {
   try {
+    const { value: assignmentId, error: assignmentIdError } = parseIntParam(
+      req.params.assignmentId,
+      "assignmentId"
+    );
+    if (assignmentIdError) {
+      return res.status(400).json({ error: assignmentIdError });
+    }
+
     await CustomJobFlowService.removeFlowAssignment(
-      parseInt(req.params.assignmentId),
+      assignmentId,
       req.businessOwnerId
     );
 
@@ -3849,7 +4540,7 @@ router.get("/team-for-job", async (req, res) => {
     );
 
     // Parse job date for availability check
-    const date = new Date(jobDate + "T00:00:00");
+    const date = new Date(jobDate + "T12:00:00");
     const dayOfWeek = date.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
 
     // Check availability for each employee
@@ -3981,23 +4672,31 @@ router.get("/settings/employee-payouts", async (req, res) => {
       return res.status(404).json({ error: "Business owner not found" });
     }
 
-    // Get count of employees with Stripe Connect ready
+    // Get all active employees with their Stripe Connect status
     const employees = await BusinessEmployee.findAll({
       where: {
         businessOwnerId: req.businessOwnerId,
         status: "active",
       },
+      attributes: ["id", "firstName", "lastName", "stripeConnectAccountId", "stripeConnectOnboarded"],
+      order: [["firstName", "ASC"], ["lastName", "ASC"]],
     });
 
-    const employeesWithStripe = employees.filter(
-      (e) => e.stripeConnectAccountId && e.stripeConnectOnboarded
-    ).length;
+    const employeeList = employees.map((e) => ({
+      id: e.id,
+      firstName: e.firstName,
+      lastName: e.lastName,
+      stripeConnected: !!(e.stripeConnectAccountId && e.stripeConnectOnboarded),
+    }));
+
+    const employeesWithStripe = employeeList.filter((e) => e.stripeConnected).length;
 
     res.json({
       employeePayoutMethod: businessOwner.employeePayoutMethod || "all_to_owner",
       totalActiveEmployees: employees.length,
       employeesReadyForDirectPayout: employeesWithStripe,
       directPayoutsAvailable: employeesWithStripe > 0,
+      employees: employeeList,
     });
   } catch (error) {
     console.error("Error fetching employee payout settings:", error);
@@ -4026,6 +4725,77 @@ router.put("/settings/employee-payouts", async (req, res) => {
 
     await businessOwner.update({ employeePayoutMethod });
 
+    // When switching to direct payouts, update all employees' payment method
+    // so they see the Stripe setup prompt on their dashboard
+    let notifiedCount = 0;
+    if (employeePayoutMethod === "direct_to_employees") {
+      // Get employees who need to set up Stripe (not yet onboarded)
+      const employeesNeedingSetup = await BusinessEmployee.findAll({
+        where: {
+          businessOwnerId: req.businessOwnerId,
+          status: "active",
+          [Op.or]: [
+            { stripeConnectOnboarded: false },
+            { stripeConnectOnboarded: null },
+          ],
+        },
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "email", "firstName", "expoPushToken"],
+          },
+        ],
+      });
+
+      // Update all employees to stripe_connect payment method
+      await BusinessEmployee.update(
+        { paymentMethod: "stripe_connect" },
+        {
+          where: {
+            businessOwnerId: req.businessOwnerId,
+            status: "active",
+          },
+        }
+      );
+      console.log(
+        `[BusinessOwner] Set all employees to stripe_connect for owner ${req.businessOwnerId}`
+      );
+
+      // Send notifications to employees who need to set up Stripe
+      const businessOwnerName = `${businessOwner.firstName || "Your employer"}`;
+      for (const employee of employeesNeedingSetup) {
+        try {
+          const employeeEmail = employee.user?.email || employee.email;
+          const employeeName = employee.firstName || employee.user?.firstName || "there";
+          const pushToken = employee.user?.expoPushToken;
+
+          // Send email notification
+          if (employeeEmail) {
+            await Email.sendStripeSetupInvitation(employeeEmail, employeeName, businessOwnerName);
+          }
+
+          // Send push notification
+          if (pushToken) {
+            await PushNotification.sendPushStripeSetupInvitation(pushToken, businessOwnerName);
+          }
+
+          notifiedCount++;
+        } catch (notifyError) {
+          console.error(
+            `[BusinessOwner] Failed to notify employee ${employee.id}:`,
+            notifyError.message
+          );
+        }
+      }
+
+      if (notifiedCount > 0) {
+        console.log(
+          `[BusinessOwner] Notified ${notifiedCount} employees to set up Stripe for owner ${req.businessOwnerId}`
+        );
+      }
+    }
+
     console.log(
       `[BusinessOwner] Updated employee payout method to ${employeePayoutMethod} for owner ${req.businessOwnerId}`
     );
@@ -4033,9 +4803,12 @@ router.put("/settings/employee-payouts", async (req, res) => {
     res.json({
       success: true,
       employeePayoutMethod,
+      notifiedEmployees: notifiedCount,
       message:
         employeePayoutMethod === "direct_to_employees"
-          ? "Employees with Stripe accounts will now receive payouts directly"
+          ? notifiedCount > 0
+            ? `Employees with Stripe accounts will now receive payouts directly. ${notifiedCount} employee${notifiedCount === 1 ? " has" : "s have"} been notified to set up Stripe.`
+            : "Employees with Stripe accounts will now receive payouts directly"
           : "All payouts will go to your account",
     });
   } catch (error) {
@@ -4054,7 +4827,7 @@ router.get("/employees/:employeeId/stripe-eligibility", async (req, res) => {
 
     const employee = await BusinessEmployee.findOne({
       where: {
-        id: parseInt(employeeId),
+        id: parseInt(employeeId, 10),
         businessOwnerId: req.businessOwnerId,
       },
     });
@@ -4067,9 +4840,13 @@ router.get("/employees/:employeeId/stripe-eligibility", async (req, res) => {
       employee.id
     );
 
+    // Decrypt employee names (BusinessEmployee has encrypted PII fields)
+    const empFirstName = employee.firstName ? EncryptionService.decrypt(employee.firstName) : "";
+    const empLastName = employee.lastName ? EncryptionService.decrypt(employee.lastName) : "";
+
     res.json({
       employeeId: employee.id,
-      employeeName: `${employee.firstName} ${employee.lastName}`,
+      employeeName: `${empFirstName} ${empLastName}`.trim() || "Unknown",
       ...status,
       canReceiveDirectPayouts: status.hasAccount && status.payoutsEnabled,
     });
@@ -4089,7 +4866,7 @@ router.post("/employees/:employeeId/invite-to-stripe", async (req, res) => {
 
     const employee = await BusinessEmployee.findOne({
       where: {
-        id: parseInt(employeeId),
+        id: parseInt(employeeId, 10),
         businessOwnerId: req.businessOwnerId,
         status: "active",
       },
@@ -4108,7 +4885,49 @@ router.post("/employees/:employeeId/invite-to-stripe", async (req, res) => {
     // Update payment method to stripe_connect
     await employee.update({ paymentMethod: "stripe_connect" });
 
-    // TODO: Send notification to employee about setting up Stripe
+    // Fetch the employee's user record for notifications
+    const employeeUser = await User.findByPk(employee.userId, {
+      attributes: ["id", "firstName", "lastName", "email", "expoPushToken", "notifications"],
+    });
+
+    // Fetch the business owner's name
+    const businessOwner = await User.findByPk(req.businessOwnerId, {
+      attributes: ["firstName", "lastName"],
+    });
+    const businessOwnerName = businessOwner
+      ? `${EncryptionService.decrypt(businessOwner.firstName)} ${EncryptionService.decrypt(businessOwner.lastName)}`
+      : "Your employer";
+
+    // Send notifications to the employee
+    if (employeeUser && employeeUser.notifications !== false) {
+      const employeeName = employee.firstName || "there";
+      const employeeEmail = employeeUser.email ? EncryptionService.decrypt(employeeUser.email) : null;
+
+      // Send push notification
+      if (employeeUser.expoPushToken) {
+        try {
+          await PushNotification.sendPushStripeSetupInvitation(
+            employeeUser.expoPushToken,
+            businessOwnerName
+          );
+        } catch (pushErr) {
+          console.error("Failed to send Stripe setup push notification:", pushErr);
+        }
+      }
+
+      // Send email notification
+      if (employeeEmail) {
+        try {
+          await Email.sendStripeSetupInvitation(
+            employeeEmail,
+            employeeName,
+            businessOwnerName
+          );
+        } catch (emailErr) {
+          console.error("Failed to send Stripe setup email:", emailErr);
+        }
+      }
+    }
 
     res.json({
       success: true,

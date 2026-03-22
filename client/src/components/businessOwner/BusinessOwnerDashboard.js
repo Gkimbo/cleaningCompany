@@ -11,9 +11,8 @@ import {
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
-import NotificationsService from "../../services/fetchRequests/NotificationsService";
 import PaymentSetupBanner from "./PaymentSetupBanner";
-import { useSocket } from "../../services/SocketContext";
+import { toLocalDateString } from "../../services/formatters";
 import {
   colors,
   spacing,
@@ -167,7 +166,8 @@ const PendingPayrollCard = ({ pendingPayroll, onPress, formatCurrency }) => {
 
   const formatPayoutDate = (dateStr) => {
     if (!dateStr) return null;
-    const date = new Date(dateStr);
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    const date = new Date(dateStr + "T12:00:00");
     const today = new Date();
     const diffDays = Math.ceil((date - today) / (1000 * 60 * 60 * 24));
 
@@ -341,55 +341,6 @@ const BusinessOwnerDashboard = ({ state }) => {
     formatted: { totalPending: "$0.00" },
   });
   const [error, setError] = useState(null);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [actionRequiredCount, setActionRequiredCount] = useState(0);
-
-  // Socket hooks for real-time notification updates
-  const { onNotification, onNotificationCountUpdate } = useSocket();
-
-  // Fetch notification counts (unread + action-required)
-  useEffect(() => {
-    const fetchNotificationCounts = async () => {
-      if (state.currentUser?.token) {
-        try {
-          const data = await NotificationsService.getUnreadCount(state.currentUser.token);
-          setUnreadNotifications(data.unreadCount || 0);
-          setActionRequiredCount(data.actionRequiredCount || 0);
-        } catch (err) {
-          console.error("Error fetching notification counts:", err);
-        }
-      }
-    };
-    fetchNotificationCounts();
-  }, [state.currentUser?.token]);
-
-  // Listen for real-time notification updates
-  useEffect(() => {
-    const unsubNotification = onNotification((data) => {
-      setUnreadNotifications((prev) => prev + 1);
-      // If the notification requires action, increment that count too
-      if (data?.notification?.actionRequired) {
-        setActionRequiredCount((prev) => prev + 1);
-      }
-    });
-
-    const unsubCountUpdate = onNotificationCountUpdate((data) => {
-      if (typeof data.unreadCount === "number") {
-        setUnreadNotifications(data.unreadCount);
-      }
-      if (typeof data.actionRequiredCount === "number") {
-        setActionRequiredCount(data.actionRequiredCount);
-      }
-    });
-
-    return () => {
-      unsubNotification();
-      unsubCountUpdate();
-    };
-  }, [onNotification, onNotificationCountUpdate]);
-
-  // Badge shows max of unread and action-required (action-required persists until resolved)
-  const notificationBadgeCount = Math.max(unreadNotifications, actionRequiredCount);
 
   const fetchDashboard = async (isRefresh = false) => {
     if (isRefresh) {
@@ -433,7 +384,7 @@ const BusinessOwnerDashboard = ({ state }) => {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const formatDateKey = (date) => date.toISOString().split("T")[0];
+      const formatDateKey = (date) => toLocalDateString(date);
       const todayKey = formatDateKey(today);
       const tomorrowKey = formatDateKey(tomorrow);
 
@@ -454,8 +405,8 @@ const BusinessOwnerDashboard = ({ state }) => {
       const todayJobs = allJobs.filter((j) => j.date?.split("T")[0] === todayKey);
       const tomorrowJobs = allJobs.filter((j) => j.date?.split("T")[0] === tomorrowKey);
       const unassignedJobs = (calendarResult.unassignedJobs || []).filter((j) => {
-        const jobDate = new Date(j.date);
-        return jobDate >= today;
+        const jobDateStr = j.date?.split("T")[0] || j.date;
+        return jobDateStr >= todayKey;
       });
 
       setDashboardData({
@@ -532,19 +483,6 @@ const BusinessOwnerDashboard = ({ state }) => {
             onPress={() => navigate("/messages")}
           >
             <Icon name="envelope" size={18} color={colors.neutral[600]} />
-          </Pressable>
-          <Pressable
-            style={styles.headerButton}
-            onPress={() => navigate("/notifications")}
-          >
-            <Icon name="bell" size={18} color={colors.neutral[600]} />
-            {notificationBadgeCount > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>
-                  {notificationBadgeCount > 9 ? "9+" : notificationBadgeCount}
-                </Text>
-              </View>
-            )}
           </Pressable>
         </View>
       </View>
@@ -837,25 +775,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     ...shadows.sm,
-  },
-  notificationBadge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    backgroundColor: colors.error[500],
-    borderRadius: radius.full,
-    minWidth: 18,
-    height: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: colors.background.primary,
-  },
-  notificationBadgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "700",
   },
   errorBanner: {
     flexDirection: "row",

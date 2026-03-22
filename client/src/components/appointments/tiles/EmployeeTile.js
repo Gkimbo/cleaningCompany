@@ -46,8 +46,8 @@ const EmployeeTile = ({
   };
 
   const getAverageRating = () => {
-    if (reviews.length === 0) return 0;
-    const totalRating = reviews.reduce((sum, review) => sum + review.review, 0);
+    if (!reviews || reviews.length === 0) return 0;
+    const totalRating = reviews.reduce((sum, review) => sum + (review.review || 0), 0);
     return totalRating / reviews.length;
   };
 

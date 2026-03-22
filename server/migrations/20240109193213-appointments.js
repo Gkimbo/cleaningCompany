@@ -33,8 +33,9 @@ module.exports = {
 				allowNull: false,
 			},
 			price: {
-				type: Sequelize.STRING,
+				type: Sequelize.INTEGER,
 				allowNull: false,
+				comment: "Price in cents (e.g., 15000 = $150.00)",
 			},
 			paid: {
 				type: Sequelize.BOOLEAN,

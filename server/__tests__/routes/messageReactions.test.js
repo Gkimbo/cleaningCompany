@@ -280,7 +280,7 @@ describe("Message Reactions API", () => {
         .send({});
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe("Emoji is required");
+      expect(res.body.error).toBe("Invalid emoji (must be 1-10 characters)");
     });
 
     it("should return 404 for non-existent message", async () => {

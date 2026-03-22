@@ -28,6 +28,7 @@ const { cancelEdgeCaseAppointment } = require("../../../services/cron/MultiClean
 const Email = require("../../../services/sendNotifications/EmailClass");
 const EncryptionService = require("../../../services/EncryptionService");
 const MultiCleanerJobSerializer = require("../../../serializers/MultiCleanerJobSerializer");
+const { checkBookingDistance, MAX_BOOKING_DISTANCE_MILES } = require("../../../utils/geoUtils");
 
 const multiCleanerRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -81,6 +82,7 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
               as: "appointment",
               where: {
                 completed: false,
+                isPaused: { [Op.ne]: true }, // Hide paused appointments (homeowner account frozen)
               },
               include: [
                 {
@@ -107,7 +109,7 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
         multiCleanerJobId: job.id,
         appointmentId: appointment.id,
         date: appointment.date,
-        price: appointment.price,
+        price: appointment.price,  // Price in cents (consistent with AppointmentSerializer)
         isMultiCleanerJob: true,
         status: completion.status,
         completionStatus: completion.completionStatus,
@@ -147,7 +149,7 @@ multiCleanerRouter.get("/check/:appointmentId", async (req, res) => {
   try {
     const { appointmentId } = req.params;
     const checkInfo = await MultiCleanerService.getJobCheckInfo(
-      parseInt(appointmentId)
+      parseInt(appointmentId, 10)
     );
     return res.status(200).json(checkInfo);
   } catch (error) {
@@ -264,6 +266,10 @@ multiCleanerRouter.get("/offers", async (req, res) => {
         {
           model: UserAppointments,
           as: "appointment",
+          where: {
+            isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner account frozen)
+            wasCancelled: { [Op.ne]: true }, // Exclude cancelled appointments
+          },
           include: [
             { model: UserHomes, as: "home" },
             { model: User, as: "user" },
@@ -290,6 +296,7 @@ multiCleanerRouter.get("/offers", async (req, res) => {
         isMultiCleanerJob: { [Op.or]: [false, null] },
         date: { [Op.gte]: now },
         isDemoAppointment: isCleanerDemo, // Demo cleaners see demo appointments only
+        isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner account frozen)
       },
       include: [
         { model: UserHomes, as: "home" },
@@ -306,8 +313,8 @@ multiCleanerRouter.get("/offers", async (req, res) => {
       const home = appt.home;
       if (!home) continue;
 
-      const numBeds = parseInt(home.numBeds) || 0;
-      const numBaths = parseInt(home.numBaths) || 0;
+      const numBeds = parseInt(home.numBeds, 10) || 0;
+      const numBaths = parseInt(home.numBaths, 10) || 0;
       const isEdgeLargeHome = await MultiCleanerService.isEdgeLargeHome(numBeds, numBaths);
 
       if (isEdgeLargeHome) {
@@ -392,6 +399,32 @@ multiCleanerRouter.post("/offers/:offerId/accept", async (req, res) => {
 
     if (offer.status !== "pending") {
       return res.status(400).json({ error: "Offer is no longer available" });
+    }
+
+    // Check distance from cleaner to home (max 30 miles)
+    const cleaner = await User.findByPk(cleanerId);
+    const appointment = await UserAppointments.findByPk(offer.appointmentId, {
+      include: [{ model: UserHomes, as: "home" }],
+    });
+
+    if (appointment?.home) {
+      const cleanerLat = cleaner?.serviceAreaLatitude ? parseFloat(cleaner.serviceAreaLatitude) : null;
+      const cleanerLon = cleaner?.serviceAreaLongitude ? parseFloat(cleaner.serviceAreaLongitude) : null;
+      const homeLat = appointment.home.latitude ? parseFloat(EncryptionService.decrypt(appointment.home.latitude)) : null;
+      const homeLon = appointment.home.longitude ? parseFloat(EncryptionService.decrypt(appointment.home.longitude)) : null;
+
+      if (cleanerLat && cleanerLon && homeLat && homeLon) {
+        const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+        if (distanceCheck.canBook === false) {
+          return res.status(400).json({
+            error: "Job too far from service area",
+            message: `This job is ${distanceCheck.distanceMiles} miles from your service area center. The maximum booking distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+            code: "EXCEEDS_MAX_DISTANCE",
+            distanceMiles: distanceCheck.distanceMiles,
+            maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+          });
+        }
+      }
     }
 
     // Accept the offer
@@ -596,6 +629,28 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
       return res.status(404).json({ error: "Job not found" });
     }
 
+    // Check distance from cleaner to home (max 30 miles)
+    const cleaner = await User.findByPk(cleanerId);
+    if (job.appointment?.home) {
+      const cleanerLat = cleaner?.serviceAreaLatitude ? parseFloat(cleaner.serviceAreaLatitude) : null;
+      const cleanerLon = cleaner?.serviceAreaLongitude ? parseFloat(cleaner.serviceAreaLongitude) : null;
+      const homeLat = job.appointment.home.latitude ? parseFloat(EncryptionService.decrypt(job.appointment.home.latitude)) : null;
+      const homeLon = job.appointment.home.longitude ? parseFloat(EncryptionService.decrypt(job.appointment.home.longitude)) : null;
+
+      if (cleanerLat && cleanerLon && homeLat && homeLon) {
+        const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+        if (distanceCheck.canBook === false) {
+          return res.status(400).json({
+            error: "Job too far from service area",
+            message: `This job is ${distanceCheck.distanceMiles} miles from your service area center. The maximum booking distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+            code: "EXCEEDS_MAX_DISTANCE",
+            distanceMiles: distanceCheck.distanceMiles,
+            maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+          });
+        }
+      }
+    }
+
     if (job.isFilled()) {
       return res.status(400).json({ error: "All slots are already filled" });
     }
@@ -612,12 +667,12 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
     // Get available rooms for this slot
     const unassignedRooms = await CleanerRoomAssignment.findAll({
       where: {
-        multiCleanerJobId: parseInt(multiCleanerJobId),
+        multiCleanerJobId: parseInt(multiCleanerJobId, 10),
         cleanerId: null,
       },
       limit: Math.ceil(
         (await CleanerRoomAssignment.count({
-          where: { multiCleanerJobId: parseInt(multiCleanerJobId) },
+          where: { multiCleanerJobId: parseInt(multiCleanerJobId, 10) },
         })) / job.totalCleanersRequired
       ),
     });
@@ -626,7 +681,7 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
 
     // Use approval service - auto-approves preferred cleaners, creates request for others
     const result = await CleanerApprovalService.requestToJoin(
-      parseInt(multiCleanerJobId),
+      parseInt(multiCleanerJobId, 10),
       cleanerId,
       roomAssignmentIds
     );
@@ -651,7 +706,7 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
     // Calculate earnings for this cleaner
     const earnings = await RoomAssignmentService.calculateCleanerEarningsShare(
       cleanerId,
-      parseInt(multiCleanerJobId)
+      parseInt(multiCleanerJobId, 10)
     );
 
     // Fetch updated job with appointment/home for serialization
@@ -696,12 +751,12 @@ multiCleanerRouter.get("/assignments/:appointmentId", async (req, res) => {
     if (isAdmin) {
       // Admin sees all assignments
       assignments = await RoomAssignmentService.getAllRoomAssignments(
-        parseInt(appointmentId)
+        parseInt(appointmentId, 10)
       );
     } else {
       // Cleaner sees only their assignments
       assignments = await RoomAssignmentService.getCleanerRooms(
-        parseInt(appointmentId),
+        parseInt(appointmentId, 10),
         cleanerId
       );
     }
@@ -724,7 +779,7 @@ multiCleanerRouter.get("/checklist/:appointmentId", async (req, res) => {
 
     // Get cleaner's room assignments
     const assignments = await RoomAssignmentService.getCleanerRooms(
-      parseInt(appointmentId),
+      parseInt(appointmentId, 10),
       cleanerId
     );
 
@@ -769,7 +824,7 @@ multiCleanerRouter.post("/rooms/:roomAssignmentId/complete", async (req, res) =>
     // Validate completion (check for photos)
     const validation = await RoomAssignmentService.validateRoomCompletion(
       cleanerId,
-      parseInt(roomAssignmentId)
+      parseInt(roomAssignmentId, 10)
     );
 
     if (!validation.valid) {
@@ -956,7 +1011,7 @@ multiCleanerRouter.get("/earnings/:multiCleanerJobId", async (req, res) => {
     const { multiCleanerJobId } = req.params;
 
     const breakdown = await MultiCleanerPricingService.generateEarningsBreakdown(
-      parseInt(multiCleanerJobId)
+      parseInt(multiCleanerJobId, 10)
     );
 
     return res.status(200).json(breakdown);
@@ -1057,7 +1112,7 @@ multiCleanerRouter.post("/:appointmentId/accept-solo", async (req, res) => {
 
     // Calculate solo earnings
     const soloEarnings = await MultiCleanerPricingService.calculateSoloCompletionEarnings(
-      parseInt(appointmentId)
+      parseInt(appointmentId, 10)
     );
 
     return res.status(200).json({
@@ -1114,7 +1169,7 @@ multiCleanerRouter.post("/:appointmentId/decline-solo", async (req, res) => {
 
     // Remove from cleaner-appointment assignments
     await UserCleanerAppointments.destroy({
-      where: { appointmentId: parseInt(appointmentId), employeeId: cleanerId },
+      where: { appointmentId: parseInt(appointmentId, 10), employeeId: cleanerId },
     });
 
     return res.status(200).json(result);
@@ -1206,7 +1261,7 @@ multiCleanerRouter.post("/:appointmentId/decline-extra-work", async (req, res) =
 
     // Remove from cleaner-appointment assignments
     await UserCleanerAppointments.destroy({
-      where: { appointmentId: parseInt(appointmentId), employeeId: cleanerId },
+      where: { appointmentId: parseInt(appointmentId, 10), employeeId: cleanerId },
     });
 
     return res.status(200).json(result);
@@ -1545,7 +1600,7 @@ multiCleanerRouter.post("/book-as-team", async (req, res) => {
 
     // Book the team
     const result = await MultiCleanerService.bookAsTeam(
-      parseInt(multiCleanerJobId),
+      parseInt(multiCleanerJobId, 10),
       businessOwnerId,
       teamMembers
     );
@@ -1553,7 +1608,7 @@ multiCleanerRouter.post("/book-as-team", async (req, res) => {
     // Calculate total earnings for the team
     const MultiCleanerJobSerializer = require("../../../serializers/MultiCleanerJobSerializer");
     const totalEarnings = await RoomAssignmentService.calculateTotalJobEarnings(
-      parseInt(multiCleanerJobId)
+      parseInt(multiCleanerJobId, 10)
     );
 
     return res.status(200).json({

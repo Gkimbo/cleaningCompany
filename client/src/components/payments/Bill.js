@@ -12,7 +12,9 @@ import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { API_BASE } from "../../services/config";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
+import { getTodayString } from "../../services/formatters";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const baseURL = API_BASE.replace("/api/v1", "");
 
 const Bill = ({ state, dispatch }) => {
@@ -23,7 +25,7 @@ const Bill = ({ state, dispatch }) => {
   const [payingCancellationFee, setPayingCancellationFee] = useState(false);
   const [allAppointments, setAllAppointments] = useState([]);
   const [homes, setHomes] = useState([]);
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
 
   const cancellationFee = Math.max(0, state?.bill?.cancellationFee || 0);
   const totalDue = Math.max(0, state?.bill?.totalDue || 0);
@@ -58,32 +60,29 @@ const Bill = ({ state, dispatch }) => {
 
   useEffect(() => {
     const appointments = state?.appointments || [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayStr = getTodayString();
 
     // All appointments sorted by date
-    const sorted = [...appointments].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const sorted = [...appointments].sort((a, b) => a.date.localeCompare(b.date));
     setAllAppointments(sorted);
 
     // Failed payments - need retry
     const failed = appointments
       .filter(appt => appt.paymentCaptureFailed && !appt.paid)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+      .sort((a, b) => a.date.localeCompare(b.date));
     setFailedPayments(failed);
 
     // Upcoming payable - can pre-pay (any assigned appointment that's not paid)
     const upcoming = appointments
       .filter(appt => {
-        const apptDate = new Date(appt.date);
-        apptDate.setHours(0, 0, 0, 0);
         return (
           !appt.paid &&
-          apptDate > today &&
+          appt.date > todayStr &&
           appt.hasBeenAssigned &&
           !appt.paymentCaptureFailed
         );
       })
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+      .sort((a, b) => a.date.localeCompare(b.date));
     setUpcomingPayable(upcoming);
   }, [state?.appointments]);
 
@@ -190,7 +189,8 @@ const Bill = ({ state, dispatch }) => {
   };
 
   const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    return new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -203,14 +203,11 @@ const Bill = ({ state, dispatch }) => {
   };
 
   // Get unpaid future appointments (not failed, not assigned yet)
+  const todayStr = getTodayString();
   const unpaidPendingAppointments = allAppointments.filter(appt => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const apptDate = new Date(appt.date);
-    apptDate.setHours(0, 0, 0, 0);
     return (
       !appt.paid &&
-      apptDate > today &&
+      appt.date > todayStr &&
       !appt.paymentCaptureFailed &&
       !appt.hasBeenAssigned
     );
@@ -218,27 +215,19 @@ const Bill = ({ state, dispatch }) => {
 
   // Get paid appointments (future - for showing paid status)
   const paidFutureAppointments = allAppointments.filter(appt => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const apptDate = new Date(appt.date);
-    apptDate.setHours(0, 0, 0, 0);
-    return appt.paid && apptDate >= today;
+    return appt.paid && appt.date >= todayStr;
   });
 
   // Get paid past appointments (for payment history)
   const paidPastAppointments = allAppointments.filter(appt => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const apptDate = new Date(appt.date);
-    apptDate.setHours(0, 0, 0, 0);
-    return appt.paid && apptDate < today;
-  }).sort((a, b) => new Date(b.date) - new Date(a.date)); // Most recent first
+    return appt.paid && appt.date < todayStr;
+  }).sort((a, b) => b.date.localeCompare(a.date)); // Most recent first
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="chevron-left" size={14} color={colors.primary[600]} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
@@ -315,7 +304,7 @@ const Bill = ({ state, dispatch }) => {
                     {getHomeNickname(appt)}
                   </Text>
                 </View>
-                <Text style={styles.appointmentPriceError}>${Number(appt.price).toFixed(2)}</Text>
+                <Text style={styles.appointmentPriceError}>${(Number(appt.price) / 100).toFixed(2)}</Text>
               </View>
               <Pressable
                 style={[styles.retryButton, retryingPaymentId === appt.id && styles.retryButtonDisabled]}
@@ -349,7 +338,7 @@ const Bill = ({ state, dispatch }) => {
                     {getHomeNickname(appt)}
                   </Text>
                 </View>
-                <Text style={styles.appointmentPrice}>${Number(appt.price).toFixed(2)}</Text>
+                <Text style={styles.appointmentPrice}>${(Number(appt.price) / 100).toFixed(2)}</Text>
               </View>
               <Pressable
                 style={[styles.payEarlyButton, prePayingId === appt.id && styles.payEarlyButtonDisabled]}
@@ -390,7 +379,7 @@ const Bill = ({ state, dispatch }) => {
                   <Text style={styles.pendingBadgeText}>Pending</Text>
                 </View>
               </View>
-              <Text style={styles.pendingPrice}>${Number(appt.price).toFixed(2)}</Text>
+              <Text style={styles.pendingPrice}>${(Number(appt.price) / 100).toFixed(2)}</Text>
             </View>
           ))}
         </View>
@@ -414,7 +403,7 @@ const Bill = ({ state, dispatch }) => {
                   <Text style={styles.paidBadgeText}>Paid</Text>
                 </View>
               </View>
-              <Text style={styles.paidPrice}>${Number(appt.price).toFixed(2)}</Text>
+              <Text style={styles.paidPrice}>${(Number(appt.price) / 100).toFixed(2)}</Text>
             </View>
           ))}
         </View>
@@ -438,7 +427,7 @@ const Bill = ({ state, dispatch }) => {
                   </Text>
                 </View>
                 <View style={styles.historyRight}>
-                  <Text style={styles.historyAmount}>${Number(appt.price).toFixed(2)}</Text>
+                  <Text style={styles.historyAmount}>${(Number(appt.price) / 100).toFixed(2)}</Text>
                   <View style={styles.historyPaidBadge}>
                     <Icon name="check" size={10} color={colors.success[600]} />
                   </View>

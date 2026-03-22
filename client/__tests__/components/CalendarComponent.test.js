@@ -12,6 +12,7 @@ jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
 
 jest.mock("react-router-native", () => ({
   useNavigate: () => jest.fn(),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 jest.mock("../../src/services/fetchRequests/fetchData", () => ({

@@ -1,6 +1,4 @@
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 /**
  * ConflictService
@@ -9,34 +7,6 @@ const baseURL = API_BASE.replace("/api/v1", "");
  * Handles both appeals and adjustment disputes.
  */
 class ConflictService {
-  // ==================
-  // Helper Methods
-  // ==================
-
-  static async fetchWithAuth(url, token, options = {}) {
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          ...options.headers,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: data.error || "Request failed" };
-      }
-
-      return { success: true, ...data };
-    } catch (error) {
-      console.error("[ConflictService] Request failed:", error);
-      return { success: false, error: "Network error. Please try again." };
-    }
-  }
-
   // ==================
   // Queue & Stats
   // ==================
@@ -53,18 +23,31 @@ class ConflictService {
     if (filters.search) params.append("search", filters.search);
     if (filters.limit) params.append("limit", filters.limit);
     if (filters.offset) params.append("offset", filters.offset);
+    if (filters.includeResolved) params.append("includeResolved", "true");
 
     const queryString = params.toString();
-    const url = `${baseURL}/api/v1/conflicts/queue${queryString ? `?${queryString}` : ""}`;
+    const url = `/conflicts/queue${queryString ? `?${queryString}` : ""}`;
 
-    return this.fetchWithAuth(url, token);
+    const result = await HttpClient.get(url, { token, useBaseUrl: true });
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] getQueue failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Get queue statistics
    */
   static async getStats(token) {
-    return this.fetchWithAuth(`${baseURL}/api/v1/conflicts/stats`, token);
+    const result = await HttpClient.get("/conflicts/stats", { token, useBaseUrl: true });
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] getStats failed:", result.error);
+    }
+
+    return result;
   }
 
   // ==================
@@ -75,50 +58,80 @@ class ConflictService {
    * Get full case details
    */
   static async getCase(token, caseType, caseId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}`,
-      token
+    const result = await HttpClient.get(
+      `/conflicts/${caseType}/${caseId}`,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] getCase failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Get appointment photos for a case
    */
   static async getPhotos(token, caseType, caseId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}/photos`,
-      token
+    const result = await HttpClient.get(
+      `/conflicts/${caseType}/${caseId}/photos`,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] getPhotos failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Get appointment checklist for a case
    */
   static async getChecklist(token, caseType, caseId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}/checklist`,
-      token
+    const result = await HttpClient.get(
+      `/conflicts/${caseType}/${caseId}/checklist`,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] getChecklist failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Get appointment messages for a case
    */
   static async getMessages(token, caseType, caseId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}/messages`,
-      token
+    const result = await HttpClient.get(
+      `/conflicts/${caseType}/${caseId}/messages`,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] getMessages failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Get audit trail for a case
    */
   static async getAuditTrail(token, caseType, caseId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}/audit`,
-      token
+    const result = await HttpClient.get(
+      `/conflicts/${caseType}/${caseId}/audit`,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] getAuditTrail failed:", result.error);
+    }
+
+    return result;
   }
 
   // ==================
@@ -129,70 +142,85 @@ class ConflictService {
    * Process refund to homeowner
    */
   static async processRefund(token, caseType, caseId, amount, reason) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}/refund`,
-      token,
-      {
-        method: "POST",
-        body: JSON.stringify({ amount, reason }),
-      }
+    const result = await HttpClient.post(
+      `/conflicts/${caseType}/${caseId}/refund`,
+      { amount, reason },
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] processRefund failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Process payout to cleaner
    */
   static async processPayout(token, caseType, caseId, amount, reason) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}/payout`,
-      token,
-      {
-        method: "POST",
-        body: JSON.stringify({ amount, reason }),
-      }
+    const result = await HttpClient.post(
+      `/conflicts/${caseType}/${caseId}/payout`,
+      { amount, reason },
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] processPayout failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Add a reviewer note
    */
   static async addNote(token, caseType, caseId, note) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}/note`,
-      token,
-      {
-        method: "POST",
-        body: JSON.stringify({ note }),
-      }
+    const result = await HttpClient.post(
+      `/conflicts/${caseType}/${caseId}/note`,
+      { note },
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] addNote failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Resolve a case
    */
   static async resolveCase(token, caseType, caseId, decision, resolution, notes) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}/resolve`,
-      token,
-      {
-        method: "POST",
-        body: JSON.stringify({ decision, resolution, notes }),
-      }
+    const result = await HttpClient.post(
+      `/conflicts/${caseType}/${caseId}/resolve`,
+      { decision, resolution, notes },
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] resolveCase failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Assign case to a reviewer
    */
   static async assignCase(token, caseType, caseId, assigneeId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}/assign`,
-      token,
-      {
-        method: "POST",
-        body: JSON.stringify({ assigneeId }),
-      }
+    const result = await HttpClient.post(
+      `/conflicts/${caseType}/${caseId}/assign`,
+      { assigneeId },
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] assignCase failed:", result.error);
+    }
+
+    return result;
   }
 
   // ==================
@@ -203,24 +231,33 @@ class ConflictService {
    * Create a new support ticket
    */
   static async createSupportTicket(token, ticketData) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/support/create`,
-      token,
-      {
-        method: "POST",
-        body: JSON.stringify(ticketData),
-      }
+    const result = await HttpClient.post(
+      "/conflicts/support/create",
+      ticketData,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] createSupportTicket failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Get linked conversation messages for a support ticket
    */
   static async getLinkedConversation(token, ticketId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/support/${ticketId}/conversation`,
-      token
+    const result = await HttpClient.get(
+      `/conflicts/support/${ticketId}/conversation`,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] getLinkedConversation failed:", result.error);
+    }
+
+    return result;
   }
 
   // ==================
@@ -231,20 +268,32 @@ class ConflictService {
    * Get refund info for a case (original amount, already refunded, max refundable)
    */
   static async getRefundInfo(token, caseType, caseId) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}/refund-info`,
-      token
+    const result = await HttpClient.get(
+      `/conflicts/${caseType}/${caseId}/refund-info`,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] getRefundInfo failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Quick lookup by case number (APL-xxx, ADJ-xxx, PD-xxx, ST-xxx)
    */
   static async lookupByNumber(token, caseNumber) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/lookup/${encodeURIComponent(caseNumber)}`,
-      token
+    const result = await HttpClient.get(
+      `/conflicts/lookup/${encodeURIComponent(caseNumber)}`,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] lookupByNumber failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
@@ -255,20 +304,31 @@ class ConflictService {
     if (includeResolved) params.append("includeResolved", "true");
 
     const queryString = params.toString();
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/user/${userId}/cases${queryString ? `?${queryString}` : ""}`,
-      token
-    );
+    const url = `/conflicts/user/${userId}/cases${queryString ? `?${queryString}` : ""}`;
+
+    const result = await HttpClient.get(url, { token, useBaseUrl: true });
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] getUserCases failed:", result.error);
+    }
+
+    return result;
   }
 
   /**
    * Search for a user and get their cases (by email, phone, or ID)
    */
   static async searchUserCases(token, query) {
-    return this.fetchWithAuth(
-      `${baseURL}/api/v1/conflicts/user/search?query=${encodeURIComponent(query)}`,
-      token
+    const result = await HttpClient.get(
+      `/conflicts/user/search?query=${encodeURIComponent(query)}`,
+      { token, useBaseUrl: true }
     );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ConflictService] searchUserCases failed:", result.error);
+    }
+
+    return result;
   }
 }
 

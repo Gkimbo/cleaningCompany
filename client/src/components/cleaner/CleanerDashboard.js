@@ -121,10 +121,17 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-// Format time constraint for display: "10-3" → "10am - 3pm"
+// Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (timeToBeCompleted) => {
   if (!timeToBeCompleted || timeToBeCompleted.toLowerCase() === "anytime") {
     return "Anytime";
+  }
+
+  // Check if it's a numeric hours limit (e.g., "2.5", "3")
+  const numericValue = parseFloat(timeToBeCompleted);
+  if (!isNaN(numericValue) && numericValue > 0 && numericValue <= 12) {
+    const unit = numericValue === 1 ? "hr" : "hrs";
+    return `Within ${numericValue} ${unit}`;
   }
 
   // Match pattern like "10-3" or "10am-3pm"
@@ -250,10 +257,13 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, pricing }) => {
     : (pricing?.platform?.feePercent || 0.1);
   const cleanerSharePercent = 1 - platformFeePercent;
 
-  const totalPrice = Number(appointment.price);
-  // For multi-cleaner jobs, calculate payout based on number of cleaners
-  const numCleaners = multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired || appointment.employeesAssigned?.length || 1;
-  const payout = (totalPrice / numCleaners) * cleanerSharePercent;
+  const totalPriceCents = Number(appointment.price) || 0;
+  // For multi-cleaner/team jobs, divide by number of cleaners; for solo jobs, use 1
+  const numCleaners = (isMultiCleaner || isTeamJob)
+    ? (multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired || appointment.employeesAssigned?.length || 1)
+    : 1;
+  // Convert cents to dollars
+  const payout = ((totalPriceCents / numCleaners) * cleanerSharePercent) / 100;
 
   return (
     <Pressable
@@ -319,7 +329,7 @@ const PendingRequestCard = ({ request, onPress, distance }) => {
     }
   }, [request.homeId]);
 
-  const appointmentDate = new Date(request.date + "T00:00:00");
+  const appointmentDate = new Date(request.date + "T12:00:00");
 
   const formatDate = (date) => {
     const options = { weekday: "short", month: "short", day: "numeric" };
@@ -620,7 +630,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
         today.setHours(0, 0, 0, 0);
         const upcomingRequests = (requestsResponse.requested || []).filter(
           (req) => {
-            const reqDate = new Date(req.date + "T00:00:00");
+            const reqDate = new Date(req.date + "T12:00:00");
             return reqDate >= today;
           }
         );
@@ -662,15 +672,16 @@ const CleanerDashboard = ({ state, dispatch }) => {
   };
 
   // Get appointment IDs that are multi-cleaner jobs to avoid duplicates
+  // Convert to strings to ensure consistent comparison
   const multiCleanerAppointmentIds = new Set(
-    confirmedMultiCleanerJobs.map((job) => job.appointmentId)
+    confirmedMultiCleanerJobs.map((job) => String(job.appointmentId))
   );
 
   // Combine solo appointments with confirmed multi-cleaner jobs
   // Filter out appointments that are already in confirmedMultiCleanerJobs to avoid duplicates
   const allJobs = [
     ...appointments
-      .filter((apt) => !multiCleanerAppointmentIds.has(apt.id))
+      .filter((apt) => !multiCleanerAppointmentIds.has(String(apt.id)))
       .map((apt) => ({ ...apt, jobType: "solo" })),
     ...confirmedMultiCleanerJobs.map((job) => ({ ...job, jobType: "team" })),
   ];
@@ -680,22 +691,23 @@ const CleanerDashboard = ({ state, dispatch }) => {
     (a, b) => parseLocalDate(a.date) - parseLocalDate(b.date)
   );
 
-  // Get today's appointments (multiple) sorted by end time
+  // Get today's appointments (multiple) sorted by end time - exclude completed
   const today = new Date();
+  today.setHours(0, 0, 0, 0);  // Normalize to midnight for consistent date comparisons
   const todaysAppointments = sortByEndTime(
     sortedAppointments.filter(
-      (apt) => parseLocalDate(apt.date).toDateString() === today.toDateString()
+      (apt) => parseLocalDate(apt.date).toDateString() === today.toDateString() && !apt.completed
     )
   );
 
-  // Get next appointment (first one after today)
+  // Get next appointment (first one after today, not completed)
   const nextAppointment = sortedAppointments.find(
-    (apt) => parseLocalDate(apt.date) > today
+    (apt) => parseLocalDate(apt.date) > today && !apt.completed
   );
 
-  // Get all upcoming appointments (excluding today)
+  // Get all upcoming appointments (excluding today, not completed)
   const allUpcomingAppointments = sortedAppointments
-    .filter((apt) => parseLocalDate(apt.date) > today);
+    .filter((apt) => parseLocalDate(apt.date) > today && !apt.completed);
 
   // Get first 3 for display in the list
   const upcomingAppointments = allUpcomingAppointments.slice(0, 3);
@@ -707,16 +719,19 @@ const CleanerDashboard = ({ state, dispatch }) => {
   const expectedPayout = sortedAppointments
     .filter((apt) => !apt.completed && parseLocalDate(apt.date) >= today)
     .reduce((sum, apt) => {
-      // For multi-cleaner jobs, use totalCleanersRequired from multiCleanerJob or appointment
-      // Otherwise fall back to employeesAssigned length
+      // Check if this is a team/multi-cleaner job
       const isTeamJob = apt.jobType === "team" || apt.isMultiCleanerJob;
-      const numCleaners = apt.multiCleanerJob?.totalCleanersRequired || apt.totalCleanersRequired || apt.employeesAssigned?.length || 1;
+      // For multi-cleaner/team jobs, divide by number of cleaners; for solo jobs, use 1
+      const numCleaners = isTeamJob
+        ? (apt.multiCleanerJob?.totalCleanersRequired || apt.totalCleanersRequired || apt.employeesAssigned?.length || 1)
+        : 1;
       // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
       const feePercent = isTeamJob
         ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
         : (pricing?.platform?.feePercent || 0.1);
       const sharePercent = 1 - feePercent;
-      const perCleanerShare = (Number(apt.price) / numCleaners) * sharePercent;
+      // Convert cents to dollars
+      const perCleanerShare = ((Number(apt.price) || 0) / numCleaners) * sharePercent / 100;
       return sum + perCleanerShare;
     }, 0);
 
@@ -842,6 +857,18 @@ const CleanerDashboard = ({ state, dispatch }) => {
                 }
               }}
             />
+            {/* My Homes - for non-business-owner cleaners only */}
+            {!state.isBusinessOwner && (
+              <QuickActionButton
+                title={state.homes?.length > 0 ? "My Homes" : "Add Home"}
+                subtitle={state.homes?.length > 0 ? "Manage properties" : "Register a property"}
+                icon="home"
+                iconColor="#fff"
+                bgColor="#fff"
+                accentColor="#8b5cf6"
+                onPress={() => navigate(state.homes?.length > 0 ? "/list-of-homes" : "/add-home")}
+              />
+            )}
           </View>
         </View>
 
@@ -953,8 +980,8 @@ const CleanerDashboard = ({ state, dispatch }) => {
             <View style={styles.requestsList}>
               {/* Combine and sort all requests by date */}
               {[
-                ...pendingRequests.map((r) => ({ ...r, type: "solo", sortDate: new Date(r.date + "T00:00:00") })),
-                ...pendingMultiCleanerRequests.map((r) => ({ ...r, type: "team", sortDate: new Date(r.appointment?.date + "T00:00:00") })),
+                ...pendingRequests.filter((r) => r.date).map((r) => ({ ...r, type: "solo", sortDate: new Date(r.date + "T12:00:00") })),
+                ...pendingMultiCleanerRequests.filter((r) => r.appointment?.date).map((r) => ({ ...r, type: "team", sortDate: new Date(r.appointment.date + "T12:00:00") })),
               ]
                 .sort((a, b) => a.sortDate - b.sortDate)
                 .slice(0, 3)
@@ -980,7 +1007,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
                         </View>
                         <View style={styles.teamRequestDateRow}>
                           <Text style={styles.teamRequestDatePrimary}>
-                            {new Date(request.appointment?.date + "T00:00:00").toLocaleDateString("en-US", {
+                            {new Date(request.appointment?.date + "T12:00:00").toLocaleDateString("en-US", {
                               weekday: "short",
                               month: "short",
                               day: "numeric",
@@ -988,7 +1015,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
                           </Text>
                           <Text style={styles.teamRequestRelativeTime}>
                             {(() => {
-                              const apptDate = new Date(request.appointment?.date + "T00:00:00");
+                              const apptDate = new Date(request.appointment?.date + "T12:00:00");
                               const now = new Date();
                               now.setHours(0, 0, 0, 0);
                               const diffDays = Math.ceil((apptDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -1004,7 +1031,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
                         </Text>
                         <View style={styles.teamRequestInfo}>
                           <Text style={styles.teamRequestEarnings}>
-                            ${(((Number(request.appointment?.price) || 0) * cleanerSharePercent) / (request.multiCleanerJob?.totalCleanersRequired || 2)).toFixed(0)}
+                            ${((((Number(request.appointment?.price) || 0) * (1 - (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13))) / (request.multiCleanerJob?.totalCleanersRequired || 2)) / 100).toFixed(0)}
                           </Text>
                         </View>
                         {request.appointment?.timeToBeCompleted &&

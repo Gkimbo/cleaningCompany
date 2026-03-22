@@ -1,12 +1,16 @@
-// Mock fetch
-global.fetch = jest.fn();
-
-// Mock the config
-jest.mock("../../src/services/config", () => ({
-  API_BASE: "http://localhost:3000/api/v1",
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
-const PreferredCleanerService = require("../../src/services/fetchRequests/PreferredCleanerService").default;
+import HttpClient from "../../src/services/HttpClient";
+import PreferredCleanerService from "../../src/services/fetchRequests/PreferredCleanerService";
 
 describe("PreferredCleanerService", () => {
   const mockToken = "test_token_12345";
@@ -15,7 +19,6 @@ describe("PreferredCleanerService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    global.fetch.mockReset();
   });
 
   describe("getPreferredCleaners", () => {
@@ -40,20 +43,13 @@ describe("PreferredCleanerService", () => {
         usePreferredCleaners: true,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await PreferredCleanerService.getPreferredCleaners(mockToken, homeId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `http://localhost:3000/api/v1/preferred-cleaner/homes/${homeId}/preferred-cleaners`,
-        expect.objectContaining({
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        `/preferred-cleaner/homes/${homeId}/preferred-cleaners`,
+        { token: mockToken }
       );
       expect(result.preferredCleaners).toHaveLength(2);
       expect(result.preferredCleaners[0].cleanerName).toBe("John Cleaner");
@@ -61,35 +57,27 @@ describe("PreferredCleanerService", () => {
     });
 
     it("should return empty list on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await PreferredCleanerService.getPreferredCleaners(mockToken, homeId);
 
       expect(result.preferredCleaners).toEqual([]);
-      expect(result.usePreferredCleaners).toBe(true);
+      expect(result.usePreferredCleaners).toBe(false);
     });
 
-    it("should return empty list when response is not ok", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-      });
+    it("should return empty list when response indicates failure", async () => {
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Not found" });
 
       const result = await PreferredCleanerService.getPreferredCleaners(mockToken, homeId);
 
       expect(result.preferredCleaners).toEqual([]);
-      // When response is explicitly not ok, usePreferredCleaners is false
-      // (different from network error which returns true as a safe default)
       expect(result.usePreferredCleaners).toBe(false);
     });
 
     it("should handle empty preferred cleaners list", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          preferredCleaners: [],
-          usePreferredCleaners: false,
-        }),
+      HttpClient.get.mockResolvedValueOnce({
+        preferredCleaners: [],
+        usePreferredCleaners: false,
       });
 
       const result = await PreferredCleanerService.getPreferredCleaners(mockToken, homeId);
@@ -106,32 +94,22 @@ describe("PreferredCleanerService", () => {
         message: "Cleaner removed from preferred list",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.delete.mockResolvedValueOnce(mockResponse);
 
       const result = await PreferredCleanerService.removePreferredCleaner(mockToken, homeId, cleanerId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `http://localhost:3000/api/v1/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}`,
-        expect.objectContaining({
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        })
+      expect(HttpClient.delete).toHaveBeenCalledWith(
+        `/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}`,
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.message).toBe("Cleaner removed from preferred list");
     });
 
     it("should return error when cleaner not found", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: "Cleaner not found in preferred list",
-        }),
+      HttpClient.delete.mockResolvedValueOnce({
+        success: false,
+        error: "Cleaner not found in preferred list",
       });
 
       const result = await PreferredCleanerService.removePreferredCleaner(mockToken, homeId, cleanerId);
@@ -140,12 +118,12 @@ describe("PreferredCleanerService", () => {
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.delete.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await PreferredCleanerService.removePreferredCleaner(mockToken, homeId, cleanerId);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to remove cleaner");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
@@ -157,23 +135,14 @@ describe("PreferredCleanerService", () => {
         message: "All cleaners can now request jobs for this home",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await PreferredCleanerService.updatePreferredSettings(mockToken, homeId, false);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `http://localhost:3000/api/v1/preferred-cleaner/homes/${homeId}/preferred-settings`,
-        expect.objectContaining({
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mockToken}`,
-          },
-          body: JSON.stringify({ usePreferredCleaners: false }),
-        })
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        `/preferred-cleaner/homes/${homeId}/preferred-settings`,
+        { usePreferredCleaners: false },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.usePreferredCleaners).toBe(false);
@@ -186,10 +155,7 @@ describe("PreferredCleanerService", () => {
         message: "Only preferred cleaners can now request jobs for this home",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await PreferredCleanerService.updatePreferredSettings(mockToken, homeId, true);
 
@@ -199,11 +165,9 @@ describe("PreferredCleanerService", () => {
     });
 
     it("should return error on failure", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({
-          error: "Home not found",
-        }),
+      HttpClient.patch.mockResolvedValueOnce({
+        success: false,
+        error: "Home not found",
       });
 
       const result = await PreferredCleanerService.updatePreferredSettings(mockToken, homeId, false);
@@ -212,51 +176,38 @@ describe("PreferredCleanerService", () => {
     });
 
     it("should return error on network failure", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await PreferredCleanerService.updatePreferredSettings(mockToken, homeId, true);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Failed to update settings");
+      expect(result.error).toBe("Network request failed");
     });
   });
 
   describe("isCleanerPreferred", () => {
     it("should return true when cleaner is preferred", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ isPreferred: true }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ isPreferred: true });
 
       const result = await PreferredCleanerService.isCleanerPreferred(mockToken, homeId, cleanerId);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `http://localhost:3000/api/v1/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}/is-preferred`,
-        expect.objectContaining({
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        `/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}/is-preferred`,
+        { token: mockToken }
       );
       expect(result.isPreferred).toBe(true);
     });
 
     it("should return false when cleaner is not preferred", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ isPreferred: false }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ isPreferred: false });
 
       const result = await PreferredCleanerService.isCleanerPreferred(mockToken, homeId, cleanerId);
 
       expect(result.isPreferred).toBe(false);
     });
 
-    it("should return false when response is not ok", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-      });
+    it("should return false when response indicates failure", async () => {
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Not found" });
 
       const result = await PreferredCleanerService.isCleanerPreferred(mockToken, homeId, cleanerId);
 
@@ -264,7 +215,7 @@ describe("PreferredCleanerService", () => {
     });
 
     it("should return false on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await PreferredCleanerService.isCleanerPreferred(mockToken, homeId, cleanerId);
 

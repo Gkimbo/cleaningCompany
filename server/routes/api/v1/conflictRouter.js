@@ -28,6 +28,7 @@ router.get("/queue", async (req, res) => {
 			search,
 			limit,
 			offset,
+			includeResolved,
 		} = req.query;
 
 		const result = await ConflictResolutionService.getConflictQueue({
@@ -39,6 +40,7 @@ router.get("/queue", async (req, res) => {
 			limit: limit ? parseInt(limit) : 50,
 			offset: offset ? parseInt(offset) : 0,
 			includeDemoData: req.user?.isDemoAccount === true,
+			includeResolved: includeResolved === "true",
 		});
 
 		res.json({
@@ -144,11 +146,20 @@ router.post("/support/create", async (req, res) => {
 			}
 
 			// Validate subjectType matches user's actual type if provided
-			if (subjectType && subjectUser.type !== subjectType) {
-				return res.status(400).json({
-					success: false,
-					error: `Subject type mismatch. User is type '${subjectUser.type || "client"}', not '${subjectType}'`,
-				});
+			// Note: "homeowner" type includes users with type null, "client", or "homeowner"
+			const isHomeownerType = (type) => type === null || type === undefined || type === "client" || type === "homeowner";
+			const userActualType = subjectUser.type;
+
+			if (subjectType) {
+				const typesMatch = (subjectType === "homeowner" && isHomeownerType(userActualType)) ||
+					(subjectType !== "homeowner" && userActualType === subjectType);
+
+				if (!typesMatch) {
+					return res.status(400).json({
+						success: false,
+						error: `Subject type mismatch. User is type '${userActualType || "client"}', not '${subjectType}'`,
+					});
+				}
 			}
 		}
 
@@ -543,10 +554,8 @@ router.get("/:type/:id/refund-info", async (req, res) => {
 
 		const caseData = await ConflictResolutionService.getConflictCase(parseInt(id), type);
 
-		// Calculate amounts (price is in dollars, convert to cents)
-		const originalAmount = caseData.appointment?.price
-			? Math.round(caseData.appointment.price * 100)
-			: 0;
+		// Price is already stored in cents
+		const originalAmount = caseData.appointment?.price || 0;
 		const alreadyRefunded = caseData.appointment?.refundAmount || 0;
 		const maxRefundable = Math.max(0, originalAmount - alreadyRefunded);
 
@@ -607,9 +616,8 @@ router.post("/:type/:id/refund", async (req, res) => {
 		// Get case data to validate refund amount
 		const caseData = await ConflictResolutionService.getConflictCase(parseInt(id), type);
 
-		const originalAmount = caseData.appointment?.price
-			? Math.round(caseData.appointment.price * 100)
-			: 0;
+		// Price is already stored in cents
+		const originalAmount = caseData.appointment?.price || 0;
 		const alreadyRefunded = caseData.appointment?.refundAmount || 0;
 		const maxRefundable = Math.max(0, originalAmount - alreadyRefunded);
 
@@ -798,6 +806,34 @@ router.post("/:type/:id/assign", async (req, res) => {
 			return res.status(400).json({
 				success: false,
 				error: "Assignee ID is required",
+			});
+		}
+
+		// Validate assignee exists and is active
+		const { User } = require("../../../models");
+		const assignee = await User.findByPk(parseInt(assigneeId));
+
+		if (!assignee) {
+			return res.status(404).json({
+				success: false,
+				error: "Assignee not found",
+			});
+		}
+
+		// Check if assignee is HR or owner
+		if (!["humanResources", "owner"].includes(assignee.type)) {
+			return res.status(400).json({
+				success: false,
+				error: "Assignee must be HR staff or owner",
+			});
+		}
+
+		// Check if assignee account is locked or frozen
+		const isLocked = assignee.lockedUntil && new Date(assignee.lockedUntil) > new Date();
+		if (isLocked || assignee.accountFrozen) {
+			return res.status(400).json({
+				success: false,
+				error: "Cannot assign to locked or frozen account",
 			});
 		}
 

@@ -120,6 +120,7 @@ const MyAppealsPage = () => {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
       month: "short",
@@ -129,6 +130,7 @@ const MyAppealsPage = () => {
   };
 
   const getTimeAgo = (dateString) => {
+    if (!dateString) return "—";
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now - date;
@@ -220,7 +222,7 @@ const MyAppealsPage = () => {
             <Text style={styles.resolutionText}>
               {appeal.resolution.penaltyWaived && "Penalty waived"}
               {appeal.resolution.feeRefunded && appeal.resolution.penaltyWaived && " • "}
-              {appeal.resolution.feeRefunded && `$${(appeal.resolution.refundAmount / 100).toFixed(2)} refunded`}
+              {appeal.resolution.feeRefunded && `$${((appeal.resolution.refundAmount || 0) / 100).toFixed(2)} refunded`}
             </Text>
           </View>
         )}

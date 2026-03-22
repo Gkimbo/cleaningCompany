@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import PreferredCleanerService from "../../services/fetchRequests/PreferredCleanerService";
+import { getTodayString } from "../../services/formatters";
 
 const { width } = Dimensions.get("window");
 
@@ -236,7 +237,7 @@ const ScheduleCleaningList = ({ state, dispatch }) => {
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Icon name="calendar-check-o" size={16} color="#10b981" />
-            <Text style={styles.statValue}>{state.appointments?.filter(a => new Date(a.date) >= new Date()).length || 0}</Text>
+            <Text style={styles.statValue}>{state.appointments?.filter(a => a.date >= getTodayString()).length || 0}</Text>
             <Text style={styles.statLabel}>Upcoming</Text>
           </View>
           <View style={styles.statDivider} />

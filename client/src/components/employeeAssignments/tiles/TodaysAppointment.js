@@ -28,10 +28,12 @@ import {
   calculateLinensFromRoomCounts,
 } from "../../../utils/linensUtils";
 import TenantPresentModal from "../modals/TenantPresentModal";
+import { useOffline } from "../../../services/offline/OfflineContext";
 
 const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token }) => {
   const { state } = useContext(UserContext);
   const { pricing } = usePricing();
+  const { isOffline } = useOffline();
   const [jobStarted, setJobStarted] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(appointment.hasCleanerReview || false);
@@ -68,8 +70,10 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
   const [isCollapsed, setIsCollapsed] = useState(isSubmitted);
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
-    return new Date(dateString + "T00:00:00").toLocaleDateString(undefined, options);
+    // Use noon to avoid timezone edge cases that could shift the day
+    return new Date(dateString + "T12:00:00").toLocaleDateString(undefined, options);
   };
 
   // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
@@ -78,12 +82,14 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
     ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
     : (pricing?.platform?.feePercent || 0.1);
   const cleanerSharePercent = 1 - platformFeePercent;
-  const totalPrice = Number(appointment.price);
+  const totalPriceCents = Number(appointment.price) || 0;
   // For multi-cleaner jobs, divide by number of cleaners
+  // Note: totalCleanersRequired can be directly on appointment (from confirmedMultiCleanerJobs) or nested under multiCleanerJob
   const numCleaners = isMultiCleanerJob
-    ? (appointment.multiCleanerJob?.totalCleanersRequired || appointment.employeesAssigned?.length || 1)
+    ? (appointment.multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired || appointment.employeesAssigned?.length || 1)
     : 1;
-  const correctedAmount = (totalPrice / numCleaners) * cleanerSharePercent;
+  // Convert cents to dollars
+  const correctedAmount = ((totalPriceCents / numCleaners) * cleanerSharePercent) / 100;
 
   useEffect(() => {
     FetchData.getHome(appointment.homeId).then((response) => {
@@ -159,6 +165,14 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
   };
 
   const handleUndoStart = () => {
+    if (isOffline) {
+      Alert.alert(
+        "Internet Required",
+        "Undoing a job start requires an internet connection. Please connect to the internet and try again.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
     Alert.alert(
       "Undo Start Job",
       "Are you sure you want to undo starting this job? This will delete any photos taken.",
@@ -393,6 +407,21 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
                   </Text>
                 </View>
               )}
+            </View>
+          </View>
+        )}
+
+        {/* Payment Issue Warning for Cleaners */}
+        {appointment.paymentCaptureFailed && !appointment.completed && (
+          <View style={styles.paymentWarningBanner}>
+            <View style={styles.paymentWarningIconContainer}>
+              <Icon name="exclamation-circle" size={20} color={colors.warning[600]} />
+            </View>
+            <View style={styles.paymentWarningContent}>
+              <Text style={styles.paymentWarningTitle}>Awaiting Homeowner Payment</Text>
+              <Text style={styles.paymentWarningText}>
+                The homeowner's payment method has an issue. They've been notified to update it. This job may be cancelled if not resolved soon.
+              </Text>
             </View>
           </View>
         )}
@@ -690,12 +719,22 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
         {!appointment.completed && !jobStarted && appointment.completionStatus !== "submitted" && (
           <View style={styles.actionContainer}>
             <TouchableOpacity
-              style={styles.reportButton}
-              onPress={() => setShowTenantPresentModal(true)}
+              style={[styles.reportButton, isOffline && styles.reportButtonDisabled]}
+              onPress={() => {
+                if (isOffline) {
+                  Alert.alert(
+                    "Internet Required",
+                    "Reporting a tenant issue requires an internet connection so we can notify the homeowner in real-time. Please connect to the internet to use this feature.",
+                    [{ text: "OK" }]
+                  );
+                } else {
+                  setShowTenantPresentModal(true);
+                }
+              }}
               activeOpacity={0.7}
             >
-              <Icon name="exclamation-circle" size={14} color={colors.neutral[500]} />
-              <Text style={styles.reportButtonText}>Report Issue</Text>
+              <Icon name="exclamation-circle" size={14} color={isOffline ? colors.neutral[300] : colors.neutral[500]} />
+              <Text style={[styles.reportButtonText, isOffline && styles.reportButtonTextDisabled]}>Report Issue</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.primaryButton}
@@ -1450,6 +1489,14 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
   },
+  reportButtonDisabled: {
+    backgroundColor: colors.neutral[50],
+    borderColor: colors.neutral[200],
+    borderWidth: 1,
+  },
+  reportButtonTextDisabled: {
+    color: colors.neutral[300],
+  },
 
   // Completed Badge
   completedBadge: {
@@ -1493,6 +1540,36 @@ const styles = StyleSheet.create({
     color: colors.warning[600],
     fontSize: typography.fontSize.xs,
     marginTop: 2,
+  },
+
+  // Payment Warning Banner
+  paymentWarningBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.warning[50],
+    borderWidth: 1,
+    borderColor: colors.warning[300],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  paymentWarningIconContainer: {
+    paddingTop: 2,
+  },
+  paymentWarningContent: {
+    flex: 1,
+  },
+  paymentWarningTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+    marginBottom: spacing.xs,
+  },
+  paymentWarningText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[600],
+    lineHeight: 16,
   },
 
   // Review Modal

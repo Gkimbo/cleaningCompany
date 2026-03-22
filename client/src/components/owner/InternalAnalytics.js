@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import AnalyticsService from "../../services/AnalyticsService";
+import { toLocalDateString } from "../../services/formatters";
 import {
   colors,
   spacing,
@@ -42,8 +43,8 @@ const InternalAnalytics = ({ authToken }) => {
         start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
     return {
-      startDate: start.toISOString().split("T")[0],
-      endDate: end.toISOString().split("T")[0],
+      startDate: toLocalDateString(start),
+      endDate: toLocalDateString(end),
     };
   };
 

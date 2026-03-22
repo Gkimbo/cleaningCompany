@@ -99,7 +99,7 @@ const AppointmentDetailsPage = ({ state }) => {
             </Text>
             <View style={homePageStyles.appointmentListContainer}>
               <View style={homePageStyles.appointmentListRow}>
-                <Text>Employees Required: {appointment.empoyeesNeeded}</Text>
+                <Text>Employees Required: {appointment.employeesNeeded}</Text>
                 <Text>Employees Assigned: {assignedEmployees.length}</Text>
                 <Text>Date: {appointment.date}</Text>
                 <Text>Price: {appointment.price}</Text>
@@ -115,7 +115,7 @@ const AppointmentDetailsPage = ({ state }) => {
                 <Text>Paid: {appointment.paid ? "Yes" : "No"}</Text>
                 <Text style={homePageStyles.appointmentBanner}>
                   Employees Needed:{" "}
-                  {appointment.empoyeesNeeded - assignedEmployees.length}
+                  {appointment.employeesNeeded - assignedEmployees.length}
                 </Text>
               </View>
             </View>

@@ -565,7 +565,8 @@ describe("BusinessEmployeeSerializer", () => {
       expect(result.email).toBe("decrypted_iv:useremail");
       expect(result.phone).toBe("decrypted_iv:userphone");
       expect(result.businessName).toBe("Test Business");
-      expect(result.expoPushToken).toBe("ExponentPushToken[xxx]");
+      // expoPushToken intentionally omitted for security
+      expect(result.expoPushToken).toBeUndefined();
     });
   });
 

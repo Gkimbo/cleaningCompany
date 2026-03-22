@@ -180,7 +180,7 @@ describe("MultiCleanerJobSerializer", () => {
       dataValues: {
         id: 100,
         date: "2024-02-10",
-        price: 150,
+        price: 15000,
         bringTowels: "yes",
         bringSheets: "no",
         timeToBeCompleted: "10-3",
@@ -208,7 +208,7 @@ describe("MultiCleanerJobSerializer", () => {
 
       expect(result.id).toBe(100);
       expect(result.date).toBe("2024-02-10");
-      expect(result.price).toBe(150);
+      expect(result.price).toBe("150.00");
       expect(result.home.address).toBe("decrypted_encrypted_address");
     });
 
@@ -224,7 +224,7 @@ describe("MultiCleanerJobSerializer", () => {
       const result = MultiCleanerJobSerializer.serializeAppointment(mockAppointment, false);
 
       expect(result.date).toBe("2024-02-10");
-      expect(result.price).toBe(150);
+      expect(result.price).toBe("150.00");
       expect(result.bringTowels).toBe("yes");
       expect(result.bringSheets).toBe("no");
       expect(result.timeToBeCompleted).toBe("10-3");
@@ -417,7 +417,7 @@ describe("MultiCleanerJobSerializer", () => {
             status: "open",
           },
           appointment: {
-            dataValues: { id: 100, date: "2024-02-09", price: 150 },
+            dataValues: { id: 100, date: "2024-02-09", price: 15000 },
             date: "2024-02-09", // Tomorrow - within 48 hours
             home: {
               dataValues: {
@@ -456,7 +456,7 @@ describe("MultiCleanerJobSerializer", () => {
               status: "open",
             },
             appointment: {
-              dataValues: { id: 100, date: "2024-02-09", price: 150 },
+              dataValues: { id: 100, date: "2024-02-09", price: 15000 },
               date: "2024-02-09",
               home: {
                 dataValues: {
@@ -501,7 +501,7 @@ describe("MultiCleanerJobSerializer", () => {
             status: "open",
           },
           appointment: {
-            dataValues: { id: 100, date: "2024-02-15", price: 150 },
+            dataValues: { id: 100, date: "2024-02-15", price: 15000 },
             date: "2024-02-15",
             home: {
               dataValues: {

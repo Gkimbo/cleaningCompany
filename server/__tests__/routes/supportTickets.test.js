@@ -232,7 +232,16 @@ describe("Support Ticket Routes", () => {
       const token = generateToken(1);
       const mockTicket = createMockTicket();
 
-      User.findByPk.mockResolvedValue(createMockUser());
+      // Handle both auth middleware call and subject user lookup
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) {
+          return Promise.resolve(createMockUser());
+        }
+        if (id === 10) {
+          return Promise.resolve(createMockUser({ id: 10, firstName: "Subject", lastName: "User", type: "cleaner" }));
+        }
+        return Promise.resolve(null);
+      });
       SupportTicketService.createDirect.mockResolvedValue(mockTicket);
 
       const res = await request(app)

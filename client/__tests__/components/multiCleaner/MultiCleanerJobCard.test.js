@@ -49,7 +49,7 @@ describe("MultiCleanerJobCard", () => {
     numBeds: 4,
     numBaths: 3,
     distance: 5,
-    perCleanerEarnings: 135.50,
+    perCleanerEarnings: 13550,
     status: "open",
   };
 
@@ -182,7 +182,7 @@ describe("MultiCleanerJobCard", () => {
     });
 
     it("should use earningsOffered if perCleanerEarnings is not available", () => {
-      const job = { ...baseJob, perCleanerEarnings: null, earningsOffered: 100.00 };
+      const job = { ...baseJob, perCleanerEarnings: null, earningsOffered: 10000 };
       const { getByText } = render(<MultiCleanerJobCard {...defaultProps} job={job} />);
       expect(getByText("$100.00")).toBeTruthy();
     });

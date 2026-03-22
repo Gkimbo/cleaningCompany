@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
+import { formatCurrency } from "../../services/formatters";
 
 /**
  * Compact job card used during reorder mode
@@ -79,7 +80,7 @@ const CompactJobCard = ({
 
       {/* Payout */}
       <View style={styles.payoutContainer}>
-        <Text style={styles.payoutText}>${payout.toFixed(0)}</Text>
+        <Text style={styles.payoutText}>{formatCurrency(payout)}</Text>
       </View>
     </TouchableOpacity>
   );

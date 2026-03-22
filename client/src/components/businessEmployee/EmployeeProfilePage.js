@@ -11,6 +11,7 @@ import { useNavigate, useLocation } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessEmployeeService from "../../services/fetchRequests/BusinessEmployeeService";
 import EmployeeJobsCalendarViewOnly from "./EmployeeJobsCalendarViewOnly";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -20,7 +21,7 @@ import {
 } from "../../services/styles/theme";
 
 const EmployeeProfilePage = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const location = useLocation();
   const cameFromJobs = location.state?.from === "jobs";
 
@@ -28,7 +29,7 @@ const EmployeeProfilePage = ({ state }) => {
     if (cameFromJobs) {
       navigate("/employee/jobs");
     } else {
-      navigate(-1);
+      goBack();
     }
   };
   const [loading, setLoading] = useState(true);

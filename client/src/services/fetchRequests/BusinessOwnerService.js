@@ -3,7 +3,7 @@
  * Handles employee management, job assignments, dashboard, and payouts
  */
 
-import { API_BASE } from "../config";
+import HttpClient from "../HttpClient";
 
 class BusinessOwnerService {
   // =====================
@@ -12,280 +12,158 @@ class BusinessOwnerService {
 
   /**
    * Get all employees for the business owner
-   * @param {string} token - Auth token
-   * @param {string} status - Optional status filter ('pending_invite', 'active', 'inactive', 'terminated')
-   * @returns {Object} { employees }
    */
   static async getEmployees(token, status = null) {
-    try {
-      const url = status
-        ? `${API_BASE}/business-owner/employees?status=${status}`
-        : `${API_BASE}/business-owner/employees`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching employees:", error);
+    const url = status ? `/business-owner/employees?status=${status}` : "/business-owner/employees";
+    const result = await HttpClient.get(url, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getEmployees failed:", result.error);
       return { employees: [] };
     }
+
+    return result;
   }
 
   /**
    * Get employees with calculated pay for a specific job
-   * @param {string} token - Auth token
-   * @param {number} appointmentId - The appointment to calculate pay for
-   * @param {string} [mode="add"] - "add" for adding new employee, "reassign" for replacing
-   * @returns {Object} { employees, jobPrice, jobDetails }
    */
   static async getEmployeesForJob(token, appointmentId, mode = "add") {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/employees/for-job/${appointmentId}?mode=${mode}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching employees for job:", error);
+    const result = await HttpClient.get(`/business-owner/employees/for-job/${appointmentId}?mode=${mode}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getEmployeesForJob failed:", result.error);
       return { employees: [] };
     }
+
+    return result;
   }
 
   /**
    * Invite a new employee
-   * @param {string} token - Auth token
-   * @param {Object} employeeData - Employee information
-   * @returns {Object} { success, employee, error }
    */
   static async inviteEmployee(token, employeeData) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/employees/invite`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(employeeData),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to send invitation" };
-      }
-      return { success: true, employee: result.employee };
-    } catch (error) {
-      console.error("[BusinessOwner] Error inviting employee:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post("/business-owner/employees/invite", employeeData, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to send invitation" };
     }
+
+    return { success: true, employee: result.employee };
   }
 
   /**
    * Get a specific employee
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @returns {Object} { employee }
    */
   static async getEmployee(token, employeeId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/employees/${employeeId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching employee:", error);
+    const result = await HttpClient.get(`/business-owner/employees/${employeeId}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getEmployee failed:", result.error);
       return null;
     }
+
+    return result;
   }
 
   /**
    * Update an employee
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @param {Object} updates - Fields to update
-   * @returns {Object} { success, employee, error }
    */
   static async updateEmployee(token, employeeId, updates) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/employees/${employeeId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(updates),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update employee" };
-      }
-      return { success: true, employee: result.employee };
-    } catch (error) {
-      console.error("[BusinessOwner] Error updating employee:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.put(`/business-owner/employees/${employeeId}`, updates, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to update employee" };
     }
+
+    return { success: true, employee: result.employee };
   }
 
   /**
    * Terminate an employee
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @param {string} reason - Termination reason
-   * @returns {Object} { success, error }
    */
   static async terminateEmployee(token, employeeId, reason = "") {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/employees/${employeeId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ reason }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to terminate employee" };
-      }
-      return { success: true, message: result.message };
-    } catch (error) {
-      console.error("[BusinessOwner] Error terminating employee:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.delete(`/business-owner/employees/${employeeId}`, { token, body: { reason } });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to terminate employee" };
     }
+
+    return { success: true, message: result.message };
   }
 
   /**
    * Reactivate a terminated employee
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @returns {Object} { success, employee, error }
    */
   static async reactivateEmployee(token, employeeId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/employees/${employeeId}/reactivate`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to reactivate employee" };
-      }
-      return { success: true, employee: result.employee };
-    } catch (error) {
-      console.error("[BusinessOwner] Error reactivating employee:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post(`/business-owner/employees/${employeeId}/reactivate`, {}, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to reactivate employee" };
     }
+
+    return { success: true, employee: result.employee };
   }
 
   /**
    * Update employee availability schedule
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @param {Object} availabilityData - { schedule, defaultJobTypes, maxJobsPerDay }
-   * @returns {Object} { success, employee, error }
    */
   static async updateAvailability(token, employeeId, availabilityData) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/employees/${employeeId}/availability`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(availabilityData),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update availability" };
-      }
-      return { success: true, employee: result.employee };
-    } catch (error) {
-      console.error("[BusinessOwner] Error updating availability:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.put(`/business-owner/employees/${employeeId}/availability`, availabilityData, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to update availability" };
     }
+
+    return { success: true, employee: result.employee };
   }
 
   /**
    * Get available employees for a specific date/time
-   * @param {string} token - Auth token
-   * @param {string} date - Date (YYYY-MM-DD)
-   * @param {string} startTime - Start time (HH:MM)
-   * @param {string} jobType - Optional job type
-   * @returns {Object} { employees }
    */
   static async getAvailableEmployees(token, date, startTime = null, jobType = null) {
-    try {
-      const params = new URLSearchParams({ date });
-      if (startTime) params.append("startTime", startTime);
-      if (jobType) params.append("jobType", jobType);
+    const params = new URLSearchParams({ date });
+    if (startTime) params.append("startTime", startTime);
+    if (jobType) params.append("jobType", jobType);
 
-      const response = await fetch(`${API_BASE}/business-owner/employees/available?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching available employees:", error);
+    const result = await HttpClient.get(`/business-owner/employees/available?${params}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getAvailableEmployees failed:", result.error);
       return { employees: [] };
     }
+
+    return result;
   }
 
   /**
    * Get team members available for a specific job (used for team booking)
-   * @param {string} token - Auth token
-   * @param {string} jobDate - Job date (YYYY-MM-DD)
-   * @param {string} startTime - Optional start time (HH:MM)
-   * @returns {Object} { canIncludeSelf, selfHasStripeConnect, employees }
    */
   static async getTeamForJob(token, jobDate, startTime = null) {
-    try {
-      const params = new URLSearchParams({ jobDate });
-      if (startTime) params.append("startTime", startTime);
+    const params = new URLSearchParams({ jobDate });
+    if (startTime) params.append("startTime", startTime);
 
-      const response = await fetch(`${API_BASE}/business-owner/team-for-job?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching team for job:", error);
+    const result = await HttpClient.get(`/business-owner/team-for-job?${params}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getTeamForJob failed:", result.error);
       return { employees: [] };
     }
+
+    return result;
   }
 
   /**
    * Resend invitation email to an employee
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @returns {Object} { success, error }
    */
   static async resendInvite(token, employeeId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/employees/${employeeId}/resend-invite`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to resend invitation" };
-      }
-      return { success: true, message: result.message };
-    } catch (error) {
-      console.error("[BusinessOwner] Error resending invite:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post(`/business-owner/employees/${employeeId}/resend-invite`, {}, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to resend invitation" };
     }
+
+    return { success: true, message: result.message };
   }
 
   // =====================
@@ -294,227 +172,128 @@ class BusinessOwnerService {
 
   /**
    * Get job assignments with optional filters
-   * @param {string} token - Auth token
-   * @param {Object} filters - { employeeId, status, startDate, endDate }
-   * @returns {Object} { assignments }
    */
   static async getAssignments(token, filters = {}) {
-    try {
-      const params = new URLSearchParams();
-      if (filters.employeeId) params.append("employeeId", filters.employeeId);
-      if (filters.status) params.append("status", filters.status);
-      if (filters.startDate) params.append("startDate", filters.startDate);
-      if (filters.endDate) params.append("endDate", filters.endDate);
+    const params = new URLSearchParams();
+    if (filters.employeeId) params.append("employeeId", filters.employeeId);
+    if (filters.status) params.append("status", filters.status);
+    if (filters.startDate) params.append("startDate", filters.startDate);
+    if (filters.endDate) params.append("endDate", filters.endDate);
 
-      const url = `${API_BASE}/business-owner/assignments${params.toString() ? `?${params}` : ""}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching assignments:", error);
+    const url = `/business-owner/assignments${params.toString() ? `?${params}` : ""}`;
+    const result = await HttpClient.get(url, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getAssignments failed:", result.error);
       return { assignments: [] };
     }
+
+    return result;
   }
 
   /**
    * Get a single assignment by ID
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @returns {Object} { assignment }
    */
   static async getAssignmentDetail(token, assignmentId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/assignments/${assignmentId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching assignment detail:", error);
-      return { error: "Failed to load assignment details" };
+    const result = await HttpClient.get(`/business-owner/assignments/${assignmentId}`, { token });
+
+    if (result.success === false) {
+      return { error: result.error || "Failed to load assignment details" };
     }
+
+    return result;
   }
 
   /**
    * Assign an employee to a job
-   * @param {string} token - Auth token
-   * @param {Object} assignmentData - { appointmentId, employeeId, payAmount, payType }
-   * @returns {Object} { success, assignment, error }
    */
   static async assignEmployee(token, assignmentData) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/assignments`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(assignmentData),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to assign employee" };
-      }
-      return { success: true, assignment: result.assignment };
-    } catch (error) {
-      console.error("[BusinessOwner] Error assigning employee:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post("/business-owner/assignments", assignmentData, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to assign employee" };
     }
+
+    return { success: true, assignment: result.assignment };
   }
 
   /**
    * Self-assign business owner to a job (tracked as $0 payroll)
-   * @param {string} token - Auth token
-   * @param {number} appointmentId - Appointment ID
-   * @returns {Object} { success, assignment, error }
    */
   static async selfAssign(token, appointmentId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/self-assign/${appointmentId}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to self-assign" };
-      }
-      return { success: true, assignment: result.assignment };
-    } catch (error) {
-      console.error("[BusinessOwner] Error self-assigning:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post(`/business-owner/self-assign/${appointmentId}`, {}, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to self-assign" };
     }
+
+    return { success: true, assignment: result.assignment };
   }
 
   /**
    * Unassign an employee from a job
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @returns {Object} { success, error }
    */
   static async unassignJob(token, assignmentId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/assignments/${assignmentId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to unassign job" };
-      }
-      return { success: true, message: result.message };
-    } catch (error) {
-      console.error("[BusinessOwner] Error unassigning job:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.delete(`/business-owner/assignments/${assignmentId}`, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to unassign job" };
     }
+
+    return { success: true, message: result.message };
   }
 
   /**
    * Reassign a job to a different employee
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @param {number} newEmployeeId - New employee ID
-   * @returns {Object} { success, assignment, error }
    */
   static async reassignJob(token, assignmentId, newEmployeeId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/assignments/${assignmentId}/reassign`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ newEmployeeId }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to reassign job" };
-      }
-      return { success: true, assignment: result.assignment };
-    } catch (error) {
-      console.error("[BusinessOwner] Error reassigning job:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post(`/business-owner/assignments/${assignmentId}/reassign`, { newEmployeeId }, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to reassign job" };
     }
+
+    return { success: true, assignment: result.assignment };
   }
 
   /**
    * Update job pay for an assignment
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @param {Object} payData - { payAmount, reason }
-   * @returns {Object} { success, assignment, changeLog, error }
    */
   static async updateJobPay(token, assignmentId, payData) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/assignments/${assignmentId}/pay`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payData),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update pay" };
-      }
-      return { success: true, assignment: result.assignment, changeLog: result.changeLog };
-    } catch (error) {
-      console.error("[BusinessOwner] Error updating job pay:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.put(`/business-owner/assignments/${assignmentId}/pay`, payData, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to update pay" };
     }
+
+    return { success: true, assignment: result.assignment, changeLog: result.changeLog };
   }
 
   /**
    * Recalculate pay for an assignment based on home size and employee's default rates
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @returns {Object} { success, assignment, error }
    */
   static async recalculatePay(token, assignmentId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/assignments/${assignmentId}/recalculate-pay`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to recalculate pay" };
-      }
-      return { success: true, assignment: result.assignment };
-    } catch (error) {
-      console.error("[BusinessOwner] Error recalculating pay:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post(`/business-owner/assignments/${assignmentId}/recalculate-pay`, {}, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to recalculate pay" };
     }
+
+    return { success: true, assignment: result.assignment };
   }
 
   /**
    * Get pay change history for an assignment
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @returns {Object} { changeLog }
    */
   static async getPayHistory(token, assignmentId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/assignments/${assignmentId}/pay-history`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching pay history:", error);
+    const result = await HttpClient.get(`/business-owner/assignments/${assignmentId}/pay-history`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getPayHistory failed:", result.error);
       return { changeLog: [] };
     }
+
+    return result;
   }
 
   // =====================
@@ -523,110 +302,71 @@ class BusinessOwnerService {
 
   /**
    * Get dashboard overview data
-   * @param {string} token - Auth token
-   * @returns {Object} { overview, employees, recentActivity }
    */
   static async getDashboard(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/dashboard`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching dashboard:", error);
+    const result = await HttpClient.get("/business-owner/dashboard", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getDashboard failed:", result.error);
       return { overview: {}, employees: [], recentActivity: [] };
     }
+
+    return result;
   }
 
   /**
    * Get calendar data for a specific month
-   * @param {string} token - Auth token
-   * @param {number} month - Month (1-12)
-   * @param {number} year - Year
-   * @returns {Object} { assignments, employees, unassignedJobs }
    */
   static async getCalendar(token, month, year) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/calendar?month=${month}&year=${year}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching calendar:", error);
+    const result = await HttpClient.get(`/business-owner/calendar?month=${month}&year=${year}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getCalendar failed:", result.error);
       return { assignments: [], employees: [], unassignedJobs: [] };
     }
+
+    return result;
   }
 
   /**
    * Get financial report
-   * @param {string} token - Auth token
-   * @param {string} startDate - Start date (YYYY-MM-DD)
-   * @param {string} endDate - End date (YYYY-MM-DD)
-   * @returns {Object} { summary, byEmployee, byJob }
    */
   static async getFinancials(token, startDate, endDate) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/financials?startDate=${startDate}&endDate=${endDate}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching financials:", error);
+    const result = await HttpClient.get(`/business-owner/financials?startDate=${startDate}&endDate=${endDate}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getFinancials failed:", result.error);
       return { summary: {}, byEmployee: [], byJob: [] };
     }
+
+    return result;
   }
 
   /**
    * Get annual tax export data
-   * @param {string} token - Auth token
-   * @param {number} year - Tax year (current year or up to 2 years back)
-   * @returns {Object} { year, financials, employeeBreakdown, summary }
    */
   static async getTaxExport(token, year) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/tax-export/${year}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        const result = await response.json();
-        return { error: result.error || "Failed to fetch tax data" };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching tax export:", error);
-      return { error: "Network error. Please try again." };
+    const result = await HttpClient.get(`/business-owner/tax-export/${year}`, { token });
+
+    if (result.success === false) {
+      return { error: result.error || "Failed to fetch tax data" };
     }
+
+    return result;
   }
 
   /**
    * Get payroll summary
-   * @param {string} token - Auth token
-   * @param {string} period - Period ('week', 'month', 'quarter', 'year')
-   * @returns {Object} { payroll }
    */
   static async getPayrollSummary(token, period = "month") {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/payroll-summary?period=${period}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching payroll summary:", error);
+    const result = await HttpClient.get(`/business-owner/payroll-summary?period=${period}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getPayrollSummary failed:", result.error);
       return { payroll: {} };
     }
+
+    return result;
   }
 
   // =====================
@@ -635,104 +375,55 @@ class BusinessOwnerService {
 
   /**
    * Get pending payouts
-   * @param {string} token - Auth token
-   * @returns {Object} { pendingPayouts, totalAmount, byEmployee }
    */
   static async getPendingPayouts(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/payouts/pending`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching pending payouts:", error);
+    const result = await HttpClient.get("/business-owner/payouts/pending", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getPendingPayouts failed:", result.error);
       return { pendingPayouts: [], totalAmount: 0, byEmployee: [] };
     }
+
+    return result;
   }
 
   /**
    * Mark an assignment as paid outside the platform
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @param {string} note - Optional note about the payment
-   * @returns {Object} { success, assignment, error }
    */
   static async markPaidOutsidePlatform(token, assignmentId, note = "") {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/payouts/${assignmentId}/mark-paid-outside`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ note }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to mark as paid" };
-      }
-      return { success: true, assignment: result.assignment };
-    } catch (error) {
-      console.error("[BusinessOwner] Error marking paid outside:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post(`/business-owner/payouts/${assignmentId}/mark-paid-outside`, { note }, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to mark as paid" };
     }
+
+    return { success: true, assignment: result.assignment };
   }
 
   /**
    * Update hours worked for an assignment (for hourly employees)
-   * @param {string} token - Auth token
-   * @param {number} assignmentId - Assignment ID
-   * @param {number} hoursWorked - Hours worked (will be rounded to nearest 0.5)
-   * @returns {Object} { success, assignment, error }
    */
   static async updateHoursWorked(token, assignmentId, hoursWorked) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/assignments/${assignmentId}/hours`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ hoursWorked }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update hours" };
-      }
-      return { success: true, assignment: result.assignment };
-    } catch (error) {
-      console.error("[BusinessOwner] Error updating hours:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.put(`/business-owner/assignments/${assignmentId}/hours`, { hoursWorked }, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to update hours" };
     }
+
+    return { success: true, assignment: result.assignment };
   }
 
   /**
    * Process multiple payouts at once
-   * @param {string} token - Auth token
-   * @param {Array<number>} assignmentIds - Array of assignment IDs to process
-   * @returns {Object} { success, processed, errors }
    */
   static async processBatchPayouts(token, assignmentIds) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/payouts/batch`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ assignmentIds }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to process payouts" };
-      }
-      return { success: true, processed: result.processed };
-    } catch (error) {
-      console.error("[BusinessOwner] Error processing batch payouts:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post("/business-owner/payouts/batch", { assignmentIds }, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to process payouts" };
     }
+
+    return { success: true, processed: result.processed };
   }
 
   // =====================
@@ -741,177 +432,137 @@ class BusinessOwnerService {
 
   /**
    * Get analytics tier access info
-   * @param {string} token - Auth token
-   * @returns {Object} { tier, features, qualification }
    */
   static async getAnalyticsAccess(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/analytics/access`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching analytics access:", error);
+    const result = await HttpClient.get("/business-owner/analytics/access", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getAnalyticsAccess failed:", result.error);
       return { tier: "standard", features: { basicMetrics: true } };
     }
+
+    return result;
   }
 
   /**
    * Get all analytics (combined endpoint, respects tier)
-   * @param {string} token - Auth token
-   * @param {Object} options - { months, topClientsLimit, churnDays }
-   * @returns {Object} { access, overview, employees?, clients?, financials?, trends }
    */
   static async getAllAnalytics(token, options = {}) {
-    try {
-      const params = new URLSearchParams();
-      if (options.months) params.append("months", options.months);
-      if (options.topClientsLimit) params.append("topClientsLimit", options.topClientsLimit);
-      if (options.churnDays) params.append("churnDays", options.churnDays);
+    const params = new URLSearchParams();
+    if (options.months) params.append("months", options.months);
+    if (options.topClientsLimit) params.append("topClientsLimit", options.topClientsLimit);
+    if (options.churnDays) params.append("churnDays", options.churnDays);
 
-      const url = `${API_BASE}/business-owner/analytics${params.toString() ? `?${params}` : ""}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching all analytics:", error);
+    const url = `/business-owner/analytics${params.toString() ? `?${params}` : ""}`;
+    const result = await HttpClient.get(url, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getAllAnalytics failed:", result.error);
       return { access: { tier: "standard" }, overview: {} };
     }
+
+    return result;
   }
 
   /**
    * Get overview analytics (available to all tiers)
-   * @param {string} token - Auth token
-   * @returns {Object} Overview metrics
    */
   static async getOverviewAnalytics(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/analytics/overview`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching overview analytics:", error);
+    const result = await HttpClient.get("/business-owner/analytics/overview", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getOverviewAnalytics failed:", result.error);
       return {};
     }
+
+    return result;
   }
 
   /**
    * Get employee performance analytics (premium)
-   * @param {string} token - Auth token
-   * @param {Object} options - { months, limit }
-   * @returns {Object} Employee performance data
    */
   static async getEmployeeAnalytics(token, options = {}) {
-    try {
-      const params = new URLSearchParams();
-      if (options.months) params.append("months", options.months);
-      if (options.limit) params.append("limit", options.limit);
+    const params = new URLSearchParams();
+    if (options.months) params.append("months", options.months);
+    if (options.limit) params.append("limit", options.limit);
 
-      const url = `${API_BASE}/business-owner/analytics/employees${params.toString() ? `?${params}` : ""}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (response.status === 403) {
-        const result = await response.json();
-        return { error: "premium_required", ...result };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching employee analytics:", error);
+    const url = `/business-owner/analytics/employees${params.toString() ? `?${params}` : ""}`;
+    const result = await HttpClient.get(url, { token });
+
+    if (result.status === 403) {
+      return { error: "premium_required", ...result };
+    }
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getEmployeeAnalytics failed:", result.error);
       return { employees: [] };
     }
+
+    return result;
   }
 
   /**
    * Get client insights (premium)
-   * @param {string} token - Auth token
-   * @param {Object} options - { topClientsLimit, churnDays }
-   * @returns {Object} Client analytics data
    */
   static async getClientAnalytics(token, options = {}) {
-    try {
-      const params = new URLSearchParams();
-      if (options.topClientsLimit) params.append("topClientsLimit", options.topClientsLimit);
-      if (options.churnDays) params.append("churnDays", options.churnDays);
+    const params = new URLSearchParams();
+    if (options.topClientsLimit) params.append("topClientsLimit", options.topClientsLimit);
+    if (options.churnDays) params.append("churnDays", options.churnDays);
 
-      const url = `${API_BASE}/business-owner/analytics/clients${params.toString() ? `?${params}` : ""}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (response.status === 403) {
-        const result = await response.json();
-        return { error: "premium_required", ...result };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching client analytics:", error);
+    const url = `/business-owner/analytics/clients${params.toString() ? `?${params}` : ""}`;
+    const result = await HttpClient.get(url, { token });
+
+    if (result.status === 403) {
+      return { error: "premium_required", ...result };
+    }
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getClientAnalytics failed:", result.error);
       return {};
     }
+
+    return result;
   }
 
   /**
    * Get financial analytics (premium)
-   * @param {string} token - Auth token
-   * @param {Object} options - { months }
-   * @returns {Object} Financial breakdown data
    */
   static async getFinancialAnalytics(token, options = {}) {
-    try {
-      const params = new URLSearchParams();
-      if (options.months) params.append("months", options.months);
+    const params = new URLSearchParams();
+    if (options.months) params.append("months", options.months);
 
-      const url = `${API_BASE}/business-owner/analytics/financials${params.toString() ? `?${params}` : ""}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (response.status === 403) {
-        const result = await response.json();
-        return { error: "premium_required", ...result };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching financial analytics:", error);
+    const url = `/business-owner/analytics/financials${params.toString() ? `?${params}` : ""}`;
+    const result = await HttpClient.get(url, { token });
+
+    if (result.status === 403) {
+      return { error: "premium_required", ...result };
+    }
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getFinancialAnalytics failed:", result.error);
       return {};
     }
+
+    return result;
   }
 
   /**
    * Get trend data for charts
-   * @param {string} token - Auth token
-   * @param {Object} options - { period, months }
-   * @returns {Object} Trend data for visualization
    */
   static async getTrends(token, options = {}) {
-    try {
-      const params = new URLSearchParams();
-      if (options.period) params.append("period", options.period);
-      if (options.months) params.append("months", options.months);
+    const params = new URLSearchParams();
+    if (options.period) params.append("period", options.period);
+    if (options.months) params.append("months", options.months);
 
-      const url = `${API_BASE}/business-owner/analytics/trends${params.toString() ? `?${params}` : ""}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching trends:", error);
+    const url = `/business-owner/analytics/trends${params.toString() ? `?${params}` : ""}`;
+    const result = await HttpClient.get(url, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getTrends failed:", result.error);
       return { data: [] };
     }
+
+    return result;
   }
 
   // =====================
@@ -920,110 +571,70 @@ class BusinessOwnerService {
 
   /**
    * Get verification status
-   * @param {string} token - Auth token
-   * @returns {Object} Verification status
    */
   static async getVerificationStatus(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/verification/status`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching verification status:", error);
+    const result = await HttpClient.get("/business-owner/verification/status", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getVerificationStatus failed:", result.error);
       return { found: false };
     }
+
+    return result;
   }
 
   /**
    * Check eligibility for verification
-   * @param {string} token - Auth token
-   * @returns {Object} Eligibility status and criteria
    */
   static async checkVerificationEligibility(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/verification/eligibility`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error checking eligibility:", error);
+    const result = await HttpClient.get("/business-owner/verification/eligibility", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] checkVerificationEligibility failed:", result.error);
       return { eligible: false };
     }
+
+    return result;
   }
 
   /**
    * Request verification
-   * @param {string} token - Auth token
-   * @returns {Object} Request result
    */
   static async requestVerification(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/verification/request`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to request verification" };
-      }
-      return result;
-    } catch (error) {
-      console.error("[BusinessOwner] Error requesting verification:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post("/business-owner/verification/request", {}, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to request verification" };
     }
+
+    return result;
   }
 
   /**
    * Update business profile
-   * @param {string} token - Auth token
-   * @param {Object} profileData - { businessDescription, businessHighlightOptIn }
-   * @returns {Object} Update result
    */
   static async updateBusinessProfile(token, profileData) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/verification/profile`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(profileData),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update profile" };
-      }
-      return result;
-    } catch (error) {
-      console.error("[BusinessOwner] Error updating profile:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.put("/business-owner/verification/profile", profileData, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to update profile" };
     }
+
+    return result;
   }
 
   /**
    * Get verification requirements/config
-   * @param {string} token - Auth token
-   * @returns {Object} Verification config
    */
   static async getVerificationConfig(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/verification/config`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching verification config:", error);
+    const result = await HttpClient.get("/business-owner/verification/config", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getVerificationConfig failed:", result.error);
       return {};
     }
+
+    return result;
   }
 
   // =====================
@@ -1032,10 +643,6 @@ class BusinessOwnerService {
 
   /**
    * Calculate job financials locally (preview before saving)
-   * @param {number} customerPays - Total customer payment in cents
-   * @param {number} employeePay - Employee pay in cents
-   * @param {number} platformFeePercent - Platform fee percentage (default 10)
-   * @returns {Object} { customerPays, platformFee, employeePay, businessOwnerProfit, profitMargin, warnings }
    */
   static calculateJobFinancials(customerPays, employeePay, platformFeePercent = 10) {
     const platformFee = Math.round(customerPays * (platformFeePercent / 100));
@@ -1075,9 +682,6 @@ class BusinessOwnerService {
 
   /**
    * Suggest pay amounts at different margin levels
-   * @param {number} customerPays - Total customer payment in cents
-   * @param {number} platformFeePercent - Platform fee percentage (default 10)
-   * @returns {Object} { margin20, margin35, margin50 }
    */
   static suggestPayAmounts(customerPays, platformFeePercent = 10) {
     const platformFee = Math.round(customerPays * (platformFeePercent / 100));
@@ -1108,140 +712,83 @@ class BusinessOwnerService {
 
   /**
    * Get unpaid client appointments
-   * @param {string} token - Auth token
-   * @returns {Object} { unpaidAppointments, totalUnpaid }
    */
   static async getClientPayments(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/client-payments`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching client payments:", error);
+    const result = await HttpClient.get("/business-owner/client-payments", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getClientPayments failed:", result.error);
       return { unpaidAppointments: [], totalUnpaid: 0 };
     }
+
+    return result;
   }
 
   /**
    * Mark an appointment as paid by client
-   * @param {string} token - Auth token
-   * @param {number} appointmentId - Appointment ID
-   * @returns {Object} { success, error }
    */
   static async markAppointmentPaid(token, appointmentId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/appointments/${appointmentId}/mark-paid`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error marking appointment paid:", error);
-      return { success: false, error: "Failed to mark appointment as paid" };
+    const result = await HttpClient.post(`/business-owner/appointments/${appointmentId}/mark-paid`, {}, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to mark appointment as paid" };
     }
+
+    return result;
   }
 
   /**
    * Send a payment reminder to client
-   * @param {string} token - Auth token
-   * @param {number} appointmentId - Appointment ID
-   * @returns {Object} { success, error }
    */
   static async sendPaymentReminder(token, appointmentId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/appointments/${appointmentId}/send-reminder`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error sending payment reminder:", error);
-      return { success: false, error: "Failed to send reminder" };
+    const result = await HttpClient.post(`/business-owner/appointments/${appointmentId}/send-reminder`, {}, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to send reminder" };
     }
+
+    return result;
   }
 
   /**
    * Get payroll history (paid payments)
-   * @param {string} token - Auth token
-   * @param {number} limit - Number of records to fetch (default 50)
-   * @returns {Object} { payouts: [] }
    */
   static async getPayrollHistory(token, limit = 50) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/payroll/history?limit=${limit}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        return { payouts: [] };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching payroll history:", error);
+    const result = await HttpClient.get(`/business-owner/payroll/history?limit=${limit}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getPayrollHistory failed:", result.error);
       return { payouts: [] };
     }
+
+    return result;
   }
 
   /**
    * Get pending bi-weekly payroll summary
-   * @param {string} token - Auth token
-   * @returns {Object} { totalPending, nextPayoutDate, byEmployee, formatted }
    */
   static async getPendingPayroll(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/payroll/pending`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching pending payroll:", error);
+    const result = await HttpClient.get("/business-owner/payroll/pending", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getPendingPayroll failed:", result.error);
       return { totalPending: 0, nextPayoutDate: null, byEmployee: [], formatted: { totalPending: "$0.00" } };
     }
+
+    return result;
   }
 
   /**
    * Trigger an early payout for an employee (before the scheduled bi-weekly date)
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @returns {Object} { success, results, error }
    */
   static async triggerEarlyPayout(token, employeeId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/payroll/early-payout/${employeeId}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to trigger early payout" };
-      }
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[BusinessOwner] Error triggering early payout:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post(`/business-owner/payroll/early-payout/${employeeId}`, {}, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to trigger early payout" };
     }
+
+    return { success: true, ...result };
   }
 
   // =====================
@@ -1250,97 +797,67 @@ class BusinessOwnerService {
 
   /**
    * Get timesheet data for all employees
-   * @param {string} token - Auth token
-   * @param {string} startDate - Start date (YYYY-MM-DD)
-   * @param {string} endDate - End date (YYYY-MM-DD)
-   * @returns {Object} Timesheet data with employee summaries
    */
   static async getTimesheetData(token, startDate, endDate) {
-    try {
-      const params = new URLSearchParams();
-      if (startDate) params.append("startDate", startDate);
-      if (endDate) params.append("endDate", endDate);
+    const params = new URLSearchParams();
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
 
-      const url = `${API_BASE}/business-owner/timesheet${params.toString() ? `?${params}` : ""}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching timesheet:", error);
+    const url = `/business-owner/timesheet${params.toString() ? `?${params}` : ""}`;
+    const result = await HttpClient.get(url, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getTimesheetData failed:", result.error);
       return { employees: [], totalHours: 0, totalPay: 0 };
     }
+
+    return result;
   }
 
   /**
    * Get hours detail for a specific employee
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @param {string} startDate - Start date (YYYY-MM-DD)
-   * @param {string} endDate - End date (YYYY-MM-DD)
-   * @returns {Object} Employee hours with daily and weekly breakdown
    */
   static async getEmployeeHours(token, employeeId, startDate, endDate) {
-    try {
-      const params = new URLSearchParams();
-      if (startDate) params.append("startDate", startDate);
-      if (endDate) params.append("endDate", endDate);
+    const params = new URLSearchParams();
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
 
-      const url = `${API_BASE}/business-owner/employees/${employeeId}/hours${params.toString() ? `?${params}` : ""}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        const result = await response.json();
-        return { error: result.error || "Failed to fetch hours" };
-      }
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching employee hours:", error);
-      return { error: "Network error. Please try again." };
+    const url = `/business-owner/employees/${employeeId}/hours${params.toString() ? `?${params}` : ""}`;
+    const result = await HttpClient.get(url, { token });
+
+    if (result.success === false) {
+      return { error: result.error || "Failed to fetch hours" };
     }
+
+    return result;
   }
 
   /**
    * Get employee workload data for fair job distribution
-   * @param {string} token - Auth token
-   * @returns {Object} { employees, teamAverage, unassignedJobCount }
    */
   static async getEmployeeWorkload(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/employee-workload`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching employee workload:", error);
+    const result = await HttpClient.get("/business-owner/employee-workload", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getEmployeeWorkload failed:", result.error);
       return { employees: [], teamAverage: {}, unassignedJobCount: 0 };
     }
+
+    return result;
   }
 
   /**
    * Get unassigned jobs for the business owner
-   * @param {string} token - Auth token
-   * @returns {Object} { jobs }
    */
   static async getUnassignedJobs(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/unassigned-jobs`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching unassigned jobs:", error);
+    const result = await HttpClient.get("/business-owner/unassigned-jobs", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getUnassignedJobs failed:", result.error);
       return { jobs: [] };
     }
+
+    return result;
   }
 
   // =====================================
@@ -1351,115 +868,87 @@ class BusinessOwnerService {
    * Create a bonus for an employee
    */
   static async createBonus(token, bonusData) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/bonuses`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(bonusData),
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error creating bonus:", error);
-      return { error: error.message };
+    const result = await HttpClient.post("/business-owner/bonuses", bonusData, { token });
+
+    if (result.success === false) {
+      return { error: result.error };
     }
+
+    return result;
   }
 
   /**
    * Get all bonuses (with optional filters)
    */
   static async getBonuses(token, filters = {}) {
-    try {
-      const params = new URLSearchParams();
-      if (filters.status) params.append("status", filters.status);
-      if (filters.employeeId) params.append("employeeId", filters.employeeId);
-      if (filters.limit) params.append("limit", filters.limit);
+    const params = new URLSearchParams();
+    if (filters.status) params.append("status", filters.status);
+    if (filters.employeeId) params.append("employeeId", filters.employeeId);
+    if (filters.limit) params.append("limit", filters.limit);
 
-      const url = `${API_BASE}/business-owner/bonuses${params.toString() ? `?${params}` : ""}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching bonuses:", error);
+    const url = `/business-owner/bonuses${params.toString() ? `?${params}` : ""}`;
+    const result = await HttpClient.get(url, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getBonuses failed:", result.error);
       return [];
     }
+
+    return result;
   }
 
   /**
    * Get pending bonuses
    */
   static async getPendingBonuses(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/bonuses/pending`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching pending bonuses:", error);
+    const result = await HttpClient.get("/business-owner/bonuses/pending", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getPendingBonuses failed:", result.error);
       return [];
     }
+
+    return result;
   }
 
   /**
    * Get bonus summary stats
    */
   static async getBonusSummary(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/bonuses/summary`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching bonus summary:", error);
+    const result = await HttpClient.get("/business-owner/bonuses/summary", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getBonusSummary failed:", result.error);
       return { pending: { total: 0, count: 0 }, paid: { total: 0, count: 0 } };
     }
+
+    return result;
   }
 
   /**
    * Mark a bonus as paid
    */
   static async markBonusPaid(token, bonusId, note = null) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/bonuses/${bonusId}/paid`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ note }),
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error marking bonus as paid:", error);
-      return { error: error.message };
+    const result = await HttpClient.put(`/business-owner/bonuses/${bonusId}/paid`, { note }, { token });
+
+    if (result.success === false) {
+      return { error: result.error };
     }
+
+    return result;
   }
 
   /**
    * Cancel a pending bonus
    */
   static async cancelBonus(token, bonusId) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/bonuses/${bonusId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error cancelling bonus:", error);
-      return { error: error.message };
+    const result = await HttpClient.delete(`/business-owner/bonuses/${bonusId}`, { token });
+
+    if (result.success === false) {
+      return { error: result.error };
     }
+
+    return result;
   }
 
   // =====================
@@ -1468,152 +957,83 @@ class BusinessOwnerService {
 
   /**
    * Get employee payout settings for the business owner
-   * @param {string} token - Auth token
-   * @returns {Object} { employeePayoutMethod, employees }
    */
   static async getEmployeePayoutSettings(token) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/settings/employee-payouts`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching payout settings:", error);
+    const result = await HttpClient.get("/business-owner/settings/employee-payouts", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getEmployeePayoutSettings failed:", result.error);
       return { employeePayoutMethod: "all_to_owner", employees: [] };
     }
+
+    return result;
   }
 
   /**
    * Update employee payout settings
-   * @param {string} token - Auth token
-   * @param {Object} settings - { employeePayoutMethod }
-   * @returns {Object} { success, settings, error }
    */
   static async updateEmployeePayoutSettings(token, settings) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/settings/employee-payouts`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(settings),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update settings" };
-      }
-      return { success: true, settings: result.settings };
-    } catch (error) {
-      console.error("[BusinessOwner] Error updating payout settings:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.put("/business-owner/settings/employee-payouts", settings, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to update settings" };
     }
+
+    return { success: true, settings: result.settings };
   }
 
   /**
    * Check if an employee is eligible for direct payouts
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @returns {Object} { eligible, reason, stripeStatus }
    */
   static async getEmployeePayoutEligibility(token, employeeId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/employees/${employeeId}/payout-eligibility`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error checking payout eligibility:", error);
+    const result = await HttpClient.get(`/business-owner/employees/${employeeId}/payout-eligibility`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getEmployeePayoutEligibility failed:", result.error);
       return { eligible: false, reason: "error" };
     }
+
+    return result;
   }
 
   /**
    * Initiate Stripe Connect onboarding for an employee
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @returns {Object} { success, onboardingUrl, error }
    */
   static async initiateEmployeeStripeOnboarding(token, employeeId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-employees/stripe-connect/onboard`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ businessEmployeeId: employeeId }),
-        }
-      );
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to start onboarding" };
-      }
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("[BusinessOwner] Error initiating Stripe onboarding:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.post("/business-employees/stripe-connect/onboard", { businessEmployeeId: employeeId }, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to start onboarding" };
     }
+
+    return { success: true, ...result };
   }
 
   /**
    * Get Stripe Connect status for an employee
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @returns {Object} { hasAccount, onboarded, payoutsEnabled }
    */
   static async getEmployeeStripeStatus(token, employeeId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-employees/stripe-connect/status?businessEmployeeId=${employeeId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      return await response.json();
-    } catch (error) {
-      console.error("[BusinessOwner] Error fetching Stripe status:", error);
+    const result = await HttpClient.get(`/business-employees/stripe-connect/status?businessEmployeeId=${employeeId}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[BusinessOwner] getEmployeeStripeStatus failed:", result.error);
       return { hasAccount: false, onboarded: false, payoutsEnabled: false };
     }
+
+    return result;
   }
 
   /**
    * Update an employee's payout method (per-employee setting)
-   * @param {string} token - Auth token
-   * @param {number} employeeId - BusinessEmployee ID
-   * @param {string} paymentMethod - "stripe_connect" or "direct_payment"
-   * @returns {Object} { success, employee, error }
    */
   static async updateEmployeePaymentMethod(token, employeeId, paymentMethod) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/employees/${employeeId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ paymentMethod }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update payment method" };
-      }
-      return { success: true, employee: result.employee };
-    } catch (error) {
-      console.error("[BusinessOwner] Error updating payment method:", error);
-      return { success: false, error: "Network error. Please try again." };
+    const result = await HttpClient.put(`/business-owner/employees/${employeeId}`, { paymentMethod }, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to update payment method" };
     }
+
+    return { success: true, employee: result.employee };
   }
 }
 

@@ -25,6 +25,10 @@ const { startExpirationJob: startHomeSizeExpirationJob } = require("./services/c
 const { startBiWeeklyPayoutJob } = require("./services/cron/BiWeeklyPayoutJob");
 const { startUnassignedReminderJob } = require("./services/cron/UnassignedReminderJob");
 const { startExpiredRequestsJob } = require("./services/cron/ExpiredRequestsJob");
+const { startRecurringScheduleGenerationJob } = require("./services/cron/RecurringScheduleGenerationJob");
+const { startUnassignedExpiredJob } = require("./services/cron/UnassignedExpiredJob");
+const { startPaymentRetryMonitor } = require("./services/cron/PaymentRetryMonitor");
+const { startPausedAppointmentCancellationJob } = require("./services/cron/PausedAppointmentCancellationJob");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -57,6 +61,23 @@ const authLimiter = rateLimit({
 	standardHeaders: true,
 	legacyHeaders: false,
 });
+
+// Stricter rate limiter for financial/sensitive endpoints (withdrawals, payouts, etc.)
+const financialLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 20, // Only 20 financial operations per 15 minutes
+	message: { error: "Too many financial requests, please try again later" },
+	standardHeaders: true,
+	legacyHeaders: false,
+	validate: false, // Disable strict IP validation for IPv6 compatibility
+	keyGenerator: (req) => {
+		// Rate limit by user ID if authenticated, otherwise by IP
+		return req.user?.id || req.ip || "unknown";
+	},
+});
+
+// Export for use in routers
+module.exports.financialLimiter = financialLimiter;
 
 const app = express();
 const port = 3000;
@@ -219,5 +240,9 @@ server.listen(port, () => {
 		startBiWeeklyPayoutJob(io); // Bi-weekly employee payouts (every other Friday at 6 AM UTC)
 		startUnassignedReminderJob(io, 24 * 60 * 60 * 1000); // Daily unassigned appointment reminders to business owners
 		startExpiredRequestsJob(io); // New home request expiration (every hour)
+		startRecurringScheduleGenerationJob(); // Weekly recurring schedule appointment generation
+		startUnassignedExpiredJob(io, 24 * 60 * 60 * 1000); // Daily cleanup of past unassigned appointments
+		startPaymentRetryMonitor(io, 4 * 60 * 60 * 1000); // Payment retry processing (every 4 hours)
+		startPausedAppointmentCancellationJob(io, 24 * 60 * 60 * 1000); // Daily cancellation of paused appointments within 7 days
 	}
 });

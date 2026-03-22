@@ -63,7 +63,7 @@ class BusinessEmployeeSerializer {
       serialized.formattedJobRate = `$${(data.defaultJobRate / 100).toFixed(2)}/job`;
     }
     if (data.payRate) {
-      serialized.formattedPayRate = `${parseFloat(data.payRate)}%`;
+      serialized.formattedPayRate = `${parseFloat(data.payRate).toFixed(2)}%`;
     }
 
     // Serialize nested user if present and requested (check both data and employee for Sequelize associations)
@@ -127,7 +127,8 @@ class BusinessEmployeeSerializer {
       email: this.decryptField(data.email),
       phone: this.decryptField(data.phone),
       businessName: data.businessName,
-      expoPushToken: data.expoPushToken,
+      businessLogo: data.businessLogo,
+      // expoPushToken intentionally omitted - sensitive device identifier
     };
   }
 
@@ -178,6 +179,7 @@ class BusinessEmployeeSerializer {
       lastName: this.decryptField(data.lastName),
       email: this.decryptField(data.email),
       businessName: businessOwner?.businessName || "Business",
+      businessLogo: businessOwner?.businessLogo || null,
       businessOwnerName: businessOwner
         ? `${businessOwner.firstName} ${businessOwner.lastName}`
         : null,
@@ -199,6 +201,16 @@ class BusinessEmployeeSerializer {
       ? this.serializeUser(rawBusinessOwner)
       : null;
 
+    // Format pay rate for display
+    let formattedPayRate = null;
+    if (data.payType === "hourly" && data.defaultHourlyRate) {
+      formattedPayRate = `$${(data.defaultHourlyRate / 100).toFixed(2)}/hour`;
+    } else if (data.payType === "per_job" && data.defaultJobRate) {
+      formattedPayRate = `$${(data.defaultJobRate / 100).toFixed(2)}/job`;
+    } else if (data.payType === "percentage" && data.payRate) {
+      formattedPayRate = `${parseFloat(data.payRate).toFixed(0)}%`;
+    }
+
     return {
       id: data.id,
       firstName: this.decryptField(data.firstName),
@@ -206,6 +218,11 @@ class BusinessEmployeeSerializer {
       email: this.decryptField(data.email),
       phone: this.decryptField(data.phone),
       status: data.status,
+      payType: data.payType,
+      defaultHourlyRate: data.defaultHourlyRate,
+      defaultJobRate: data.defaultJobRate,
+      payRate: data.payRate ? parseFloat(data.payRate) : null,
+      formattedPayRate,
       paymentMethod: data.paymentMethod,
       stripeConnectOnboarded: data.stripeConnectOnboarded,
       canViewClientDetails: data.canViewClientDetails,
@@ -215,6 +232,7 @@ class BusinessEmployeeSerializer {
         ? {
             name: `${businessOwner.firstName} ${businessOwner.lastName}`,
             businessName: businessOwner.businessName,
+            businessLogo: businessOwner.businessLogo,
           }
         : null,
     };

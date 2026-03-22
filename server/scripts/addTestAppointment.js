@@ -119,7 +119,7 @@ async function addTestAppointment() {
         employeesAssigned: [String(karin.id)],
         completed: false,
         paymentStatus: "captured",
-        amountPaid: Math.round(parseFloat(existingAppt.price) * 100),
+        amountPaid: existingAppt.price, // Already stored in cents
         manuallyPaid: false,
       });
 
@@ -158,21 +158,20 @@ async function addTestAppointment() {
     // Calculate price using the actual pricing service
     const bringSheets = raceLaneHome.sheetsProvided === "company" ? "yes" : "no";
     const bringTowels = raceLaneHome.towelsProvided === "company" ? "yes" : "no";
-    const calculatedPrice = await calculatePrice(
+    const priceInCents = await calculatePrice(
       bringSheets,
       bringTowels,
       raceLaneHome.numBeds,
       raceLaneHome.numBaths,
       raceLaneHome.timeToBeCompleted || "anytime"
     );
-    const price = calculatedPrice.toFixed(2);
 
-    // Create the appointment
+    // Create the appointment (price stored in cents)
     const appointment = await UserAppointments.create({
       userId: gavin.id,
       homeId: raceLaneHome.id,
       date: todayStr,
-      price: price,
+      price: priceInCents,
       paid: true,
       bringTowels: bringTowels,
       bringSheets: bringSheets,
@@ -181,10 +180,10 @@ async function addTestAppointment() {
       completed: false,
       hasBeenAssigned: true,
       employeesAssigned: [String(karin.id)],
-      empoyeesNeeded: raceLaneHome.cleanersNeeded || 1,
+      employeesNeeded: raceLaneHome.cleanersNeeded || 1,
       timeToBeCompleted: raceLaneHome.timeToBeCompleted || "10am-3pm",
       paymentStatus: "captured",
-      amountPaid: Math.round(parseFloat(price) * 100),
+      amountPaid: priceInCents,
       manuallyPaid: false,
       paymentCaptureFailed: false,
       unassignedWarningSent: false,

@@ -15,9 +15,9 @@ module.exports = {
     });
 
     await queryInterface.addColumn("UserAppointments", "originalPrice", {
-      type: Sequelize.STRING,
+      type: Sequelize.INTEGER,
       allowNull: true,
-      comment: "Original price before discount was applied",
+      comment: "Original price in cents before discount was applied",
     });
   },
 

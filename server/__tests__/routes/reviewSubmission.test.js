@@ -54,6 +54,7 @@ jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
 // Mock ReviewSerializer
 jest.mock("../../serializers/ReviewSerializer", () => ({
   serializeArray: jest.fn((reviews) => reviews),
+  serializeOne: jest.fn((review) => review),
 }));
 
 const { User, UserReviews, UserHomes } = require("../../models");

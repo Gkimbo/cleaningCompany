@@ -92,14 +92,14 @@ describe("CalculatePrice - Last-Minute Booking", () => {
       const result = await checkLastMinuteBooking(appointmentDate);
 
       expect(result.isLastMinute).toBe(true);
-      expect(result.fee).toBe(50); // default
+      expect(result.fee).toBe(5000); // default (in cents = $50)
       expect(result.thresholdHours).toBe(48); // default
     });
 
     it("should use provided pricing config instead of fetching", async () => {
       const customConfig = {
         lastMinute: {
-          fee: 100,
+          fee: 10000, // $100 in cents
           thresholdHours: 24,
         },
       };
@@ -113,7 +113,7 @@ describe("CalculatePrice - Last-Minute Booking", () => {
 
       expect(getPricingConfig).not.toHaveBeenCalled();
       expect(result.isLastMinute).toBe(true);
-      expect(result.fee).toBe(100);
+      expect(result.fee).toBe(10000); // $100 in cents
       expect(result.thresholdHours).toBe(24);
     });
 

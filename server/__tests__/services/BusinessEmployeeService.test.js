@@ -21,6 +21,12 @@ jest.mock("../../models", () => ({
     findAll: jest.fn(),
     count: jest.fn(),
   },
+  TermsAndConditions: {
+    findByPk: jest.fn(),
+  },
+  UserTermsAcceptance: {
+    create: jest.fn(),
+  },
   sequelize: {
     fn: jest.fn(),
     col: jest.fn(),
@@ -39,7 +45,7 @@ jest.mock("../../models", () => ({
   },
 }));
 
-const { User, BusinessEmployee, EmployeeJobAssignment, sequelize } = require("../../models");
+const { User, BusinessEmployee, EmployeeJobAssignment, TermsAndConditions, UserTermsAcceptance, sequelize } = require("../../models");
 const BusinessEmployeeService = require("../../services/BusinessEmployeeService");
 
 describe("BusinessEmployeeService", () => {
@@ -558,6 +564,7 @@ describe("BusinessEmployeeService", () => {
         businessOwnerId: 100,
         status: "pending_invite",
         inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        email: "iv:test@example.com", // Encrypted email
         update: jest.fn().mockResolvedValue(true),
         reload: jest.fn().mockImplementation(function () {
           return Promise.resolve(this);
@@ -570,6 +577,7 @@ describe("BusinessEmployeeService", () => {
       const mockUser = {
         id: 200,
         employeeOfBusinessId: null,
+        email: "iv:test@example.com", // Encrypted email - must match employee.email
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -649,6 +657,7 @@ describe("BusinessEmployeeService", () => {
         id: 1,
         status: "pending_invite",
         inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        email: "iv:test@example.com", // Encrypted email
         toJSON: function () {
           return { ...this, toJSON: undefined };
         },
@@ -657,6 +666,7 @@ describe("BusinessEmployeeService", () => {
       const mockUser = {
         id: 200,
         employeeOfBusinessId: 999, // Already employed
+        email: "iv:test@example.com", // Encrypted email - must match employee.email
       };
 
       BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
@@ -706,9 +716,28 @@ describe("BusinessEmployeeService", () => {
         type: "employee",
       };
 
+      const mockTerms = {
+        id: 1,
+        version: 1,
+        contentType: "text",
+        content: "Terms content",
+      };
+
+      const mockPrivacyPolicy = {
+        id: 1,
+        version: 1,
+        contentType: "text",
+        content: "Privacy content",
+      };
+
       BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
       User.findOne.mockResolvedValue(null); // No existing username or email
       User.create.mockResolvedValue(mockNewUser);
+      TermsAndConditions.findByPk.mockImplementation((id) => {
+        if (id === 1) return Promise.resolve(mockTerms);
+        return Promise.resolve(mockPrivacyPolicy);
+      });
+      UserTermsAcceptance.create.mockResolvedValue({ id: 1 });
 
       const result = await BusinessEmployeeService.acceptInviteWithSignup(
         "abc123def456abc123def456abc12345",

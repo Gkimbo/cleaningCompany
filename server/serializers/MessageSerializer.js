@@ -14,9 +14,11 @@ class MessageSerializer {
 		const data = user.dataValues || user;
 		return {
 			id: data.id,
+			username: data.username,
 			firstName: this.decryptUserField(data.firstName),
 			lastName: this.decryptUserField(data.lastName),
 			email: this.decryptUserField(data.email),
+			phone: this.decryptUserField(data.phone),
 			type: data.type
 		};
 	}

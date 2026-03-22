@@ -8,6 +8,7 @@ import { PricingProvider } from "../../src/context/PricingContext";
 // Mock dependencies
 jest.mock("react-router-native", () => ({
   useNavigate: () => jest.fn(),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 jest.mock("../../src/services/fetchRequests/AppointmentClass", () => ({
@@ -82,7 +83,7 @@ const defaultProps = {
   id: 1,
   index: 0,
   date: "2025-02-15",
-  price: 150,
+  price: 15000, // $150.00 in cents
   bringSheets: "no",
   bringTowels: "no",
   keyPadCode: "",
@@ -193,9 +194,9 @@ describe("EachAppointment", () => {
   describe("Price display", () => {
     it("displays the price", () => {
       const { getByText } = renderWithProvider(
-        <EachAppointment {...defaultProps} price={200} />
+        <EachAppointment {...defaultProps} price={20000} /> // $200.00 in cents
       );
-      expect(getByText("$200")).toBeTruthy();
+      expect(getByText("$200.00")).toBeTruthy();
     });
 
     it("displays price label for active appointments", () => {
@@ -679,15 +680,16 @@ describe("EachAppointment", () => {
       const { getByText } = renderWithProvider(
         <EachAppointment {...defaultProps} paymentCaptureFailed={true} />
       );
-      expect(getByText("Payment Failed")).toBeTruthy();
+      expect(getByText("Action Required: Payment Failed")).toBeTruthy();
       expect(getByText("Retry Payment")).toBeTruthy();
+      expect(getByText("Update Payment Method")).toBeTruthy();
     });
 
     it("does not show payment failed when paymentCaptureFailed is false", () => {
       const { queryByText } = renderWithProvider(
         <EachAppointment {...defaultProps} paymentCaptureFailed={false} />
       );
-      expect(queryByText("Payment Failed")).toBeNull();
+      expect(queryByText("Action Required: Payment Failed")).toBeNull();
     });
 
     it("retries payment when button is pressed", async () => {
@@ -734,7 +736,7 @@ describe("EachAppointment", () => {
 
       await waitFor(() => {
         expect(getByText("Payment successful! Your appointment is confirmed.")).toBeTruthy();
-        expect(queryByText("Payment Failed")).toBeNull();
+        expect(queryByText("Action Required: Payment Failed")).toBeNull();
       });
     });
 

@@ -355,7 +355,7 @@ const AppealSubmissionModal = ({
               <View style={styles.impactRow}>
                 <Text style={styles.impactLabel}>Refund Withheld</Text>
                 <Text style={styles.impactValue}>
-                  ${(cancellationInfo.price - cancellationInfo.estimatedRefund).toFixed(2)}
+                  ${(((cancellationInfo.price || 0) - (cancellationInfo.estimatedRefund || 0))).toFixed(2)}
                 </Text>
               </View>
             )}

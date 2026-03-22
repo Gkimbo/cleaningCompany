@@ -268,7 +268,7 @@ async function checkRecentPayouts() {
 
     // Calculate totals for current year
     const currentYear = new Date().getFullYear();
-    const yearStart = new Date(`${currentYear}-01-01T00:00:00Z`);
+    const yearStart = new Date(`${currentYear}-01-01T12:00:00Z`);
 
     const yearPayouts = await stripe.payouts.list({
       created: { gte: Math.floor(yearStart.getTime() / 1000) },

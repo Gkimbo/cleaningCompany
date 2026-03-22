@@ -21,6 +21,7 @@ jest.mock("../../../src/services/offline/database", () => ({
       fetch: jest.fn().mockResolvedValue([]),
     })),
     create: jest.fn(),
+    find: jest.fn(),
   },
   offlineChecklistItemsCollection: {
     query: jest.fn(() => ({
@@ -47,6 +48,13 @@ jest.mock("../../../src/services/offline/PhotoStorage", () => ({
     initialize: jest.fn().mockResolvedValue(undefined),
     cleanupUploadedPhotos: jest.fn().mockResolvedValue(undefined),
     clearAllPhotos: jest.fn().mockResolvedValue(undefined),
+    saveMismatchPhoto: jest.fn().mockResolvedValue({
+      id: "photo-123",
+      localUri: "/local/path/photo.jpg",
+      roomType: "bedroom",
+      roomNumber: 1,
+    }),
+    deleteMismatchPhotosForJob: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -54,6 +62,7 @@ jest.mock("../../../src/services/fetchRequests/BusinessEmployeeService", () => (
   __esModule: true,
   default: {
     getMyJobs: jest.fn().mockResolvedValue({ jobs: [] }),
+    getJobFlow: jest.fn().mockResolvedValue(null),
   },
 }));
 
@@ -150,9 +159,13 @@ describe("OfflineManager", () => {
     });
 
     it("should filter jobs to today and tomorrow only", async () => {
+      // Add 1 hour buffer to avoid timing issues where 'now' in preloadJobs
+      // might be slightly after the test-created dates
       const today = new Date();
+      today.setHours(today.getHours() + 1);
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(tomorrow.getHours() + 1);
       const nextWeek = new Date();
       nextWeek.setDate(nextWeek.getDate() + 7);
 
@@ -186,9 +199,16 @@ describe("OfflineManager", () => {
         fetch: jest.fn().mockResolvedValue([existingJob]),
       });
 
+      // Mock find to return the same job (used to re-fetch fresh state inside write block)
+      offlineJobsCollection.find.mockResolvedValue(existingJob);
+
+      // Add buffer time to ensure job is in the future
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 1);
+
       BusinessEmployeeService.getMyJobs.mockResolvedValue({
         jobs: [
-          { id: 1, appointment: { dateTime: new Date().toISOString() } },
+          { id: 1, appointment: { dateTime: futureDate.toISOString() } },
         ],
       });
 
@@ -210,9 +230,16 @@ describe("OfflineManager", () => {
         fetch: jest.fn().mockResolvedValue([existingJob]),
       });
 
+      // Mock find to return the same job (used to re-fetch fresh state inside write block)
+      offlineJobsCollection.find.mockResolvedValue(existingJob);
+
+      // Add buffer time to ensure job is in the future
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 1);
+
       BusinessEmployeeService.getMyJobs.mockResolvedValue({
         jobs: [
-          { id: 1, appointment: { dateTime: new Date().toISOString() } },
+          { id: 1, appointment: { dateTime: futureDate.toISOString() } },
         ],
       });
 
@@ -513,6 +540,139 @@ describe("OfflineManager", () => {
 
       expect(database.write).toHaveBeenCalled();
       expect(PhotoStorage.clearAllPhotos).toHaveBeenCalled();
+    });
+  });
+
+  describe("submitHomeSizeMismatch", () => {
+    it("should throw if job not found", async () => {
+      offlineJobsCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([]),
+      });
+
+      await expect(
+        OfflineManager.submitHomeSizeMismatch(999, {
+          appointmentId: 1,
+          reportedNumBeds: "3",
+          reportedNumBaths: "2",
+          photos: [],
+        })
+      ).rejects.toThrow("Job not found");
+    });
+
+    it("should save photos and queue mismatch report", async () => {
+      const mockJob = {
+        id: "local-1",
+        serverId: 100,
+        update: jest.fn(),
+      };
+
+      offlineJobsCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([mockJob]),
+      });
+
+      const mismatchData = {
+        appointmentId: 1,
+        reportedNumBeds: "3",
+        reportedNumBaths: "2",
+        cleanerNote: "Extra bedroom found",
+        photos: [
+          { roomType: "bedroom", roomNumber: 1, photoData: "data:image/jpeg;base64,abc123" },
+          { roomType: "bathroom", roomNumber: 1, photoData: "data:image/jpeg;base64,def456" },
+        ],
+      };
+
+      const result = await OfflineManager.submitHomeSizeMismatch(100, mismatchData);
+
+      expect(result.success).toBe(true);
+      expect(result.queuedForSync).toBe(true);
+      expect(result.photoCount).toBe(2);
+      expect(PhotoStorage.saveMismatchPhoto).toHaveBeenCalledTimes(2);
+      expect(syncQueueCollection.create).toHaveBeenCalled();
+      expect(mockJob.update).toHaveBeenCalled();
+    });
+
+    it("should work with no photos", async () => {
+      const mockJob = {
+        id: "local-1",
+        serverId: 100,
+        update: jest.fn(),
+      };
+
+      offlineJobsCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([mockJob]),
+      });
+
+      const mismatchData = {
+        appointmentId: 1,
+        reportedNumBeds: "3",
+        reportedNumBaths: "2",
+        cleanerNote: null,
+        photos: [],
+      };
+
+      const result = await OfflineManager.submitHomeSizeMismatch(100, mismatchData);
+
+      expect(result.success).toBe(true);
+      expect(result.photoCount).toBe(0);
+      expect(PhotoStorage.saveMismatchPhoto).not.toHaveBeenCalled();
+      expect(syncQueueCollection.create).toHaveBeenCalled();
+    });
+
+    it("should find job by appointment ID when serverId lookup fails", async () => {
+      const mockJob = {
+        id: "local-1",
+        serverId: 100,
+        appointmentId: 500, // The appointment ID
+        update: jest.fn(),
+      };
+
+      offlineJobsCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([mockJob]),
+      });
+
+      const mismatchData = {
+        appointmentId: 500,
+        reportedNumBeds: "3",
+        reportedNumBaths: "2",
+        cleanerNote: null,
+        photos: [],
+      };
+
+      // Pass appointment ID (500), not server ID (100)
+      const result = await OfflineManager.submitHomeSizeMismatch(500, mismatchData);
+
+      expect(result.success).toBe(true);
+      expect(result.queuedForSync).toBe(true);
+      expect(syncQueueCollection.create).toHaveBeenCalled();
+      expect(mockJob.update).toHaveBeenCalled();
+    });
+  });
+
+  describe("getLocalJobByAppointmentId", () => {
+    it("should find job by appointment ID", async () => {
+      const mockJob = {
+        id: "local-1",
+        serverId: 100,
+        appointmentId: 500,
+      };
+
+      offlineJobsCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([mockJob]),
+      });
+
+      const job = await OfflineManager.getLocalJobByAppointmentId(500);
+
+      expect(job).toEqual(mockJob);
+    });
+
+    it("should return undefined if not found", async () => {
+      offlineJobsCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([]),
+      });
+
+      const job = await OfflineManager.getLocalJobByAppointmentId(999);
+
+      expect(job).toBeUndefined();
     });
   });
 });

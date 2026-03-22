@@ -1,163 +1,85 @@
 /* eslint-disable no-console */
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class Application {
   static async addApplicationToDb(data) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/applications/submitted", {
-        method: "post",
-        body: JSON.stringify(data),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        if (response.status === 400) {
-          const responseData = await response.json();
-          return responseData;
-        }
-        const error = new Error(`${response.status}(${response.statusText})`);
-        throw error;
+    const result = await HttpClient.post("/applications/submitted", data, { skipAuth: true });
+
+    if (result.success === false) {
+      if (result.status === 400) {
+        return result;
       }
-      const responseData = await response.json();
-      return true;
-    } catch (err) {
-      return err;
+      throw new Error(result.error || "Failed to submit application");
     }
+
+    return true;
   }
 
   static async deleteApplication(id, token) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/applications/${id}`, {
-        method: "delete",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        if (response.status === 400) {
-          const responseData = await response.json();
-          throw new Error(`Bad Request: ${JSON.stringify(responseData)}`);
-        }
-        throw new Error(`${response.status} (${response.statusText})`);
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (err) {
-      console.log(err);
-      throw new Error(`Failed to delete appointment: ${err.message}`);
+    const result = await HttpClient.delete(`/applications/${id}`, { token });
+
+    if (result.success === false) {
+      throw new Error(result.error || "Failed to delete application");
     }
+
+    return result;
   }
 
   static async getApplications(appID) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/applications/${appID}`);
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      return error;
+    const result = await HttpClient.get(`/applications/${appID}`, { skipAuth: true });
+
+    if (result.success === false) {
+      throw new Error("No data received");
     }
+
+    return result;
   }
 
   static async updateApplicationStatus(id, status, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/applications/${id}/status`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ status }),
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || `${response.status} error`;
-        throw new Error(errorMessage);
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (err) {
-      console.error("Failed to update application status:", err);
-      throw err;
+    const result = await HttpClient.patch(`/applications/${id}/status`, { status }, { token });
+
+    if (result.success === false) {
+      throw new Error(result.error || "Failed to update application status");
     }
+
+    return result;
   }
 
   static async updateApplicationNotes(id, adminNotes, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/applications/${id}/notes`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ adminNotes }),
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        throw new Error(`${response.status} (${response.statusText})`);
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (err) {
-      console.error("Failed to update application notes:", err);
-      throw err;
+    const result = await HttpClient.patch(`/applications/${id}/notes`, { adminNotes }, { token });
+
+    if (result.success === false) {
+      throw new Error(result.error || "Failed to update application notes");
     }
+
+    return result;
   }
 
   static async getPendingCount() {
-    try {
-      const response = await fetch(baseURL + "/api/v1/applications/pending-count");
-      if (!response.ok) {
-        return 0;
-      }
-      const responseData = await response.json();
-      return responseData.count || 0;
-    } catch (error) {
-      console.error("Error fetching pending applications:", error);
+    const result = await HttpClient.get("/applications/pending-count", { skipAuth: true });
+
+    if (result.success === false) {
       return 0;
     }
+
+    return result.count || 0;
   }
 
   static async hireApplicant(id, employeeData, token) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/applications/${id}/hire`,
-        {
-          method: "POST",
-          body: JSON.stringify(employeeData),
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        if (response.status === 409) {
-          return { error: "An account already has this email" };
-        } else if (response.status === 410) {
-          return { error: "Username already exists" };
-        }
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || `${response.status} error`;
-        throw new Error(errorMessage);
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (err) {
-      console.error("Failed to hire applicant:", err);
-      throw err;
+    const result = await HttpClient.post(`/applications/${id}/hire`, employeeData, { token });
+
+    if (result.status === 409) {
+      return { error: "An account already has this email" };
     }
+    if (result.status === 410) {
+      return { error: "Username already exists" };
+    }
+
+    if (result.success === false) {
+      throw new Error(result.error || "Failed to hire applicant");
+    }
+
+    return result;
   }
 }
 

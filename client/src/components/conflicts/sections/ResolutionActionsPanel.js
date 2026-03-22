@@ -95,7 +95,6 @@ const ResolutionActionsPanel = ({
           <TouchableOpacity
             style={styles.actionButton}
             onPress={onRefund}
-            disabled={!caseData?.homeowner?.stripeCustomerId}
           >
             <Icon name="undo" size={16} color={colors.success[600]} />
             <Text style={styles.actionButtonText}>Refund</Text>
@@ -104,7 +103,6 @@ const ResolutionActionsPanel = ({
           <TouchableOpacity
             style={styles.actionButton}
             onPress={onPayout}
-            disabled={!caseData?.cleaner?.stripeAccountId}
           >
             <Icon name="money" size={16} color={colors.warning[600]} />
             <Text style={styles.actionButtonText}>Payout</Text>

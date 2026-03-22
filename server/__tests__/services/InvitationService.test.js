@@ -7,6 +7,13 @@ jest.mock("crypto", () => ({
   })),
 }));
 
+// Mock EncryptionService
+jest.mock("../../services/EncryptionService", () => ({
+  hash: jest.fn((value) => `hashed_${value}`),
+  encrypt: jest.fn((value) => `encrypted_${value}`),
+  decrypt: jest.fn((value) => value?.replace("encrypted_", "")),
+}));
+
 describe("InvitationService", () => {
   let mockModels;
   let mockCleanerClient;
@@ -83,6 +90,7 @@ describe("InvitationService", () => {
       },
       User: {
         findOne: jest.fn(),
+        findAll: jest.fn(),
         create: jest.fn(),
       },
       UserHomes: {
@@ -207,6 +215,7 @@ describe("InvitationService", () => {
     beforeEach(() => {
       mockModels.CleanerClient.findOne.mockResolvedValue(mockCleanerClient);
       mockModels.User.findOne.mockResolvedValue(null); // No existing user
+      mockModels.User.findAll.mockResolvedValue([]); // No existing users with this email
       mockModels.User.create.mockResolvedValue(mockUser);
       mockModels.UserHomes.create.mockResolvedValue(mockUserHomes);
       mockModels.UserBills.create.mockResolvedValue(mockUserBills);
@@ -227,6 +236,7 @@ describe("InvitationService", () => {
         homeId: mockUserHomes.id,
         status: "active",
         acceptedAt: expect.any(Date),
+        inviteToken: null, // Token cleared for security
       });
     });
 
@@ -286,9 +296,10 @@ describe("InvitationService", () => {
         mockHashPassword
       );
 
-      // For cancelled invitations, should only set acceptedAt, not clientId/homeId/status
+      // For cancelled invitations, should only set acceptedAt and clear token, not clientId/homeId/status
       expect(cancelledClientUpdate).toHaveBeenCalledWith({
         acceptedAt: expect.any(Date),
+        inviteToken: null, // Token cleared for security
       });
     });
 
@@ -324,7 +335,8 @@ describe("InvitationService", () => {
     });
 
     it("should throw error if user with email already exists", async () => {
-      mockModels.User.findOne.mockResolvedValue({ id: 999, email: "client@example.com" });
+      // Mock findAll returning an existing user (used for email hash lookup)
+      mockModels.User.findAll.mockResolvedValue([{ id: 999, email: "client@example.com" }]);
 
       await expect(
         InvitationService.acceptInvitation(
@@ -427,7 +439,7 @@ describe("InvitationService", () => {
       );
 
       expect(result).toBe(true);
-      expect(pendingClient.update).toHaveBeenCalledWith({ status: "declined" });
+      expect(pendingClient.update).toHaveBeenCalledWith({ status: "declined", inviteToken: null });
     });
 
     it("should throw error if invitation not found", async () => {

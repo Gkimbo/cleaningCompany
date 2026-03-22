@@ -144,9 +144,9 @@ userInfoRouter.get("/", async (req, res) => {
     const appointmentsWithReviewStatus = user.appointments.map((apt) => {
       const mcJob = multiCleanerJobsByAppointment[apt.id];
       const employeesCount = apt.employeesAssigned ? apt.employeesAssigned.length : 0;
-      // Use appointment's empoyeesNeeded (calculated at booking with time window factored in)
+      // Use appointment's employeesNeeded (calculated at booking with time window factored in)
       // Fall back to 1 if not set
-      const appointmentNeeds = apt.empoyeesNeeded || 1;
+      const appointmentNeeds = apt.employeesNeeded || 1;
 
       // Get multi-cleaner completion status
       const completions = completionsByAppointment[apt.id] || [];
@@ -163,7 +163,7 @@ userInfoRouter.get("/", async (req, res) => {
         hasClientReview: reviewedAppointmentIds.has(apt.id),
         pendingRequestCount: pendingRequestCounts[apt.id] || 0,
         pendingApprovalCount: pendingApprovalCounts[apt.id] || 0,
-        // If there's a MultiCleanerJob record, use that data; otherwise use appointment's empoyeesNeeded
+        // If there's a MultiCleanerJob record, use that data; otherwise use appointment's employeesNeeded
         cleanersNeeded: mcJob ? mcJob.cleanersNeeded : appointmentNeeds,
         cleanersConfirmed: mcJob ? mcJob.cleanersConfirmed : employeesCount,
         multiCleanerJobId: mcJob ? mcJob.multiCleanerJobId : null,
@@ -234,12 +234,15 @@ userInfoRouter.post("/sync-bill", async (req, res) => {
       console.log(`[Sync Bill] User ${userId}: appointmentDue ${oldAppointmentDue} -> ${correctAppointmentDue}, totalDue -> ${newTotalDue}`);
     }
 
+    // Convert cents to dollars for display
+    const cancellationFeeCents = Number(bill.cancellationFee) || 0;
+    const totalDueCents = correctAppointmentDue + cancellationFeeCents;
     return res.status(200).json({
       success: true,
       bill: {
-        appointmentDue: correctAppointmentDue,
-        cancellationFee: Number(bill.cancellationFee) || 0,
-        totalDue: correctAppointmentDue + (Number(bill.cancellationFee) || 0),
+        appointmentDue: (correctAppointmentDue / 100).toFixed(2),
+        cancellationFee: (cancellationFeeCents / 100).toFixed(2),
+        totalDue: (totalDueCents / 100).toFixed(2),
       },
       unpaidAppointmentsCount: unpaidAppointments.length,
     });
@@ -276,6 +279,15 @@ userInfoRouter.post("/home", async (req, res) => {
     dirtyTowelsLocation,
     bedConfigurations,
     bathroomConfigurations,
+    // Common room counts for large homes (4+ beds)
+    numKitchens,
+    numLivingRooms,
+    numDiningRooms,
+    numFamilyRooms,
+    numOffices,
+    numLaundryRooms,
+    numBonusRooms,
+    numBasements,
   } = req.body.home;
   try {
     const decodedToken = jwt.verify(token, secretKey);
@@ -283,6 +295,16 @@ userInfoRouter.post("/home", async (req, res) => {
     const user = await User.findOne({
       where: { id: userId },
     });
+
+    // Check if user account is frozen
+    if (user && user.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot add new homes.",
+        reason: user.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
+
     const checkZipCode = await HomeClass.checkZipCodeExists(zipcode);
     if (!checkZipCode) {
       return res.status(400).json("Cannot find zipcode");
@@ -321,6 +343,15 @@ userInfoRouter.post("/home", async (req, res) => {
       dirtyTowelsLocation,
       bedConfigurations,
       bathroomConfigurations,
+      // Common room counts for large homes (4+ beds)
+      numKitchens,
+      numLivingRooms,
+      numDiningRooms,
+      numFamilyRooms,
+      numOffices,
+      numLaundryRooms,
+      numBonusRooms,
+      numBasements,
     });
 
     // Serialize the home to ensure consistent structure with fetched homes
@@ -362,6 +393,12 @@ userInfoRouter.post("/home", async (req, res) => {
 });
 
 userInfoRouter.patch("/home", async (req, res) => {
+  // Authentication check
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const {
     id,
     nickName,
@@ -388,9 +425,31 @@ userInfoRouter.patch("/home", async (req, res) => {
     dirtyTowelsLocation,
     bedConfigurations,
     bathroomConfigurations,
+    // Common room counts for large homes (4+ beds)
+    numKitchens,
+    numLivingRooms,
+    numDiningRooms,
+    numFamilyRooms,
+    numOffices,
+    numLaundryRooms,
+    numBonusRooms,
+    numBasements,
   } = req.body;
 
   try {
+    // Verify token and get user ID
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Verify home exists and belongs to the authenticated user
+    const home = await UserHomes.findByPk(id);
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+    if (home.userId !== userId) {
+      return res.status(403).json({ error: "You don't have permission to update this home" });
+    }
+
     const checkZipCode = await HomeClass.checkZipCodeExists(zipcode);
     if (!checkZipCode) {
       return res.status(400).json({ error: "Cannot find zipcode" });
@@ -429,6 +488,15 @@ userInfoRouter.patch("/home", async (req, res) => {
       dirtyTowelsLocation,
       bedConfigurations,
       bathroomConfigurations,
+      // Common room counts for large homes (4+ beds)
+      numKitchens,
+      numLivingRooms,
+      numDiningRooms,
+      numFamilyRooms,
+      numOffices,
+      numLaundryRooms,
+      numBonusRooms,
+      numBasements,
     });
 
     return res.status(200).json({
@@ -587,22 +655,36 @@ userInfoRouter.patch("/home/:id/complete-setup", async (req, res) => {
 });
 
 userInfoRouter.delete("/home", async (req, res) => {
+  // Authentication check
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const id = req.body.id;
+
   try {
+    // Verify token and get user ID
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Verify home exists and belongs to the authenticated user
+    const homeToDelete = await UserHomes.findByPk(id);
+    if (!homeToDelete) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+    if (homeToDelete.userId !== userId) {
+      return res.status(403).json({ error: "You don't have permission to delete this home" });
+    }
+
     const today = new Date();
     const oneWeekFromToday = new Date(today);
     let price = 0;
     oneWeekFromToday.setDate(oneWeekFromToday.getDate() + 7);
 
-    const homeToDelete = await UserHomes.findAll({
-      where: {
-        id: id,
-      },
-    });
-
     const billToUpdate = await UserBills.findOne({
       where: {
-        userId: homeToDelete[0].dataValues.userId,
+        userId: userId,
       },
     });
 
@@ -729,12 +811,25 @@ userInfoRouter.put("/service-area", async (req, res) => {
       return res.status(400).json({ error: "Invalid coordinates" });
     }
 
+    // Validate radius (must be between 1 and 30 miles)
+    if (radiusMiles !== undefined && radiusMiles !== null) {
+      const { validateServiceRadius } = require("../../../utils/geoUtils");
+      const radiusValidation = validateServiceRadius(radiusMiles);
+      if (!radiusValidation.valid) {
+        return res.status(400).json({
+          error: radiusValidation.error,
+          code: "INVALID_RADIUS",
+        });
+      }
+    }
+
     // Update user's service area
+    const clampedRadius = Math.min(Math.max(parseFloat(radiusMiles) || 30, 1), 30);
     await user.update({
       serviceAreaAddress: address || null,
       serviceAreaLatitude: String(latitude),
       serviceAreaLongitude: String(longitude),
-      serviceAreaRadiusMiles: radiusMiles || 30,
+      serviceAreaRadiusMiles: clampedRadius,
     });
 
     res.json({
@@ -742,7 +837,7 @@ userInfoRouter.put("/service-area", async (req, res) => {
       message: "Service area updated successfully",
       serviceArea: {
         address: address || null,
-        radiusMiles: radiusMiles || 30,
+        radiusMiles: clampedRadius,
         // Don't return exact coordinates for privacy
         hasLocation: true,
       },

@@ -30,7 +30,8 @@ import {
 // Individual appointment card for pending appointments
 const PendingAppointmentCard = ({ appointment, onAccept, onDecline, onMessage, loading }) => {
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -59,7 +60,7 @@ const PendingAppointmentCard = ({ appointment, onAccept, onDecline, onMessage, l
           </Pressable>
           <View style={styles.priceContainer}>
             <Text style={styles.priceLabel}>Your price</Text>
-            <Text style={styles.priceValue}>${parseFloat(appointment.price).toFixed(2)}</Text>
+            <Text style={styles.priceValue}>${((parseFloat(appointment.price) || 0) / 100).toFixed(2)}</Text>
           </View>
         </View>
       </View>
@@ -128,7 +129,8 @@ const PendingAppointmentCard = ({ appointment, onAccept, onDecline, onMessage, l
 // Card showing declined appointment awaiting client response
 const DeclinedAppointmentCard = ({ appointment, onMessage }) => {
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -319,12 +321,23 @@ const ClientAppointmentsSection = ({ token, onRefresh }) => {
           text: "Yes, Cancel",
           style: "destructive",
           onPress: async () => {
-            // TODO: Implement cancel endpoint if needed
-            // For now, just remove from local state
-            setAwaitingClientResponse((prev) =>
-              prev.filter((a) => a.id !== appointment.id)
-            );
-            if (onRefresh) onRefresh();
+            setActionLoading(appointment.id);
+            try {
+              const result = await CleanerClientService.cancelBookingRequest(token, appointment.id);
+              if (result.success) {
+                // Remove from local state
+                setAwaitingClientResponse((prev) =>
+                  prev.filter((a) => a.id !== appointment.id)
+                );
+                if (onRefresh) onRefresh();
+              } else {
+                Alert.alert("Error", result.error || "Failed to cancel booking request");
+              }
+            } catch (error) {
+              Alert.alert("Error", "Failed to cancel booking request");
+            } finally {
+              setActionLoading(null);
+            }
           },
         },
       ]

@@ -1,4 +1,4 @@
-import { API_BASE } from "../config";
+import HttpClient from "../HttpClient";
 
 /**
  * JobFlowService - Client-side service for business owner job flow management
@@ -16,29 +16,20 @@ class JobFlowService {
    * @returns {Object} { flows: [...] }
    */
   static async getFlows(token, options = {}) {
-    try {
-      const params = new URLSearchParams();
-      if (options.status) params.append("status", options.status);
+    const params = new URLSearchParams();
+    if (options.status) params.append("status", options.status);
 
-      const queryString = params.toString();
-      const url = `${API_BASE}/business-owner/job-flows${queryString ? `?${queryString}` : ""}`;
+    const queryString = params.toString();
+    const url = `/business-owner/job-flows${queryString ? `?${queryString}` : ""}`;
 
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    const result = await HttpClient.get(url, { token });
 
-      if (!response.ok) {
-        const error = await response.json();
-        return { flows: [], error: error.error || "Failed to fetch job flows" };
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching job flows:", error);
-      return { flows: [], error: "Failed to fetch job flows" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] getFlows failed:", result.error);
+      return { flows: [], error: result.error };
     }
+
+    return result;
   }
 
   /**
@@ -48,26 +39,17 @@ class JobFlowService {
    * @returns {Object} { flow: {...} }
    */
   static async getFlow(token, flowId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/${flowId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.get(
+      `/business-owner/job-flows/${flowId}`,
+      { token }
+    );
 
-      if (!response.ok) {
-        const error = await response.json();
-        return { flow: null, error: error.error || "Failed to fetch job flow" };
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching job flow:", error);
-      return { flow: null, error: "Failed to fetch job flow" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] getFlow failed:", result.error);
+      return { flow: null, error: result.error };
     }
+
+    return result;
   }
 
   /**
@@ -82,27 +64,17 @@ class JobFlowService {
    * @returns {Object} { success, flow, message, error }
    */
   static async createFlow(token, flowData) {
-    try {
-      const response = await fetch(`${API_BASE}/business-owner/job-flows`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(flowData),
-      });
+    const result = await HttpClient.post(
+      "/business-owner/job-flows",
+      flowData,
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to create job flow" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error creating job flow:", error);
-      return { success: false, error: "Failed to create job flow" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] createFlow failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -113,30 +85,17 @@ class JobFlowService {
    * @returns {Object} { success, flow, message, error }
    */
   static async updateFlow(token, flowId, updates) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/${flowId}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(updates),
-        }
-      );
+    const result = await HttpClient.put(
+      `/business-owner/job-flows/${flowId}`,
+      updates,
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update job flow" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error updating job flow:", error);
-      return { success: false, error: "Failed to update job flow" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] updateFlow failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -147,27 +106,15 @@ class JobFlowService {
    * @returns {Object} { success, message, error }
    */
   static async deleteFlow(token, flowId, permanent = false) {
-    try {
-      const url = `${API_BASE}/business-owner/job-flows/${flowId}${permanent ? "?permanent=true" : ""}`;
+    const url = `/business-owner/job-flows/${flowId}${permanent ? "?permanent=true" : ""}`;
 
-      const response = await fetch(url, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    const result = await HttpClient.delete(url, { token });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to delete job flow" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error deleting job flow:", error);
-      return { success: false, error: "Failed to delete job flow" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] deleteFlow failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -177,28 +124,17 @@ class JobFlowService {
    * @returns {Object} { success, flow, message, error }
    */
   static async setDefaultFlow(token, flowId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/${flowId}/set-default`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.post(
+      `/business-owner/job-flows/${flowId}/set-default`,
+      {},
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to set default flow" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error setting default flow:", error);
-      return { success: false, error: "Failed to set default flow" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] setDefaultFlow failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -207,28 +143,17 @@ class JobFlowService {
    * @returns {Object} { success, message, error }
    */
   static async clearDefaultFlow(token) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/clear-default`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.post(
+      "/business-owner/job-flows/clear-default",
+      {},
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to clear default flow" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error clearing default flow:", error);
-      return { success: false, error: "Failed to clear default flow" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] clearDefaultFlow failed:", result.error);
     }
+
+    return result;
   }
 
   // =====================================
@@ -242,26 +167,17 @@ class JobFlowService {
    * @returns {Object} { checklist: {...} | null }
    */
   static async getChecklist(token, flowId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/${flowId}/checklist`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.get(
+      `/business-owner/job-flows/${flowId}/checklist`,
+      { token }
+    );
 
-      if (!response.ok) {
-        const error = await response.json();
-        return { checklist: null, error: error.error || "Failed to fetch checklist" };
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching checklist:", error);
-      return { checklist: null, error: "Failed to fetch checklist" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] getChecklist failed:", result.error);
+      return { checklist: null, error: result.error };
     }
+
+    return result;
   }
 
   /**
@@ -272,30 +188,17 @@ class JobFlowService {
    * @returns {Object} { success, checklist, message, error }
    */
   static async createChecklist(token, flowId, sections) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/${flowId}/checklist`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ sections }),
-        }
-      );
+    const result = await HttpClient.post(
+      `/business-owner/job-flows/${flowId}/checklist`,
+      { sections },
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to create checklist" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error creating checklist:", error);
-      return { success: false, error: "Failed to create checklist" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] createChecklist failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -306,30 +209,17 @@ class JobFlowService {
    * @returns {Object} { success, checklist, message, error }
    */
   static async updateChecklist(token, flowId, sections) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/${flowId}/checklist`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ sections }),
-        }
-      );
+    const result = await HttpClient.put(
+      `/business-owner/job-flows/${flowId}/checklist`,
+      { sections },
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update checklist" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error updating checklist:", error);
-      return { success: false, error: "Failed to update checklist" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] updateChecklist failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -339,28 +229,16 @@ class JobFlowService {
    * @returns {Object} { success, message, error }
    */
   static async deleteChecklist(token, flowId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/${flowId}/checklist`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.delete(
+      `/business-owner/job-flows/${flowId}/checklist`,
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to delete checklist" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error deleting checklist:", error);
-      return { success: false, error: "Failed to delete checklist" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] deleteChecklist failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -371,30 +249,17 @@ class JobFlowService {
    * @returns {Object} { success, checklist, message, error }
    */
   static async forkPlatformChecklist(token, flowId, versionId = null) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/${flowId}/checklist/fork-platform`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ versionId }),
-        }
-      );
+    const result = await HttpClient.post(
+      `/business-owner/job-flows/${flowId}/checklist/fork-platform`,
+      { versionId },
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to fork platform checklist" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error forking platform checklist:", error);
-      return { success: false, error: "Failed to fork platform checklist" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] forkPlatformChecklist failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -406,30 +271,17 @@ class JobFlowService {
    * @returns {Object} { success, checklist, message, error }
    */
   static async updateItemNotes(token, flowId, itemId, notes) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/${flowId}/checklist/items/${itemId}/notes`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ notes }),
-        }
-      );
+    const result = await HttpClient.put(
+      `/business-owner/job-flows/${flowId}/checklist/items/${itemId}/notes`,
+      { notes },
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to update item notes" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error updating item notes:", error);
-      return { success: false, error: "Failed to update item notes" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] updateItemNotes failed:", result.error);
     }
+
+    return result;
   }
 
   // =====================================
@@ -442,26 +294,17 @@ class JobFlowService {
    * @returns {Object} { assignments: [...] }
    */
   static async getAssignments(token) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/assignments`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.get(
+      "/business-owner/job-flows/assignments",
+      { token }
+    );
 
-      if (!response.ok) {
-        const error = await response.json();
-        return { assignments: [], error: error.error || "Failed to fetch assignments" };
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("Error fetching flow assignments:", error);
-      return { assignments: [], error: "Failed to fetch assignments" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] getAssignments failed:", result.error);
+      return { assignments: [], error: result.error };
     }
+
+    return result;
   }
 
   /**
@@ -472,30 +315,17 @@ class JobFlowService {
    * @returns {Object} { success, assignment, message, error }
    */
   static async assignFlowToClient(token, clientId, flowId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/assignments/client/${clientId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ flowId }),
-        }
-      );
+    const result = await HttpClient.post(
+      `/business-owner/job-flows/assignments/client/${clientId}`,
+      { flowId },
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to assign flow to client" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error assigning flow to client:", error);
-      return { success: false, error: "Failed to assign flow to client" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] assignFlowToClient failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -506,30 +336,17 @@ class JobFlowService {
    * @returns {Object} { success, assignment, message, error }
    */
   static async assignFlowToHome(token, homeId, flowId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/assignments/home/${homeId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ flowId }),
-        }
-      );
+    const result = await HttpClient.post(
+      `/business-owner/job-flows/assignments/home/${homeId}`,
+      { flowId },
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to assign flow to home" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error assigning flow to home:", error);
-      return { success: false, error: "Failed to assign flow to home" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] assignFlowToHome failed:", result.error);
     }
+
+    return result;
   }
 
   /**
@@ -539,28 +356,16 @@ class JobFlowService {
    * @returns {Object} { success, message, error }
    */
   static async removeAssignment(token, assignmentId) {
-    try {
-      const response = await fetch(
-        `${API_BASE}/business-owner/job-flows/assignments/${assignmentId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const result = await HttpClient.delete(
+      `/business-owner/job-flows/assignments/${assignmentId}`,
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { success: false, error: result.error || "Failed to remove assignment" };
-      }
-
-      return { success: true, ...result };
-    } catch (error) {
-      console.error("Error removing flow assignment:", error);
-      return { success: false, error: "Failed to remove assignment" };
+    if (result.success === false) {
+      __DEV__ && console.warn("[JobFlowService] removeAssignment failed:", result.error);
     }
+
+    return result;
   }
 }
 

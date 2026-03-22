@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from "react";
+import React, { useState, useEffect, useContext, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { useRoute, useNavigation } from "@react-navigation/native";
+import { useParams } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { AuthContext } from "../../services/AuthContext";
 import ConflictService from "../../services/fetchRequests/ConflictService";
@@ -37,6 +37,7 @@ import PhotoViewerModal from "./modals/PhotoViewerModal";
 import PhotoComparisonModal from "./modals/PhotoComparisonModal";
 import AddNoteModal from "./modals/AddNoteModal";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const BASE_TABS = [
   { id: "overview", label: "Overview", icon: "info-circle" },
   { id: "evidence", label: "Evidence", icon: "camera" },
@@ -53,10 +54,9 @@ const SUPPORT_TABS = [
 ];
 
 const ConflictCaseView = () => {
-  const route = useRoute();
-  const navigation = useNavigation();
+  const { caseId, caseType } = useParams();
+  const { goBack } = useSafeNavigation();
   const { user } = useContext(AuthContext);
-  const { caseId, caseType } = route.params;
 
   const [caseData, setCaseData] = useState(null);
   const [photos, setPhotos] = useState(null);
@@ -67,6 +67,7 @@ const ConflictCaseView = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tabLoading, setTabLoading] = useState({});
+  const fetchedTabsRef = useRef({});
 
   // Modal states
   const [showRefundModal, setShowRefundModal] = useState(false);
@@ -91,51 +92,50 @@ const ConflictCaseView = () => {
   }, [user.token, caseType, caseId]);
 
   const fetchTabData = useCallback(async (tab) => {
-    if (tabLoading[tab]) return;
+    // Skip if already fetched or loading
+    if (fetchedTabsRef.current[tab]) return;
 
+    fetchedTabsRef.current[tab] = true;
     setTabLoading(prev => ({ ...prev, [tab]: true }));
 
     try {
       switch (tab) {
-        case "evidence":
-          if (!photos) {
-            const result = await ConflictService.getPhotos(user.token, caseType, caseId);
-            if (result.success) {
-              setPhotos(result);
-            }
-          }
+        case "evidence": {
+          const result = await ConflictService.getPhotos(user.token, caseType, caseId);
+          if (result.success) setPhotos(result);
           break;
-        case "context":
-          if (!checklist) {
-            const result = await ConflictService.getChecklist(user.token, caseType, caseId);
-            if (result.success) {
-              setChecklist(result);
-            }
-          }
+        }
+        case "context": {
+          const result = await ConflictService.getChecklist(user.token, caseType, caseId);
+          if (result.success) setChecklist(result);
           break;
-        case "messages":
-          if (!messages) {
-            const result = await ConflictService.getMessages(user.token, caseType, caseId);
-            if (result.success) {
-              setMessages(result);
-            }
-          }
+        }
+        case "messages": {
+          const result = await ConflictService.getMessages(user.token, caseType, caseId);
+          if (result.success) setMessages(result);
           break;
-        case "activity":
-          if (!auditTrail) {
-            const result = await ConflictService.getAuditTrail(user.token, caseType, caseId);
-            if (result.success) {
-              setAuditTrail(result.auditTrail);
-            }
-          }
+        }
+        case "activity": {
+          const result = await ConflictService.getAuditTrail(user.token, caseType, caseId);
+          if (result.success) setAuditTrail(result.auditTrail);
+          break;
+        }
+        case "conversation":
+          // Conversation data is loaded within LinkedConversationSection
           break;
       }
     } catch (err) {
       console.error(`Failed to fetch ${tab} data:`, err);
+      fetchedTabsRef.current[tab] = false; // Allow retry on error
     } finally {
       setTabLoading(prev => ({ ...prev, [tab]: false }));
     }
-  }, [user.token, caseType, caseId, photos, checklist, messages, auditTrail, tabLoading]);
+  }, [user.token, caseType, caseId]);
+
+  // Reset fetched tabs when case changes
+  useEffect(() => {
+    fetchedTabsRef.current = {};
+  }, [caseType, caseId]);
 
   useEffect(() => {
     fetchCaseData();
@@ -153,6 +153,7 @@ const ConflictCaseView = () => {
     setChecklist(null);
     setMessages(null);
     setAuditTrail(null);
+    fetchedTabsRef.current = {}; // Reset to allow re-fetching
     fetchCaseData();
   };
 
@@ -173,13 +174,16 @@ const ConflictCaseView = () => {
 
   const handleNoteAdded = () => {
     setShowAddNoteModal(false);
+    // Refresh case data to show the new note in resolutionNotes
+    fetchCaseData();
+    // Also refresh audit trail
+    fetchedTabsRef.current["activity"] = false;
     setAuditTrail(null);
-    fetchTabData("activity");
   };
 
   const handleResolveSuccess = () => {
     onRefresh();
-    navigation.goBack();
+    goBack();
   };
 
   const formatTimeRemaining = (seconds) => {
@@ -287,7 +291,7 @@ const ConflictCaseView = () => {
       <View style={styles.errorContainer}>
         <Icon name="exclamation-triangle" size={48} color={colors.error[400]} />
         <Text style={styles.errorTitle}>Case not found</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => goBack()}>
           <Text style={styles.backButtonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -301,7 +305,7 @@ const ConflictCaseView = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backArrow} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backArrow} onPress={() => goBack()}>
           <Icon name="arrow-left" size={20} color={colors.text.primary} />
         </TouchableOpacity>
 

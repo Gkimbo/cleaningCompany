@@ -8,7 +8,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import {
   colors,
@@ -21,8 +20,9 @@ import PricingService from "../../services/fetchRequests/PricingService";
 import PricingWarningModal from "./PricingWarningModal";
 import { usePricing } from "../../context/PricingContext";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const PricingManagement = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const { refreshPricing } = usePricing();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -95,20 +95,23 @@ const PricingManagement = ({ state }) => {
 
       if (result) {
         let values;
+        // Helper to convert cents to dollars for display
+        const fromCents = (cents) => cents != null ? (cents / 100).toString() : "";
+
         if (result.config) {
-          // Database config exists
+          // Database config exists - convert cents to dollars for display
           values = {
-            basePrice: result.config.basePrice?.toString() || "",
-            extraBedBathFee: result.config.extraBedBathFee?.toString() || "",
-            halfBathFee: result.config.halfBathFee?.toString() || "",
-            sheetFeePerBed: result.config.sheetFeePerBed?.toString() || "",
-            towelFee: result.config.towelFee?.toString() || "",
-            faceClothFee: result.config.faceClothFee?.toString() || "",
-            timeWindowAnytime: result.config.timeWindowAnytime?.toString() || "",
-            timeWindow10To3: result.config.timeWindow10To3?.toString() || "",
-            timeWindow11To4: result.config.timeWindow11To4?.toString() || "",
-            timeWindow12To2: result.config.timeWindow12To2?.toString() || "",
-            cancellationFee: result.config.cancellationFee?.toString() || "",
+            basePrice: fromCents(result.config.basePrice),
+            extraBedBathFee: fromCents(result.config.extraBedBathFee),
+            halfBathFee: fromCents(result.config.halfBathFee),
+            sheetFeePerBed: fromCents(result.config.sheetFeePerBed),
+            towelFee: fromCents(result.config.towelFee),
+            faceClothFee: fromCents(result.config.faceClothFee),
+            timeWindowAnytime: fromCents(result.config.timeWindowAnytime),
+            timeWindow10To3: fromCents(result.config.timeWindow10To3),
+            timeWindow11To4: fromCents(result.config.timeWindow11To4),
+            timeWindow12To2: fromCents(result.config.timeWindow12To2),
+            cancellationFee: fromCents(result.config.cancellationFee),
             cancellationWindowDays: result.config.cancellationWindowDays?.toString() || "",
             homeownerPenaltyDays: result.config.homeownerPenaltyDays?.toString() || "",
             cleanerPenaltyDays: result.config.cleanerPenaltyDays?.toString() || "",
@@ -119,28 +122,28 @@ const PricingManagement = ({ state }) => {
             largeBusinessMonthlyThreshold: result.config.largeBusinessMonthlyThreshold?.toString() || "50",
             largeBusinessLookbackMonths: result.config.largeBusinessLookbackMonths?.toString() || "1",
             multiCleanerPlatformFeePercent: (parseFloat(result.config.multiCleanerPlatformFeePercent || 0.13) * 100).toString() || "13",
-            highVolumeFee: result.config.highVolumeFee?.toString() || "",
+            highVolumeFee: fromCents(result.config.highVolumeFee),
             incentiveRefundPercent: (parseFloat(result.config.incentiveRefundPercent || 0.10) * 100).toString() || "10",
             incentiveCleanerPercent: (parseFloat(result.config.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
-            lastMinuteFee: result.config.lastMinuteFee?.toString() || "50",
+            lastMinuteFee: fromCents(result.config.lastMinuteFee),
             lastMinuteThresholdHours: result.config.lastMinuteThresholdHours?.toString() || "48",
             lastMinuteNotificationRadiusMiles: result.config.lastMinuteNotificationRadiusMiles?.toString() || "25",
             changeNote: "",
           };
         } else if (result.staticDefaults) {
-          // Use static defaults
+          // Use static defaults - convert cents to dollars for display
           values = {
-            basePrice: result.staticDefaults.basePrice?.toString() || "",
-            extraBedBathFee: result.staticDefaults.extraBedBathFee?.toString() || "",
-            halfBathFee: result.staticDefaults.halfBathFee?.toString() || "",
-            sheetFeePerBed: result.staticDefaults.sheetFeePerBed?.toString() || "",
-            towelFee: result.staticDefaults.towelFee?.toString() || "",
-            faceClothFee: result.staticDefaults.faceClothFee?.toString() || "",
-            timeWindowAnytime: result.staticDefaults.timeWindowAnytime?.toString() || "",
-            timeWindow10To3: result.staticDefaults.timeWindow10To3?.toString() || "",
-            timeWindow11To4: result.staticDefaults.timeWindow11To4?.toString() || "",
-            timeWindow12To2: result.staticDefaults.timeWindow12To2?.toString() || "",
-            cancellationFee: result.staticDefaults.cancellationFee?.toString() || "",
+            basePrice: fromCents(result.staticDefaults.basePrice),
+            extraBedBathFee: fromCents(result.staticDefaults.extraBedBathFee),
+            halfBathFee: fromCents(result.staticDefaults.halfBathFee),
+            sheetFeePerBed: fromCents(result.staticDefaults.sheetFeePerBed),
+            towelFee: fromCents(result.staticDefaults.towelFee),
+            faceClothFee: fromCents(result.staticDefaults.faceClothFee),
+            timeWindowAnytime: fromCents(result.staticDefaults.timeWindowAnytime),
+            timeWindow10To3: fromCents(result.staticDefaults.timeWindow10To3),
+            timeWindow11To4: fromCents(result.staticDefaults.timeWindow11To4),
+            timeWindow12To2: fromCents(result.staticDefaults.timeWindow12To2),
+            cancellationFee: fromCents(result.staticDefaults.cancellationFee),
             cancellationWindowDays: result.staticDefaults.cancellationWindowDays?.toString() || "",
             homeownerPenaltyDays: result.staticDefaults.homeownerPenaltyDays?.toString() || "",
             cleanerPenaltyDays: result.staticDefaults.cleanerPenaltyDays?.toString() || "",
@@ -151,10 +154,10 @@ const PricingManagement = ({ state }) => {
             largeBusinessMonthlyThreshold: result.staticDefaults.largeBusinessMonthlyThreshold?.toString() || "50",
             largeBusinessLookbackMonths: result.staticDefaults.largeBusinessLookbackMonths?.toString() || "1",
             multiCleanerPlatformFeePercent: ((result.staticDefaults.multiCleanerPlatformFeePercent || 0.13) * 100).toString() || "13",
-            highVolumeFee: result.staticDefaults.highVolumeFee?.toString() || "",
+            highVolumeFee: fromCents(result.staticDefaults.highVolumeFee),
             incentiveRefundPercent: ((result.staticDefaults.incentiveRefundPercent || 0.10) * 100).toString() || "10",
             incentiveCleanerPercent: ((result.staticDefaults.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
-            lastMinuteFee: result.staticDefaults.lastMinuteFee?.toString() || "50",
+            lastMinuteFee: fromCents(result.staticDefaults.lastMinuteFee),
             lastMinuteThresholdHours: result.staticDefaults.lastMinuteThresholdHours?.toString() || "48",
             lastMinuteNotificationRadiusMiles: result.staticDefaults.lastMinuteNotificationRadiusMiles?.toString() || "25",
             changeNote: "",
@@ -282,18 +285,25 @@ const PricingManagement = ({ state }) => {
     setSuccess(null);
 
     try {
+      // Helper to convert dollars to cents for storage
+      const toCents = (dollars) => Math.round(parseFloat(dollars) * 100);
+
       const pricingData = {
-        basePrice: parseInt(formData.basePrice),
-        extraBedBathFee: parseInt(formData.extraBedBathFee),
-        halfBathFee: parseInt(formData.halfBathFee),
-        sheetFeePerBed: parseInt(formData.sheetFeePerBed),
-        towelFee: parseInt(formData.towelFee),
-        faceClothFee: parseInt(formData.faceClothFee),
-        timeWindowAnytime: parseInt(formData.timeWindowAnytime),
-        timeWindow10To3: parseInt(formData.timeWindow10To3),
-        timeWindow11To4: parseInt(formData.timeWindow11To4),
-        timeWindow12To2: parseInt(formData.timeWindow12To2),
-        cancellationFee: parseInt(formData.cancellationFee),
+        // Price fields - convert dollars to cents for database storage
+        basePrice: toCents(formData.basePrice),
+        extraBedBathFee: toCents(formData.extraBedBathFee),
+        halfBathFee: toCents(formData.halfBathFee),
+        sheetFeePerBed: toCents(formData.sheetFeePerBed),
+        towelFee: toCents(formData.towelFee),
+        faceClothFee: toCents(formData.faceClothFee),
+        timeWindowAnytime: toCents(formData.timeWindowAnytime),
+        timeWindow10To3: toCents(formData.timeWindow10To3),
+        timeWindow11To4: toCents(formData.timeWindow11To4),
+        timeWindow12To2: toCents(formData.timeWindow12To2),
+        cancellationFee: toCents(formData.cancellationFee),
+        highVolumeFee: toCents(formData.highVolumeFee),
+        lastMinuteFee: toCents(formData.lastMinuteFee),
+        // Non-price fields - keep as-is
         cancellationWindowDays: parseInt(formData.cancellationWindowDays),
         homeownerPenaltyDays: parseInt(formData.homeownerPenaltyDays),
         cleanerPenaltyDays: parseInt(formData.cleanerPenaltyDays),
@@ -304,10 +314,8 @@ const PricingManagement = ({ state }) => {
         largeBusinessMonthlyThreshold: parseInt(formData.largeBusinessMonthlyThreshold),
         largeBusinessLookbackMonths: parseInt(formData.largeBusinessLookbackMonths),
         multiCleanerPlatformFeePercent: parseFloat(formData.multiCleanerPlatformFeePercent) / 100,
-        highVolumeFee: parseInt(formData.highVolumeFee),
         incentiveRefundPercent: parseFloat(formData.incentiveRefundPercent) / 100,
         incentiveCleanerPercent: parseFloat(formData.incentiveCleanerPercent) / 100,
-        lastMinuteFee: parseInt(formData.lastMinuteFee),
         lastMinuteThresholdHours: parseInt(formData.lastMinuteThresholdHours),
         lastMinuteNotificationRadiusMiles: parseFloat(formData.lastMinuteNotificationRadiusMiles),
         changeNote: formData.changeNote || null,
@@ -398,7 +406,7 @@ const PricingManagement = ({ state }) => {
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+        <Pressable onPress={() => goBack()} style={styles.backButton}>
           <Icon name="arrow-left" size={16} color={colors.primary[600]} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>

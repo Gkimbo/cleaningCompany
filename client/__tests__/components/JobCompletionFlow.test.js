@@ -87,7 +87,7 @@ describe("JobCompletionFlow Component", () => {
     id: 123,
     homeId: 456,
     date: "2024-01-15",
-    price: 150,
+    price: 15000,
     completed: false,
     bringSheets: "No",
     bringTowels: "No",
@@ -792,14 +792,14 @@ describe("JobCompletionFlow Component", () => {
           json: () => Promise.resolve({ beforePhotos: [], afterPhotos: [], passesPhotos: [] }),
         });
 
-      const appointmentWithDifferentPrice = { ...mockAppointment, price: 200 };
+      const appointmentWithDifferentPrice = { ...mockAppointment, price: 20000 };
 
       const { getByText } = renderWithContext(
         <JobCompletionFlow {...defaultProps} appointment={appointmentWithDifferentPrice} />
       );
 
       await waitFor(() => {
-        // 200 * 0.9 = 180
+        // 20000 cents * 0.9 = 18000 cents = $180.00
         expect(getByText("$180.00")).toBeTruthy();
       });
     });

@@ -14,78 +14,78 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
     },
 
-    // Base pricing (in dollars)
+    // Base pricing (in cents)
     basePrice: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 150,
-      comment: "Base price for 1 bed, 1 bath cleaning",
+      defaultValue: 15000,
+      comment: "Base price for 1 bed, 1 bath cleaning in cents ($150.00)",
     },
     extraBedBathFee: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 50,
-      comment: "Additional fee per extra bed or full bath",
+      defaultValue: 5000,
+      comment: "Additional fee per extra bed or full bath in cents ($50.00)",
     },
     halfBathFee: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 25,
-      comment: "Additional fee per half bathroom",
+      defaultValue: 2500,
+      comment: "Additional fee per half bathroom in cents ($25.00)",
     },
 
-    // Linen services (in dollars)
+    // Linen services (in cents)
     sheetFeePerBed: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 30,
-      comment: "Fee per bed for sheet service",
+      defaultValue: 3000,
+      comment: "Fee per bed for sheet service in cents ($30.00)",
     },
     towelFee: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 5,
-      comment: "Fee per towel",
+      defaultValue: 500,
+      comment: "Fee per towel in cents ($5.00)",
     },
     faceClothFee: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 2,
-      comment: "Fee per face cloth",
+      defaultValue: 200,
+      comment: "Fee per face cloth in cents ($2.00)",
     },
 
-    // Time window surcharges (in dollars)
+    // Time window surcharges (in cents)
     timeWindowAnytime: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
-      comment: "Surcharge for anytime window",
+      comment: "Surcharge for anytime window in cents",
     },
     timeWindow10To3: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 25,
-      comment: "Surcharge for 10am-3pm window",
+      defaultValue: 2500,
+      comment: "Surcharge for 10am-3pm window in cents ($25.00)",
     },
     timeWindow11To4: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 25,
-      comment: "Surcharge for 11am-4pm window",
+      defaultValue: 2500,
+      comment: "Surcharge for 11am-4pm window in cents ($25.00)",
     },
     timeWindow12To2: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 30,
-      comment: "Surcharge for 12pm-2pm window",
+      defaultValue: 3000,
+      comment: "Surcharge for 12pm-2pm window in cents ($30.00)",
     },
 
-    // Cancellation policy
+    // Cancellation policy (in cents)
     cancellationFee: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 25,
-      comment: "Flat cancellation fee",
+      defaultValue: 2500,
+      comment: "Flat cancellation fee in cents ($25.00)",
     },
     cancellationWindowDays: {
       type: DataTypes.INTEGER,
@@ -140,12 +140,12 @@ module.exports = (sequelize, DataTypes) => {
       comment: "Percentage of original price cleaner receives on incentive cancellation (0.40 = 40%)",
     },
 
-    // High volume fee
+    // High volume fee (in cents)
     highVolumeFee: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 50,
-      comment: "Additional fee for high volume days",
+      defaultValue: 5000,
+      comment: "Additional fee for high volume days in cents ($50.00)",
     },
 
     // Multi-cleaner job settings
@@ -212,12 +212,12 @@ module.exports = (sequelize, DataTypes) => {
       comment: "Number of months to look back for volume calculation",
     },
 
-    // Last-minute booking settings
+    // Last-minute booking settings (in cents)
     lastMinuteFee: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 50,
-      comment: "Flat fee for bookings within threshold hours (in dollars)",
+      defaultValue: 5000,
+      comment: "Flat fee for bookings within threshold hours in cents ($50.00)",
     },
     lastMinuteThresholdHours: {
       type: DataTypes.INTEGER,
@@ -329,22 +329,22 @@ module.exports = (sequelize, DataTypes) => {
         anytime: {
           surcharge: config.timeWindowAnytime,
           label: "Anytime",
-          description: config.timeWindowAnytime > 0 ? `+$${config.timeWindowAnytime} per cleaning` : "Most flexible, best pricing",
+          description: config.timeWindowAnytime > 0 ? `+$${(config.timeWindowAnytime / 100).toFixed(2)} per cleaning` : "Most flexible, best pricing",
         },
         "10-3": {
           surcharge: config.timeWindow10To3,
           label: "10am - 3pm",
-          description: `+$${config.timeWindow10To3} per cleaning`,
+          description: `+$${(config.timeWindow10To3 / 100).toFixed(2)} per cleaning`,
         },
         "11-4": {
           surcharge: config.timeWindow11To4,
           label: "11am - 4pm",
-          description: `+$${config.timeWindow11To4} per cleaning`,
+          description: `+$${(config.timeWindow11To4 / 100).toFixed(2)} per cleaning`,
         },
         "12-2": {
           surcharge: config.timeWindow12To2,
           label: "12pm - 2pm",
-          description: `+$${config.timeWindow12To2} per cleaning`,
+          description: `+$${(config.timeWindow12To2 / 100).toFixed(2)} per cleaning`,
         },
       },
       cancellation: {
@@ -358,35 +358,35 @@ module.exports = (sequelize, DataTypes) => {
       },
       platform: {
         feePercent: parseFloat(config.platformFeePercent),
-        businessOwnerFeePercent: parseFloat(config.businessOwnerFeePercent || config.platformFeePercent),
-        largeBusinessFeePercent: parseFloat(config.largeBusinessFeePercent || 0.07),
-        largeBusinessMonthlyThreshold: config.largeBusinessMonthlyThreshold || 50,
-        largeBusinessLookbackMonths: config.largeBusinessLookbackMonths || 1,
+        businessOwnerFeePercent: parseFloat(config.businessOwnerFeePercent),
+        largeBusinessFeePercent: parseFloat(config.largeBusinessFeePercent),
+        largeBusinessMonthlyThreshold: config.largeBusinessMonthlyThreshold,
+        largeBusinessLookbackMonths: config.largeBusinessLookbackMonths,
       },
       highVolumeFee: config.highVolumeFee,
       multiCleaner: {
-        platformFeePercent: parseFloat(config.multiCleanerPlatformFeePercent || 0.13),
-        soloLargeHomeBonus: config.soloLargeHomeBonus || 0,
-        largeHomeBedsThreshold: config.largeHomeBedsThreshold || 3,
-        largeHomeBathsThreshold: config.largeHomeBathsThreshold || 3,
-        offerExpirationHours: config.multiCleanerOfferExpirationHours || 48,
-        urgentFillDays: config.urgentFillDays || 7,
-        finalWarningDays: config.finalWarningDays || 3,
+        platformFeePercent: parseFloat(config.multiCleanerPlatformFeePercent),
+        soloLargeHomeBonus: config.soloLargeHomeBonus,
+        largeHomeBedsThreshold: config.largeHomeBedsThreshold,
+        largeHomeBathsThreshold: config.largeHomeBathsThreshold,
+        offerExpirationHours: config.multiCleanerOfferExpirationHours,
+        urgentFillDays: config.urgentFillDays,
+        finalWarningDays: config.finalWarningDays,
       },
       lastMinute: {
-        fee: config.lastMinuteFee || 50,
-        thresholdHours: config.lastMinuteThresholdHours || 48,
-        notificationRadiusMiles: parseFloat(config.lastMinuteNotificationRadiusMiles || 25),
+        fee: config.lastMinuteFee,
+        thresholdHours: config.lastMinuteThresholdHours,
+        notificationRadiusMiles: parseFloat(config.lastMinuteNotificationRadiusMiles),
       },
       completion: {
-        autoApprovalHours: config.completionAutoApprovalHours || 24,
-        requiresPhotos: config.completionRequiresPhotos || false,
-        autoCompleteHoursAfterEnd: config.autoCompleteHoursAfterEnd || 4,
-        autoCompleteReminderIntervals: config.autoCompleteReminderIntervals || [30, 60, 120, 180, 210],
-        minOnSiteMinutes: config.minOnSiteMinutes || 30,
+        autoApprovalHours: config.completionAutoApprovalHours,
+        requiresPhotos: config.completionRequiresPhotos,
+        autoCompleteHoursAfterEnd: config.autoCompleteHoursAfterEnd,
+        autoCompleteReminderIntervals: config.autoCompleteReminderIntervals,
+        minOnSiteMinutes: config.minOnSiteMinutes,
       },
       applications: {
-        idVerificationEnabled: config.idVerificationEnabled || false,
+        idVerificationEnabled: config.idVerificationEnabled,
       },
     };
   };

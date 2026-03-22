@@ -5,6 +5,7 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { useNavigate } from "react-router-native";
 import { usePricing, getTimeWindowSurcharge, getTimeWindowLabel, isLastMinuteBooking } from "../../context/PricingContext";
+import { formatCurrency, toLocalDateString, parseDateString, getTodayString } from "../../services/formatters";
 
 const CalendarComponent = ({
   onDatesSelected,
@@ -40,12 +41,13 @@ const CalendarComponent = ({
 
   const calculatePrice = (dateString = null) => {
     // Fallbacks match database defaults in case pricing is unavailable
-    const basePrice = pricing?.basePrice ?? 150;
-    const extraBedBathFee = pricing?.extraBedBathFee ?? 50;
-    const halfBathFee = pricing?.halfBathFee ?? 25;
-    const sheetFeePerBed = pricing?.linens?.sheetFeePerBed ?? 30;
-    const towelFee = pricing?.linens?.towelFee ?? 5;
-    const faceClothFee = pricing?.linens?.faceClothFee ?? 2;
+    // ALL VALUES IN CENTS (e.g., 15000 = $150.00)
+    const basePrice = pricing?.basePrice ?? 15000;
+    const extraBedBathFee = pricing?.extraBedBathFee ?? 5000;
+    const halfBathFee = pricing?.halfBathFee ?? 2500;
+    const sheetFeePerBed = pricing?.linens?.sheetFeePerBed ?? 3000;
+    const towelFee = pricing?.linens?.towelFee ?? 500;
+    const faceClothFee = pricing?.linens?.faceClothFee ?? 200;
     let price = 0;
 
     // Time window surcharge from database config
@@ -107,11 +109,10 @@ const CalendarComponent = ({
   };
 
   const handleDateSelect = (date) => {
-    const currentDate = new Date();
-    const selectedDate = new Date(date.dateString);
+    const todayString = toLocalDateString(new Date());
 
-    // Check if date is in the past
-    if (selectedDate < currentDate) {
+    // Check if date is in the past (compare YYYY-MM-DD strings)
+    if (date.dateString < todayString) {
       setError("Cannot book appointments in the past.");
       return;
     }
@@ -192,8 +193,8 @@ const CalendarComponent = ({
   };
 
   const isDateDisabled = (date) => {
-    const currentDate = new Date();
-    return new Date(date.dateString) < currentDate;
+    const todayString = toLocalDateString(new Date());
+    return date.dateString < todayString;
   };
 
   const isDateBooked = (date) => {
@@ -218,7 +219,8 @@ const CalendarComponent = ({
     let price;
     appointments.forEach((day) => {
       if (day.date === date.dateString) {
-        price = day.price;
+        // Convert from cents to dollars for display consistency with calculatePrice()
+        price = (day.price || 0) / 100;
       }
     });
     return price;
@@ -230,7 +232,7 @@ const CalendarComponent = ({
 
   const handleRemoveBooking = (date) => {
     const currentDate = new Date();
-    const selectedDate = new Date(date.dateString);
+    const selectedDate = parseDateString(date.dateString);
     const appointment = getAppointmentDetails(date);
 
     const isWithinWeek =
@@ -240,7 +242,7 @@ const CalendarComponent = ({
     setAppointmentToCancel(appointment);
 
     if (isWithinWeek) {
-      setCancellationFee(pricing.cancellation.fee);
+      setCancellationFee(pricing?.cancellation?.fee || 0);
     } else {
       setCancellationFee(0);
     }
@@ -273,7 +275,9 @@ const CalendarComponent = ({
   }, [redirectToBill]);
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    if (!dateString) return "—";
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       month: "long",
@@ -292,12 +296,13 @@ const CalendarComponent = ({
     const lastMinuteInfo = !isPast && !isBooked ? getLastMinuteInfo(date.dateString) : { isLastMinute: false, fee: 0 };
 
     // Calculate price - include last-minute fee for applicable dates
+    // All internal prices are in cents, convert to dollars for display
     const basePrice = calculatePrice();
     const price = isBooked
-      ? priceOfBooking(date)
+      ? priceOfBooking(date) // Already returns dollars
       : isSelected
-      ? selectedDates[date.dateString].price
-      : basePrice + lastMinuteInfo.fee;
+      ? (selectedDates[date.dateString].price / 100).toFixed(0)
+      : ((basePrice + lastMinuteInfo.fee) / 100).toFixed(0);
 
     // Get appointment details for time window display
     const appointment = isBooked ? getAppointmentDetails(date) : null;
@@ -379,7 +384,7 @@ const CalendarComponent = ({
 
   const selectedCount = Object.keys(selectedDates).length;
   const totalPrice = Object.values(selectedDates).reduce((sum, d) => sum + d.price, 0);
-  const bookedCount = appointments.filter(a => new Date(a.date) >= new Date()).length;
+  const bookedCount = appointments.filter(a => a.date >= getTodayString()).length;
 
   return (
     <View style={styles.wrapper}>
@@ -401,7 +406,7 @@ const CalendarComponent = ({
               <Icon name="dollar" size={10} color="#3b82f6" />
             </View>
             <View>
-              <Text style={styles.headerStatValue}>${calculatePrice()}</Text>
+              <Text style={styles.headerStatValue}>${(calculatePrice() / 100).toFixed(0)}</Text>
               <Text style={styles.headerStatLabel}>Per Clean</Text>
             </View>
           </View>
@@ -414,7 +419,7 @@ const CalendarComponent = ({
                 </View>
                 <View>
                   <Text style={styles.headerStatValue}>{timeWindowInfo.label}</Text>
-                  <Text style={styles.headerStatLabel}>+${timeWindowInfo.surcharge}</Text>
+                  <Text style={styles.headerStatLabel}>+${(timeWindowInfo.surcharge / 100).toFixed(0)}</Text>
                 </View>
               </View>
             </>
@@ -460,7 +465,7 @@ const CalendarComponent = ({
         </View>
 
         <Calendar
-          current={currentMonth.toISOString().split("T")[0]}
+          current={toLocalDateString(currentMonth)}
           onMonthChange={handleMonthChange}
           renderArrow={(direction) => (
             <View style={styles.arrowButton}>
@@ -492,7 +497,7 @@ const CalendarComponent = ({
 
             <View style={styles.selectedDatesList}>
               {Object.keys(selectedDates).sort().map((dateStr) => {
-                const dateObj = new Date(dateStr + "T00:00:00");
+                const dateObj = new Date(dateStr + "T12:00:00");
                 const formatted = dateObj.toLocaleDateString("en-US", {
                   weekday: "short",
                   month: "short",
@@ -520,7 +525,7 @@ const CalendarComponent = ({
               </View>
               <View style={styles.summaryPriceContainer}>
                 <Text style={styles.summaryPriceLabel}>Total</Text>
-                <Text style={styles.summaryPrice}>${totalPrice}</Text>
+                <Text style={styles.summaryPrice}>${(totalPrice / 100).toFixed(0)}</Text>
               </View>
             </View>
           </View>
@@ -550,7 +555,7 @@ const CalendarComponent = ({
             </Text>
           </View>
           {selectedCount > 0 && (
-            <Text style={styles.bookButtonPrice}>${totalPrice}</Text>
+            <Text style={styles.bookButtonPrice}>${(totalPrice / 100).toFixed(0)}</Text>
           )}
         </Pressable>
 
@@ -599,7 +604,7 @@ const CalendarComponent = ({
                 <View style={styles.modalAppointmentRow}>
                   <Icon name="dollar" size={14} color="#64748b" />
                   <Text style={styles.modalAppointmentPrice}>
-                    ${appointmentToCancel.price} cleaning
+                    {formatCurrency(appointmentToCancel.price)} cleaning
                   </Text>
                 </View>
               </View>
@@ -610,7 +615,7 @@ const CalendarComponent = ({
                 <Icon name="info-circle" size={14} color="#dc2626" />
                 <Text style={styles.modalFeeText}>
                   This appointment is within 7 days. A{" "}
-                  <Text style={styles.modalFeeAmount}>${cancellationFee} cancellation fee</Text>
+                  <Text style={styles.modalFeeAmount}>${(cancellationFee / 100).toFixed(0)} cancellation fee</Text>
                   {" "}will be charged.
                 </Text>
               </View>
@@ -642,7 +647,7 @@ const CalendarComponent = ({
               >
                 <Icon name="times" size={14} color="#dc2626" style={{ marginRight: 8 }} />
                 <Text style={styles.modalButtonCancelText}>
-                  {cancellationFee > 0 ? `Cancel & Pay $${cancellationFee}` : "Cancel Appointment"}
+                  {cancellationFee > 0 ? `Cancel & Pay $${(cancellationFee / 100).toFixed(0)}` : "Cancel Appointment"}
                 </Text>
               </Pressable>
             </View>
@@ -689,7 +694,7 @@ const CalendarComponent = ({
               <Text style={styles.lastMinuteFeeText}>
                 This is a last-minute booking. An additional{" "}
                 <Text style={styles.lastMinuteFeeAmount}>
-                  ${pricing?.lastMinute?.fee || 50} fee
+                  ${((pricing?.lastMinute?.fee || 5000) / 100).toFixed(0)} fee
                 </Text>{" "}
                 will be added to help ensure a cleaner is available on short notice.
               </Text>
@@ -700,18 +705,18 @@ const CalendarComponent = ({
               <View style={styles.lastMinutePriceBreakdown}>
                 <View style={styles.priceRow}>
                   <Text style={styles.priceLabel}>Base cleaning</Text>
-                  <Text style={styles.priceValue}>${calculatePrice()}</Text>
+                  <Text style={styles.priceValue}>${(calculatePrice() / 100).toFixed(0)}</Text>
                 </View>
                 <View style={styles.priceRow}>
                   <Text style={styles.priceLabel}>Last-minute fee</Text>
                   <Text style={[styles.priceValue, styles.lastMinuteFeeValue]}>
-                    +${pricing?.lastMinute?.fee || 50}
+                    +${((pricing?.lastMinute?.fee || 5000) / 100).toFixed(0)}
                   </Text>
                 </View>
                 <View style={[styles.priceRow, styles.priceTotalRow]}>
                   <Text style={styles.priceTotalLabel}>Total</Text>
                   <Text style={styles.priceTotalValue}>
-                    ${calculatePrice() + (pricing?.lastMinute?.fee || 50)}
+                    ${((calculatePrice() + (pricing?.lastMinute?.fee || 5000)) / 100).toFixed(0)}
                   </Text>
                 </View>
               </View>

@@ -444,9 +444,9 @@ const BusinessOwnerDeclinedModal = ({ visible, notification, onClose, onComplete
       <View style={styles.priceCard}>
         <Text style={styles.priceLabel}>Marketplace Price</Text>
         <Text style={styles.priceValue}>
-          {formatCurrency(marketplacePrice * 100)}
+          {formatCurrency(marketplacePrice)}
         </Text>
-        {currentPrice && currentPrice !== marketplacePrice && (
+        {currentPrice && currentPrice !== marketplacePrice / 100 && (
           <View style={styles.priceComparison}>
             <Text style={styles.previousPriceLabel}>Previous price: </Text>
             <Text style={styles.previousPrice}>

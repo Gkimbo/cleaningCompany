@@ -18,6 +18,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { toLocalDateString } from "../../services/formatters";
 import NotificationsService from "../../services/fetchRequests/NotificationsService";
 
 const RebookingModal = ({
@@ -57,7 +58,7 @@ const RebookingModal = ({
       const dates = typeof originalAppointment.suggestedDates === "string"
         ? JSON.parse(originalAppointment.suggestedDates)
         : originalAppointment.suggestedDates;
-      return dates.map((d) => new Date(d));
+      return dates.map((d) => new Date(d + "T12:00:00"));
     } catch (e) {
       return [];
     }
@@ -83,7 +84,7 @@ const RebookingModal = ({
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
       const isPast = date < today;
-      const dateString = date.toISOString().split("T")[0];
+      const dateString = toLocalDateString(date);
       const isSuggested = suggestedDates.some(
         (sd) => sd.toDateString() === date.toDateString()
       );
@@ -222,17 +223,17 @@ const RebookingModal = ({
                         key={index}
                         style={[
                           styles.suggestedDateChip,
-                          selectedDate === date.toISOString().split("T")[0] &&
+                          selectedDate === toLocalDateString(date) &&
                             styles.suggestedDateChipSelected,
                         ]}
                         onPress={() =>
-                          handleDateSelect(date.toISOString().split("T")[0])
+                          handleDateSelect(toLocalDateString(date))
                         }
                       >
                         <Text
                           style={[
                             styles.suggestedDateChipText,
-                            selectedDate === date.toISOString().split("T")[0] &&
+                            selectedDate === toLocalDateString(date) &&
                               styles.suggestedDateChipTextSelected,
                           ]}
                         >

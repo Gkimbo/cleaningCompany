@@ -54,9 +54,21 @@ const validatePassword = (password) => {
   return null;
 };
 
+// Helper to safely decrypt a field with error handling
+const safeDecrypt = (value) => {
+  if (!value) return null;
+  try {
+    const EncryptionService = require("../../../services/EncryptionService");
+    return EncryptionService.decrypt(value);
+  } catch (error) {
+    console.error("Decryption failed:", error.message);
+    return "[encrypted]";
+  }
+};
+
 usersRouter.post("/", async (req, res) => {
   try {
-    const { firstName, lastName, username, password, email, termsId, privacyPolicyId, referralCode } = req.body;
+    const { firstName, lastName, username, password, email, termsId, privacyPolicyId, paymentTermsId, damageProtectionId, referralCode } = req.body;
 
     // Validate password strength
     const passwordError = validatePassword(password);
@@ -94,6 +106,26 @@ usersRouter.post("/", async (req, res) => {
           }
         }
 
+        // Get payment terms version if paymentTermsId provided
+        let paymentTermsVersion = null;
+        let paymentTermsRecord = null;
+        if (paymentTermsId) {
+          paymentTermsRecord = await TermsAndConditions.findByPk(paymentTermsId);
+          if (paymentTermsRecord) {
+            paymentTermsVersion = paymentTermsRecord.version;
+          }
+        }
+
+        // Get damage protection version if damageProtectionId provided
+        let damageProtectionVersion = null;
+        let damageProtectionRecord = null;
+        if (damageProtectionId) {
+          damageProtectionRecord = await TermsAndConditions.findByPk(damageProtectionId);
+          if (damageProtectionRecord) {
+            damageProtectionVersion = damageProtectionRecord.version;
+          }
+        }
+
         const newUser = await User.create({
           firstName,
           lastName,
@@ -103,6 +135,8 @@ usersRouter.post("/", async (req, res) => {
           notifications: ["phone", "email"],
           termsAcceptedVersion: termsVersion,
           privacyPolicyAcceptedVersion: privacyVersion,
+          paymentTermsAcceptedVersion: paymentTermsVersion,
+          damageProtectionAcceptedVersion: damageProtectionVersion,
         });
         const newBill = await UserBills.create({
           userId: newUser.dataValues.id,
@@ -132,6 +166,28 @@ usersRouter.post("/", async (req, res) => {
             acceptedAt: new Date(),
             ipAddress,
             termsContentSnapshot: privacyRecord.contentType === "text" ? privacyRecord.content : null,
+          });
+        }
+
+        // Record payment terms acceptance if payment terms were accepted
+        if (paymentTermsId && paymentTermsRecord) {
+          await UserTermsAcceptance.create({
+            userId: newUser.dataValues.id,
+            termsId: paymentTermsId,
+            acceptedAt: new Date(),
+            ipAddress,
+            termsContentSnapshot: paymentTermsRecord.contentType === "text" ? paymentTermsRecord.content : null,
+          });
+        }
+
+        // Record damage protection acceptance if damage protection was accepted
+        if (damageProtectionId && damageProtectionRecord) {
+          await UserTermsAcceptance.create({
+            userId: newUser.dataValues.id,
+            termsId: damageProtectionId,
+            acceptedAt: new Date(),
+            ipAddress,
+            termsContentSnapshot: damageProtectionRecord.contentType === "text" ? damageProtectionRecord.content : null,
           });
         }
 
@@ -269,7 +325,7 @@ usersRouter.post("/business-owner", async (req, res) => {
 // Allows duplicate emails when one is an employee account and one is a marketplace cleaner account
 usersRouter.post("/marketplace-cleaner", async (req, res) => {
   try {
-    const { firstName, lastName, username, password, email, phone, termsId, privacyPolicyId, referralCode } = req.body;
+    const { firstName, lastName, username, password, email, phone, termsId, privacyPolicyId, paymentTermsId, referralCode } = req.body;
 
     // Validate required fields
     if (!firstName || !lastName || !email || !username || !password) {
@@ -325,6 +381,16 @@ usersRouter.post("/marketplace-cleaner", async (req, res) => {
       }
     }
 
+    // Get payment terms version if paymentTermsId provided
+    let paymentTermsVersion = null;
+    let paymentTermsRecord = null;
+    if (paymentTermsId) {
+      paymentTermsRecord = await TermsAndConditions.findByPk(paymentTermsId);
+      if (paymentTermsRecord) {
+        paymentTermsVersion = paymentTermsRecord.version;
+      }
+    }
+
     // Create the marketplace cleaner account
     const newUser = await User.create({
       firstName,
@@ -339,6 +405,7 @@ usersRouter.post("/marketplace-cleaner", async (req, res) => {
       notifications: ["phone", "email"],
       termsAcceptedVersion: termsVersion,
       privacyPolicyAcceptedVersion: privacyVersion,
+      paymentTermsAcceptedVersion: paymentTermsVersion,
     });
 
     // Create billing record
@@ -370,6 +437,17 @@ usersRouter.post("/marketplace-cleaner", async (req, res) => {
         acceptedAt: new Date(),
         ipAddress,
         termsContentSnapshot: privacyRecord.contentType === "text" ? privacyRecord.content : null,
+      });
+    }
+
+    // Record payment terms acceptance if payment terms were accepted
+    if (paymentTermsId && paymentTermsRecord) {
+      await UserTermsAcceptance.create({
+        userId: newUser.id,
+        termsId: paymentTermsId,
+        acceptedAt: new Date(),
+        ipAddress,
+        termsContentSnapshot: paymentTermsRecord.contentType === "text" ? paymentTermsRecord.content : null,
       });
     }
 
@@ -474,6 +552,25 @@ usersRouter.patch("/upgrade-to-business", async (req, res) => {
 });
 
 usersRouter.post("/new-employee", async (req, res) => {
+  // Verify caller is owner
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  let decoded;
+  try {
+    decoded = jwt.verify(token, secretKey);
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  const caller = await User.findByPk(decoded.userId);
+  if (!caller || caller.type !== "owner") {
+    return res.status(403).json({ error: "Only owner can create employee accounts" });
+  }
+
   try {
     const { username, password, email, type, firstName, lastName, phone } = req.body;
     let existingUser = null;
@@ -563,7 +660,9 @@ usersRouter.post("/new-hr", async (req, res) => {
     }
 
     // Check if username or email already exists
-    let existingUser = await User.findOne({ where: { email } });
+    const EncryptionService = require("../../../services/EncryptionService");
+    const emailHash = EncryptionService.hash(email.toLowerCase());
+    let existingUser = await User.findOne({ where: { emailHash } });
     if (existingUser) {
       return res.status(409).json({ error: "Email already exists" });
     }
@@ -727,24 +826,26 @@ usersRouter.patch("/hr-staff/:id", async (req, res) => {
     }
 
     // Validate email if provided
+    const EncryptionService = require("../../../services/EncryptionService");
     if (email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         return res.status(400).json({ error: "Please enter a valid email address" });
       }
 
-      // Check if email is already taken by another user
-      const existingUser = await User.findOne({ where: { email } });
+      // Check if email is already taken by another user (using emailHash for encrypted comparison)
+      const emailHash = EncryptionService.hash(email.toLowerCase());
+      const existingUser = await User.findOne({ where: { emailHash } });
       if (existingUser && existingUser.id !== parseInt(id)) {
         return res.status(409).json({ error: "Email is already in use" });
       }
     }
 
-    // Update HR employee details
+    // Update HR employee details (model beforeUpdate hook handles encryption)
     const updateData = {};
     if (firstName !== undefined) updateData.firstName = firstName;
     if (lastName !== undefined) updateData.lastName = lastName;
-    if (email !== undefined) updateData.email = email;
+    if (email !== undefined) updateData.email = email.toLowerCase();
     if (phone !== undefined) updateData.phone = phone || null;
 
     await hrUser.update(updateData);
@@ -752,7 +853,6 @@ usersRouter.patch("/hr-staff/:id", async (req, res) => {
     console.log(`✅ HR employee ${id} updated by owner ${caller.id}`);
 
     // Decrypt PII fields for response
-    const EncryptionService = require("../../../services/EncryptionService");
     return res.status(200).json({
       message: "HR employee updated successfully",
       user: {
@@ -804,6 +904,31 @@ usersRouter.delete("/hr-staff/:id", async (req, res) => {
       return res.status(400).json({ error: "User is not an HR employee" });
     }
 
+    // Check for active case assignments and reassign them to owner
+    const { CancellationAppeal } = models;
+    if (CancellationAppeal) {
+      const activeAppeals = await CancellationAppeal.count({
+        where: {
+          assignedTo: id,
+          status: { [Op.in]: ["submitted", "under_review", "awaiting_documents"] },
+        },
+      });
+
+      if (activeAppeals > 0) {
+        // Reassign to owner (the caller)
+        await CancellationAppeal.update(
+          { assignedTo: caller.id },
+          {
+            where: {
+              assignedTo: id,
+              status: { [Op.in]: ["submitted", "under_review", "awaiting_documents"] },
+            },
+          }
+        );
+        console.log(`✅ Reassigned ${activeAppeals} appeals from HR ${id} to owner ${caller.id}`);
+      }
+    }
+
     // Remove associated records
     await UserBills.destroy({ where: { userId: id } });
     await ConversationParticipant.destroy({ where: { userId: id } });
@@ -835,6 +960,311 @@ usersRouter.delete("/hr-staff/:id", async (req, res) => {
   }
 });
 
+// =============================================
+// IT STAFF MANAGEMENT ROUTES
+// =============================================
+
+// POST /api/v1/users/new-it - Owner creates IT account
+usersRouter.post("/new-it", async (req, res) => {
+  try {
+    const { firstName, lastName, username, password, email, phone } = req.body;
+
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || caller.type !== "owner") {
+      return res.status(403).json({ error: "Only owner can create IT accounts" });
+    }
+
+    // Validate required fields
+    if (!username || !password || !email) {
+      return res.status(400).json({ error: "Username, password, and email are required" });
+    }
+
+    // Validate username doesn't contain "owner"
+    if (username.toLowerCase().includes("owner")) {
+      return res.status(400).json({ error: "Username cannot contain the word 'owner'" });
+    }
+
+    // Validate password strength
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
+    }
+
+    // Check if username or email already exists
+    const EncryptionService = require("../../../services/EncryptionService");
+    const emailHash = EncryptionService.hash(email.toLowerCase());
+    let existingUser = await User.findOne({ where: { emailHash } });
+    if (existingUser) {
+      return res.status(409).json({ error: "Email already exists" });
+    }
+
+    existingUser = await User.findOne({ where: { username } });
+    if (existingUser) {
+      return res.status(410).json({ error: "Username already exists" });
+    }
+
+    // Create IT user (password is hashed by User model's beforeCreate hook)
+    const newUser = await User.create({
+      firstName: firstName || "",
+      lastName: lastName || "",
+      username,
+      password,
+      email,
+      phone: phone || null,
+      type: "it",
+      notifications: ["phone", "email"],
+    });
+
+    // Create UserBills record
+    await UserBills.create({
+      userId: newUser.id,
+      appointmentDue: 0,
+      cancellationFee: 0,
+      totalDue: 0,
+    });
+
+    // Add IT user to existing "IT Team" internal conversation if it exists
+    const itGroupConvo = await Conversation.findOne({
+      where: { conversationType: "internal", title: "IT Team" },
+    });
+    if (itGroupConvo) {
+      await ConversationParticipant.findOrCreate({
+        where: {
+          conversationId: itGroupConvo.id,
+          userId: newUser.id,
+        },
+      });
+      console.log(`✅ Added new IT staff to existing IT Team conversation`);
+    }
+
+    // Send welcome email with credentials
+    const itFirstName = firstName || username;
+    const itLastName = lastName || "";
+
+    await Email.sendEmailCongragulations(
+      itFirstName,
+      itLastName,
+      username,
+      password,
+      email,
+      "it"
+    );
+
+    console.log(`✅ New IT account created: ${username}`);
+
+    const serializedUser = UserSerializer.serializeOne(newUser.dataValues);
+    return res.status(201).json({ user: serializedUser });
+  } catch (error) {
+    console.error("Error creating IT account:", error);
+    res.status(500).json({ error: "Failed to create IT account" });
+  }
+});
+
+// GET /api/v1/users/it-staff - Owner gets list of all IT employees
+usersRouter.get("/it-staff", async (req, res) => {
+  try {
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || caller.type !== "owner") {
+      return res.status(403).json({ error: "Only owner can access IT staff list" });
+    }
+
+    // Fetch all IT employees
+    const itStaff = await User.findAll({
+      where: { type: "it" },
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Explicitly decrypt PII fields
+    const serializedItStaff = itStaff.map((user) => ({
+      id: user.id,
+      firstName: safeDecrypt(user.firstName),
+      lastName: safeDecrypt(user.lastName),
+      username: user.username,
+      email: safeDecrypt(user.email),
+      phone: safeDecrypt(user.phone),
+      createdAt: user.createdAt,
+    }));
+
+    return res.status(200).json({ itStaff: serializedItStaff });
+  } catch (error) {
+    console.error("Error fetching IT staff:", error);
+    return res.status(500).json({ error: "Failed to fetch IT staff" });
+  }
+});
+
+// PATCH /api/v1/users/it-staff/:id - Owner updates IT employee details
+usersRouter.patch("/it-staff/:id", async (req, res) => {
+  const { id } = req.params;
+  const { firstName, lastName, email, phone } = req.body;
+
+  try {
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || caller.type !== "owner") {
+      return res.status(403).json({ error: "Only owner can update IT staff" });
+    }
+
+    // Find the IT employee
+    const itUser = await User.findByPk(id);
+    if (!itUser) {
+      return res.status(404).json({ error: "IT employee not found" });
+    }
+
+    if (itUser.type !== "it") {
+      return res.status(400).json({ error: "User is not an IT employee" });
+    }
+
+    // Validate email if provided
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "Please enter a valid email address" });
+      }
+
+      // Check if email is already taken by another user (using emailHash for encrypted comparison)
+      const EncryptionService = require("../../../services/EncryptionService");
+      const emailHash = EncryptionService.hash(email.toLowerCase());
+      const existingUser = await User.findOne({ where: { emailHash } });
+      if (existingUser && existingUser.id !== parseInt(id)) {
+        return res.status(409).json({ error: "Email is already in use" });
+      }
+    }
+
+    // Update IT employee details
+    const updateData = {};
+    if (firstName !== undefined) updateData.firstName = firstName;
+    if (lastName !== undefined) updateData.lastName = lastName;
+    if (email !== undefined) updateData.email = email;
+    if (phone !== undefined) updateData.phone = phone || null;
+
+    await itUser.update(updateData);
+
+    console.log(`✅ IT employee ${id} updated by owner ${caller.id}`);
+
+    // Decrypt PII fields for response
+    return res.status(200).json({
+      message: "IT employee updated successfully",
+      user: {
+        id: itUser.id,
+        firstName: safeDecrypt(itUser.firstName),
+        lastName: safeDecrypt(itUser.lastName),
+        username: itUser.username,
+        email: safeDecrypt(itUser.email),
+        phone: safeDecrypt(itUser.phone),
+      },
+    });
+  } catch (error) {
+    console.error("Error updating IT employee:", error);
+    return res.status(500).json({ error: "Failed to update IT employee" });
+  }
+});
+
+// DELETE /api/v1/users/it-staff/:id - Owner removes IT employee
+usersRouter.delete("/it-staff/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || caller.type !== "owner") {
+      return res.status(403).json({ error: "Only owner can remove IT staff" });
+    }
+
+    // Find the IT employee
+    const itUser = await User.findByPk(id);
+    if (!itUser) {
+      return res.status(404).json({ error: "IT employee not found" });
+    }
+
+    if (itUser.type !== "it") {
+      return res.status(400).json({ error: "User is not an IT employee" });
+    }
+
+    // Remove associated records
+    await UserBills.destroy({ where: { userId: id } });
+    await ConversationParticipant.destroy({ where: { userId: id } });
+
+    // Cancel any referrals associated with this user
+    const { Referral } = models;
+    if (Referral) {
+      // Cancel referrals where this user was the referrer
+      await Referral.update(
+        { status: "cancelled" },
+        { where: { referrerId: id, status: { [Op.in]: ["pending", "qualified"] } } }
+      );
+      // Cancel referrals where this user was referred
+      await Referral.update(
+        { status: "cancelled" },
+        { where: { referredId: id, status: { [Op.in]: ["pending", "qualified"] } } }
+      );
+    }
+
+    // Delete the IT user
+    await itUser.destroy();
+
+    console.log(`✅ IT employee ${id} removed by owner ${caller.id}`);
+
+    return res.status(200).json({ message: "IT employee removed successfully" });
+  } catch (error) {
+    console.error("Error removing IT employee:", error);
+    return res.status(500).json({ error: "Failed to remove IT employee" });
+  }
+});
+
 usersRouter.get("/employees", async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
@@ -861,6 +1291,25 @@ usersRouter.get("/employees", async (req, res) => {
 });
 
 usersRouter.patch("/employee", async (req, res) => {
+  // Verify caller is owner
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  let decoded;
+  try {
+    decoded = jwt.verify(token, secretKey);
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
+  const caller = await User.findByPk(decoded.userId);
+  if (!caller || caller.type !== "owner") {
+    return res.status(403).json({ error: "Only owner can edit employee accounts" });
+  }
+
   const { id, username, password, email, type, firstName, lastName, phone } = req.body;
   try {
     const userInfo = await UserInfo.editEmployeeInDB({
@@ -882,7 +1331,7 @@ usersRouter.patch("/employee", async (req, res) => {
       return res.status(401).json({ error: "Token has expired" });
     }
 
-    return res.status(401).json({ error: "Invalid token" });
+    return res.status(500).json({ error: "Failed to update employee" });
   }
 });
 
@@ -1049,7 +1498,11 @@ usersRouter.get("/appointments/employee", async (req, res) => {
     const isCleanerDemo = cleaner.isDemoAccount === true;
 
     // Get all appointments with home data (needed for edge large home detection)
+    // Exclude paused appointments (homeowner account frozen)
     const userAppointments = await UserAppointments.findAll({
+      where: {
+        isPaused: { [Op.ne]: true },
+      },
       include: [{ model: UserHomes, as: "home" }],
     });
 
@@ -1243,6 +1696,11 @@ usersRouter.post("/update-business-name", async (req, res) => {
       return res.status(403).json({ error: "Only business owners can update business name" });
     }
 
+    // Check if account is frozen
+    if (user.accountFrozen) {
+      return res.status(403).json({ error: "Account is frozen. Please contact support." });
+    }
+
     // Update business name
     await user.update({ businessName: businessName.trim() });
     console.log(`✅ Business name updated for user ${userId}: ${businessName.trim()}`);
@@ -1285,6 +1743,11 @@ usersRouter.post("/update-business-logo", async (req, res) => {
       return res.status(403).json({ error: "Only business owners can update business logo" });
     }
 
+    // Check if account is frozen
+    if (user.accountFrozen) {
+      return res.status(403).json({ error: "Account is frozen. Please contact support." });
+    }
+
     // Validate logo data (should be base64 string or null to remove)
     if (businessLogo && typeof businessLogo !== "string") {
       return res.status(400).json({ error: "Invalid logo format" });
@@ -1293,6 +1756,23 @@ usersRouter.post("/update-business-logo", async (req, res) => {
     // Check size limit (max 5MB base64 - roughly 6.67MB as base64)
     if (businessLogo && businessLogo.length > 7000000) {
       return res.status(400).json({ error: "Logo image is too large. Maximum size is 5MB." });
+    }
+
+    // Validate image format (must be a valid image data URI)
+    if (businessLogo) {
+      const validImagePrefixes = [
+        "data:image/jpeg;base64,",
+        "data:image/jpg;base64,",
+        "data:image/png;base64,",
+        "data:image/gif;base64,",
+        "data:image/webp;base64,",
+      ];
+      const hasValidPrefix = validImagePrefixes.some(prefix =>
+        businessLogo.toLowerCase().startsWith(prefix.toLowerCase())
+      );
+      if (!hasValidPrefix) {
+        return res.status(400).json({ error: "Invalid image format. Please upload a JPEG, PNG, GIF, or WebP image." });
+      }
     }
 
     // Update business logo (null to remove)
@@ -1354,8 +1834,38 @@ usersRouter.patch("/update-password", async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    await user.update({ password: hashedPassword });
+    // Update password and clear the password reset flags
+    await user.update({
+      password: hashedPassword,
+      requirePasswordChange: false,
+      passwordResetAt: null,
+    });
+
     console.log(`✅ Password updated for user ${userId}`);
+
+    // Log to security audit log
+    if (models.SecurityAuditLog) {
+      models.SecurityAuditLog.logEvent("PASSWORD_CHANGED", {
+        userId: userId,
+        username: user.username,
+        ipAddress: req.headers["x-forwarded-for"] || req.ip,
+        userAgent: req.headers["user-agent"],
+        eventData: { wasTemporaryPassword: !!user.requirePasswordChange },
+      }).catch(err => {
+        console.error("[SECURITY] Failed to log PASSWORD_CHANGED:", err.message);
+      });
+    }
+
+    // Send password change confirmation email
+    try {
+      const userEmail = user.getNotificationEmail ? user.getNotificationEmail() : user.email;
+      if (userEmail) {
+        await Email.sendPasswordChangeConfirmation(userEmail, user.username);
+      }
+    } catch (emailError) {
+      console.warn(`[Email] Failed to send password change confirmation to user ${userId}:`, emailError.message);
+      // Don't fail the request if email fails
+    }
 
     return res.status(200).json({ message: "Password updated successfully" });
   } catch (error) {

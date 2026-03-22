@@ -87,7 +87,7 @@ const PaymentDisputeModal = ({
         payoutId: payout?.id || null,
         issueType,
         description: description.trim(),
-        expectedAmount: expectedAmount ? Math.round(parseFloat(expectedAmount) * 100) : null,
+        expectedAmount: expectedAmount && !isNaN(parseFloat(expectedAmount)) ? Math.round(parseFloat(expectedAmount) * 100) : null,
         receivedAmount: payout?.netAmount || null,
       };
 
@@ -170,7 +170,7 @@ const PaymentDisputeModal = ({
               <Text style={styles.contextLabel}>Related Job</Text>
               <Text style={styles.contextValue}>
                 {appointment?.date
-                  ? new Date(appointment.date + "T00:00:00").toLocaleDateString("en-US", {
+                  ? new Date(appointment.date + "T12:00:00").toLocaleDateString("en-US", {
                       weekday: "short",
                       month: "short",
                       day: "numeric",

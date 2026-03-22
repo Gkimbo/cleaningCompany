@@ -31,8 +31,8 @@ class MultiCleanerPricingService {
       appointment.towelConfigurations || home.bathroomConfigurations
     );
 
-    // Convert to cents
-    return Math.round(basePrice * 100);
+    // basePrice from calculatePrice() is already in cents
+    return Math.round(basePrice);
   }
 
   /**

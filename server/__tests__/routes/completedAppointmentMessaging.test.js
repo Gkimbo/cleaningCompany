@@ -18,6 +18,7 @@ jest.mock("../../models", () => ({
   Message: {
     findAll: jest.fn(),
     findByPk: jest.fn(),
+    findOne: jest.fn(),
     create: jest.fn(),
     count: jest.fn(),
   },
@@ -58,6 +59,15 @@ jest.mock("../../models", () => ({
   UserHomes: {
     findOne: jest.fn(),
   },
+  SuspiciousActivityReport: {
+    create: jest.fn(),
+  },
+}));
+
+// Mock SuspiciousContentDetector
+jest.mock("../../services/SuspiciousContentDetector", () => ({
+  analyze: jest.fn().mockReturnValue({ isSuspicious: false }),
+  detect: jest.fn().mockReturnValue({ isSuspicious: false, patterns: [] }),
 }));
 
 // Mock Email service

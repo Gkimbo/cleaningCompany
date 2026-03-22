@@ -1,119 +1,64 @@
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class HRManagementService {
-  static async fetchWithFallback(url, token, fallback = {}) {
-    try {
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        console.warn(`[HRManagement] ${url} returned ${response.status}`);
-        return fallback;
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn(`[HRManagement] ${url} failed:`, error.message);
-      return fallback;
-    }
-  }
-
   static async getHRStaff(token) {
-    return this.fetchWithFallback(
-      `${baseURL}/api/v1/users/hr-staff`,
-      token,
-      { hrStaff: [] }
-    );
+    const result = await HttpClient.get("/users/hr-staff", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[HRManagement] getHRStaff failed:", result.error);
+      return { hrStaff: [] };
+    }
+
+    return result;
   }
 
   static async createHREmployee(token, data) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/users/new-hr`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
+    const result = await HttpClient.post("/users/new-hr", data, { token });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || "Failed to create HR employee",
-        };
-      }
-
+    if (result.success === false) {
       return {
-        success: true,
-        user: result.user,
+        success: false,
+        error: result.error || "Failed to create HR employee",
       };
-    } catch (error) {
-      console.error("[HRManagement] createHREmployee failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
     }
+
+    return {
+      success: true,
+      user: result.user,
+    };
   }
 
   static async updateHREmployee(token, id, data) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/users/hr-staff/${id}`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
+    const result = await HttpClient.patch(`/users/hr-staff/${id}`, data, { token });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || "Failed to update HR employee",
-        };
-      }
-
+    if (result.success === false) {
       return {
-        success: true,
-        user: result.user,
-        message: result.message,
+        success: false,
+        error: result.error || "Failed to update HR employee",
       };
-    } catch (error) {
-      console.error("[HRManagement] updateHREmployee failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
     }
+
+    return {
+      success: true,
+      user: result.user,
+      message: result.message,
+    };
   }
 
   static async deleteHREmployee(token, id) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/users/hr-staff/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    const result = await HttpClient.delete(`/users/hr-staff/${id}`, { token });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || "Failed to delete HR employee",
-        };
-      }
-
+    if (result.success === false) {
       return {
-        success: true,
-        message: result.message,
+        success: false,
+        error: result.error || "Failed to delete HR employee",
       };
-    } catch (error) {
-      console.error("[HRManagement] deleteHREmployee failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
     }
+
+    return {
+      success: true,
+      message: result.message,
+    };
   }
 }
 

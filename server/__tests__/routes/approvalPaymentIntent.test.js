@@ -135,7 +135,8 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
           return result;
         }
 
-        const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+        // Price is already stored in cents
+        const priceInCents = Math.round(parseFloat(appointment.price));
 
         capturedIntent = await stripe.paymentIntents.create({
           amount: priceInCents,
@@ -185,7 +186,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: null,
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -219,7 +220,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: "pi_existing_123",
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -241,7 +242,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: null,
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -264,7 +265,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(1),
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -284,7 +285,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -304,7 +305,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(5),
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -325,7 +326,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(-1),
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -347,7 +348,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: "pi_test_123",
         paymentStatus: "captured", // Already captured
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -370,7 +371,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: null,
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -397,7 +398,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: null,
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -419,7 +420,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -442,7 +443,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: null,
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -465,7 +466,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -492,7 +493,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: null,
         paymentStatus: "pending",
-        price: "175.50", // Tests decimal handling
+        price: 17550, // $175.50 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -515,7 +516,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: null,
         paymentStatus: "pending",
-        price: "200",
+        price: 20000, // $200.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -546,7 +547,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: "pi_test_123",
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -577,7 +578,7 @@ describe("Approval Flow - Payment Intent Creation and Capture", () => {
         date: daysFromNow(2),
         paymentIntentId: null,
         paymentStatus: "pending",
-        price: "150.00",
+        price: 15000, // $150.00 in cents
         update: jest.fn().mockResolvedValue(true),
       };
 

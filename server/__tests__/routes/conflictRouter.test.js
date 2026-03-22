@@ -41,6 +41,14 @@ jest.mock("../../services/ConflictResolutionService", () => ({
 	assignCase: (...args) => mockAssignCase(...args),
 }));
 
+// Mock User model for assign endpoint validation
+const mockUserFindByPk = jest.fn();
+jest.mock("../../models", () => ({
+	User: {
+		findByPk: (...args) => mockUserFindByPk(...args),
+	},
+}));
+
 const conflictRouter = require("../../routes/api/v1/conflictRouter");
 
 // Create test app
@@ -51,6 +59,7 @@ app.use("/api/v1/conflicts", conflictRouter);
 describe("Conflict Router", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockUserFindByPk.mockReset();
 	});
 
 	describe("GET /api/v1/conflicts/queue", () => {
@@ -109,6 +118,89 @@ describe("Conflict Router", () => {
 			expect(mockGetConflictQueue).toHaveBeenCalledWith(
 				expect.objectContaining({ limit: 10, offset: 20 })
 			);
+		});
+
+		it("should include resolved cases when includeResolved=true", async () => {
+			const mockQueue = {
+				cases: [
+					{ id: 1, caseType: "appeal", status: "submitted" },
+					{ id: 2, caseType: "appeal", status: "approved" },
+					{ id: 3, caseType: "adjustment", status: "denied" },
+				],
+				total: 3,
+				limit: 50,
+				offset: 0,
+			};
+			mockGetConflictQueue.mockResolvedValue(mockQueue);
+
+			const response = await request(app)
+				.get("/api/v1/conflicts/queue?includeResolved=true")
+				.expect(200);
+
+			expect(response.body.success).toBe(true);
+			expect(response.body.cases).toHaveLength(3);
+			expect(mockGetConflictQueue).toHaveBeenCalledWith(
+				expect.objectContaining({ includeResolved: true })
+			);
+		});
+
+		it("should exclude resolved cases by default (includeResolved=false)", async () => {
+			const mockQueue = {
+				cases: [
+					{ id: 1, caseType: "appeal", status: "submitted" },
+				],
+				total: 1,
+				limit: 50,
+				offset: 0,
+			};
+			mockGetConflictQueue.mockResolvedValue(mockQueue);
+
+			const response = await request(app)
+				.get("/api/v1/conflicts/queue")
+				.expect(200);
+
+			expect(response.body.success).toBe(true);
+			expect(response.body.cases).toHaveLength(1);
+			expect(mockGetConflictQueue).toHaveBeenCalledWith(
+				expect.objectContaining({ includeResolved: false })
+			);
+		});
+
+		it("should handle includeResolved=false explicitly", async () => {
+			mockGetConflictQueue.mockResolvedValue({ cases: [], total: 0 });
+
+			await request(app)
+				.get("/api/v1/conflicts/queue?includeResolved=false")
+				.expect(200);
+
+			expect(mockGetConflictQueue).toHaveBeenCalledWith(
+				expect.objectContaining({ includeResolved: false })
+			);
+		});
+
+		it("should return archived cases with proper status indicators", async () => {
+			const mockQueue = {
+				cases: [
+					{ id: 1, caseType: "appeal", status: "approved", resolvedAt: new Date() },
+					{ id: 2, caseType: "appeal", status: "denied", resolvedAt: new Date() },
+					{ id: 3, caseType: "adjustment", status: "partial", resolvedAt: new Date() },
+				],
+				total: 3,
+				limit: 50,
+				offset: 0,
+			};
+			mockGetConflictQueue.mockResolvedValue(mockQueue);
+
+			const response = await request(app)
+				.get("/api/v1/conflicts/queue?includeResolved=true")
+				.expect(200);
+
+			expect(response.body.success).toBe(true);
+			// Verify all resolved statuses are included
+			const statuses = response.body.cases.map(c => c.status);
+			expect(statuses).toContain("approved");
+			expect(statuses).toContain("denied");
+			expect(statuses).toContain("partial");
 		});
 
 		it("should handle errors gracefully", async () => {
@@ -299,7 +391,7 @@ describe("Conflict Router", () => {
 			// Mock getConflictCase to return case with appointment price for validation
 			mockGetConflictCase.mockResolvedValue({
 				id: 1,
-				appointment: { id: 100, price: 100, refundAmount: 0 }, // $100 = 10000 cents max refundable
+				appointment: { id: 100, price: 10000, refundAmount: 0 }, // 10000 cents = $100.00 max refundable
 			});
 			mockProcessRefund.mockResolvedValue({
 				success: true,
@@ -333,7 +425,7 @@ describe("Conflict Router", () => {
 			// Mock getConflictCase to return case with appointment price for validation
 			mockGetConflictCase.mockResolvedValue({
 				id: 1,
-				appointment: { id: 100, price: 100, refundAmount: 0 }, // $100 = 10000 cents max refundable
+				appointment: { id: 100, price: 10000, refundAmount: 0 }, // 10000 cents = $100.00 max refundable
 			});
 			mockProcessRefund.mockRejectedValue(new Error("No payment intent found"));
 
@@ -448,6 +540,13 @@ describe("Conflict Router", () => {
 
 	describe("POST /api/v1/conflicts/:type/:id/assign", () => {
 		it("should assign case successfully", async () => {
+			// Mock the User lookup for assignee validation
+			mockUserFindByPk.mockResolvedValue({
+				id: 5,
+				type: "humanResources",
+				accountFrozen: false,
+				lockedUntil: null,
+			});
 			mockAssignCase.mockResolvedValue({ success: true });
 
 			const response = await request(app)

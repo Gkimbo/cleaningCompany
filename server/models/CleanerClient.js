@@ -1,7 +1,7 @@
 const EncryptionService = require("../services/EncryptionService");
 
 // Fields that contain PII and should be encrypted
-const PII_FIELDS = ["invitedEmail", "invitedName", "invitedPhone", "invitedAddress"];
+const PII_FIELDS = ["invitedEmail", "invitedName", "invitedPhone", "invitedAddress", "invitedNotes"];
 
 module.exports = (sequelize, DataTypes) => {
   const CleanerClient = sequelize.define("CleanerClient", {
@@ -29,12 +29,17 @@ module.exports = (sequelize, DataTypes) => {
     // === Invitation data (encrypted) ===
     inviteToken: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true, // Null after invitation is accepted
       unique: true,
     },
     invitedEmail: {
       type: DataTypes.TEXT,
       allowNull: false,
+    },
+    invitedEmailHash: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: "Hash of invitedEmail for searching (since invitedEmail is encrypted)",
     },
     invitedName: {
       type: DataTypes.TEXT,
@@ -79,6 +84,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+    inviteExpiresAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "Invitation expiration date (7 days from creation)",
+    },
 
     // === Scheduling preferences ===
     defaultFrequency: {
@@ -86,8 +96,9 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     defaultPrice: {
-      type: DataTypes.DECIMAL(10, 2),
+      type: DataTypes.INTEGER,
       allowNull: true,
+      comment: "Custom price in cents (e.g., 15000 = $150.00)",
     },
     defaultDayOfWeek: {
       type: DataTypes.INTEGER, // 0-6, 0=Sunday
@@ -111,6 +122,21 @@ module.exports = (sequelize, DataTypes) => {
     },
   });
 
+  // Helper function to check if a value appears to be already encrypted
+  // Encrypted format is "iv:ciphertext" where both are hex strings
+  // IV is exactly 32 hex chars (16 bytes), ciphertext varies but is also hex
+  const isAlreadyEncrypted = (value) => {
+    if (!value || typeof value !== "string") return false;
+    const parts = value.split(":");
+    if (parts.length !== 2) return false;
+    const [iv, ciphertext] = parts;
+    // IV should be exactly 32 hex characters
+    if (iv.length !== 32) return false;
+    // Both parts should only contain hex characters
+    const hexRegex = /^[0-9a-fA-F]+$/;
+    return hexRegex.test(iv) && hexRegex.test(ciphertext) && ciphertext.length > 0;
+  };
+
   // Helper function to encrypt PII fields
   const encryptPIIFields = (record) => {
     PII_FIELDS.forEach((field) => {
@@ -123,7 +149,7 @@ module.exports = (sequelize, DataTypes) => {
           value = String(value);
         }
         // Only encrypt if not already encrypted
-        if (!value.includes(":") || value.split(":").length !== 2) {
+        if (!isAlreadyEncrypted(value)) {
           record[field] = EncryptionService.encrypt(value);
         }
       }

@@ -66,6 +66,14 @@ jest.mock("../../../models", () => ({
   Op: {
     lt: Symbol("lt"),
   },
+  sequelize: {
+    transaction: jest.fn().mockImplementation(() => Promise.resolve({
+      LOCK: { UPDATE: 'UPDATE' },
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      finished: false,
+    })),
+  },
 }));
 
 const {
@@ -163,6 +171,7 @@ describe("CompletionApprovalMonitor", () => {
     it("should auto-approve expired single-cleaner appointments", async () => {
       const mockAppointment = createMockAppointment();
       UserAppointments.findAll.mockResolvedValue([mockAppointment]);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
       User.findByPk.mockResolvedValue({
         id: 200,
         firstName: "Jane",
@@ -180,13 +189,15 @@ describe("CompletionApprovalMonitor", () => {
           completionStatus: "auto_approved",
           completed: true,
           completionApprovedBy: null,
-        })
+        }),
+        expect.anything() // transaction option
       );
     });
 
     it("should send notifications to homeowner on auto-approval", async () => {
       const mockAppointment = createMockAppointment();
       UserAppointments.findAll.mockResolvedValue([mockAppointment]);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
       User.findByPk.mockResolvedValue({
         id: 200,
         firstName: "Jane",
@@ -197,8 +208,11 @@ describe("CompletionApprovalMonitor", () => {
       await processAutoApprovalsSingleCleaner();
 
       expect(NotificationService.createNotification).toHaveBeenCalledWith(
-        100,
-        expect.stringContaining("auto-approved")
+        expect.objectContaining({
+          userId: 100,
+          type: "completion_auto_approved",
+          body: expect.stringContaining("auto-approved"),
+        })
       );
       expect(Email.sendCompletionAutoApproved).toHaveBeenCalled();
       expect(PushNotification.sendPushCompletionAutoApproved).toHaveBeenCalled();
@@ -207,6 +221,7 @@ describe("CompletionApprovalMonitor", () => {
     it("should send notifications to cleaner on auto-approval", async () => {
       const mockAppointment = createMockAppointment();
       UserAppointments.findAll.mockResolvedValue([mockAppointment]);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
       User.findByPk.mockResolvedValue({
         id: 200,
         firstName: "Jane",
@@ -238,6 +253,10 @@ describe("CompletionApprovalMonitor", () => {
       mockAppointment2.update = jest.fn().mockResolvedValue(true);
 
       UserAppointments.findAll.mockResolvedValue([mockAppointment1, mockAppointment2]);
+      // Return appointments in sequence for findByPk calls
+      UserAppointments.findByPk
+        .mockResolvedValueOnce(mockAppointment1)
+        .mockResolvedValueOnce(mockAppointment2);
       User.findByPk.mockResolvedValue({
         id: 200,
         firstName: "Jane",
@@ -314,14 +333,20 @@ describe("CompletionApprovalMonitor", () => {
 
       // Should notify homeowner
       expect(NotificationService.createNotification).toHaveBeenCalledWith(
-        100,
-        expect.stringContaining("auto-approved")
+        expect.objectContaining({
+          userId: 100,
+          type: "completion_auto_approved",
+          body: expect.stringContaining("auto-approved"),
+        })
       );
 
       // Should notify cleaner
       expect(NotificationService.createNotification).toHaveBeenCalledWith(
-        200,
-        expect.stringContaining("auto-approved")
+        expect.objectContaining({
+          userId: 200,
+          type: "completion_approved_cleaner",
+          body: expect.stringContaining("auto-approved"),
+        })
       );
     });
   });

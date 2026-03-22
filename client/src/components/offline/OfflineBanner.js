@@ -46,8 +46,10 @@ export default function OfflineBanner() {
     if (isOffline) {
       return {
         backgroundColor: colors.warning[500],
-        text: "Offline Mode",
-        subtext: pendingSyncCount > 0 ? `${pendingSyncCount} changes pending sync` : "Changes will sync when online",
+        text: "You're Offline",
+        subtext: pendingSyncCount > 0
+          ? `Some features may not be available • ${pendingSyncCount} changes pending`
+          : "Some features may not be available",
         icon: "cloud-offline",
         tappable: false,
       };

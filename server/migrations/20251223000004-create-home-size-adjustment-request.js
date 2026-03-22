@@ -46,8 +46,9 @@ module.exports = {
         allowNull: false,
       },
       originalPrice: {
-        type: Sequelize.DECIMAL(10, 2),
+        type: Sequelize.INTEGER,
         allowNull: false,
+        comment: "Original price in cents",
       },
       reportedNumBeds: {
         type: Sequelize.STRING,
@@ -58,12 +59,14 @@ module.exports = {
         allowNull: false,
       },
       calculatedNewPrice: {
-        type: Sequelize.DECIMAL(10, 2),
+        type: Sequelize.INTEGER,
         allowNull: false,
+        comment: "Calculated new price in cents",
       },
       priceDifference: {
-        type: Sequelize.DECIMAL(10, 2),
+        type: Sequelize.INTEGER,
         allowNull: false,
+        comment: "Price difference in cents",
       },
       status: {
         type: Sequelize.ENUM(

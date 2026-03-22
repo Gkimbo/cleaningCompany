@@ -22,11 +22,12 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { formatCurrency } from "../../services/formatters";
 
 // Response Modal Component
 const ResponseModal = ({ visible, appointment, onClose, onRespond, loading }) => {
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       month: "long",
@@ -64,7 +65,7 @@ const ResponseModal = ({ visible, appointment, onClose, onRespond, loading }) =>
             <View style={styles.infoRow}>
               <Icon name="dollar" size={14} color={colors.text.secondary} />
               <Text style={styles.infoText}>
-                Your price: ${parseFloat(appointment.price).toFixed(2)}
+                Your price: ${((parseFloat(appointment.price) || 0) / 100).toFixed(2)}
               </Text>
             </View>
           </View>
@@ -138,7 +139,7 @@ const ResponseModal = ({ visible, appointment, onClose, onRespond, loading }) =>
 // Individual declined appointment card
 const DeclinedAppointmentCard = ({ appointment, onPress }) => {
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -234,7 +235,7 @@ const DeclinedAppointmentsSection = ({ token, onRefresh }) => {
         } else if (action === "opened_to_market") {
           Alert.alert(
             "Opened to Other Cleaners",
-            `Your appointment is now open to other cleaners. The price has been updated to platform pricing ($${result.newPrice?.toFixed(2) || "varies"}).`
+            `Your appointment is now open to other cleaners. The price has been updated to platform pricing (${formatCurrency(result.newPrice) || "varies"}).`
           );
         }
 

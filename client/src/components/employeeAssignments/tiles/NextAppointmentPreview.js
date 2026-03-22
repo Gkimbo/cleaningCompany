@@ -12,6 +12,7 @@ import FetchData from "../../../services/fetchRequests/fetchData";
 import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { PricingContext } from "../../../context/PricingContext";
+import { formatCurrency } from "../../../services/formatters";
 
 const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
   const { pricing } = useContext(PricingContext);
@@ -27,8 +28,10 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
   });
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
-    return new Date(dateString + "T00:00:00").toLocaleDateString(undefined, options);
+    // Use noon to avoid timezone edge cases that could shift the day
+    return new Date(dateString + "T12:00:00").toLocaleDateString(undefined, options);
   };
 
   // Calculate estimated cleaning time based on home size and number of cleaners
@@ -266,7 +269,7 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
         </View>
         <View style={styles.detailItem}>
           <Text style={styles.detailLabel}>Payout</Text>
-          <Text style={[styles.detailValue, styles.payoutValue]}>${payout.toFixed(2)}</Text>
+          <Text style={[styles.detailValue, styles.payoutValue]}>{formatCurrency(payout)}</Text>
         </View>
       </View>
 

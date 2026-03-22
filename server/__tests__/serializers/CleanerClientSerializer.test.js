@@ -48,7 +48,8 @@ describe("CleanerClientSerializer", () => {
       expect(result.cleanerId).toBe(10);
       expect(result.clientId).toBe(20);
       expect(result.homeId).toBe(30);
-      expect(result.inviteToken).toBe("abc123token");
+      // inviteToken intentionally omitted for security
+      expect(result.inviteToken).toBeUndefined();
       expect(result.status).toBe("active");
       expect(result.autoPayEnabled).toBe(true);
       expect(result.autoScheduleEnabled).toBe(false);
@@ -102,17 +103,17 @@ describe("CleanerClientSerializer", () => {
       expect(result.invitedBaths).toBeNull();
     });
 
-    it("should parse defaultPrice decimal field as number", () => {
+    it("should return defaultPrice in cents", () => {
       const mockCleanerClient = {
         dataValues: {
           id: 1,
-          defaultPrice: "250.00",
+          defaultPrice: 25000, // 250 dollars in cents
         },
       };
 
       const result = CleanerClientSerializer.serializeOne(mockCleanerClient);
 
-      expect(result.defaultPrice).toBe(250);
+      expect(result.defaultPrice).toBe(25000); // Returns cents, frontend handles conversion
       expect(typeof result.defaultPrice).toBe("number");
     });
 
@@ -293,7 +294,7 @@ describe("CleanerClientSerializer", () => {
       expect(result.home.numBeds).toBe(3);
     });
 
-    it("should serialize recurring schedules with parsed price", () => {
+    it("should serialize recurring schedules with price in cents", () => {
       const mockCleanerClient = {
         dataValues: {
           id: 1,
@@ -303,7 +304,7 @@ describe("CleanerClientSerializer", () => {
             id: 100,
             frequency: "weekly",
             dayOfWeek: 1,
-            price: "200.00",
+            price: 20000, // cents
             isActive: true,
             isPaused: false,
           },
@@ -311,7 +312,7 @@ describe("CleanerClientSerializer", () => {
             id: 101,
             frequency: "biweekly",
             dayOfWeek: 4,
-            price: "225.50",
+            price: 22550, // cents
             isActive: true,
             isPaused: false,
           },
@@ -322,9 +323,9 @@ describe("CleanerClientSerializer", () => {
 
       expect(result.recurringSchedules).toHaveLength(2);
       expect(result.recurringSchedules[0].id).toBe(100);
-      expect(result.recurringSchedules[0].price).toBe(200);
+      expect(result.recurringSchedules[0].price).toBe(20000); // Returns cents
       expect(typeof result.recurringSchedules[0].price).toBe("number");
-      expect(result.recurringSchedules[1].price).toBe(225.5);
+      expect(result.recurringSchedules[1].price).toBe(22550); // Returns cents
       expect(typeof result.recurringSchedules[1].price).toBe("number");
     });
 
@@ -358,14 +359,14 @@ describe("CleanerClientSerializer", () => {
           dataValues: {
             id: 1,
             invitedName: "iv:name1",
-            defaultPrice: "200.00",
+            defaultPrice: 20000, // 200 dollars in cents
           },
         },
         {
           dataValues: {
             id: 2,
             invitedName: "iv:name2",
-            defaultPrice: "250.00",
+            defaultPrice: 25000, // 250 dollars in cents
           },
         },
       ];
@@ -374,9 +375,9 @@ describe("CleanerClientSerializer", () => {
 
       expect(result).toHaveLength(2);
       expect(result[0].invitedName).toBe("decrypted_iv:name1");
-      expect(result[0].defaultPrice).toBe(200);
+      expect(result[0].defaultPrice).toBe(20000); // Returns cents
       expect(result[1].invitedName).toBe("decrypted_iv:name2");
-      expect(result[1].defaultPrice).toBe(250);
+      expect(result[1].defaultPrice).toBe(25000); // Returns cents
     });
 
     it("should handle empty array", () => {
@@ -394,7 +395,7 @@ describe("CleanerClientSerializer", () => {
           invitedEmail: "iv:email",
           status: "active",
           defaultFrequency: "weekly",
-          defaultPrice: "200.00",
+          defaultPrice: 20000, // 200 dollars in cents
           invitedAt: new Date("2026-01-01"),
           acceptedAt: new Date("2026-01-05"),
           // Fields NOT included in list view
@@ -410,24 +411,24 @@ describe("CleanerClientSerializer", () => {
       expect(result.invitedEmail).toBe("decrypted_iv:email");
       expect(result.status).toBe("active");
       expect(result.defaultFrequency).toBe("weekly");
-      expect(result.defaultPrice).toBe(200);
+      expect(result.defaultPrice).toBe(20000); // Returns cents
 
       // Should NOT include
       expect(result.inviteToken).toBeUndefined();
       expect(result.autoPayEnabled).toBeUndefined();
     });
 
-    it("should parse defaultPrice as number in list view", () => {
+    it("should return defaultPrice in cents in list view", () => {
       const mockCleanerClient = {
         dataValues: {
           id: 1,
-          defaultPrice: "175.50",
+          defaultPrice: 17550, // 175.50 dollars in cents
         },
       };
 
       const result = CleanerClientSerializer.serializeForList(mockCleanerClient);
 
-      expect(result.defaultPrice).toBe(175.5);
+      expect(result.defaultPrice).toBe(17550); // Returns cents
       expect(typeof result.defaultPrice).toBe("number");
     });
 
@@ -485,14 +486,14 @@ describe("CleanerClientSerializer", () => {
           dataValues: {
             id: 1,
             invitedName: "iv:name1",
-            defaultPrice: "200.00",
+            defaultPrice: 20000, // 200 dollars in cents
           },
         },
         {
           dataValues: {
             id: 2,
             invitedName: "iv:name2",
-            defaultPrice: "250.00",
+            defaultPrice: 25000, // 250 dollars in cents
           },
         },
       ];
@@ -500,8 +501,8 @@ describe("CleanerClientSerializer", () => {
       const result = CleanerClientSerializer.serializeArrayForList(mockCleanerClients);
 
       expect(result).toHaveLength(2);
-      expect(result[0].defaultPrice).toBe(200);
-      expect(result[1].defaultPrice).toBe(250);
+      expect(result[0].defaultPrice).toBe(20000); // Returns cents
+      expect(result[1].defaultPrice).toBe(25000); // Returns cents
     });
   });
 
@@ -519,7 +520,7 @@ describe("CleanerClientSerializer", () => {
           invitedBaths: "2.5",
           invitedNotes: "Special instructions",
           defaultFrequency: "weekly",
-          defaultPrice: "225.00",
+          defaultPrice: 22500, // 225 dollars in cents
           status: "pending",
           invitedAt: new Date("2026-01-01"),
         },
@@ -528,7 +529,8 @@ describe("CleanerClientSerializer", () => {
       const result = CleanerClientSerializer.serializeInvitation(mockCleanerClient);
 
       expect(result.id).toBe(1);
-      expect(result.inviteToken).toBe("token123");
+      // inviteToken intentionally omitted for security
+      expect(result.inviteToken).toBeUndefined();
       expect(result.invitedName).toBe("decrypted_iv:invname");
       expect(result.invitedEmail).toBe("decrypted_iv:invemail");
       expect(result.invitedPhone).toBe("decrypted_iv:invphone");
@@ -536,16 +538,16 @@ describe("CleanerClientSerializer", () => {
       expect(result.invitedBeds).toBe(3);
       expect(result.invitedBaths).toBe(2.5);
       expect(result.defaultFrequency).toBe("weekly");
-      expect(result.defaultPrice).toBe(225);
+      expect(result.defaultPrice).toBe(22500); // Returns cents
       expect(result.status).toBe("pending");
     });
 
-    it("should parse decimal fields in invitation", () => {
+    it("should return defaultPrice in cents in invitation", () => {
       const mockCleanerClient = {
         dataValues: {
           id: 1,
           invitedBaths: "3.5",
-          defaultPrice: "275.00",
+          defaultPrice: 27500, // 275 dollars in cents
         },
       };
 
@@ -553,7 +555,7 @@ describe("CleanerClientSerializer", () => {
 
       expect(result.invitedBaths).toBe(3.5);
       expect(typeof result.invitedBaths).toBe("number");
-      expect(result.defaultPrice).toBe(275);
+      expect(result.defaultPrice).toBe(27500); // Returns cents
       expect(typeof result.defaultPrice).toBe("number");
     });
   });

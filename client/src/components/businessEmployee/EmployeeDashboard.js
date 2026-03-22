@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
+  Image,
   Linking,
   Pressable,
   RefreshControl,
@@ -136,20 +137,31 @@ const TodayJobCard = ({ job, onStart, onComplete, onView, isStarting, isCompleti
   );
 };
 
-// Upcoming Job Row Component
-const UpcomingJobRow = ({ job, onPress }) => {
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
+// Upcoming Job Card Component
+const UpcomingJobCard = ({ job, onPress }) => {
+  const getDateInfo = (dateStr) => {
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateStr + "T12:00:00");
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
+    const day = date.getDate();
+    const weekday = date.toLocaleDateString("en-US", { weekday: "short" });
+    const month = date.toLocaleDateString("en-US", { month: "short" });
+
+    let label = null;
     if (date.toDateString() === today.toDateString()) {
-      return "Today";
+      label = "Today";
     } else if (date.toDateString() === tomorrow.toDateString()) {
-      return "Tomorrow";
+      label = "Tmrw";
     }
-    return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+    // Calculate days from now
+    const diffTime = date.getTime() - new Date(today.toDateString()).getTime();
+    const daysFromNow = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    return { day, weekday, month, label, daysFromNow };
   };
 
   const formatTime = (timeStr) => {
@@ -159,23 +171,104 @@ const UpcomingJobRow = ({ job, onPress }) => {
     return `${h > 12 ? h - 12 : h}:${minutes} ${h >= 12 ? "PM" : "AM"}`;
   };
 
+  const getEstimatedDuration = (home) => {
+    if (!home) return "2 hrs";
+    const beds = home.numBeds || 2;
+    const baths = home.numBaths || 1;
+    const hours = Math.ceil((1 + beds * 0.25 + baths * 0.5) * 2) / 2;
+    return `${hours} hr${hours !== 1 ? "s" : ""}`;
+  };
+
+  const dateInfo = getDateInfo(job.appointment?.date);
+  const home = job.appointment?.home;
+  const payAmount = (job.payAmount || 0) / 100;
+
   return (
-    <Pressable style={styles.upcomingJobRow} onPress={onPress}>
-      <View style={styles.upcomingJobDate}>
-        <Text style={styles.upcomingJobDateText}>{formatDate(job.appointment?.date)}</Text>
+    <Pressable
+      style={({ pressed }) => [
+        styles.upcomingJobCard,
+        pressed && styles.upcomingJobCardPressed
+      ]}
+      onPress={onPress}
+    >
+      {/* Left accent bar */}
+      <View style={[
+        styles.upcomingAccentBar,
+        dateInfo.label === "Tmrw" && styles.upcomingAccentBarTomorrow,
+        dateInfo.daysFromNow <= 2 && styles.upcomingAccentBarSoon
+      ]} />
+
+      {/* Date Column */}
+      <View style={styles.upcomingDateColumn}>
+        <Text style={styles.upcomingDateWeekday}>{dateInfo.weekday}</Text>
+        <Text style={styles.upcomingDateDay}>{dateInfo.day}</Text>
+        <Text style={styles.upcomingDateMonth}>{dateInfo.month}</Text>
+        {dateInfo.label && (
+          <View style={[
+            styles.upcomingDateLabel,
+            dateInfo.label === "Tmrw" && styles.upcomingDateLabelTomorrow
+          ]}>
+            <Text style={styles.upcomingDateLabelText}>{dateInfo.label}</Text>
+          </View>
+        )}
       </View>
-      <View style={styles.upcomingJobInfo}>
+
+      {/* Divider */}
+      <View style={styles.upcomingDivider} />
+
+      {/* Job Details */}
+      <View style={styles.upcomingJobContent}>
+        {/* Address */}
         <Text style={styles.upcomingJobAddress} numberOfLines={1}>
-          {job.appointment?.home?.address || "Address TBD"}
+          {home?.address || "Address TBD"}
         </Text>
-        <Text style={styles.upcomingJobTime}>
-          {formatTime(job.appointment?.startTime)}
-        </Text>
+
+        {/* Client name */}
+        {job.appointment?.user?.firstName && (
+          <Text style={styles.upcomingJobClient}>
+            {job.appointment.user.firstName}
+          </Text>
+        )}
+
+        {/* Meta row */}
+        <View style={styles.upcomingJobMeta}>
+          {job.appointment?.startTime && (
+            <View style={styles.upcomingJobMetaItem}>
+              <Icon name="clock-o" size={11} color={colors.primary[500]} />
+              <Text style={styles.upcomingJobMetaText}>
+                {formatTime(job.appointment.startTime)}
+              </Text>
+            </View>
+          )}
+          {home?.numBeds && (
+            <View style={styles.upcomingJobMetaItem}>
+              <Icon name="home" size={11} color={colors.primary[500]} />
+              <Text style={styles.upcomingJobMetaText}>
+                {home.numBeds}bd · {home.numBaths}ba
+              </Text>
+            </View>
+          )}
+          <View style={styles.upcomingJobMetaItem}>
+            <Icon name="hourglass-half" size={10} color={colors.primary[500]} />
+            <Text style={styles.upcomingJobMetaText}>
+              ~{getEstimatedDuration(home)}
+            </Text>
+          </View>
+        </View>
       </View>
-      <Text style={styles.upcomingJobPay}>
-        ${((job.payAmount || 0) / 100).toFixed(0)}
-      </Text>
-      <Icon name="chevron-right" size={14} color={colors.neutral[400]} />
+
+      {/* Pay Column */}
+      <View style={styles.upcomingPayColumn}>
+        <Text style={styles.upcomingPayAmount}>
+          ${payAmount.toFixed(0)}
+        </Text>
+        {job.isEstimate && (
+          <Text style={styles.upcomingPayEstimate}>est.</Text>
+        )}
+        <View style={styles.upcomingArrowCircle}>
+          <Icon name="chevron-right" size={12} color={colors.primary[600]} />
+        </View>
+      </View>
     </Pressable>
   );
 };
@@ -338,10 +431,10 @@ const EmployeeDashboard = ({ state }) => {
   // Get today's jobs
   const today = new Date().toDateString();
   const todaysJobs = jobs.filter(
-    (job) => new Date(job.appointment?.date + "T00:00:00").toDateString() === today
+    (job) => job.appointment?.date && new Date(job.appointment.date + "T12:00:00").toDateString() === today
   );
   const upcomingJobs = jobs.filter(
-    (job) => new Date(job.appointment?.date + "T00:00:00").toDateString() !== today
+    (job) => job.appointment?.date && new Date(job.appointment.date + "T12:00:00").toDateString() !== today
   );
 
   // Count in-progress jobs
@@ -365,13 +458,22 @@ const EmployeeDashboard = ({ state }) => {
     >
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>
-            {getGreeting()}, {profile?.firstName || "there"}!
-          </Text>
-          <Text style={styles.businessName}>
-            {profile?.businessOwner?.businessName || "Your Business"}
-          </Text>
+        <View style={styles.headerLeft}>
+          {profile?.businessLogo ? (
+            <Image source={{ uri: profile.businessLogo }} style={styles.businessLogoImage} />
+          ) : (
+            <View style={styles.businessLogoPlaceholder}>
+              <Icon name="building" size={20} color={colors.primary[600]} />
+            </View>
+          )}
+          <View>
+            <Text style={styles.greeting}>
+              {getGreeting()}, {profile?.firstName || "there"}!
+            </Text>
+            <Text style={styles.businessName}>
+              {profile?.businessOwner?.businessName || profile?.businessName || "Your Business"}
+            </Text>
+          </View>
         </View>
         <View style={styles.profileButton}>
           <View style={styles.profileAvatar}>
@@ -539,7 +641,7 @@ const EmployeeDashboard = ({ state }) => {
           </View>
           <View style={styles.upcomingJobsList}>
             {upcomingJobs.slice(0, 5).map((job) => (
-              <UpcomingJobRow
+              <UpcomingJobCard
                 key={job.id}
                 job={job}
                 onPress={() => handleViewJob(job)}
@@ -580,7 +682,8 @@ const getGreeting = () => {
 
 // Helper function for payout date
 const formatPayoutDate = (dateStr) => {
-  const date = new Date(dateStr);
+  // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+  const date = new Date(dateStr + "T12:00:00");
   const today = new Date();
   const diffDays = Math.ceil((date - today) / (1000 * 60 * 60 * 24));
 
@@ -618,6 +721,26 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.lg,
     backgroundColor: colors.primary[600],
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  businessLogoImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+  },
+  businessLogoPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   greeting: {
     fontSize: typography.fontSize.lg,
@@ -929,44 +1052,146 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   upcomingJobsList: {
+    gap: spacing.md,
+  },
+  upcomingJobCard: {
+    flexDirection: "row",
+    alignItems: "stretch",
     backgroundColor: colors.background.primary,
     borderRadius: radius.xl,
     overflow: "hidden",
-    ...shadows.sm,
+    ...shadows.md,
   },
-  upcomingJobRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  upcomingJobCardPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  upcomingAccentBar: {
+    width: 4,
+    backgroundColor: colors.primary[400],
+  },
+  upcomingAccentBarTomorrow: {
+    backgroundColor: colors.warning[500],
+  },
+  upcomingAccentBarSoon: {
+    backgroundColor: colors.primary[500],
+  },
+  upcomingDateColumn: {
+    width: 56,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.neutral[50],
   },
-  upcomingJobDate: {
-    width: 80,
+  upcomingDateWeekday: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.tertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  upcomingJobDateText: {
-    fontSize: typography.fontSize.sm,
+  upcomingDateDay: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+    lineHeight: 28,
+    marginTop: -2,
+  },
+  upcomingDateMonth: {
+    fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.medium,
     color: colors.primary[600],
+    textTransform: "uppercase",
+    marginTop: -2,
   },
-  upcomingJobInfo: {
+  upcomingDateLabel: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+  },
+  upcomingDateLabelTomorrow: {
+    backgroundColor: colors.warning[500],
+  },
+  upcomingDateLabelText: {
+    fontSize: 8,
+    fontWeight: typography.fontWeight.bold,
+    color: "#fff",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  upcomingDivider: {
+    width: 1,
+    backgroundColor: colors.border.light,
+    marginVertical: spacing.sm,
+  },
+  upcomingJobContent: {
     flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    justifyContent: "center",
   },
   upcomingJobAddress: {
     fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
+    lineHeight: 18,
   },
-  upcomingJobTime: {
+  upcomingJobClient: {
     fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
+    color: colors.text.secondary,
     marginTop: 2,
   },
-  upcomingJobPay: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
+  upcomingJobMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.sm,
+    gap: spacing.sm,
+    flexWrap: "wrap",
+  },
+  upcomingJobMetaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    gap: 4,
+  },
+  upcomingJobMetaText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary[700],
+  },
+  upcomingPayColumn: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.success[50],
+    minWidth: 72,
+  },
+  upcomingPayAmount: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[700],
+  },
+  upcomingPayEstimate: {
+    fontSize: 9,
     color: colors.success[600],
-    marginRight: spacing.sm,
+    fontStyle: "italic",
+    marginTop: -2,
+  },
+  upcomingArrowCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.full,
+    backgroundColor: colors.background.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: spacing.sm,
+    ...shadows.sm,
   },
   emptyState: {
     alignItems: "center",

@@ -1,6 +1,8 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
+const HomeSerializer = require("../../../serializers/homesSerializer");
+const ReviewSerializer = require("../../../serializers/ReviewSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
 const {
   User,
@@ -49,6 +51,7 @@ employeeInfoRouter.get("/", async (req, res) => {
       where: {
         id: appointmentIds,
         wasCancelled: false, // Exclude cancelled appointments
+        isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner frozen)
       },
       include: [
         {
@@ -129,13 +132,44 @@ employeeInfoRouter.get("/", async (req, res) => {
 
 // Note: /home/LL/:id must come BEFORE /home/:id to avoid route interception
 employeeInfoRouter.get("/home/LL/:id", async (req, res) => {
+  // Authentication check
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id } = req.params;
+
   try {
-    let home = await UserHomes.findOne({
-      where: {
-        id,
-      },
+    // Verify token and get user ID
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Verify user is assigned to an appointment at this home
+    const isAssigned = await UserCleanerAppointments.findOne({
+      include: [{
+        model: UserAppointments,
+        as: "appointment",
+        where: { homeId: id },
+        required: true,
+      }],
+      where: { employeeId: userId },
     });
+
+    // Also allow homeowners to access their own home coordinates
+    const home = await UserHomes.findOne({
+      where: { id },
+    });
+
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    const isHomeOwner = home.userId === userId;
+
+    if (!isAssigned && !isHomeOwner) {
+      return res.status(403).json({ error: "You don't have permission to access this home's location" });
+    }
 
     // Use stored coordinates if available
     if (home.latitude && home.longitude) {
@@ -149,47 +183,119 @@ employeeInfoRouter.get("/home/LL/:id", async (req, res) => {
     const { latitude, longitude } = await HomeClass.getLatAndLong(EncryptionService.decrypt(home.zipcode));
     return res.status(200).json({ latitude, longitude });
   } catch (error) {
-    console.log(error);
-    return res.status(401).json({ error: "Error fetching coordinates" });
+    console.error(error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    return res.status(500).json({ error: "Error fetching coordinates" });
   }
 });
 
 employeeInfoRouter.get("/home/:id", async (req, res) => {
+  // Authentication check
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id } = req.params;
+
   try {
-    let home = await UserHomes.findOne({
-      where: {
-        id,
-      },
+    // Verify token and get user ID
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Find the home first
+    const home = await UserHomes.findOne({
+      where: { id },
     });
 
-    return res.status(200).json({ home });
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    // Check if user is the homeowner
+    const isHomeOwner = home.userId === userId;
+
+    // Check if user is assigned to an appointment at this home
+    const isAssigned = await UserCleanerAppointments.findOne({
+      include: [{
+        model: UserAppointments,
+        as: "appointment",
+        where: { homeId: id },
+        required: true,
+      }],
+      where: { employeeId: userId },
+    });
+
+    if (!isHomeOwner && !isAssigned) {
+      return res.status(403).json({ error: "You don't have permission to view this home" });
+    }
+
+    return res.status(200).json({ home: HomeSerializer.serializeOne(home) });
   } catch (error) {
-    console.log(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    console.error(error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    return res.status(500).json({ error: "Failed to fetch home" });
   }
 });
 
 employeeInfoRouter.get("/employeeSchedule", async (req, res) => {
+  // Authentication check
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   try {
+    // Verify token and get user ID
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Verify user is an owner (admin) - only owners can view all employee schedules
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    if (user.type !== "owner") {
+      return res.status(403).json({ error: "Owner access required to view all employee schedules" });
+    }
+
     const employees = await User.findAll({
       where: {
         type: "cleaner",
       },
     });
-    return res.status(200).json({ employees });
+    return res.status(200).json({ employees: employees.map(e => UserSerializer.serializeOne(e.dataValues || e)) });
   } catch (error) {
-    console.log(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    console.error(error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    return res.status(500).json({ error: "Failed to fetch employee schedules" });
   }
 });
 
 // Get cleaner profile with reviews by ID
+// Requires authentication - homeowners can view cleaner profiles when selecting cleaners
 employeeInfoRouter.get("/cleaner/:id", async (req, res) => {
+  // Authentication check
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id } = req.params;
   const { UserReviews } = require("../../../models");
 
   try {
+    // Verify token
+    const decodedToken = jwt.verify(token, secretKey);
+    // Token is valid - any authenticated user can view cleaner profiles
+
     const cleaner = await User.findByPk(id, {
       include: [
         {
@@ -204,6 +310,11 @@ employeeInfoRouter.get("/cleaner/:id", async (req, res) => {
     });
 
     if (!cleaner) {
+      return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    // Verify the requested user is actually a cleaner
+    if (cleaner.type !== "cleaner") {
       return res.status(404).json({ error: "Cleaner not found" });
     }
 
@@ -222,7 +333,7 @@ employeeInfoRouter.get("/cleaner/:id", async (req, res) => {
       username: cleaner.username,
       type: cleaner.type,
       daysWorking: cleaner.daysWorking || [],
-      reviews: cleaner.reviews || [],
+      reviews: ReviewSerializer.serializeArray(cleaner.reviews || []),
       completedJobs: completedAppointments,
       totalReviews: cleaner.reviews?.length || 0,
       memberSince: cleaner.createdAt,
@@ -230,7 +341,10 @@ employeeInfoRouter.get("/cleaner/:id", async (req, res) => {
 
     return res.status(200).json({ cleaner: serializedCleaner });
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
     return res.status(500).json({ error: "Server error" });
   }
 });
@@ -247,7 +361,7 @@ employeeInfoRouter.post("/shifts", async (req, res) => {
     await user.update({
       daysWorking: daysArray,
     });
-    return res.status(201).json({ user });
+    return res.status(201).json({ user: UserSerializer.serializeOne(user.dataValues || user) });
   } catch (error) {
     console.log(error);
     return res.status(401).json({ error: "Invalid or expired token" });

@@ -66,9 +66,9 @@ class EmployeeStripeConnectService {
       const dobParts = personalInfo.dob.split("-");
       if (dobParts.length === 3) {
         individual.dob = {
-          year: parseInt(dobParts[0]),
-          month: parseInt(dobParts[1]),
-          day: parseInt(dobParts[2]),
+          year: parseInt(dobParts[0], 10),
+          month: parseInt(dobParts[1], 10),
+          day: parseInt(dobParts[2], 10),
         };
       }
     }

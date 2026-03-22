@@ -51,7 +51,7 @@ describe("HomeownerAdjustmentNotification", () => {
     originalNumBaths: "2",
     reportedNumBeds: "4",
     reportedNumBaths: "3",
-    priceDifference: 50.0,
+    priceDifference: 5000,
     cleanerNote: "Home has an extra bedroom and bathroom",
     home: {
       address: "123 Main St",

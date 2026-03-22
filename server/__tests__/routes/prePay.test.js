@@ -77,6 +77,20 @@ jest.mock("../../models", () => ({
   UserPendingRequests: {
     destroy: jest.fn().mockResolvedValue(0),
   },
+  sequelize: {
+    transaction: jest.fn().mockImplementation(() => Promise.resolve({
+      LOCK: { UPDATE: 'UPDATE' },
+      commit: jest.fn().mockResolvedValue(undefined),
+      rollback: jest.fn().mockResolvedValue(undefined),
+      finished: false,
+    })),
+  },
+  StripeWebhookEvent: {
+    claimEvent: jest.fn().mockResolvedValue({ id: 1, stripeEventId: "evt_test_123", status: "processing" }),
+    markCompleted: jest.fn().mockResolvedValue(true),
+    markFailed: jest.fn().mockResolvedValue(true),
+    markSkipped: jest.fn().mockResolvedValue(true),
+  },
 }));
 
 // Mock Email service
@@ -473,7 +487,8 @@ describe("Pre-Pay and Retry Payment Routes", () => {
             paymentStatus: "captured",
             paid: true,
             paymentCaptureFailed: false,
-          })
+          }),
+          expect.anything() // transaction option
         );
       });
 

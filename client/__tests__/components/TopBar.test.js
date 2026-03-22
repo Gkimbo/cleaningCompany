@@ -4,6 +4,7 @@ import { render, waitFor, fireEvent, act } from "@testing-library/react-native";
 // Mock dependencies
 jest.mock("react-router-native", () => ({
   useNavigate: () => jest.fn(),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 jest.mock("@expo/vector-icons", () => ({
@@ -175,7 +176,7 @@ describe("TopBar", () => {
       expect(queryByText("0")).toBeNull();
     });
 
-    it("should display '9+' when pending count exceeds 9", async () => {
+    it("should display actual count when pending count exceeds 9", async () => {
       Application.getPendingCount.mockResolvedValue(15);
 
       const stateWithPending = {
@@ -187,7 +188,7 @@ describe("TopBar", () => {
         <TopBar dispatch={mockDispatch} state={stateWithPending} />
       );
 
-      const badge = await findByText("9+");
+      const badge = await findByText("15");
       expect(badge).toBeTruthy();
     });
 
@@ -366,7 +367,7 @@ describe("TopBar", () => {
         <TopBar dispatch={mockDispatch} state={stateWithPending} />
       );
 
-      const badge = await findByText("9+");
+      const badge = await findByText("10");
       expect(badge).toBeTruthy();
     });
 

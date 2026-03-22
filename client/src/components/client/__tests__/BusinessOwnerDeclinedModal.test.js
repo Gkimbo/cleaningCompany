@@ -230,7 +230,7 @@ describe("BusinessOwnerDeclinedModal", () => {
     it("should call the marketplace endpoint when find cleaner is pressed", async () => {
       const mockResponse = {
         ok: true,
-        json: () => Promise.resolve({ confirmRequired: true, marketplacePrice: 200, currentPrice: 150, homeId: 1 }),
+        json: () => Promise.resolve({ confirmRequired: true, marketplacePrice: 20000, currentPrice: 15000, homeId: 1 }),
       };
       global.fetch.mockResolvedValueOnce(mockResponse);
 
@@ -282,9 +282,8 @@ describe("BusinessOwnerDeclinedModal", () => {
         fireEvent.press(getByText("Find Another Cleaner"));
       });
 
-      await waitFor(() => {
-        expect(findByText("Complete Home Details")).toBeTruthy();
-      });
+      const detailsText = await findByText("Complete Home Details");
+      expect(detailsText).toBeTruthy();
     });
   });
 
@@ -294,14 +293,14 @@ describe("BusinessOwnerDeclinedModal", () => {
         ok: true,
         json: () => Promise.resolve({
           confirmRequired: true,
-          marketplacePrice: 200,
-          currentPrice: 150,
+          marketplacePrice: 20000,
+          currentPrice: 15000,
           homeId: 1,
         }),
       };
       global.fetch.mockResolvedValueOnce(mockResponse);
 
-      const { getByText, findByText } = renderWithProviders(
+      const { getByText, queryByText } = renderWithProviders(
         <BusinessOwnerDeclinedModal
           visible={true}
           notification={mockNotification}
@@ -315,7 +314,7 @@ describe("BusinessOwnerDeclinedModal", () => {
       });
 
       await waitFor(() => {
-        expect(findByText("Marketplace Price")).toBeTruthy();
+        expect(queryByText("$200.00")).toBeTruthy();
       });
     });
 
@@ -325,15 +324,15 @@ describe("BusinessOwnerDeclinedModal", () => {
         ok: true,
         json: () => Promise.resolve({
           confirmRequired: true,
-          marketplacePrice: 200,
-          currentPrice: 150,
+          marketplacePrice: 20000,
+          currentPrice: 15000,
           homeId: 1,
         }),
       };
       // Second response for confirm
       const confirmResponse = {
         ok: true,
-        json: () => Promise.resolve({ success: true, marketplacePrice: 200 }),
+        json: () => Promise.resolve({ success: true, marketplacePrice: 20000 }),
       };
 
       global.fetch
@@ -381,14 +380,14 @@ describe("BusinessOwnerDeclinedModal", () => {
         ok: true,
         json: () => Promise.resolve({
           confirmRequired: true,
-          marketplacePrice: 200,
-          currentPrice: 150,
+          marketplacePrice: 20000,
+          currentPrice: 15000,
           homeId: 1,
         }),
       };
       const confirmResponse = {
         ok: true,
-        json: () => Promise.resolve({ success: true, marketplacePrice: 200 }),
+        json: () => Promise.resolve({ success: true, marketplacePrice: 20000 }),
       };
 
       global.fetch

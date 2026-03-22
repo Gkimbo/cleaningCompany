@@ -107,6 +107,14 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
+		paymentTermsAcceptedVersion: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
+		damageProtectionAcceptedVersion: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
 		lastDeviceType: {
 			type: DataTypes.STRING,
 			allowNull: true,
@@ -170,6 +178,17 @@ module.exports = (sequelize, DataTypes) => {
 		lockedUntil: {
 			type: DataTypes.DATE,
 			allowNull: true,
+		},
+		passwordResetAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Timestamp when password was last reset via forgot-password flow",
+		},
+		requirePasswordChange: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "If true, user must change password on next login",
 		},
 		supplyReminderSnoozedUntil: {
 			type: DataTypes.DATE,

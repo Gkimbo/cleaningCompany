@@ -64,6 +64,34 @@ paymentDisputeRouter.post("/", authenticateToken, async (req, res) => {
       });
     }
 
+    // Validate amount fields if provided
+    const MAX_DISPUTE_AMOUNT_CENTS = 10000000; // $100,000 max
+    if (expectedAmount !== undefined && expectedAmount !== null) {
+      if (typeof expectedAmount !== "number" || !Number.isFinite(expectedAmount)) {
+        return res.status(400).json({
+          error: "Expected amount must be a valid number",
+        });
+      }
+      if (expectedAmount < 0 || expectedAmount > MAX_DISPUTE_AMOUNT_CENTS) {
+        return res.status(400).json({
+          error: "Expected amount must be between 0 and $100,000",
+        });
+      }
+    }
+
+    if (receivedAmount !== undefined && receivedAmount !== null) {
+      if (typeof receivedAmount !== "number" || !Number.isFinite(receivedAmount)) {
+        return res.status(400).json({
+          error: "Received amount must be a valid number",
+        });
+      }
+      if (receivedAmount < 0 || receivedAmount > MAX_DISPUTE_AMOUNT_CENTS) {
+        return res.status(400).json({
+          error: "Received amount must be between 0 and $100,000",
+        });
+      }
+    }
+
     // Get the appointment to verify it exists and belongs to this cleaner
     const appointment = await UserAppointments.findByPk(appointmentId);
     if (!appointment) {
@@ -142,8 +170,7 @@ paymentDisputeRouter.post("/", authenticateToken, async (req, res) => {
     // Notify owners and HR about the dispute
     const ownersAndHR = await User.findAll({
       where: {
-        type: "owner",
-        role: { [Op.in]: ["owner", "hr"] },
+        type: { [Op.in]: ["owner", "humanResources"] },
       },
     });
 
@@ -283,7 +310,7 @@ paymentDisputeRouter.get("/:id", authenticateToken, async (req, res) => {
     if (dispute.cleanerId !== userId) {
       // Check if user is admin/owner
       const user = await User.findByPk(userId);
-      if (!user || !["admin", "owner", "hr"].includes(user.role)) {
+      if (!user || !["admin", "owner", "humanResources"].includes(user.type)) {
         return res.status(403).json({ error: "Access denied" });
       }
     }

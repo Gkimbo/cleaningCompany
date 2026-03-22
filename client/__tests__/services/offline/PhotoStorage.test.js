@@ -12,6 +12,9 @@ const mockFileSystem = {
   copyAsync: jest.fn(),
   deleteAsync: jest.fn(),
   readDirectoryAsync: jest.fn(),
+  writeAsStringAsync: jest.fn(),
+  EncodingType: { Base64: "base64" },
+  getFreeDiskStorageAsync: jest.fn().mockResolvedValue(1024 * 1024 * 1024), // 1GB free
 };
 
 jest.mock("expo-file-system", () => mockFileSystem);
@@ -33,11 +36,15 @@ jest.mock("../../../src/services/offline/database", () => ({
     create: jest.fn(),
     find: jest.fn(),
   },
+  syncQueueCollection: {
+    create: jest.fn(),
+  },
 }));
 
 let PhotoStorage;
 let database;
 let offlinePhotosCollection;
+let syncQueueCollection;
 let FileSystem;
 let Crypto;
 
@@ -51,6 +58,7 @@ describe("PhotoStorage", () => {
     Crypto = require("expo-crypto");
     database = require("../../../src/services/offline/database").default;
     offlinePhotosCollection = require("../../../src/services/offline/database").offlinePhotosCollection;
+    syncQueueCollection = require("../../../src/services/offline/database").syncQueueCollection;
     PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
 
     // Default mocks
@@ -99,6 +107,7 @@ describe("PhotoStorage", () => {
       FileSystem = require("expo-file-system");
       Crypto = require("expo-crypto");
       offlinePhotosCollection = require("../../../src/services/offline/database").offlinePhotosCollection;
+      syncQueueCollection = require("../../../src/services/offline/database").syncQueueCollection;
       PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
 
       // Re-apply default mocks
@@ -106,6 +115,7 @@ describe("PhotoStorage", () => {
       FileSystem.makeDirectoryAsync.mockResolvedValue(undefined);
       FileSystem.copyAsync.mockResolvedValue(undefined);
       Crypto.randomUUID.mockReturnValue("test-uuid-1234");
+      syncQueueCollection.create.mockResolvedValue({ id: "sync-1" });
     });
 
     it("should copy photo to local storage", async () => {
@@ -146,6 +156,11 @@ describe("PhotoStorage", () => {
         callback(photo);
         return photo;
       });
+      syncQueueCollection.create.mockImplementation(async (callback) => {
+        const op = { id: "sync-1", _raw: {} };
+        callback(op);
+        return op;
+      });
 
       const result = await PhotoStorage.savePhoto(
         "file:///temp/photo.jpg",
@@ -185,6 +200,55 @@ describe("PhotoStorage", () => {
       await expect(
         PhotoStorage.savePhoto("file:///temp/photo.jpg", "job-1", "before", "Kitchen")
       ).rejects.toThrow("Copy failed");
+    });
+
+    it("should queue photo for sync", async () => {
+      offlinePhotosCollection.create.mockImplementation(async (callback) => {
+        const photo = { id: "photo-1", _raw: {} };
+        callback(photo);
+        return photo;
+      });
+      let syncOp = null;
+      syncQueueCollection.create.mockImplementation(async (callback) => {
+        syncOp = { id: "sync-1", _raw: {} };
+        callback(syncOp);
+        return syncOp;
+      });
+
+      const result = await PhotoStorage.savePhoto(
+        "file:///temp/photo.jpg",
+        "job-1",
+        "before",
+        "Kitchen"
+      );
+
+      expect(result.queuedForSync).toBe(true);
+      expect(syncQueueCollection.create).toHaveBeenCalled();
+      expect(syncOp.jobId).toBe("job-1");
+      expect(syncOp.operationType).toBe("before_photo");
+    });
+
+    it("should use correct operation type for after photos", async () => {
+      offlinePhotosCollection.create.mockImplementation(async (callback) => {
+        const photo = { id: "photo-1", _raw: {} };
+        callback(photo);
+        return photo;
+      });
+      let syncOp = null;
+      syncQueueCollection.create.mockImplementation(async (callback) => {
+        syncOp = { id: "sync-1", _raw: {} };
+        callback(syncOp);
+        return syncOp;
+      });
+
+      await PhotoStorage.savePhoto(
+        "file:///temp/photo.jpg",
+        "job-1",
+        "after",
+        "Kitchen"
+      );
+
+      expect(syncOp.operationType).toBe("after_photo");
     });
   });
 
@@ -440,12 +504,15 @@ describe("PhotoStorage", () => {
       FileSystem.getInfoAsync.mockResolvedValue({ exists: true });
     });
 
-    it("should delete orphaned photo records", async () => {
+    it("should delete orphaned photo records after 3 missing checks", async () => {
+      // Photo has already been missing 2 times, this will be the 3rd
       const photo = {
         id: "orphan-1",
         localUri: "/path/to/missing.jpg",
         uploaded: false,
+        _raw: { missing_file_checks: 2 },
         markAsDeleted: jest.fn(),
+        update: jest.fn(),
       };
 
       offlinePhotosCollection.query.mockReturnValue({
@@ -461,12 +528,14 @@ describe("PhotoStorage", () => {
       expect(photo.markAsDeleted).toHaveBeenCalled();
     });
 
-    it("should not delete uploaded photo records even if file is missing", async () => {
+    it("should increment missing count but not delete on first missing check", async () => {
       const photo = {
-        id: "uploaded-1",
+        id: "maybe-orphan-1",
         localUri: "/path/to/missing.jpg",
-        uploaded: true,
+        uploaded: false,
+        _raw: { missing_file_checks: 0 },
         markAsDeleted: jest.fn(),
+        update: jest.fn(),
       };
 
       offlinePhotosCollection.query.mockReturnValue({
@@ -480,6 +549,76 @@ describe("PhotoStorage", () => {
       await PhotoStorage.syncWithFileSystem();
 
       expect(photo.markAsDeleted).not.toHaveBeenCalled();
+      expect(photo.update).toHaveBeenCalled();
+    });
+
+    it("should reset missing count when file is found again", async () => {
+      const photo = {
+        id: "recovered-1",
+        localUri: "/path/to/recovered.jpg",
+        uploaded: false,
+        _raw: { missing_file_checks: 2 },
+        markAsDeleted: jest.fn(),
+        update: jest.fn(),
+      };
+
+      offlinePhotosCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([photo]),
+      });
+
+      FileSystem.getInfoAsync
+        .mockResolvedValueOnce({ exists: true }) // initialize
+        .mockResolvedValueOnce({ exists: true }); // photo check - file found
+
+      await PhotoStorage.syncWithFileSystem();
+
+      expect(photo.markAsDeleted).not.toHaveBeenCalled();
+      expect(photo.update).toHaveBeenCalled();
+    });
+
+    it("should not delete uploaded photo records even if file is missing", async () => {
+      const photo = {
+        id: "uploaded-1",
+        localUri: "/path/to/missing.jpg",
+        uploaded: true,
+        _raw: {},
+        markAsDeleted: jest.fn(),
+        update: jest.fn(),
+      };
+
+      offlinePhotosCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([photo]),
+      });
+
+      FileSystem.getInfoAsync
+        .mockResolvedValueOnce({ exists: true }) // initialize
+        .mockResolvedValueOnce({ exists: false }); // photo check
+
+      await PhotoStorage.syncWithFileSystem();
+
+      expect(photo.markAsDeleted).not.toHaveBeenCalled();
+    });
+
+    it("should skip N/A records (no actual files)", async () => {
+      const photo = {
+        id: "na-record-1",
+        localUri: "",
+        uploaded: false,
+        _raw: { is_not_applicable: true },
+        markAsDeleted: jest.fn(),
+        update: jest.fn(),
+      };
+
+      offlinePhotosCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([photo]),
+      });
+
+      FileSystem.getInfoAsync.mockResolvedValue({ exists: true });
+
+      await PhotoStorage.syncWithFileSystem();
+
+      expect(photo.markAsDeleted).not.toHaveBeenCalled();
+      expect(photo.update).not.toHaveBeenCalled();
     });
   });
 
@@ -654,12 +793,14 @@ describe("PhotoStorage", () => {
       FileSystem = require("expo-file-system");
       Crypto = require("expo-crypto");
       offlinePhotosCollection = require("../../../src/services/offline/database").offlinePhotosCollection;
+      syncQueueCollection = require("../../../src/services/offline/database").syncQueueCollection;
       PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
 
       FileSystem.getInfoAsync.mockResolvedValue({ exists: true });
       FileSystem.makeDirectoryAsync.mockResolvedValue(undefined);
       FileSystem.copyAsync.mockResolvedValue(undefined);
       Crypto.randomUUID.mockReturnValue("test-uuid-5678");
+      syncQueueCollection.create.mockResolvedValue({ id: "sync-1" });
     });
 
     it("should save passes photo with correct type", async () => {
@@ -668,6 +809,11 @@ describe("PhotoStorage", () => {
         savedPhoto = { id: "passes-1", _raw: {} };
         callback(savedPhoto);
         return savedPhoto;
+      });
+      syncQueueCollection.create.mockImplementation(async (callback) => {
+        const op = { id: "sync-1", _raw: {} };
+        callback(op);
+        return op;
       });
 
       await PhotoStorage.savePhoto(
@@ -695,6 +841,198 @@ describe("PhotoStorage", () => {
         from: "file:///temp/pass.jpg",
         to: expect.stringContaining("job-1_passes_Parking_Pass_test-uuid-5678.jpg"),
       });
+    });
+  });
+
+  describe("saveMismatchPhoto", () => {
+    beforeEach(async () => {
+      jest.resetModules();
+      FileSystem = require("expo-file-system");
+      Crypto = require("expo-crypto");
+      database = require("../../../src/services/offline/database").default;
+      offlinePhotosCollection = require("../../../src/services/offline/database").offlinePhotosCollection;
+      PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
+
+      FileSystem.getInfoAsync.mockResolvedValue({ exists: true });
+      FileSystem.writeAsStringAsync = jest.fn().mockResolvedValue(undefined);
+      FileSystem.EncodingType = { Base64: "base64" };
+      Crypto.randomUUID.mockReturnValue("mismatch-uuid-1234");
+    });
+
+    it("should save mismatch photo from base64 data", async () => {
+      let savedPhoto = null;
+      offlinePhotosCollection.create.mockImplementation(async (callback) => {
+        savedPhoto = { id: "mismatch-1", _raw: {} };
+        callback(savedPhoto);
+        return savedPhoto;
+      });
+
+      const result = await PhotoStorage.saveMismatchPhoto(
+        "data:image/jpeg;base64,abc123",
+        100,
+        "bedroom",
+        1
+      );
+
+      expect(result.id).toBe("mismatch-1");
+      expect(result.roomType).toBe("bedroom");
+      expect(result.roomNumber).toBe(1);
+      expect(result.localUri).toContain("mismatch");
+    });
+
+    it("should return correct result structure", async () => {
+      // Re-apply mock since jest.resetModules clears it
+      FileSystem.writeAsStringAsync = jest.fn().mockResolvedValue(undefined);
+
+      offlinePhotosCollection.create.mockImplementation(async (callback) => {
+        const photo = { id: "mismatch-2", _raw: {} };
+        callback(photo);
+        return photo;
+      });
+
+      const result = await PhotoStorage.saveMismatchPhoto(
+        "data:image/jpeg;base64,abc123content",
+        100,
+        "bathroom",
+        2
+      );
+
+      expect(result).toHaveProperty("id");
+      expect(result).toHaveProperty("localUri");
+      expect(result.roomType).toBe("bathroom");
+      expect(result.roomNumber).toBe(2);
+    });
+
+    it("should set correct photo type as mismatch", async () => {
+      // Re-apply mock since jest.resetModules clears it
+      FileSystem.writeAsStringAsync = jest.fn().mockResolvedValue(undefined);
+
+      let savedPhoto = null;
+      offlinePhotosCollection.create.mockImplementation(async (callback) => {
+        savedPhoto = { id: "mismatch-1", _raw: {} };
+        callback(savedPhoto);
+        return savedPhoto;
+      });
+
+      await PhotoStorage.saveMismatchPhoto("base64data", 100, "bedroom", 1);
+
+      expect(savedPhoto.photoType).toBe("mismatch");
+      expect(savedPhoto.room).toBe("bedroom_1");
+    });
+  });
+
+  describe("getMismatchPhotosForJob", () => {
+    beforeEach(async () => {
+      jest.resetModules();
+      FileSystem = require("expo-file-system");
+      offlinePhotosCollection = require("../../../src/services/offline/database").offlinePhotosCollection;
+      PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
+
+      FileSystem.getInfoAsync.mockResolvedValue({ exists: true });
+    });
+
+    it("should return only mismatch photos for the job", async () => {
+      const photos = [
+        { id: "1", jobId: 100, photoType: "before" },
+        { id: "2", jobId: 100, photoType: "mismatch" },
+        { id: "3", jobId: 100, photoType: "after" },
+        { id: "4", jobId: 100, photoType: "mismatch" },
+        { id: "5", jobId: 200, photoType: "mismatch" }, // Different job
+      ];
+
+      offlinePhotosCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue(photos),
+      });
+
+      const result = await PhotoStorage.getMismatchPhotosForJob(100);
+
+      expect(result).toHaveLength(2);
+      expect(result.every(p => p.photoType === "mismatch")).toBe(true);
+      expect(result.every(p => p.jobId === 100)).toBe(true);
+    });
+
+    it("should return empty array if no mismatch photos exist", async () => {
+      const photos = [
+        { id: "1", jobId: 100, photoType: "before" },
+        { id: "2", jobId: 100, photoType: "after" },
+      ];
+
+      offlinePhotosCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue(photos),
+      });
+
+      const result = await PhotoStorage.getMismatchPhotosForJob(100);
+
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe("deleteMismatchPhotosForJob", () => {
+    beforeEach(async () => {
+      jest.resetModules();
+      FileSystem = require("expo-file-system");
+      database = require("../../../src/services/offline/database").default;
+      offlinePhotosCollection = require("../../../src/services/offline/database").offlinePhotosCollection;
+      PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
+
+      FileSystem.getInfoAsync.mockResolvedValue({ exists: true });
+      FileSystem.deleteAsync.mockResolvedValue(undefined);
+    });
+
+    it("should delete all mismatch photos for the job", async () => {
+      const photos = [
+        { id: "1", jobId: 100, photoType: "before" },
+        { id: "2", jobId: 100, photoType: "mismatch" },
+        { id: "3", jobId: 100, photoType: "mismatch" },
+      ];
+
+      offlinePhotosCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue(photos),
+      });
+
+      const deletedPhotoIds = [];
+      offlinePhotosCollection.find.mockImplementation((id) => {
+        deletedPhotoIds.push(id);
+        return Promise.resolve({
+          localUri: `/mock/path/${id}.jpg`,
+          markAsDeleted: jest.fn(),
+        });
+      });
+
+      await PhotoStorage.deleteMismatchPhotosForJob(100);
+
+      expect(deletedPhotoIds).toContain("2");
+      expect(deletedPhotoIds).toContain("3");
+      expect(deletedPhotoIds).not.toContain("1"); // Not a mismatch photo
+    });
+
+    it("should handle errors gracefully for individual photos", async () => {
+      const photos = [
+        { id: "1", jobId: 100, photoType: "mismatch" },
+        { id: "2", jobId: 100, photoType: "mismatch" },
+      ];
+
+      offlinePhotosCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue(photos),
+      });
+
+      let deletedCount = 0;
+      offlinePhotosCollection.find.mockImplementation((id) => {
+        if (id === "1") {
+          return Promise.reject(new Error("Not found"));
+        }
+        deletedCount++;
+        return Promise.resolve({
+          localUri: `/mock/path/${id}.jpg`,
+          markAsDeleted: jest.fn(),
+        });
+      });
+
+      // Should not throw, even if one photo fails
+      await PhotoStorage.deleteMismatchPhotosForJob(100);
+
+      // Second photo should still be deleted
+      expect(deletedCount).toBe(1);
     });
   });
 });

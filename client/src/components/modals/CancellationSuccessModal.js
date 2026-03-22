@@ -76,7 +76,7 @@ const CancellationSuccessModal = ({
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Original Amount</Text>
                     <Text style={styles.summaryValue}>
-                      ${(financialBreakdown.summary.youOriginallyPaid / 100).toFixed(2)}
+                      ${((financialBreakdown.summary.youOriginallyPaid || 0) / 100).toFixed(2)}
                     </Text>
                   </View>
 
@@ -103,7 +103,7 @@ const CancellationSuccessModal = ({
                   <View style={styles.summaryRow}>
                     <Text style={styles.totalLabel}>Your Net Cost</Text>
                     <Text style={styles.totalValue}>
-                      ${(financialBreakdown.summary.yourNetCost / 100).toFixed(2)}
+                      ${((financialBreakdown.summary.yourNetCost || 0) / 100).toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -116,7 +116,7 @@ const CancellationSuccessModal = ({
                   <View style={styles.infoContent}>
                     <Text style={styles.infoTitle}>Refund Processing</Text>
                     <Text style={styles.infoText}>
-                      Your refund of ${(financialBreakdown.refund.amount / 100).toFixed(2)} will
+                      Your refund of ${((financialBreakdown.refund.amount || 0) / 100).toFixed(2)} will
                       be returned to your {financialBreakdown.refund.method || "original payment method"}.
                     </Text>
                     <Text style={styles.infoSubtext}>

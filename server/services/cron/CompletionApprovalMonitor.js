@@ -16,6 +16,8 @@ const {
   PricingConfig,
   EmployeeJobAssignment,
   BusinessEmployee,
+  Payment,
+  sequelize,
 } = require("../../models");
 const NotificationService = require("../NotificationService");
 const EncryptionService = require("../EncryptionService");
@@ -29,10 +31,70 @@ const PushNotification = require("../sendNotifications/PushNotificationClass");
  * - autoApprovalExpiresAt < now
  * - completed === false (payout not yet sent)
  */
+// Circuit breaker configuration
+const CIRCUIT_BREAKER_THRESHOLD = 5; // Stop after 5 consecutive errors
+const CIRCUIT_BREAKER_RESET_MS = 5 * 60 * 1000; // 5 minute cool-down
+
+// Circuit breaker state (in-memory, resets on process restart)
+let circuitBreakerState = {
+  consecutiveErrors: 0,
+  lastError: null,
+  circuitOpen: false,
+  circuitOpenedAt: null,
+};
+
+function resetCircuitBreaker() {
+  circuitBreakerState = {
+    consecutiveErrors: 0,
+    lastError: null,
+    circuitOpen: false,
+    circuitOpenedAt: null,
+  };
+}
+
+function checkCircuitBreaker() {
+  if (!circuitBreakerState.circuitOpen) return true;
+
+  // Check if cool-down period has passed
+  const now = Date.now();
+  if (now - circuitBreakerState.circuitOpenedAt > CIRCUIT_BREAKER_RESET_MS) {
+    console.log("[CompletionApprovalMonitor] Circuit breaker reset after cool-down period");
+    resetCircuitBreaker();
+    return true;
+  }
+
+  return false;
+}
+
+function recordError(error) {
+  circuitBreakerState.consecutiveErrors++;
+  circuitBreakerState.lastError = error.message;
+
+  if (circuitBreakerState.consecutiveErrors >= CIRCUIT_BREAKER_THRESHOLD) {
+    circuitBreakerState.circuitOpen = true;
+    circuitBreakerState.circuitOpenedAt = Date.now();
+    console.error(`[CompletionApprovalMonitor] CRITICAL: Circuit breaker opened after ${CIRCUIT_BREAKER_THRESHOLD} consecutive errors. Last error: ${error.message}`);
+    console.error("[CompletionApprovalMonitor] Processing halted - manual intervention may be required");
+    return false; // Signal to stop processing
+  }
+  return true; // Continue processing
+}
+
+function recordSuccess() {
+  // Reset consecutive errors on success
+  circuitBreakerState.consecutiveErrors = 0;
+}
+
 async function processAutoApprovalsSingleCleaner(io = null) {
   const now = new Date();
   let processed = 0;
   let errors = 0;
+
+  // Check circuit breaker before starting
+  if (!checkCircuitBreaker()) {
+    console.warn("[CompletionApprovalMonitor] Circuit breaker is open - skipping processing");
+    return { processed: 0, errors: 0, circuitBreakerOpen: true };
+  }
 
   try {
     const expiredApprovals = await UserAppointments.findAll({
@@ -41,6 +103,8 @@ async function processAutoApprovalsSingleCleaner(io = null) {
         autoApprovalExpiresAt: { [Op.lt]: now },
         completed: false,
         isMultiCleanerJob: false,
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
+        wasCancelled: { [Op.ne]: true }, // Skip cancelled appointments
       },
       include: [
         {
@@ -61,19 +125,114 @@ async function processAutoApprovalsSingleCleaner(io = null) {
     );
 
     for (const appointment of expiredApprovals) {
+      // Use transaction with row-level locking to prevent race conditions
+      // between auto-approval and manual approval
+      const t = await sequelize.transaction();
+
       try {
+        // Re-fetch appointment with exclusive lock to ensure it hasn't been approved
+        const lockedAppointment = await UserAppointments.findByPk(appointment.id, {
+          lock: t.LOCK.UPDATE,
+          transaction: t,
+        });
+
+        // Check if already approved by homeowner (race condition check)
+        if (!lockedAppointment ||
+            lockedAppointment.completionStatus !== "submitted" ||
+            lockedAppointment.completed === true) {
+          await t.rollback();
+          console.log(
+            `[CompletionApprovalMonitor] Appointment ${appointment.id} already approved, skipping`
+          );
+          continue;
+        }
+
         // Get cleaner info
-        const cleanerIds = appointment.employeesAssigned || [];
+        const cleanerIds = lockedAppointment.employeesAssigned || [];
         const cleanerId = cleanerIds[0];
         const cleaner = cleanerId ? await User.findByPk(cleanerId) : null;
 
-        // Auto-approve
-        await appointment.update({
+        // Auto-approve within transaction
+        await lockedAppointment.update({
           completionStatus: "auto_approved",
           completionApprovedAt: now,
           completionApprovedBy: null, // null = system auto-approved
           completed: true,
+        }, { transaction: t });
+
+        // Commit the approval status change before processing payout
+        await t.commit();
+
+        // Audit logging for auto-approval
+        console.log(`[CompletionApprovalMonitor] Auto-approval audit:`, {
+          appointmentId: appointment.id,
+          approvedAt: now.toISOString(),
+          completionStatus: "auto_approved",
+          approvalType: "auto",
+          expirationTime: appointment.autoApprovalExpiresAt,
         });
+
+        // Create audit trail record
+        try {
+          await Payment.create({
+            transactionId: Payment.generateTransactionId(),
+            type: "approval",
+            status: "succeeded",
+            amount: appointment.price,
+            userId: appointment.userId,
+            appointmentId: appointment.id,
+            currency: "usd",
+            taxYear: new Date().getFullYear(),
+            reportable: false,
+            description: `Auto-approval for appointment ${appointment.id} after expiration window`,
+            metadata: {
+              approvalType: "auto",
+              approvedAt: now.toISOString(),
+              expirationTime: appointment.autoApprovalExpiresAt?.toISOString(),
+              previousStatus: "submitted",
+            },
+            processedAt: now,
+          });
+        } catch (auditError) {
+          console.error(`[CompletionApprovalMonitor] Failed to create audit record:`, auditError);
+        }
+
+        // Process payout to cleaner(s) - has its own transaction/locking
+        let payoutSuccess = false;
+        try {
+          const { processSingleCleanerPayout } = require("./payoutHelpers");
+          const payoutResults = await processSingleCleanerPayout(lockedAppointment);
+
+          // Check if at least one payout succeeded
+          payoutSuccess = payoutResults.some(r => r.status === "success");
+
+          for (const result of payoutResults) {
+            if (result.status === "success") {
+              console.log(
+                `[CompletionApprovalMonitor] Payout processed for cleaner ${result.cleanerId} on appointment ${appointment.id}`
+              );
+            } else if (result.status === "skipped") {
+              console.warn(
+                `[CompletionApprovalMonitor] Payout skipped for cleaner ${result.cleanerId}: ${result.reason}`
+              );
+            } else if (result.status === "failed") {
+              console.error(
+                `[CompletionApprovalMonitor] Payout failed for cleaner ${result.cleanerId}: ${result.error}`,
+                { reason: result.reason, canRetry: result.canRetry }
+              );
+            } else if (result.status === "already_paid") {
+              console.log(
+                `[CompletionApprovalMonitor] Cleaner ${result.cleanerId} already paid for appointment ${appointment.id}`
+              );
+              payoutSuccess = true; // Already paid counts as success
+            }
+          }
+        } catch (payoutError) {
+          console.error(
+            `[CompletionApprovalMonitor] Unexpected payout error for appointment ${appointment.id}:`,
+            payoutError
+          );
+        }
 
         // Notify homeowner
         if (appointment.user) {
@@ -86,10 +245,14 @@ async function processAutoApprovalsSingleCleaner(io = null) {
             : "Your cleaner";
 
           // In-app notification
-          await NotificationService.createNotification(
-            appointment.userId,
-            `Your cleaning on ${appointment.date} has been auto-approved. Payment sent to ${cleanerName}.`
-          );
+          await NotificationService.createNotification({
+            userId: appointment.userId,
+            type: "completion_auto_approved",
+            title: "Cleaning Auto-Approved",
+            body: `Your cleaning on ${appointment.date} has been auto-approved. Payment sent to ${cleanerName}.`,
+            data: { appointmentId: appointment.id, cleanerName },
+            relatedAppointmentId: appointment.id,
+          });
 
           // Email notification
           const homeownerEmail = appointment.user.email
@@ -120,10 +283,14 @@ async function processAutoApprovalsSingleCleaner(io = null) {
           const cleanerFirstName = EncryptionService.decrypt(cleaner.firstName);
 
           // In-app notification
-          await NotificationService.createNotification(
-            cleanerId,
-            `Your job completion for ${appointment.date} was approved! Payment is on the way.`
-          );
+          await NotificationService.createNotification({
+            userId: cleanerId,
+            type: "completion_approved_cleaner",
+            title: "Job Approved!",
+            body: `Your job completion for ${appointment.date} was approved! Payment is on the way.`,
+            data: { appointmentId: appointment.id, appointmentDate: appointment.date, price: appointment.price },
+            relatedAppointmentId: appointment.id,
+          });
 
           // Email notification
           const cleanerEmail = cleaner.email
@@ -179,10 +346,14 @@ async function processAutoApprovalsSingleCleaner(io = null) {
                 : "your client";
 
               // In-app notification for business owner
-              await NotificationService.createNotification(
-                businessOwner.id,
-                `${employeeName}'s job for ${clientName} on ${appointment.date} was auto-approved. Payment sent.`
-              );
+              await NotificationService.createNotification({
+                userId: businessOwner.id,
+                type: "employee_job_auto_approved",
+                title: "Employee Job Auto-Approved",
+                body: `${employeeName}'s job for ${clientName} on ${appointment.date} was auto-approved. Payment sent.`,
+                data: { appointmentId: appointment.id, employeeName, clientName },
+                relatedAppointmentId: appointment.id,
+              });
 
               // Push notification to business owner
               if (businessOwner.expoPushToken) {
@@ -207,21 +378,33 @@ async function processAutoApprovalsSingleCleaner(io = null) {
         }
 
         processed++;
+        recordSuccess(); // Reset circuit breaker on success
         console.log(
           `[CompletionApprovalMonitor] Auto-approved single-cleaner appointment ${appointment.id}`
         );
       } catch (error) {
+        // Rollback transaction if it hasn't been committed yet
+        if (t && !t.finished) {
+          await t.rollback();
+        }
         errors++;
         console.error(
           `[CompletionApprovalMonitor] Error processing single-cleaner appointment ${appointment.id}:`,
           error
         );
+
+        // Check circuit breaker - stop processing if threshold exceeded
+        if (!recordError(error)) {
+          console.error("[CompletionApprovalMonitor] Circuit breaker tripped - stopping single-cleaner processing");
+          return { processed, errors, circuitBreakerTripped: true };
+        }
       }
     }
 
     return { processed, errors };
   } catch (error) {
     console.error("[CompletionApprovalMonitor] Error in processAutoApprovalsSingleCleaner:", error);
+    recordError(error); // Track fatal errors too
     return { processed, errors: errors + 1 };
   }
 }
@@ -276,6 +459,14 @@ async function processAutoApprovalsMultiCleaner(io = null) {
         const cleaner = completion.cleaner;
         const homeowner = appointment?.user;
 
+        // Skip if appointment is paused or cancelled
+        if (appointment?.isPaused || appointment?.wasCancelled) {
+          console.log(
+            `[CompletionApprovalMonitor] Skipping auto-approval for completion ${completion.id} - appointment ${appointment.id} is paused or cancelled`
+          );
+          continue;
+        }
+
         // Auto-approve this cleaner's completion
         await completion.update({
           completionStatus: "auto_approved",
@@ -288,13 +479,29 @@ async function processAutoApprovalsMultiCleaner(io = null) {
         // Process payout for this cleaner
         try {
           const { processMultiCleanerPayoutForCleaner } = require("./payoutHelpers");
-          await processMultiCleanerPayoutForCleaner(appointment, completion.cleanerId);
-          console.log(
-            `[CompletionApprovalMonitor] Payout processed for cleaner ${completion.cleanerId} on appointment ${appointment.id}`
-          );
+          const payoutResult = await processMultiCleanerPayoutForCleaner(appointment, completion.cleanerId);
+
+          if (payoutResult.status === "success") {
+            console.log(
+              `[CompletionApprovalMonitor] Payout processed for cleaner ${completion.cleanerId} on appointment ${appointment.id}`
+            );
+          } else if (payoutResult.status === "skipped") {
+            console.warn(
+              `[CompletionApprovalMonitor] Payout skipped for cleaner ${completion.cleanerId}: ${payoutResult.reason}`
+            );
+          } else if (payoutResult.status === "failed") {
+            console.error(
+              `[CompletionApprovalMonitor] Payout failed for cleaner ${completion.cleanerId}: ${payoutResult.error}`,
+              { reason: payoutResult.reason, canRetry: payoutResult.canRetry }
+            );
+          } else if (payoutResult.status === "already_paid") {
+            console.log(
+              `[CompletionApprovalMonitor] Cleaner ${completion.cleanerId} already paid for appointment ${appointment.id}`
+            );
+          }
         } catch (payoutError) {
           console.error(
-            `[CompletionApprovalMonitor] Payout error for cleaner ${completion.cleanerId}:`,
+            `[CompletionApprovalMonitor] Unexpected payout error for cleaner ${completion.cleanerId}:`,
             payoutError
           );
         }
@@ -311,10 +518,14 @@ async function processAutoApprovalsMultiCleaner(io = null) {
           const homeownerFirstName = EncryptionService.decrypt(homeowner.firstName);
 
           // In-app notification
-          await NotificationService.createNotification(
-            homeowner.id,
-            `${cleanerFirstName}'s work on ${appointment.date} has been auto-approved. Payment sent.`
-          );
+          await NotificationService.createNotification({
+            userId: homeowner.id,
+            type: "completion_auto_approved",
+            title: "Cleaning Auto-Approved",
+            body: `${cleanerFirstName}'s work on ${appointment.date} has been auto-approved. Payment sent.`,
+            data: { appointmentId: appointment.id, cleanerId: cleaner.id, cleanerName: cleanerFirstName },
+            relatedAppointmentId: appointment.id,
+          });
 
           // Email notification
           const homeownerEmail = homeowner.email
@@ -343,10 +554,14 @@ async function processAutoApprovalsMultiCleaner(io = null) {
         // Notify cleaner
         if (cleaner) {
           // In-app notification
-          await NotificationService.createNotification(
-            cleaner.id,
-            `Your work on ${appointment.date} was auto-approved! Payment is on the way.`
-          );
+          await NotificationService.createNotification({
+            userId: cleaner.id,
+            type: "completion_approved_cleaner",
+            title: "Work Approved!",
+            body: `Your work on ${appointment.date} was auto-approved! Payment is on the way.`,
+            data: { appointmentId: appointment.id, appointmentDate: appointment.date },
+            relatedAppointmentId: appointment.id,
+          });
 
           // Email notification
           const cleanerEmail = cleaner.email
@@ -375,6 +590,7 @@ async function processAutoApprovalsMultiCleaner(io = null) {
         await checkAndUpdateParentAppointmentCompletion(appointment.id);
 
         processed++;
+        recordSuccess(); // Reset circuit breaker on success
         console.log(
           `[CompletionApprovalMonitor] Auto-approved multi-cleaner completion ${completion.id} for cleaner ${completion.cleanerId}`
         );
@@ -384,12 +600,19 @@ async function processAutoApprovalsMultiCleaner(io = null) {
           `[CompletionApprovalMonitor] Error processing multi-cleaner completion ${completion.id}:`,
           error
         );
+
+        // Check circuit breaker - stop processing if threshold exceeded
+        if (!recordError(error)) {
+          console.error("[CompletionApprovalMonitor] Circuit breaker tripped - stopping multi-cleaner processing");
+          return { processed, errors, circuitBreakerTripped: true };
+        }
       }
     }
 
     return { processed, errors };
   } catch (error) {
     console.error("[CompletionApprovalMonitor] Error in processAutoApprovalsMultiCleaner:", error);
+    recordError(error); // Track fatal errors too
     return { processed, errors: errors + 1 };
   }
 }

@@ -10,6 +10,7 @@ import {
 import Icon from "react-native-vector-icons/FontAwesome";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { usePricing } from "../../context/PricingContext";
+import { formatCurrency } from "../../services/formatters";
 
 const CancellationWarningModal = ({
   visible,
@@ -110,7 +111,7 @@ const CancellationWarningModal = ({
                 </View>
                 <View style={styles.feeAmountRow}>
                   <Text style={styles.feeLabel}>Cancellation Fee</Text>
-                  <Text style={styles.feeAmount}>${cancellationFee}</Text>
+                  <Text style={styles.feeAmount}>{formatCurrency(cancellationFee)}</Text>
                 </View>
                 <Text style={styles.feeNote}>
                   This fee will be charged to your card on file immediately upon cancellation.
@@ -136,11 +137,11 @@ const CancellationWarningModal = ({
                   <>
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>Original Price (before discount)</Text>
-                      <Text style={styles.breakdownValue}>${parseFloat(originalPrice).toFixed(2)}</Text>
+                      <Text style={styles.breakdownValue}>${((parseFloat(originalPrice) || 0) / 100).toFixed(2)}</Text>
                     </View>
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>You Paid (after discount)</Text>
-                      <Text style={styles.breakdownValue}>${parseFloat(price).toFixed(2)}</Text>
+                      <Text style={styles.breakdownValue}>${((parseFloat(price) || 0) / 100).toFixed(2)}</Text>
                     </View>
                   </>
                 )}
@@ -148,7 +149,7 @@ const CancellationWarningModal = ({
                 {!discountApplied && (
                   <View style={styles.breakdownRow}>
                     <Text style={styles.breakdownLabel}>Amount Paid</Text>
-                    <Text style={styles.breakdownValue}>${parseFloat(price).toFixed(2)}</Text>
+                    <Text style={styles.breakdownValue}>${((parseFloat(price) || 0) / 100).toFixed(2)}</Text>
                   </View>
                 )}
 
@@ -214,7 +215,7 @@ const CancellationWarningModal = ({
                 agreed && styles.checkboxLabelChecked
               ]}>
                 {showCancellationFeeWarning
-                  ? `I agree to pay the $${cancellationFee} cancellation fee`
+                  ? `I agree to pay the ${formatCurrency(cancellationFee)} cancellation fee`
                   : isWithinPenaltyWindow && discountApplied
                   ? `I understand I will only receive $${estimatedRefund} back (${refundPercent}% refund due to discount)`
                   : isWithinPenaltyWindow

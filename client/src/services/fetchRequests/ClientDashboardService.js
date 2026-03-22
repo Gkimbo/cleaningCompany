@@ -1,22 +1,15 @@
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class ClientDashboardService {
   static async fetchWithFallback(url, token, fallback = {}) {
-    try {
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        console.warn(`[ClientDashboard] ${url} returned ${response.status}`);
-        return fallback;
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn(`[ClientDashboard] ${url} failed:`, error.message);
+    const result = await HttpClient.get(url, { token, useBaseUrl: true });
+
+    if (result.success === false) {
+      __DEV__ && console.warn(`[ClientDashboard] ${url} failed:`, result.error);
       return fallback;
     }
+
+    return result;
   }
 
   static async getDashboardSummary(token) {
@@ -24,7 +17,7 @@ class ClientDashboardService {
     await this.syncBill(token);
 
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/user-info`,
+      "/api/v1/user-info",
       token,
       {
         user: {
@@ -42,19 +35,20 @@ class ClientDashboardService {
   }
 
   static async syncBill(token) {
-    try {
-      await fetch(`${baseURL}/api/v1/user-info/sync-bill`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch (error) {
-      console.warn("[ClientDashboard] Bill sync failed:", error.message);
+    const result = await HttpClient.post(
+      "/api/v1/user-info/sync-bill",
+      {},
+      { token, useBaseUrl: true }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[ClientDashboard] Bill sync failed:", result.error);
     }
   }
 
   static async getMyRequests(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/appointments/my-requests`,
+      "/api/v1/appointments/my-requests",
       token,
       {
         pendingRequestsEmployee: [],
@@ -64,7 +58,7 @@ class ClientDashboardService {
 
   static async getPendingRequestsForClient(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/appointments/client-pending-requests`,
+      "/api/v1/appointments/client-pending-requests",
       token,
       {
         totalCount: 0,
@@ -78,7 +72,7 @@ class ClientDashboardService {
    */
   static async getMyCleanerRelationship(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/cleaner-clients/my-cleaner`,
+      "/api/v1/cleaner-clients/my-cleaner",
       token,
       { cleaner: null }
     );
@@ -89,7 +83,7 @@ class ClientDashboardService {
    */
   static async getMyRecurringSchedules(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/recurring-schedules/my-schedules`,
+      "/api/v1/recurring-schedules/my-schedules",
       token,
       { schedules: [] }
     );

@@ -18,6 +18,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { formatCurrency } from "../../services/formatters";
 import { API_BASE } from "../../services/config";
 
 const PaymentMethodRemovalModal = ({
@@ -46,7 +47,7 @@ const PaymentMethodRemovalModal = ({
   const appointmentsWithFees = unpaidAppointments?.filter((apt) => apt.isWithinCancellationWindow) || [];
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -76,7 +77,7 @@ const PaymentMethodRemovalModal = ({
 
       Alert.alert(
         "Success",
-        `All appointments prepaid ($${data.totalPrepaid.toFixed(2)}) and card removed.`,
+        `All appointments prepaid (${formatCurrency(data.totalPrepaid)}) and card removed.`,
         [{ text: "OK", onPress: () => onSuccess && onSuccess(data) }]
       );
       onClose();
@@ -116,7 +117,7 @@ const PaymentMethodRemovalModal = ({
       }
 
       const feeMessage = data.totalFeesPaid > 0
-        ? ` $${data.totalFeesPaid.toFixed(2)} in fees has been charged.`
+        ? ` ${formatCurrency(data.totalFeesPaid)} in fees has been charged.`
         : "";
 
       Alert.alert(
@@ -160,16 +161,16 @@ const PaymentMethodRemovalModal = ({
                 <View style={styles.warningContent}>
                   <Text style={styles.warningTitle}>Outstanding Fees</Text>
                   <Text style={styles.warningText}>
-                    You have ${outstandingFees.totalDue.toFixed(2)} in outstanding fees that must be paid.
+                    You have {formatCurrency(outstandingFees.totalDue)} in outstanding fees that must be paid.
                   </Text>
                   {outstandingFees.cancellationFee > 0 && (
                     <Text style={styles.feeDetail}>
-                      Cancellation fees: ${outstandingFees.cancellationFee.toFixed(2)}
+                      Cancellation fees: {formatCurrency(outstandingFees.cancellationFee)}
                     </Text>
                   )}
                   {outstandingFees.appointmentDue > 0 && (
                     <Text style={styles.feeDetail}>
-                      Appointment dues: ${outstandingFees.appointmentDue.toFixed(2)}
+                      Appointment dues: {formatCurrency(outstandingFees.appointmentDue)}
                     </Text>
                   )}
                 </View>
@@ -190,13 +191,13 @@ const PaymentMethodRemovalModal = ({
                   <View key={apt.id} style={styles.appointmentItem}>
                     <View style={styles.appointmentInfo}>
                       <Text style={styles.appointmentDate}>{formatDate(apt.date)}</Text>
-                      <Text style={styles.appointmentPrice}>${apt.price.toFixed(2)}</Text>
+                      <Text style={styles.appointmentPrice}>{formatCurrency(apt.price)}</Text>
                     </View>
                     {apt.isWithinCancellationWindow && (
                       <View style={styles.feeTag}>
                         <Icon name="warning" size={12} color={colors.warning[700]} />
                         <Text style={styles.feeTagText}>
-                          ${apt.cancellationFee} fee if cancelled
+                          {formatCurrency(apt.cancellationFee)} fee if cancelled
                         </Text>
                       </View>
                     )}
@@ -217,8 +218,8 @@ const PaymentMethodRemovalModal = ({
                     <Text style={styles.optionTitle}>Prepay All Appointments</Text>
                   </View>
                   <Text style={styles.optionDescription}>
-                    Pay for all your booked appointments now. Total: ${totalToPrepay.toFixed(2)}
-                    {hasOutstandingFees && ` + $${outstandingFees.totalDue.toFixed(2)} fees`}
+                    Pay for all your booked appointments now. Total: {formatCurrency(totalToPrepay)}
+                    {hasOutstandingFees && ` + ${formatCurrency(outstandingFees.totalDue)} fees`}
                   </Text>
                   <Pressable
                     style={[styles.optionButton, styles.prepayButton, isProcessing && styles.buttonDisabled]}
@@ -231,7 +232,7 @@ const PaymentMethodRemovalModal = ({
                       <>
                         <Icon name="check" size={16} color={colors.neutral[0]} />
                         <Text style={styles.optionButtonText}>
-                          Prepay ${(totalToPrepay + (outstandingFees?.totalDue || 0)).toFixed(2)}
+                          Prepay {formatCurrency(totalToPrepay + (outstandingFees?.totalDue || 0))}
                         </Text>
                       </>
                     )}
@@ -255,7 +256,7 @@ const PaymentMethodRemovalModal = ({
                       <Icon name="exclamation-circle" size={16} color={colors.error[600]} />
                       <Text style={styles.cancellationWarningText}>
                         {appointmentsWithFees.length} appointment(s) within 7 days will incur a
-                        ${totalCancellationFees.toFixed(2)} cancellation fee.
+                        {formatCurrency(totalCancellationFees)} cancellation fee.
                       </Text>
                     </View>
                   )}
@@ -271,7 +272,7 @@ const PaymentMethodRemovalModal = ({
                         color={colors.error[600]}
                       />
                       <Text style={styles.acknowledgeText}>
-                        I understand I will be charged ${(totalCancellationFees + (outstandingFees?.totalDue || 0)).toFixed(2)} in fees
+                        I understand I will be charged {formatCurrency(totalCancellationFees + (outstandingFees?.totalDue || 0))} in fees
                       </Text>
                     </Pressable>
                   )}

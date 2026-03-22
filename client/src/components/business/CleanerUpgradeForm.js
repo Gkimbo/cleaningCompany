@@ -13,6 +13,7 @@ import {
 import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import FetchData from "../../services/fetchRequests/fetchData";
+import SecureStorage from "../../services/SecureStorage";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
 const CleanerUpgradeForm = ({ state, dispatch }) => {
@@ -63,6 +64,15 @@ const CleanerUpgradeForm = ({ state, dispatch }) => {
           yearsInBusiness: yearsInBusiness ? parseInt(yearsInBusiness, 10) : null,
         },
       });
+
+      // Clear dual-role state - business owners don't use role toggling
+      dispatch({ type: "SET_ACTIVE_ROLE", payload: null });
+      try {
+        await SecureStorage.removeItem("activeRole");
+      } catch (err) {
+        // Non-critical, continue with upgrade
+        console.warn("Could not clear activeRole from storage:", err);
+      }
 
       setSuccess(true);
 

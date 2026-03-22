@@ -1,24 +1,6 @@
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class SuspiciousReportsService {
-  static async fetchWithFallback(url, token, fallback = {}) {
-    try {
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        console.warn(`[SuspiciousReports] ${url} returned ${response.status}`);
-        return fallback;
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn(`[SuspiciousReports] ${url} failed:`, error.message);
-      return fallback;
-    }
-  }
-
   /**
    * Get all suspicious activity reports with optional filters
    * @param {string} token - Auth token
@@ -32,22 +14,30 @@ class SuspiciousReportsService {
     if (filters.limit) params.append("limit", filters.limit);
 
     const queryString = params.toString();
-    const url = `${baseURL}/api/v1/suspicious-reports${queryString ? `?${queryString}` : ""}`;
+    const url = `/suspicious-reports${queryString ? `?${queryString}` : ""}`;
 
-    return this.fetchWithFallback(url, token, {
-      reports: [],
-      pagination: { total: 0, page: 1, limit: 20, totalPages: 0 },
-    });
+    const result = await HttpClient.get(url, { token });
+
+    if (result.success === false) {
+      __DEV__ && console.warn(`[SuspiciousReports] getReports failed:`, result.error);
+      return {
+        reports: [],
+        pagination: { total: 0, page: 1, limit: 20, totalPages: 0 },
+      };
+    }
+
+    return result;
   }
 
   /**
    * Get quick stats for dashboard display
    */
   static async getStats(token) {
-    return this.fetchWithFallback(
-      `${baseURL}/api/v1/suspicious-reports/stats`,
-      token,
-      {
+    const result = await HttpClient.get("/suspicious-reports/stats", { token });
+
+    if (result.success === false) {
+      __DEV__ && console.warn(`[SuspiciousReports] getStats failed:`, result.error);
+      return {
         pending: 0,
         reviewed: 0,
         dismissed: 0,
@@ -55,30 +45,38 @@ class SuspiciousReportsService {
         resolvedThisWeek: 0,
         warnedUsers: 0,
         suspendedUsers: 0,
-      }
-    );
+      };
+    }
+
+    return result;
   }
 
   /**
    * Get a specific report with full details
    */
   static async getReportById(token, id) {
-    return this.fetchWithFallback(
-      `${baseURL}/api/v1/suspicious-reports/${id}`,
-      token,
-      { report: null }
-    );
+    const result = await HttpClient.get(`/suspicious-reports/${id}`, { token });
+
+    if (result.success === false) {
+      __DEV__ && console.warn(`[SuspiciousReports] getReportById failed:`, result.error);
+      return { report: null };
+    }
+
+    return result;
   }
 
   /**
    * Get all reports for a specific user (as reported)
    */
   static async getUserHistory(token, userId) {
-    return this.fetchWithFallback(
-      `${baseURL}/api/v1/suspicious-reports/user/${userId}/history`,
-      token,
-      { user: null, reports: [] }
-    );
+    const result = await HttpClient.get(`/suspicious-reports/user/${userId}/history`, { token });
+
+    if (result.success === false) {
+      __DEV__ && console.warn(`[SuspiciousReports] getUserHistory failed:`, result.error);
+      return { user: null, reports: [] };
+    }
+
+    return result;
   }
 
   /**
@@ -89,36 +87,24 @@ class SuspiciousReportsService {
    * @param {string} notes - Notes for the action (required for warn/suspend)
    */
   static async takeAction(token, id, action, notes = "") {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/suspicious-reports/${id}/action`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ action, notes }),
-        }
-      );
+    const result = await HttpClient.post(
+      `/suspicious-reports/${id}/action`,
+      { action, notes },
+      { token }
+    );
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || "Failed to take action",
-        };
-      }
-
+    if (result.success === false) {
+      __DEV__ && console.warn(`[SuspiciousReports] takeAction failed:`, result.error);
       return {
-        success: true,
-        ...result,
+        success: false,
+        error: result.error || "Failed to take action",
       };
-    } catch (error) {
-      console.error("[SuspiciousReports] takeAction failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
     }
+
+    return {
+      success: true,
+      ...result,
+    };
   }
 }
 

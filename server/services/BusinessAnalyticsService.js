@@ -154,21 +154,21 @@ class BusinessAnalyticsService {
 				}),
 			]);
 
-			// Calculate metrics
+			// Calculate metrics (prices are stored in cents)
 			const thisMonthRevenue = thisMonthAssignments.reduce(
-				(sum, a) => sum + Math.round(parseFloat(a.appointment.price || 0) * 100),
+				(sum, a) => sum + (a.appointment.price || 0),
 				0
 			);
 			const lastMonthRevenue = lastMonthAssignments.reduce(
-				(sum, a) => sum + Math.round(parseFloat(a.appointment.price || 0) * 100),
+				(sum, a) => sum + (a.appointment.price || 0),
 				0
 			);
 			const thisWeekRevenue = thisWeekAssignments.reduce(
-				(sum, a) => sum + Math.round(parseFloat(a.appointment.price || 0) * 100),
+				(sum, a) => sum + (a.appointment.price || 0),
 				0
 			);
 			const todayRevenue = todayAssignments.reduce(
-				(sum, a) => sum + Math.round(parseFloat(a.appointment.price || 0) * 100),
+				(sum, a) => sum + (a.appointment.price || 0),
 				0
 			);
 
@@ -264,7 +264,7 @@ class BusinessAnalyticsService {
 
 					const completedAssignments = assignments.filter(a => a.status === "completed");
 					const totalRevenue = completedAssignments.reduce(
-						(sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100),
+						(sum, a) => sum + (a.appointment?.price || 0),
 						0
 					);
 					const totalPay = completedAssignments.reduce(
@@ -426,7 +426,7 @@ class BusinessAnalyticsService {
 					});
 
 					const totalRevenue = appointments.reduce(
-						(sum, a) => sum + Math.round(parseFloat(a.price || 0) * 100),
+						(sum, a) => sum + (a.price || 0),
 						0
 					);
 					const lastBookingDate = appointments.length > 0 ? appointments[0].date : null;
@@ -568,10 +568,10 @@ class BusinessAnalyticsService {
 				}],
 			});
 
-			// Helper to calculate financials for a set of assignments
+			// Helper to calculate financials for a set of assignments (prices in cents)
 			const calculateFinancials = (assignments) => {
 				const grossRevenue = assignments.reduce(
-					(sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100),
+					(sum, a) => sum + (a.appointment?.price || 0),
 					0
 				);
 				const totalPayroll = assignments.reduce(
@@ -616,9 +616,9 @@ class BusinessAnalyticsService {
 			// Use completedAssignments for the legacy 'assignments' variable
 			const assignments = completedAssignments;
 
-			// Calculate totals
+			// Calculate totals (prices in cents)
 			const grossRevenue = assignments.reduce(
-				(sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100),
+				(sum, a) => sum + (a.appointment?.price || 0),
 				0
 			);
 			const totalPayroll = assignments.reduce(
@@ -648,12 +648,12 @@ class BusinessAnalyticsService {
 				};
 			}
 
-			// Populate monthly data
+			// Populate monthly data (prices in cents)
 			assignments.forEach(a => {
 				const date = new Date(a.appointment.date);
 				const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 				if (monthlyData[monthKey]) {
-					const jobRevenue = Math.round(parseFloat(a.appointment.price || 0) * 100);
+					const jobRevenue = a.appointment.price || 0;
 					const jobFees = Math.round(jobRevenue * businessFee.feePercent);
 					monthlyData[monthKey].grossRevenue += jobRevenue;
 					monthlyData[monthKey].payroll += a.payAmount || 0;
@@ -718,14 +718,14 @@ class BusinessAnalyticsService {
 					lastMonth: calculateFinancials(lastMonthCompleted),
 					allTime: calculateFinancials(assignments),
 				},
-				// Pending/upcoming jobs
+				// Pending/upcoming jobs (prices in cents)
 				pending: {
 					...calculateFinancials(pendingAssignments),
 					jobs: pendingAssignments.map(a => ({
 						id: a.id,
 						appointmentId: a.appointmentId,
 						date: a.appointment?.date,
-						estimatedRevenue: Math.round(parseFloat(a.appointment?.price || 0) * 100),
+						estimatedRevenue: a.appointment?.price || 0,
 						estimatedPayout: a.payAmount || 0,
 					})),
 				},
@@ -738,13 +738,13 @@ class BusinessAnalyticsService {
 					pendingFormatted: `$${(unpaidPayrollAssignments.reduce((sum, a) => sum + (a.payAmount || 0), 0) / 100).toFixed(2)}`,
 					pendingCount: unpaidPayrollAssignments.length,
 				},
-				// Client payment status
+				// Client payment status (prices in cents)
 				clientPayments: {
-					collected: paidByClients.reduce((sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100), 0),
-					collectedFormatted: `$${(paidByClients.reduce((sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100), 0) / 100).toFixed(2)}`,
+					collected: paidByClients.reduce((sum, a) => sum + (a.appointment?.price || 0), 0),
+					collectedFormatted: `$${(paidByClients.reduce((sum, a) => sum + (a.appointment?.price || 0), 0) / 100).toFixed(2)}`,
 					collectedCount: paidByClients.length,
-					outstanding: unpaidByClients.reduce((sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100), 0),
-					outstandingFormatted: `$${(unpaidByClients.reduce((sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100), 0) / 100).toFixed(2)}`,
+					outstanding: unpaidByClients.reduce((sum, a) => sum + (a.appointment?.price || 0), 0),
+					outstandingFormatted: `$${(unpaidByClients.reduce((sum, a) => sum + (a.appointment?.price || 0), 0) / 100).toFixed(2)}`,
 					outstandingCount: unpaidByClients.length,
 				},
 				// Fee tier info
@@ -809,7 +809,7 @@ class BusinessAnalyticsService {
 					});
 
 					const revenue = monthAssignments.reduce(
-						(sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100),
+						(sum, a) => sum + (a.appointment?.price || 0),
 						0
 					);
 
@@ -835,7 +835,7 @@ class BusinessAnalyticsService {
 					});
 
 					const revenue = weekAssignments.reduce(
-						(sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100),
+						(sum, a) => sum + (a.appointment?.price || 0),
 						0
 					);
 

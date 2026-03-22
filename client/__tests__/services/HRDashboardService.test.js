@@ -1,7 +1,17 @@
 import HRDashboardService from "../../src/services/fetchRequests/HRDashboardService";
 
-// Mock global fetch
-global.fetch = jest.fn();
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
+import HttpClient from "../../src/services/HttpClient";
 
 describe("HRDashboardService", () => {
   const mockToken = "test-hr-token";
@@ -52,28 +62,20 @@ describe("HRDashboardService", () => {
     };
 
     it("should fetch pending disputes successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockDisputes,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockDisputes);
 
       const result = await HRDashboardService.getPendingDisputes(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/hr-dashboard/disputes/pending"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/api/v1/hr-dashboard/disputes/pending",
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.disputes).toHaveLength(2);
       expect(result.disputes[0].status).toBe("pending_owner");
     });
 
     it("should return fallback on API error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Server error" });
 
       const result = await HRDashboardService.getPendingDisputes(mockToken);
 
@@ -81,7 +83,7 @@ describe("HRDashboardService", () => {
     });
 
     it("should return fallback on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await HRDashboardService.getPendingDisputes(mockToken);
 
@@ -89,10 +91,7 @@ describe("HRDashboardService", () => {
     });
 
     it("should include home, cleaner, and homeowner data", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockDisputes,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockDisputes);
 
       const result = await HRDashboardService.getPendingDisputes(mockToken);
 
@@ -105,10 +104,7 @@ describe("HRDashboardService", () => {
     });
 
     it("should include falseClaimCount and falseHomeSizeCount", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockDisputes,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockDisputes);
 
       const result = await HRDashboardService.getPendingDisputes(mockToken);
 
@@ -151,28 +147,20 @@ describe("HRDashboardService", () => {
     };
 
     it("should fetch single dispute successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockDispute,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockDispute);
 
       const result = await HRDashboardService.getDispute(mockToken, 1);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/hr-dashboard/disputes/1"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/api/v1/hr-dashboard/disputes/1",
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.dispute).toBeDefined();
       expect(result.dispute.id).toBe(1);
     });
 
     it("should return fallback on API error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Not found" });
 
       const result = await HRDashboardService.getDispute(mockToken, 999);
 
@@ -180,10 +168,7 @@ describe("HRDashboardService", () => {
     });
 
     it("should include photos in response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockDispute,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockDispute);
 
       const result = await HRDashboardService.getDispute(mockToken, 1);
 
@@ -193,10 +178,7 @@ describe("HRDashboardService", () => {
     });
 
     it("should include home details with current size", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockDispute,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockDispute);
 
       const result = await HRDashboardService.getDispute(mockToken, 1);
 
@@ -236,27 +218,19 @@ describe("HRDashboardService", () => {
     };
 
     it("should fetch support conversations successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockConversations,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockConversations);
 
       const result = await HRDashboardService.getSupportConversations(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/hr-dashboard/support-conversations"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/api/v1/hr-dashboard/support-conversations",
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.conversations).toHaveLength(2);
     });
 
     it("should return fallback on API error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Server error" });
 
       const result = await HRDashboardService.getSupportConversations(mockToken);
 
@@ -264,7 +238,7 @@ describe("HRDashboardService", () => {
     });
 
     it("should return fallback on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await HRDashboardService.getSupportConversations(mockToken);
 
@@ -272,10 +246,7 @@ describe("HRDashboardService", () => {
     });
 
     it("should include customer type (cleaner or homeowner)", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockConversations,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockConversations);
 
       const result = await HRDashboardService.getSupportConversations(mockToken);
 
@@ -284,10 +255,7 @@ describe("HRDashboardService", () => {
     });
 
     it("should include last message preview", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockConversations,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockConversations);
 
       const result = await HRDashboardService.getSupportConversations(mockToken);
 
@@ -304,18 +272,13 @@ describe("HRDashboardService", () => {
     };
 
     it("should fetch quick stats successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockStats,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockStats);
 
       const result = await HRDashboardService.getQuickStats(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/hr-dashboard/quick-stats"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/api/v1/hr-dashboard/quick-stats",
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.pendingDisputes).toBe(5);
       expect(result.supportConversations).toBe(10);
@@ -323,10 +286,7 @@ describe("HRDashboardService", () => {
     });
 
     it("should return fallback on API error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Server error" });
 
       const result = await HRDashboardService.getQuickStats(mockToken);
 
@@ -336,7 +296,7 @@ describe("HRDashboardService", () => {
     });
 
     it("should return fallback on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await HRDashboardService.getQuickStats(mockToken);
 
@@ -356,35 +316,23 @@ describe("HRDashboardService", () => {
     };
 
     it("should resolve dispute successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          message: "Dispute resolved successfully",
-          adjustment: { id: 1, status: "owner_approved" },
-        }),
+      HttpClient.post.mockResolvedValueOnce({
+        message: "Dispute resolved successfully",
+        adjustment: { id: 1, status: "owner_approved" },
       });
 
       const result = await HRDashboardService.resolveDispute(mockToken, 1, resolveData);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/home-size-adjustment/1/owner-resolve"),
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(resolveData),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/api/v1/home-size-adjustment/${disputeId}/owner-resolve".replace("${disputeId}", "1"),
+        resolveData,
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.success).toBe(true);
     });
 
     it("should handle resolve error gracefully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Dispute already resolved" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Dispute already resolved" });
 
       const result = await HRDashboardService.resolveDispute(mockToken, 1, resolveData);
 
@@ -393,12 +341,12 @@ describe("HRDashboardService", () => {
     });
 
     it("should handle network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await HRDashboardService.resolveDispute(mockToken, 1, resolveData);
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Network error. Please try again.");
+      expect(result.error).toBe("Network request failed");
     });
 
     it("should handle deny decision", async () => {
@@ -408,22 +356,18 @@ describe("HRDashboardService", () => {
         ownerNote: "Cleaner's claim was incorrect",
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          message: "Dispute resolved successfully",
-          adjustment: { id: 1, status: "owner_denied" },
-        }),
+      HttpClient.post.mockResolvedValueOnce({
+        message: "Dispute resolved successfully",
+        adjustment: { id: 1, status: "owner_denied" },
       });
 
       const result = await HRDashboardService.resolveDispute(mockToken, 1, denyData);
 
       expect(result.success).toBe(true);
-      expect(fetch).toHaveBeenCalledWith(
+      expect(HttpClient.post).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({
-          body: JSON.stringify(denyData),
-        })
+        denyData,
+        { token: mockToken, useBaseUrl: true }
       );
     });
   });
@@ -432,10 +376,7 @@ describe("HRDashboardService", () => {
     it("should log warning on API error", async () => {
       const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Forbidden" });
 
       await HRDashboardService.getPendingDisputes(mockToken);
 
@@ -446,7 +387,7 @@ describe("HRDashboardService", () => {
     it("should log warning on network error", async () => {
       const consoleSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 
-      global.fetch.mockRejectedValueOnce(new Error("Connection refused"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Connection refused" });
 
       await HRDashboardService.getPendingDisputes(mockToken);
 
@@ -456,21 +397,18 @@ describe("HRDashboardService", () => {
   });
 
   describe("Authorization header", () => {
-    it("should include Bearer token in all requests", async () => {
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({}),
-      });
+    it("should include token in all requests", async () => {
+      HttpClient.get.mockResolvedValue({});
 
       await HRDashboardService.getPendingDisputes(mockToken);
       await HRDashboardService.getSupportConversations(mockToken);
       await HRDashboardService.getQuickStats(mockToken);
 
-      expect(fetch).toHaveBeenCalledTimes(3);
+      expect(HttpClient.get).toHaveBeenCalledTimes(3);
 
-      const calls = fetch.mock.calls;
+      const calls = HttpClient.get.mock.calls;
       calls.forEach((call) => {
-        expect(call[1].headers.Authorization).toBe(`Bearer ${mockToken}`);
+        expect(call[1].token).toBe(mockToken);
       });
     });
   });

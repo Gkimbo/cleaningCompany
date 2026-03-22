@@ -61,38 +61,39 @@ const businessConfig = {
   /**
    * PRICING CONFIGURATION
    * Single source of truth for all pricing in the backend
+   * ALL PRICES ARE IN CENTS (e.g., 15000 = $150.00)
    */
   pricing: {
-    // Base cleaning rate
-    basePrice: 150, // 1 bed/1 bath starting price
-    extraBedBathFee: 50, // Per additional bedroom or full bathroom
-    halfBathFee: 25, // Per half bathroom
+    // Base cleaning rate (in cents)
+    basePrice: 15000, // $150.00 - 1 bed/1 bath starting price
+    extraBedBathFee: 5000, // $50.00 - Per additional bedroom or full bathroom
+    halfBathFee: 2500, // $25.00 - Per half bathroom
 
-    // Linen services
+    // Linen services (in cents)
     linens: {
-      sheetFeePerBed: 30, // Per bed needing fresh sheets
-      towelFee: 5, // Per towel
-      faceClothFee: 2, // Per face cloth
+      sheetFeePerBed: 3000, // $30.00 - Per bed needing fresh sheets
+      towelFee: 500, // $5.00 - Per towel
+      faceClothFee: 200, // $2.00 - Per face cloth
     },
 
-    // Time window surcharges
+    // Time window surcharges (in cents)
     timeWindows: {
       anytime: 0,
-      "10-3": 25,
-      "11-4": 25,
-      "12-2": 30,
+      "10-3": 2500, // $25.00
+      "11-4": 2500, // $25.00
+      "12-2": 3000, // $30.00
     },
 
     // Cancellation policy
     cancellation: {
-      fee: 25, // Flat cancellation fee
+      fee: 2500, // $25.00 - Flat cancellation fee (in cents)
       windowDays: 7, // Days before appointment when fee applies
       homeownerPenaltyDays: 3, // Days before when homeowner gets partial refund
       cleanerPenaltyDays: 4, // Days before when cleaner gets penalty
       refundPercentage: 0.5, // Percentage refunded within penalty window (50%)
     },
 
-    // Platform fees
+    // Platform fees (percentages, not cents)
     platform: {
       feePercent: 0.1, // 10% platform fee on regular cleaner payouts
       businessOwnerFeePercent: 0.1, // 10% platform fee on business owner cleaner payouts
@@ -101,8 +102,8 @@ const businessConfig = {
       largeBusinessLookbackMonths: 1, // Check last 1 month (rolling window)
     },
 
-    // High volume day surcharge
-    highVolumeFee: 50,
+    // High volume day surcharge (in cents)
+    highVolumeFee: 5000, // $50.00
     highVolumeDays: ["holiday", "holiday weekend"],
   },
 
@@ -131,8 +132,31 @@ const businessConfig = {
   ],
 };
 
+// Convert miles to meters for radius calculations
+const MILES_TO_METERS = 1609.34;
+
 /**
- * Helper function to check if an address is within the service area
+ * Get service area config from database with fallback to static config
+ * @returns {Promise<object>} Service area configuration object
+ */
+async function getServiceAreaConfig() {
+  try {
+    // Dynamic import to avoid circular dependency
+    const { ServiceAreaConfig } = require("../models");
+    const dbConfig = await ServiceAreaConfig.getFormattedConfig();
+    if (dbConfig) {
+      return { ...dbConfig, source: "database" };
+    }
+  } catch (error) {
+    // ServiceAreaConfig model may not be loaded yet during startup
+    console.log("[BusinessConfig] Using static service area config (DB not available)");
+  }
+  return { ...businessConfig.serviceAreas, mode: "list", source: "config" };
+}
+
+/**
+ * Helper function to check if an address is within the service area (sync version)
+ * Uses static config only - for backwards compatibility
  * @param {string} city - City name
  * @param {string} state - State abbreviation
  * @param {string} zipcode - 5-digit zipcode
@@ -171,6 +195,83 @@ function isInServiceArea(city, state, zipcode) {
   return {
     isServiceable,
     message: isServiceable ? "" : serviceAreas.outsideAreaMessage,
+  };
+}
+
+/**
+ * Async helper function to check if an address is within the service area
+ * Checks database config first, then falls back to static config
+ * Supports both list mode (cities/zipcodes) and radius mode (lat/lng + miles)
+ * @param {string} city - City name
+ * @param {string} state - State abbreviation
+ * @param {string} zipcode - 5-digit zipcode
+ * @param {number|null} latitude - Optional latitude for radius mode
+ * @param {number|null} longitude - Optional longitude for radius mode
+ * @returns {Promise<object>} { isServiceable: boolean, message: string }
+ */
+async function isInServiceAreaAsync(city, state, zipcode, latitude = null, longitude = null) {
+  const config = await getServiceAreaConfig();
+
+  // If service area restriction is disabled, allow all valid addresses
+  if (!config.enabled) {
+    return { isServiceable: true, message: "" };
+  }
+
+  // Handle radius mode
+  if (config.mode === "radius" && config.centerLatitude && config.centerLongitude) {
+    // Radius mode requires coordinates
+    if (latitude !== null && longitude !== null) {
+      const { calculateDistance } = require("../utils/geoUtils");
+      const distance = calculateDistance(
+        config.centerLatitude,
+        config.centerLongitude,
+        latitude,
+        longitude
+      );
+
+      if (distance !== null) {
+        const radiusMeters = (config.radiusMiles || 25) * MILES_TO_METERS;
+        const isServiceable = distance <= radiusMeters;
+        return {
+          isServiceable,
+          message: isServiceable ? "" : config.outsideAreaMessage,
+        };
+      }
+    }
+    // If no coordinates provided in radius mode, fall through to list check
+    // (This allows the feature to work even if geocoding failed)
+  }
+
+  // List mode (or fallback if radius mode but no coordinates)
+  const normalizedCity = city?.toLowerCase().trim();
+  const normalizedState = state?.toUpperCase().trim();
+  const normalizedZipcode = zipcode?.trim();
+
+  const cities = config.cities || [];
+  const states = config.states || [];
+  const zipcodes = config.zipcodes || [];
+
+  // Check if city is in service area
+  const cityMatch = cities.some(
+    (serviceCity) => serviceCity.toLowerCase() === normalizedCity
+  );
+
+  // Check if state is in service area
+  const stateMatch = states.some(
+    (serviceState) => serviceState.toUpperCase() === normalizedState
+  );
+
+  // Check if zipcode matches (exact or prefix)
+  const zipcodeMatch = zipcodes.some((serviceZip) =>
+    normalizedZipcode?.startsWith(serviceZip)
+  );
+
+  // Address is serviceable if city matches AND state matches, OR if zipcode matches
+  const isServiceable = (cityMatch && stateMatch) || zipcodeMatch;
+
+  return {
+    isServiceable,
+    message: isServiceable ? "" : (config.outsideAreaMessage || businessConfig.serviceAreas.outsideAreaMessage),
   };
 }
 
@@ -234,7 +335,7 @@ function getCleanersNeeded(numBeds, numBaths, timeWindow = null) {
 /**
  * Helper function to calculate time window surcharge
  * @param {string} timeWindow - Time window selection
- * @returns {number} Surcharge amount
+ * @returns {number} Surcharge amount in CENTS (e.g., 2500 = $25.00)
  */
 function getTimeWindowSurcharge(timeWindow) {
   return businessConfig.pricing.timeWindows[timeWindow] || 0;
@@ -270,8 +371,9 @@ async function updateAllHomesServiceAreaStatus(
     let updatedCount = 0;
 
     for (const home of allHomes) {
-      const { city, state, zipcode, address, nickName } = home.dataValues;
-      const { isServiceable } = isInServiceArea(city, state, zipcode);
+      const { city, state, zipcode, address, nickName, latitude, longitude } = home.dataValues;
+      // Use async version to check database config
+      const { isServiceable } = await isInServiceAreaAsync(city, state, zipcode, latitude, longitude);
       const shouldBeOutside = !isServiceable;
       const wasOutside = home.dataValues.outsideServiceArea;
 
@@ -366,6 +468,30 @@ async function updateAllHomesServiceAreaStatus(
 }
 
 /**
+ * Validates that a platform fee percentage is within safe bounds
+ * @param {number} fee - Fee as decimal (e.g., 0.10 for 10%)
+ * @param {string} fieldName - Name of the field for logging
+ * @returns {number} Validated fee or default 0.10
+ */
+function validatePlatformFee(fee, fieldName = "feePercent") {
+  const MIN_FEE = 0.0;
+  const MAX_FEE = 0.5; // 50% max - catches misconfiguration like 10 instead of 0.10
+  const DEFAULT_FEE = 0.10;
+
+  if (typeof fee !== "number" || isNaN(fee)) {
+    console.error(`[BusinessConfig] CRITICAL: Invalid ${fieldName} "${fee}" is not a number! Using default ${DEFAULT_FEE}.`);
+    return DEFAULT_FEE;
+  }
+
+  if (fee < MIN_FEE || fee > MAX_FEE) {
+    console.error(`[BusinessConfig] CRITICAL: ${fieldName} ${fee} is outside valid range (${MIN_FEE}-${MAX_FEE})! Using default ${DEFAULT_FEE}.`);
+    return DEFAULT_FEE;
+  }
+
+  return fee;
+}
+
+/**
  * Get pricing from database with fallback to static config
  * @returns {Promise<object>} Pricing configuration object
  */
@@ -375,6 +501,21 @@ async function getPricingConfig() {
     const { PricingConfig } = require("../models");
     const dbPricing = await PricingConfig.getFormattedPricing();
     if (dbPricing) {
+      // Validate platform fee percentages to prevent misconfiguration
+      if (dbPricing.platform) {
+        dbPricing.platform.feePercent = validatePlatformFee(
+          dbPricing.platform.feePercent,
+          "platform.feePercent"
+        );
+        dbPricing.platform.businessOwnerFeePercent = validatePlatformFee(
+          dbPricing.platform.businessOwnerFeePercent,
+          "platform.businessOwnerFeePercent"
+        );
+        dbPricing.platform.largeBusinessFeePercent = validatePlatformFee(
+          dbPricing.platform.largeBusinessFeePercent,
+          "platform.largeBusinessFeePercent"
+        );
+      }
       return dbPricing;
     }
   } catch (error) {
@@ -397,6 +538,8 @@ async function getTimeWindowSurchargeAsync(timeWindow) {
 module.exports = {
   businessConfig,
   isInServiceArea,
+  isInServiceAreaAsync,
+  getServiceAreaConfig,
   getCleanersNeeded,
   getTimeWindowSurcharge,
   getTimeWindowSurchargeAsync,

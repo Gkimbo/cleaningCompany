@@ -19,6 +19,7 @@ import HomeSizeConfirmationModal from "../employeeAssignments/HomeSizeConfirmati
 import FetchData from "../../services/fetchRequests/fetchData";
 import { API_BASE } from "../../services/config";
 import { usePricing } from "../../context/PricingContext";
+import { parseLocalDate } from "../../utils/dateUtils";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
 
 const Earnings = ({ state, dispatch }) => {
@@ -139,8 +140,8 @@ const Earnings = ({ state, dispatch }) => {
       const myAppointments = allAppointments
         .filter((appt) => !appt.completed)
         .sort((a, b) => {
-          const dateA = new Date(a.date + "T00:00:00");
-          const dateB = new Date(b.date + "T00:00:00");
+          const dateA = new Date(a.date + "T12:00:00");
+          const dateB = new Date(b.date + "T12:00:00");
           return dateA - dateB;
         });
       setAssignedAppointments(myAppointments);
@@ -186,9 +187,8 @@ const Earnings = ({ state, dispatch }) => {
 
   const isAppointmentToday = (appt) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const apptDate = new Date(appt.date + "T00:00:00");
-    return apptDate.getTime() === today.getTime();
+    const apptDate = parseLocalDate(appt.date);
+    return apptDate.toDateString() === today.toDateString();
   };
 
   const checkJobStatuses = async () => {
@@ -279,44 +279,55 @@ const Earnings = ({ state, dispatch }) => {
     return tierColors[tier] || { bg: colors.neutral[100], text: colors.neutral[600] };
   };
 
-  const calculateCleanerShare = (price, numCleaners = 1, isMultiCleanerJob = false) => {
-    const gross = parseFloat(price) || 0;
-    const perCleaner = gross / numCleaners;
+  const calculateCleanerShare = (priceInCents, numCleaners = 1, isMultiCleanerJob = false) => {
+    const grossCents = parseFloat(priceInCents) || 0;
+    const perCleanerCents = grossCents / numCleaners;
     // Use multi-cleaner fee (13%) for multi-cleaner jobs, regular fee (10%) otherwise
     const feePercent = isMultiCleanerJob ? multiCleanerFeePercent : regularFeePercent;
     const cleanerSharePercent = 1 - feePercent;
-    const cleanerShare = perCleaner * cleanerSharePercent;
-    return cleanerShare.toFixed(2);
+    const cleanerShareCents = perCleanerCents * cleanerSharePercent;
+    // Convert cents to dollars for display
+    return (cleanerShareCents / 100).toFixed(2);
   };
 
   // Get appointment IDs that are multi-cleaner jobs to avoid duplicates
+  // Convert to strings to ensure consistent comparison
   const multiCleanerAppointmentIds = new Set(
-    confirmedMultiCleanerJobs.map((job) => job.appointmentId)
+    confirmedMultiCleanerJobs.map((job) => String(job.appointmentId))
   );
 
   // Combine solo appointments and confirmed multi-cleaner jobs
   // Filter out appointments that are already in confirmedMultiCleanerJobs to avoid duplicates
   const allAssignments = [
     ...assignedAppointments
-      .filter((appt) => !multiCleanerAppointmentIds.has(appt.id))
+      .filter((appt) => !multiCleanerAppointmentIds.has(String(appt.id)))
       .map((appt) => ({ ...appt, jobType: "solo" })),
     ...confirmedMultiCleanerJobs.map((job) => ({ ...job, jobType: "team" })),
   ].sort((a, b) => {
-    const dateA = new Date(a.date + "T00:00:00");
-    const dateB = new Date(b.date + "T00:00:00");
+    const dateA = new Date(a.date + "T12:00:00");
+    const dateB = new Date(b.date + "T12:00:00");
     return dateA - dateB;
   });
 
+  // Get upcoming assignments (today or future, not completed)
+  const getUpcomingAssignments = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return allAssignments.filter((appt) => !appt.completed && parseLocalDate(appt.date) >= today);
+  };
+
   const calculatePotentialEarnings = () => {
-    return allAssignments
-      .filter((appt) => !appt.completed)
+    return getUpcomingAssignments()
       .reduce((total, appt) => {
-        // For multi-cleaner jobs, use totalCleanersRequired
+        // For multi-cleaner jobs, use totalCleanersRequired; for solo jobs, use 1
         const isTeamJob = appt.jobType === "team" || appt.isMultiCleanerJob;
         const numCleaners = isTeamJob
           ? (appt.multiCleanerJob?.totalCleanersRequired || appt.totalCleanersRequired || appt.employeesAssigned?.length || 1)
-          : (appt.employeesAssigned?.length || 1);
-        const share = parseFloat(calculateCleanerShare(appt.price, numCleaners, isTeamJob));
+          : 1;
+        // Calculate share with full precision (same as CleanerDashboard.js)
+        const feePercent = isTeamJob ? multiCleanerFeePercent : regularFeePercent;
+        const sharePercent = 1 - feePercent;
+        const share = ((Number(appt.price) || 0) / numCleaners) * sharePercent / 100;
         return total + share;
       }, 0)
       .toFixed(2);
@@ -397,8 +408,8 @@ const Earnings = ({ state, dispatch }) => {
           <Text style={styles.statLabel}>Upcoming</Text>
           <Text style={styles.statValue}>${calculatePotentialEarnings()}</Text>
           <Text style={styles.statSubtext}>
-            {allAssignments.filter((a) => !a.completed).length} pending{" "}
-            {allAssignments.filter((a) => !a.completed).length === 1 ? "job" : "jobs"}
+            {getUpcomingAssignments().length} pending{" "}
+            {getUpcomingAssignments().length === 1 ? "job" : "jobs"}
           </Text>
         </View>
       </View>
@@ -535,10 +546,10 @@ const Earnings = ({ state, dispatch }) => {
           allAssignments.map((appt) => {
             const status = getStatusBadge(appt);
             const isTeamJob = appt.jobType === "team" || appt.isMultiCleanerJob;
-            // For multi-cleaner jobs, use totalCleanersRequired (not employeesAssigned.length)
+            // For multi-cleaner jobs, use totalCleanersRequired; for solo jobs, use 1
             const numCleaners = isTeamJob
               ? (appt.multiCleanerJob?.totalCleanersRequired || appt.totalCleanersRequired || appt.employeesAssigned?.length || 1)
-              : (appt.employeesAssigned?.length || 1);
+              : 1;
             const yourShare = calculateCleanerShare(appt.price, numCleaners, isTeamJob);
             const isToday = isAppointmentToday(appt);
             const uniqueKey = appt.jobType === "team" ? `team-${appt.completionId}` : `solo-${appt.id}`;
@@ -568,7 +579,7 @@ const Earnings = ({ state, dispatch }) => {
                 <View style={styles.appointmentContent}>
                   <View style={styles.appointmentLeft}>
                     <Text style={styles.appointmentDate}>
-                      {new Date(appt.date + "T00:00:00").toLocaleDateString("en-US", {
+                      {new Date(appt.date + "T12:00:00").toLocaleDateString("en-US", {
                         weekday: "short",
                         month: "short",
                         day: "numeric",
@@ -594,7 +605,7 @@ const Earnings = ({ state, dispatch }) => {
 
                 {(numCleaners > 1 || isTeamJob) && (
                   <Text style={styles.splitInfo}>
-                    {isTeamJob ? "Team Clean: " : ""}Split between {numCleaners} cleaners (Total: ${((parseFloat(appt.price) || 0) * (1 - (isTeamJob ? multiCleanerFeePercent : regularFeePercent))).toFixed(2)})
+                    {isTeamJob ? "Team Clean: " : ""}Split between {numCleaners} cleaners (Total: ${(((parseFloat(appt.price) || 0) * (1 - (isTeamJob ? multiCleanerFeePercent : regularFeePercent))) / 100).toFixed(2)})
                   </Text>
                 )}
 

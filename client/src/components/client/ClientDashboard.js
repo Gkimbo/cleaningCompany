@@ -244,12 +244,12 @@ const AppointmentCard = ({ homes, appointment, onPress, navigate }) => {
                 size="sm"
               />
               <Text style={styles.discountBadge}>
-                {Math.round(Number(appointment.discountPercent) * 100)}% new homeowner discount
+                {Math.round((Number(appointment.discountPercent) || 0) * 100)}% new homeowner discount
               </Text>
             </>
           ) : (
             <Text style={styles.appointmentPrice}>
-              ${Number(appointment.price).toFixed(2)}
+              ${((Number(appointment.price) || 0) / 100).toFixed(2)}
             </Text>
           )}
         </View>
@@ -441,9 +441,10 @@ const ClientDashboard = ({ state, dispatch }) => {
     fetchDashboardData(true);
   }, [state.currentUser.token]);
 
-  const formatCurrency = (value) => {
-    if (!value && value !== 0) return "$0.00";
-    return `$${Number(value).toFixed(2)}`;
+  const formatCurrency = (cents) => {
+    if (!cents && cents !== 0) return "$0.00";
+    // Convert cents to dollars for display
+    return `$${(Number(cents) / 100).toFixed(2)}`;
   };
 
   const getGreeting = () => {
@@ -1083,9 +1084,9 @@ const ClientDashboard = ({ state, dispatch }) => {
                     })}
                   </Text>
                 </View>
-                {/* Price is stored in dollars in DB, convert to cents for formatCurrency */}
+                {/* Price is already stored in cents in DB */}
                 <Text style={styles.recentPrice}>
-                  {formatCurrency((apt.price || 0) * 100)}
+                  {formatCurrency(apt.price || 0)}
                 </Text>
               </View>
             ))}

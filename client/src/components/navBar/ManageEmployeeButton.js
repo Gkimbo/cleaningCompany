@@ -10,7 +10,7 @@ const ManageEmployees = ({ closeModal }) => {
 
   useEffect(() => {
     if (redirect) {
-      navigate("/employees");
+      navigate("/owner/cleaners");
       setRedirect(false);
     }
   }, [redirect]);
@@ -29,7 +29,7 @@ const ManageEmployees = ({ closeModal }) => {
       onPress={handlePress}
     >
       <Feather name="users" size={18} color="#E5E7EB" style={{ marginRight: 12 }} />
-      <Text style={ButtonStyles.buttonText}>Manage Employees</Text>
+      <Text style={ButtonStyles.buttonText}>Manage Cleaners</Text>
     </Pressable>
   );
 };

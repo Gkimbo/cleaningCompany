@@ -5,6 +5,16 @@
  * Supports linking tickets to support conversations.
  */
 
+const EncryptionService = require("./EncryptionService");
+
+// Helper to format decrypted user name
+const formatUserName = (user) => {
+  if (!user) return null;
+  const firstName = user.firstName ? EncryptionService.decrypt(user.firstName) : "";
+  const lastName = user.lastName ? EncryptionService.decrypt(user.lastName) : "";
+  return `${firstName} ${lastName}`.trim() || null;
+};
+
 class SupportTicketService {
   /**
    * Create a support ticket from a support conversation
@@ -151,7 +161,7 @@ class SupportTicketService {
         {
           model: User,
           as: "sender",
-          attributes: ["id", "firstName", "lastName", "type", "profileImage"],
+          attributes: ["id", "firstName", "lastName", "type"],
         },
       ],
       order: [["createdAt", "ASC"]],
@@ -166,9 +176,8 @@ class SupportTicketService {
         sender: m.sender
           ? {
               id: m.sender.id,
-              name: `${m.sender.firstName} ${m.sender.lastName}`,
+              name: formatUserName(m.sender),
               type: m.sender.type,
-              profileImage: m.sender.profileImage,
             }
           : null,
       })),

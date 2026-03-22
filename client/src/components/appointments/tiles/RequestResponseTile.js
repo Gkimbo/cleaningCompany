@@ -85,7 +85,8 @@ const RequestResponseTile = ({
   );
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    if (!dateString) return "—";
+    const date = new Date(dateString + "T12:00:00");
     const options = {
       weekday: "long",
       month: "short",

@@ -39,10 +39,13 @@ const { Notification } = require("../../../models");
 const CancellationAuditService = require("../../../services/CancellationAuditService");
 const CancellationFinancialService = require("../../../services/CancellationFinancialService");
 const JobLedgerService = require("../../../services/JobLedgerService");
+const TimezoneService = require("../../../services/TimezoneService");
 const {
   calculateScheduledEndTime,
   getAutoCompleteConfig,
 } = require("../../../services/cron/AutoCompleteMonitor");
+const { notifyInitialPaymentFailure } = require("../../../services/cron/PaymentRetryMonitor");
+const { checkBookingDistance, MAX_BOOKING_DISTANCE_MILES } = require("../../../utils/geoUtils");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -98,6 +101,7 @@ appointmentRouter.get("/unassigned", async (req, res) => {
       userId: { [Op.in]: matchingUserIds }, // Filter by demo status match
       wasCancelled: false, // Exclude cancelled appointments
       isDemoAppointment: isCleanerDemo, // Demo cleaners see demo appointments, real cleaners see real appointments
+      isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner account frozen)
     };
 
     // If cleaner doesn't have early access, filter out jobs in early access period
@@ -576,12 +580,14 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
     const isHomeowner = appointment.userId === userId;
     const isCleaner = appointment.employeesAssigned?.includes(String(userId));
     const hasCleanerAssigned = appointment.hasBeenAssigned && appointment.employeesAssigned?.length > 0;
-    const price = parseFloat(appointment.price) || 0;
+    const priceCents = appointment.price || 0;
+    const price = priceCents / 100; // Convert cents to dollars for calculations
 
     let response = {
       daysUntilAppointment,
       appointmentDate: appointment.date,
-      price,
+      price, // Price in dollars for display
+      priceCents, // Include cents for calculations
       hasCleanerAssigned,
       isHomeowner,
       isCleaner,
@@ -603,8 +609,10 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
 
       // Check if discount was applied (incentive appointment)
       const discountApplied = appointment.discountApplied === true;
+      // originalPrice is stored in cents (INTEGER), convert to dollars
+      // Use parseInt for backwards compatibility with any string values
       const originalPrice = discountApplied && appointment.originalPrice
-        ? parseFloat(appointment.originalPrice)
+        ? parseInt(appointment.originalPrice, 10) / 100
         : price;
 
       // Get incentive-specific cancellation rates
@@ -914,19 +922,50 @@ appointmentRouter.get("/pending-approval", async (req, res) => {
 // ==========================================
 
 appointmentRouter.get("/home/:homeId", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { homeId } = req.params;
+
   try {
-    const home = await UserHomes.findAll({
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
+    const home = await UserHomes.findByPk(homeId);
+
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    // Verify user owns this home or is assigned to clean it
+    const isOwner = home.userId === requestingUserId;
+
+    // Check if user is a cleaner assigned to an appointment at this home
+    const isAssignedCleaner = await UserAppointments.findOne({
       where: {
-        id: homeId,
+        homeId: homeId,
+        employeesAssigned: { [Op.contains]: [String(requestingUserId)] },
       },
     });
-    const serializedHome = HomeSerializer.serializeArray(home);
 
-    return res.status(200).json({ home: serializedHome });
+    if (!isOwner && !isAssignedCleaner) {
+      return res.status(403).json({ error: "You don't have permission to view this home" });
+    }
+
+    const serializedHome = HomeSerializer.serializeOne(home);
+
+    return res.status(200).json({ home: [serializedHome] });
   } catch (error) {
-    console.log(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    console.error(error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    return res.status(500).json({ error: "Failed to fetch home" });
   }
 });
 
@@ -967,6 +1006,22 @@ appointmentRouter.post("/", async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
+    }
+
+    // Verify user owns this home (prevent booking appointments on other users' homes)
+    if (home.userId !== userId) {
+      return res.status(403).json({
+        error: "You can only book appointments for your own homes"
+      });
+    }
+
+    // Check if homeowner account is frozen
+    if (user.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot book new appointments.",
+        reason: user.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
     }
 
     // Check if this is a demo account
@@ -1030,7 +1085,8 @@ appointmentRouter.post("/", async (req, res) => {
 
       // If this home has a preferred cleaner with custom pricing, use their price
       if (cleanerClientRelation && cleanerClientRelation.dataValues.defaultPrice) {
-        finalPrice = parseFloat(cleanerClientRelation.dataValues.defaultPrice);
+        // defaultPrice is stored as INTEGER (cents)
+        finalPrice = cleanerClientRelation.dataValues.defaultPrice;
         // No discounts apply to business owner pricing
         date.originalPrice = null;
         date.discountApplied = false;
@@ -1048,12 +1104,12 @@ appointmentRouter.post("/", async (req, res) => {
           towelConfigs
         );
 
-        // Apply discount if eligible
+        // Apply discount if eligible (originalPrice is already in cents)
         finalPrice = originalPrice;
         if (discountResult.eligible && discountResult.remainingCleanings > 0) {
-          const discountAmount = originalPrice * discountResult.discountPercent;
-          finalPrice = Math.round((originalPrice - discountAmount) * 100) / 100;
-          date.originalPrice = originalPrice.toString();
+          const discountAmount = Math.round(originalPrice * discountResult.discountPercent);
+          finalPrice = originalPrice - discountAmount;
+          date.originalPrice = originalPrice; // Store as INTEGER (cents), not string
           date.discountApplied = true;
           date.discountPercent = discountResult.discountPercent;
           // Decrement remaining for this batch of appointments
@@ -1146,7 +1202,7 @@ appointmentRouter.post("/", async (req, res) => {
           keyLocation,
           completed: false,
           hasBeenAssigned: false,
-          empoyeesNeeded: cleanersNeeded,
+          employeesNeeded: cleanersNeeded,
           timeToBeCompleted: timeWindow,
           sheetConfigurations: date.sheetConfigurations || null,
           towelConfigurations: date.towelConfigurations || null,
@@ -1411,24 +1467,49 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
 
 // NOTE: /id/:id must be defined BEFORE /:id to prevent route interception
 appointmentRouter.delete("/id/:id", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id } = req.params;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Verify appointment exists
     const appointmentToDelete = await UserAppointments.findOne({
       where: { id: id },
     });
 
-    const connectionsToDelete = await UserCleanerAppointments.destroy({
+    if (!appointmentToDelete) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify user owns this appointment
+    if (appointmentToDelete.userId !== userId) {
+      return res.status(403).json({ error: "You don't have permission to delete this appointment" });
+    }
+
+    await UserCleanerAppointments.destroy({
       where: { appointmentId: id },
     });
 
-    const deletedAppointmentInfo = await UserAppointments.destroy({
+    await UserAppointments.destroy({
       where: { id: id },
     });
 
-    return res.status(201).json({ message: "Appointment Deleted" });
+    return res.status(200).json({ message: "Appointment Deleted" });
   } catch (error) {
     console.error(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    return res.status(500).json({ error: "Failed to delete appointment" });
   }
 });
 
@@ -1439,13 +1520,25 @@ appointmentRouter.delete("/:id", async (req, res) => {
   try {
     const decodedToken = jwt.verify(user, secretKey);
     const userId = decodedToken.userId;
+
+    // Verify appointment exists and belongs to user
+    const appointmentToDelete = await UserAppointments.findOne({
+      where: { id: id },
+    });
+
+    if (!appointmentToDelete) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify user owns this appointment
+    if (appointmentToDelete.userId !== userId) {
+      return res.status(403).json({ error: "You don't have permission to delete this appointment" });
+    }
+
     const existingBill = await UserBills.findOne({
       where: { userId },
     });
 
-    const appointmentToDelete = await UserAppointments.findOne({
-      where: { id: id },
-    });
     const appointmentTotal = Number(appointmentToDelete.dataValues.price);
     const oldFee = Number(existingBill.dataValues.cancellationFee);
     const oldAppt = Number(existingBill.dataValues.appointmentDue);
@@ -1500,9 +1593,46 @@ appointmentRouter.delete("/:id", async (req, res) => {
 });
 
 appointmentRouter.patch("/remove-employee", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id, appointmentId } = req.body;
   let userInfo;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
+    // Get the appointment to verify ownership
+    const updateAppointment = await UserAppointments.findOne({
+      where: {
+        id: Number(appointmentId),
+      },
+    });
+
+    if (!updateAppointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Get the requesting user to check their type
+    const requestingUser = await User.findByPk(requestingUserId);
+    if (!requestingUser) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    // Authorization: only homeowner of appointment or owner/admin can remove employees
+    const isOwnerOrAdmin = requestingUser.type === "owner" || requestingUser.type === "admin";
+    const isAppointmentOwner = updateAppointment.userId === requestingUserId;
+
+    if (!isOwnerOrAdmin && !isAppointmentOwner) {
+      return res.status(403).json({ error: "You don't have permission to remove employees from this appointment" });
+    }
+
     const checkItExists = await UserCleanerAppointments.findOne({
       where: {
         employeeId: id,
@@ -1514,12 +1644,6 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
         where: {
           employeeId: id,
           appointmentId: Number(appointmentId),
-        },
-      });
-
-      const updateAppointment = await UserAppointments.findOne({
-        where: {
-          id: Number(appointmentId),
         },
       });
 
@@ -1630,8 +1754,8 @@ appointmentRouter.get("/booking-info/:appointmentId", async (req, res) => {
       return res.status(404).json({ error: "Home not found" });
     }
 
-    const numBeds = parseInt(home.numBeds) || 0;
-    const numBaths = parseInt(home.numBaths) || 0;
+    const numBeds = parseInt(home.numBeds, 10) || 0;
+    const numBaths = parseInt(home.numBaths, 10) || 0;
     const timeToBeCompleted = home.timeToBeCompleted || "anytime";
     const cleanersNeeded = home.cleanersNeeded || 1;
 
@@ -1697,7 +1821,7 @@ appointmentRouter.get("/booking-info/:appointmentId", async (req, res) => {
     }
 
     return res.json({
-      appointmentId: parseInt(appointmentId),
+      appointmentId: parseInt(appointmentId, 10),
       homeInfo: {
         numBeds,
         numBaths,
@@ -1787,8 +1911,29 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
     // Check if home is large and requires acknowledgment
     const home = await UserHomes.findByPk(appointment.homeId);
     if (home) {
-      const numBeds = parseInt(home.numBeds) || 0;
-      const numBaths = parseInt(home.numBaths) || 0;
+      // Check distance from cleaner's service area to home (max 30 miles)
+      const cleanerLat = cleaner.serviceAreaLatitude ? parseFloat(cleaner.serviceAreaLatitude) : null;
+      const cleanerLon = cleaner.serviceAreaLongitude ? parseFloat(cleaner.serviceAreaLongitude) : null;
+      const homeLat = home.latitude ? parseFloat(EncryptionService.decrypt(home.latitude)) : null;
+      const homeLon = home.longitude ? parseFloat(EncryptionService.decrypt(home.longitude)) : null;
+
+      if (cleanerLat && cleanerLon && homeLat && homeLon) {
+        const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+        if (distanceCheck.canBook === false) {
+          return res.status(400).json({
+            error: "Job too far from service area",
+            message: `This job is ${distanceCheck.distanceMiles} miles from your service area center. The maximum booking distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+            code: "EXCEEDS_MAX_DISTANCE",
+            distanceMiles: distanceCheck.distanceMiles,
+            maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+          });
+        }
+      } else if (!cleanerLat || !cleanerLon) {
+        console.warn(`[Appointments] Cleaner ${id} has no service area coordinates set - skipping distance check`);
+      }
+
+      const numBeds = parseInt(home.numBeds, 10) || 0;
+      const numBaths = parseInt(home.numBaths, 10) || 0;
       const MultiCleanerService = require("../../../services/MultiCleanerService");
       const isLargeHome = await MultiCleanerService.isLargeHome(numBeds, numBaths);
 
@@ -1862,7 +2007,7 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
       // Create payment intent if one doesn't exist
       if (!appointment.dataValues.paymentIntentId) {
         try {
-          const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
+          const priceInCents = appointment.dataValues.price; // Already stored in cents
           const user = await User.findByPk(appointment.dataValues.userId);
 
           if (user && user.stripeCustomerId) {
@@ -1907,14 +2052,14 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
         }
       }
 
-      // Create payout record for the cleaner
+      // Create payout record for the cleaner (prices already in cents)
       const pricingConfig = await getPricingConfig();
       const { platform: platformConfig } = pricingConfig;
 
-      const payoutPrice = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
-        ? parseFloat(appointment.dataValues.originalPrice)
-        : parseFloat(appointment.dataValues.price);
-      const priceInCents = Math.round(payoutPrice * 100);
+      // Use parseInt for backwards compatibility with any string values stored for originalPrice
+      const priceInCents = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
+        ? parseInt(appointment.dataValues.originalPrice, 10)
+        : appointment.dataValues.price;
 
       const feeResult = await IncentiveService.calculateCleanerFee(
         id,
@@ -1949,40 +2094,106 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
         diffInDays >= 0 &&
         appointment.dataValues.paymentStatus !== "captured"
       ) {
+        // Use transaction with row-level locking to prevent race conditions
+        const captureTransaction = await models.sequelize.transaction();
         try {
-          const user = await User.findByPk(appointment.dataValues.userId);
+          // Re-fetch appointment with exclusive lock
+          const lockedAppointment = await UserAppointments.findByPk(appointment.id, {
+            lock: captureTransaction.LOCK.UPDATE,
+            transaction: captureTransaction,
+          });
 
-          if (appointment.dataValues.paymentIntentId) {
-            await stripe.paymentIntents.capture(appointment.dataValues.paymentIntentId);
-            await appointment.update({ paymentStatus: "captured" });
-          } else if (user && user.stripeCustomerId) {
-            const customer = await stripe.customers.retrieve(user.stripeCustomerId);
-            const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+          // Double-check payment status after acquiring lock (race condition protection)
+          if (lockedAppointment.paymentStatus === "captured" ||
+              lockedAppointment.paymentStatus === "capture_in_progress") {
+            await captureTransaction.rollback();
+            console.log(`[Auto-Capture] Appointment ${appointment.id} already captured or in progress, skipping`);
+          } else {
+            // Mark as capture_in_progress to prevent concurrent captures
+            await lockedAppointment.update({
+              paymentStatus: "capture_in_progress",
+            }, { transaction: captureTransaction });
+            await captureTransaction.commit();
 
-            if (defaultPaymentMethod) {
-              const priceForCapture = Math.round(parseFloat(appointment.dataValues.price) * 100);
-              const capturedIntent = await stripe.paymentIntents.create({
-                amount: priceForCapture,
-                currency: "usd",
-                customer: user.stripeCustomerId,
-                payment_method: defaultPaymentMethod,
-                confirm: true,
-                off_session: true,
-                metadata: {
-                  userId: appointment.dataValues.userId,
-                  homeId: homeId,
-                  appointmentId: Number(appointmentId),
-                },
-              });
+            // Now perform Stripe capture outside transaction (external API call)
+            const user = await User.findByPk(lockedAppointment.userId);
+            let captureSuccess = false;
+            let capturedAmount = 0;
+            let stripeChargeId = null;
+            let paymentIntentId = lockedAppointment.paymentIntentId;
 
-              await appointment.update({
-                paymentIntentId: capturedIntent.id,
-                paymentStatus: "captured",
+            try {
+              if (lockedAppointment.paymentIntentId) {
+                const capturedPaymentIntent = await stripe.paymentIntents.capture(lockedAppointment.paymentIntentId);
+                captureSuccess = true;
+                capturedAmount = capturedPaymentIntent.amount_received || capturedPaymentIntent.amount;
+                stripeChargeId = capturedPaymentIntent.latest_charge;
+              } else if (user && user.stripeCustomerId) {
+                const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+                const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+
+                if (defaultPaymentMethod) {
+                  const priceForCapture = lockedAppointment.price;
+                  const capturedIntent = await stripe.paymentIntents.create({
+                    amount: priceForCapture,
+                    currency: "usd",
+                    customer: user.stripeCustomerId,
+                    payment_method: defaultPaymentMethod,
+                    confirm: true,
+                    off_session: true,
+                    metadata: {
+                      userId: lockedAppointment.userId,
+                      homeId: homeId,
+                      appointmentId: Number(appointmentId),
+                    },
+                  });
+                  captureSuccess = true;
+                  capturedAmount = capturedIntent.amount_received || capturedIntent.amount;
+                  stripeChargeId = capturedIntent.latest_charge;
+                  paymentIntentId = capturedIntent.id;
+                }
+              }
+
+              // Update appointment with final status
+              if (captureSuccess) {
+                await lockedAppointment.update({
+                  paymentIntentId: paymentIntentId,
+                  paymentStatus: "captured",
+                  paid: true,
+                  amountPaid: capturedAmount,
+                });
+
+                // Record capture transaction in Payment table for audit trail
+                await recordPaymentTransaction({
+                  type: "capture",
+                  status: "succeeded",
+                  amount: capturedAmount,
+                  userId: lockedAppointment.userId,
+                  appointmentId: lockedAppointment.id,
+                  stripePaymentIntentId: paymentIntentId,
+                  stripeChargeId: stripeChargeId,
+                  description: `Auto-capture for direct booking appointment ${lockedAppointment.id}`,
+                });
+              } else {
+                // Revert status if capture didn't happen (no payment method)
+                await lockedAppointment.update({ paymentStatus: "pending" });
+              }
+            } catch (stripeError) {
+              // Stripe capture failed - revert status
+              console.error("Error capturing payment on direct booking:", stripeError);
+              await lockedAppointment.update({
+                paymentStatus: "pending",
+                paymentCaptureFailed: true,
+                paymentFirstFailedAt: new Date(),
               });
             }
           }
         } catch (captureError) {
-          console.error("Error capturing payment on direct booking:", captureError);
+          // Rollback transaction if it hasn't been committed
+          if (captureTransaction && !captureTransaction.finished) {
+            await captureTransaction.rollback();
+          }
+          console.error("Error in auto-capture transaction:", captureError);
         }
       }
 
@@ -2074,8 +2285,20 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
 });
 
 appointmentRouter.patch("/approve-request", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { requestId, approve } = req.body;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
     const request = await UserPendingRequests.findOne({
       where: { id: requestId },
     });
@@ -2090,6 +2313,24 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
 
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify user owns this appointment
+    if (appointment.userId !== requestingUserId) {
+      return res.status(403).json({ error: "You don't have permission to approve requests for this appointment" });
+    }
+
+    // Check if appointment is paused (due to homeowner freeze)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused and cannot be modified",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment is cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
     }
 
     if (approve) {
@@ -2180,7 +2421,7 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       // Create payment intent if one doesn't exist (for appointments booked without upfront payment)
       if (!appointment.dataValues.paymentIntentId) {
         try {
-          const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
+          const priceInCents = appointment.dataValues.price;
           const user = await User.findByPk(appointment.dataValues.userId);
 
           if (user && user.stripeCustomerId) {
@@ -2237,11 +2478,11 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       const appointmentId = request.dataValues.appointmentId;
 
       // Use original price for cleaner payout if a homeowner discount was applied
-      // This ensures cleaners get paid based on the full price, with the platform absorbing the discount
-      const payoutPrice = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
-        ? parseFloat(appointment.dataValues.originalPrice)
-        : parseFloat(appointment.dataValues.price);
-      const priceInCents = Math.round(payoutPrice * 100);
+      // This ensures cleaners get paid based on the full price, with the platform absorbing the discount (prices in cents)
+      // Use parseInt for backwards compatibility with any string values stored for originalPrice
+      const priceInCents = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
+        ? parseInt(appointment.dataValues.originalPrice, 10)
+        : appointment.dataValues.price;
 
       // Check cleaner incentive eligibility and calculate fees
       const feeResult = await IncentiveService.calculateCleanerFee(
@@ -2319,7 +2560,17 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
 
             if (!user || !user.stripeCustomerId) {
               console.error(`[Approve Request] No Stripe customer for appointment ${appointment.id}`);
-              await appointment.update({ paymentCaptureFailed: true });
+              await appointment.update({
+                paymentCaptureFailed: true,
+                paymentFirstFailedAt: new Date(),
+                paymentRetryCount: 0,
+              });
+              // Send initial payment failure notification
+              try {
+                await notifyInitialPaymentFailure(appointment);
+              } catch (notifyErr) {
+                console.error("Failed to send payment failure notification:", notifyErr.message);
+              }
               // Continue with approval - don't return early
             } else {
               const customer = await stripe.customers.retrieve(user.stripeCustomerId);
@@ -2327,10 +2578,20 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
 
               if (!defaultPaymentMethod) {
                 console.error(`[Approve Request] No payment method for appointment ${appointment.id}`);
-                await appointment.update({ paymentCaptureFailed: true });
+                await appointment.update({
+                  paymentCaptureFailed: true,
+                  paymentFirstFailedAt: new Date(),
+                  paymentRetryCount: 0,
+                });
+                // Send initial payment failure notification
+                try {
+                  await notifyInitialPaymentFailure(appointment);
+                } catch (notifyErr) {
+                  console.error("Failed to send payment failure notification:", notifyErr.message);
+                }
                 // Continue with approval - don't return early
               } else {
-                const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
+                const priceInCents = appointment.dataValues.price;
 
                 capturedIntent = await stripe.paymentIntents.create({
                   amount: priceInCents,
@@ -2386,8 +2647,18 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
             `[Approve Request] Payment capture failed for appointment ${appointment.id}, will retry via cron:`,
             captureError.message
           );
-          // Mark as failed so cron can notify and retry
-          await appointment.update({ paymentCaptureFailed: true });
+          // Mark as failed and initialize retry tracking
+          await appointment.update({
+            paymentCaptureFailed: true,
+            paymentFirstFailedAt: new Date(),
+            paymentRetryCount: 0,
+          });
+          // Send initial payment failure notification
+          try {
+            await notifyInitialPaymentFailure(appointment);
+          } catch (notifyErr) {
+            console.error("Failed to send payment failure notification:", notifyErr.message);
+          }
         }
       }
 
@@ -2539,6 +2810,28 @@ appointmentRouter.post("/switch-cleaner", async (req, res) => {
       return res.status(404).json({ error: "New cleaner not found" });
     }
 
+    // 3b. Check distance from new cleaner's service area to home (max 30 miles)
+    if (home) {
+      const cleanerLat = newCleaner.serviceAreaLatitude ? parseFloat(newCleaner.serviceAreaLatitude) : null;
+      const cleanerLon = newCleaner.serviceAreaLongitude ? parseFloat(newCleaner.serviceAreaLongitude) : null;
+      const homeLat = home.latitude ? parseFloat(EncryptionService.decrypt(home.latitude)) : null;
+      const homeLon = home.longitude ? parseFloat(EncryptionService.decrypt(home.longitude)) : null;
+
+      if (cleanerLat && cleanerLon && homeLat && homeLon) {
+        const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+        if (distanceCheck.canBook === false) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: "New cleaner too far from service area",
+            message: `The new cleaner is ${distanceCheck.distanceMiles} miles from this home. The maximum distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+            code: "EXCEEDS_MAX_DISTANCE",
+            distanceMiles: distanceCheck.distanceMiles,
+            maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+          });
+        }
+      }
+    }
+
     // 4. Remove old cleaner assignment
     await existingAssignment.destroy({ transaction });
 
@@ -2566,14 +2859,13 @@ appointmentRouter.post("/switch-cleaner", async (req, res) => {
       bookedByCleanerId: newCleaner.isBusinessOwner ? newCleanerId : null,
     }, { transaction });
 
-    // 9. Create new payout record
+    // 9. Create new payout record (prices already in cents)
     const pricingConfig = await getPricingConfig();
     const { platform: platformConfig } = pricingConfig;
 
-    const payoutPrice = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
-      ? parseFloat(appointment.dataValues.originalPrice)
-      : parseFloat(appointment.dataValues.price);
-    const priceInCents = Math.round(payoutPrice * 100);
+    const priceInCents = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
+      ? appointment.dataValues.originalPrice
+      : appointment.dataValues.price;
 
     const feeResult = await IncentiveService.calculateCleanerFee(
       newCleanerId,
@@ -2695,8 +2987,20 @@ appointmentRouter.post("/switch-cleaner", async (req, res) => {
 });
 
 appointmentRouter.patch("/deny-request", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id, appointmentId } = req.body;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
     const request = await UserPendingRequests.findOne({
       where: { appointmentId: Number(appointmentId), employeeId: Number(id) },
     });
@@ -2708,6 +3012,11 @@ appointmentRouter.patch("/deny-request", async (req, res) => {
     const appointment = await UserAppointments.findByPk(Number(appointmentId));
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify user owns this appointment
+    if (appointment.userId !== requestingUserId) {
+      return res.status(403).json({ error: "You don't have permission to deny requests for this appointment" });
     }
 
     const client = await User.findByPk(appointment.dataValues.userId);
@@ -2762,9 +3071,30 @@ appointmentRouter.patch("/deny-request", async (req, res) => {
 });
 
 appointmentRouter.patch("/undo-request-choice", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id, appointmentId } = req.body;
   let userInfo;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
+    // Verify appointment exists and user owns it
+    const appointment = await UserAppointments.findByPk(Number(appointmentId));
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+    if (appointment.userId !== requestingUserId) {
+      return res.status(403).json({ error: "You don't have permission to modify this appointment" });
+    }
+
     const checkItExists = await UserCleanerAppointments.findOne({
       where: {
         employeeId: id,
@@ -2928,6 +3258,28 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
         return res.status(404).json({ error: "Cleaner not found" });
       }
 
+      // Check distance from cleaner's service area to home (max 30 miles)
+      const home = await UserHomes.findByPk(appointment.dataValues.homeId);
+      if (home) {
+        const cleanerLat = cleaner.serviceAreaLatitude ? parseFloat(cleaner.serviceAreaLatitude) : null;
+        const cleanerLon = cleaner.serviceAreaLongitude ? parseFloat(cleaner.serviceAreaLongitude) : null;
+        const homeLat = home.latitude ? parseFloat(EncryptionService.decrypt(home.latitude)) : null;
+        const homeLon = home.longitude ? parseFloat(EncryptionService.decrypt(home.longitude)) : null;
+
+        if (cleanerLat && cleanerLon && homeLat && homeLon) {
+          const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+          if (distanceCheck.canBook === false) {
+            return res.status(400).json({
+              error: "Cleaner too far from home",
+              message: `This cleaner is ${distanceCheck.distanceMiles} miles from the home. The maximum distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+              code: "EXCEEDS_MAX_DISTANCE",
+              distanceMiles: distanceCheck.distanceMiles,
+              maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+            });
+          }
+        }
+      }
+
       const existingRequest = await UserPendingRequests.findOne({
         where: { employeeId: id, appointmentId: Number(appointmentId) },
       });
@@ -2953,8 +3305,20 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
 });
 
 appointmentRouter.patch("/remove-request", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { id, appointmentId } = req.body;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const requestingUserId = decodedToken.userId;
+
     const request = await UserPendingRequests.findOne({
       where: { appointmentId: Number(appointmentId), employeeId: Number(id) },
     });
@@ -2966,6 +3330,14 @@ appointmentRouter.patch("/remove-request", async (req, res) => {
     const appointment = await UserAppointments.findByPk(Number(appointmentId));
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Authorization: only homeowner or the cleaner who made the request can remove it
+    const isAppointmentOwner = appointment.userId === requestingUserId;
+    const isRequestingCleaner = Number(id) === requestingUserId;
+
+    if (!isAppointmentOwner && !isRequestingCleaner) {
+      return res.status(403).json({ error: "You don't have permission to remove this request" });
     }
 
     const client = await User.findByPk(appointment.dataValues.userId);
@@ -3095,6 +3467,19 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       return res.status(400).json({ error: "Cannot cancel a completed appointment" });
     }
 
+    // Check if appointment is paused (homeowner account frozen)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused and cannot be cancelled",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment is already cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has already been cancelled" });
+    }
+
     // Calculate days until appointment
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -3110,15 +3495,13 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     const hasCleanerAssigned = appointment.hasBeenAssigned && appointment.employeesAssigned?.length > 0;
     const isWithinPenaltyWindow = daysUntilAppointment <= cancellationConfig.homeownerPenaltyDays && hasCleanerAssigned;
     const isWithinCancellationFeeWindow = daysUntilAppointment <= cancellationConfig.windowDays;
-    const price = parseFloat(appointment.price) || 0;
-    const priceInCents = Math.round(price * 100);
+    const priceInCents = appointment.price || 0; // Already stored in cents
 
     // Use original price for cleaner payout calculations if discount was applied
     // This ensures cleaners get paid based on the full price, with the platform absorbing the discount
-    const cleanerBasePrice = appointment.discountApplied && appointment.originalPrice
-      ? parseFloat(appointment.originalPrice)
-      : price;
-    const cleanerBasePriceInCents = Math.round(cleanerBasePrice * 100);
+    const cleanerBasePriceInCents = appointment.discountApplied && appointment.originalPrice
+      ? appointment.originalPrice
+      : priceInCents;
 
     // Get user for Stripe customer info
     const user = await User.findByPk(userId);
@@ -3151,7 +3534,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
 
     // Log cancellation initiated
     await CancellationAuditService.logCancellationInitiated(
-      parseInt(id),
+      parseInt(id, 10),
       userId,
       "homeowner",
       {
@@ -3172,12 +3555,14 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     console.log(`[Cancellation] isWithinCancellationFeeWindow: ${isWithinCancellationFeeWindow}`);
     console.log(`[Cancellation] User stripeCustomerId: ${user.stripeCustomerId}`);
     console.log(`[Cancellation] User hasPaymentMethod: ${user.hasPaymentMethod}`);
-    console.log(`[Cancellation] Cancellation fee: $${cancellationConfig.fee}`);
+    console.log(`[Cancellation] Cancellation fee: $${(cancellationConfig.fee / 100).toFixed(2)} (${cancellationConfig.fee} cents)`);
+
+    // Cancellation fee is already stored in cents in the config
+    const cancellationFeeAmountCents = Math.round(cancellationConfig.fee);
 
     // Charge cancellation fee if within the window, cleaner is assigned, and user has payment method
     // No fee charged if no cleaner assigned - homeowner can cancel freely
     if (isWithinCancellationFeeWindow && hasCleanerAssigned && user.stripeCustomerId && user.hasPaymentMethod) {
-      const cancellationFeeAmountCents = Math.round(cancellationConfig.fee * 100);
 
       try {
         // Get the customer's default payment method
@@ -3188,10 +3573,10 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
 
         if (defaultPaymentMethod) {
           // Log fee charge attempt
-          await CancellationAuditService.logFeeChargeAttempted(parseInt(id), cancellationFeeAmountCents, defaultPaymentMethod, req);
+          await CancellationAuditService.logFeeChargeAttempted(parseInt(id, 10), cancellationFeeAmountCents, defaultPaymentMethod, req);
 
           // Create and confirm a PaymentIntent for the cancellation fee
-          console.log(`[Cancellation] Creating PaymentIntent for $${cancellationConfig.fee} (${cancellationFeeAmountCents} cents)`);
+          console.log(`[Cancellation] Creating PaymentIntent for $${(cancellationConfig.fee / 100).toFixed(2)} (${cancellationFeeAmountCents} cents)`);
           const cancellationPaymentIntent = await stripe.paymentIntents.create({
             amount: cancellationFeeAmountCents,
             currency: "usd",
@@ -3210,11 +3595,12 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           console.log(`[Cancellation] PaymentIntent created: ${cancellationPaymentIntent.id}, Status: ${cancellationPaymentIntent.status}`);
 
           // Log fee charge success
-          await CancellationAuditService.logFeeChargeSucceeded(parseInt(id), cancellationFeeAmountCents, cancellationPaymentIntent.id, req);
+          await CancellationAuditService.logFeeChargeSucceeded(parseInt(id, 10), cancellationFeeAmountCents, cancellationPaymentIntent.id, req);
 
           cancellationFeeResult = {
             charged: true,
-            amount: cancellationConfig.fee,
+            amount: cancellationConfig.fee / 100, // API response in dollars for backward compatibility
+            amountCents: cancellationFeeAmountCents, // Internal use in cents
             paymentIntentId: cancellationPaymentIntent.id,
           };
         } else {
@@ -3224,41 +3610,44 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           if (existingBillForFee) {
             const currentFee = Number(existingBillForFee.cancellationFee) || 0;
             const currentTotal = Number(existingBillForFee.totalDue) || 0;
+            // UserBills stores amounts in cents, cancellationConfig.fee is also in cents
             await existingBillForFee.update({
-              cancellationFee: currentFee + cancellationConfig.fee,
-              totalDue: currentTotal + cancellationConfig.fee,
+              cancellationFee: currentFee + cancellationFeeAmountCents,
+              totalDue: currentTotal + cancellationFeeAmountCents,
             });
           }
           cancellationFeeResult = {
             charged: false,
             addedToBill: true,
-            amount: cancellationConfig.fee,
+            amount: cancellationConfig.fee / 100, // API response in dollars for backward compatibility
+            amountCents: cancellationFeeAmountCents, // Internal use in cents
             reason: "No default payment method - added to bill",
           };
         }
       } catch (stripeError) {
         console.error(`[Cancellation] Error charging cancellation fee, adding to bill:`, stripeError);
         // Log fee charge failure
-        await CancellationAuditService.logFeeChargeFailed(parseInt(id), Math.round(cancellationConfig.fee * 100), stripeError, req);
+        await CancellationAuditService.logFeeChargeFailed(parseInt(id, 10), cancellationFeeAmountCents, stripeError, req);
 
-        // Add fee to user's bill since charge failed
+        // Add fee to user's bill since charge failed (UserBills stores in cents)
         const existingBillForFee = await UserBills.findOne({ where: { userId } });
         if (existingBillForFee) {
           const currentFee = Number(existingBillForFee.cancellationFee) || 0;
           const currentTotal = Number(existingBillForFee.totalDue) || 0;
           await existingBillForFee.update({
-            cancellationFee: currentFee + cancellationConfig.fee,
-            totalDue: currentTotal + cancellationConfig.fee,
+            cancellationFee: currentFee + cancellationFeeAmountCents,
+            totalDue: currentTotal + cancellationFeeAmountCents,
           });
         }
 
         // Log fee added to bill
-        await CancellationAuditService.logFeeAddedToBill(parseInt(id), Math.round(cancellationConfig.fee * 100), req);
+        await CancellationAuditService.logFeeAddedToBill(parseInt(id, 10), cancellationFeeAmountCents, req);
 
         cancellationFeeResult = {
           charged: false,
           addedToBill: true,
-          amount: cancellationConfig.fee,
+          amount: cancellationConfig.fee / 100, // API response in dollars for backward compatibility
+          amountCents: cancellationFeeAmountCents, // Internal use in cents
           reason: `Charge failed: ${stripeError.message} - added to bill`,
         };
       }
@@ -3269,15 +3658,17 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       if (existingBillForFee) {
         const currentFee = Number(existingBillForFee.cancellationFee) || 0;
         const currentTotal = Number(existingBillForFee.totalDue) || 0;
+        // UserBills stores amounts in cents
         await existingBillForFee.update({
-          cancellationFee: currentFee + cancellationConfig.fee,
-          totalDue: currentTotal + cancellationConfig.fee,
+          cancellationFee: currentFee + cancellationFeeAmountCents,
+          totalDue: currentTotal + cancellationFeeAmountCents,
         });
       }
       cancellationFeeResult = {
         charged: false,
         addedToBill: true,
-        amount: cancellationConfig.fee,
+        amount: cancellationConfig.fee / 100, // API response in dollars for backward compatibility
+        amountCents: cancellationFeeAmountCents, // Internal use in cents
         reason: "No payment method configured - added to bill",
       };
     } else {
@@ -3342,7 +3733,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           });
 
           // Log refund completed
-          await CancellationAuditService.logRefundCompleted(parseInt(id), clientRefundAmount, refundResult.id, req);
+          await CancellationAuditService.logRefundCompleted(parseInt(id, 10), clientRefundAmount, refundResult.id, req);
 
           // Create payout records for cleaners (their portion minus platform fee)
           const cleanerIds = appointment.employeesAssigned || [];
@@ -3365,7 +3756,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             });
 
             // Log payout created
-            await CancellationAuditService.logPayoutCreated(parseInt(id), cleanerId, perCleanerAmount, req);
+            await CancellationAuditService.logPayoutCreated(parseInt(id, 10), cleanerId, perCleanerAmount, req);
           }
 
           cleanerPayoutResult = {
@@ -3396,7 +3787,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           });
 
           // Log full refund completed
-          await CancellationAuditService.logRefundCompleted(parseInt(id), priceInCents, refundResult.id, req);
+          await CancellationAuditService.logRefundCompleted(parseInt(id, 10), priceInCents, refundResult.id, req);
 
           await appointment.update({ paymentStatus: "refunded" });
         } else if (paymentIntent && paymentIntent.status === "requires_capture") {
@@ -3418,10 +3809,10 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     // Update user bills
     const existingBill = await UserBills.findOne({ where: { userId } });
     if (existingBill) {
-      const appointmentTotal = appointment.paid ? 0 : price; // Only subtract if not already paid
+      const appointmentTotal = appointment.paid ? 0 : priceInCents; // Only subtract if not already paid
       const oldAppt = Number(existingBill.appointmentDue);
       const oldFee = Number(existingBill.cancellationFee);
-      const cancellationFeeAmount = isWithinPenaltyWindow ? price * cancellationConfig.refundPercentage : 0;
+      const cancellationFeeAmount = isWithinPenaltyWindow ? priceInCents * cancellationConfig.refundPercentage : 0;
 
       // Ensure values don't go negative
       const newAppointmentDue = Math.max(0, oldAppt - appointmentTotal);
@@ -3448,11 +3839,11 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       if (cleanerPayoutResult) {
         cleanerPayment = cleanerPayoutResult.perCleaner.toFixed(2);
       } else if (appointment.discountApplied) {
-        // 40% of original price to cleaner
-        cleanerPayment = (cleanerBasePrice * 0.40 / cleanerIds.length).toFixed(2);
+        // 40% of original price to cleaner (convert cents to dollars for display)
+        cleanerPayment = (cleanerBasePriceInCents * 0.40 / cleanerIds.length / 100).toFixed(2);
       } else {
-        // Standard: 50% minus platform fee
-        cleanerPayment = (cleanerBasePrice * (1 - cancellationConfig.refundPercentage) * (1 - platformConfig.feePercent) / cleanerIds.length).toFixed(2);
+        // Standard: 50% minus platform fee (convert cents to dollars for display)
+        cleanerPayment = (cleanerBasePriceInCents * (1 - cancellationConfig.refundPercentage) * (1 - platformConfig.feePercent) / cleanerIds.length / 100).toFixed(2);
       }
 
       // Only show payment amount if appointment was paid and cleaner is getting compensated
@@ -3568,11 +3959,11 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
 
     // Create ledger entries for the cancellation
     try {
-      await JobLedgerService.recordCancellation(parseInt(id), {
+      await JobLedgerService.recordCancellation(parseInt(id, 10), {
         homeownerId: userId,
         refundAmount: refundResult?.amount || 0,
         refundPercentage,
-        cancellationFee: cancellationFeeResult?.charged ? Math.round(cancellationFeeResult.amount * 100) : 0,
+        cancellationFee: cancellationFeeResult?.charged ? cancellationFeeResult.amountCents : 0, // use cents for ledger
         cleanerPayouts: cleanerPayoutResult?.cleanerPayouts || [],
         stripeDetails: {
           refundId: refundResult?.id,
@@ -3616,14 +4007,14 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     };
 
     await CancellationAuditService.logCancellationConfirmed(
-      parseInt(id),
+      parseInt(id, 10),
       userId,
       "homeowner",
       {
         confirmationId,
         refundAmount: refundResult?.amount || 0,
-        cancellationFee: cancellationFeeResult?.amount || 0,
-        cleanerPayout: cleanerPayoutResult?.totalAmount || 0,
+        cancellationFee: cancellationFeeResult?.amountCents || 0, // use cents for audit
+        cleanerPayout: cleanerPayoutResult?.totalAmount ? Math.round(cleanerPayoutResult.totalAmount * 100) : 0, // convert dollars to cents
         previousState,
         newState,
       },
@@ -3640,7 +4031,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
         isWithinFeeWindow: isWithinCancellationFeeWindow,
         refundAmount: refundResult?.amount || 0,
         refundPercentage,
-        cancellationFee: cancellationFeeResult?.amount ? Math.round(cancellationFeeResult.amount * 100) : 0,
+        cancellationFee: cancellationFeeResult?.amountCents || 0, // use cents for breakdown
         cleanerPayout: cleanerPayoutResult ? {
           netAmount: Math.round(cleanerPayoutResult.totalAmount * 100),
           grossAmount: Math.round((cleanerPayoutResult.totalAmount + cleanerPayoutResult.platformFeeTotal) * 100),
@@ -3661,6 +4052,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       message = "Appointment cancelled. Cleaner will receive partial payment.";
     }
     if (cancellationFeeResult?.charged) {
+      // amount is already in dollars for API compatibility
       message += ` A $${cancellationFeeResult.amount} cancellation fee has been charged to your card.`;
     }
 
@@ -3711,6 +4103,19 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
     // Check if appointment is already completed
     if (appointment.completed) {
       return res.status(400).json({ error: "Cannot cancel a completed appointment" });
+    }
+
+    // Check if appointment is paused (homeowner account frozen)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment is already cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has already been cancelled" });
     }
 
     const cleaner = await User.findByPk(userId);
@@ -3788,7 +4193,7 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
             model: UserAppointments,
             as: "appointment",
             where: {
-              date: { [Op.gte]: today.toISOString().split('T')[0] },
+              date: { [Op.gte]: TimezoneService.getTodayInTimezone() },
               completed: false,
             },
           }],
@@ -3798,7 +4203,7 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
           const futureAppointment = assignment.appointment;
 
           // Skip the current appointment being cancelled (already handled below)
-          if (futureAppointment.id === parseInt(id)) continue;
+          if (futureAppointment.id === parseInt(id, 10)) continue;
 
           // Remove from employeesAssigned array
           let futureEmployees = Array.isArray(futureAppointment.employeesAssigned)
@@ -3825,48 +4230,112 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
             },
           });
 
+          // Reactivate pending request if no cleaners left
+          if (updatedFutureEmployees.length === 0) {
+            await UserPendingRequests.update(
+              { status: "pending" },
+              {
+                where: {
+                  appointmentId: futureAppointment.id,
+                  status: { [Op.in]: ["approved", "assigned"] },
+                },
+              }
+            );
+          }
+
+          // Calculate days until appointment for urgency check
+          const apptDate = new Date(futureAppointment.date);
+          const daysUntil = Math.ceil((apptDate - today) / (1000 * 60 * 60 * 24));
+          const isUrgentFill = daysUntil <= 7;
+
           // Notify homeowner about the removed assignment
           const futureHomeowner = await User.findByPk(futureAppointment.userId);
           const futureHome = await UserHomes.findByPk(futureAppointment.homeId);
 
-          if (futureHomeowner) {
+          if (futureHomeowner && futureHome) {
             const notifications = futureHomeowner.notifications || [];
             const formattedDate = new Date(futureAppointment.date).toLocaleDateString(undefined, {
               weekday: "long",
               month: "short",
               day: "numeric",
             });
-            notifications.unshift(
-              `A cleaner has been removed from the ${formattedDate} cleaning at ${futureHome?.address || "your property"} due to account issues. A new cleaner will need to be assigned.`
-            );
+
+            // Different in-app notification based on urgency
+            const inAppMessage = isUrgentFill
+              ? `🚨 PRIORITY: A cleaner has been removed from the ${formattedDate} cleaning at ${EncryptionService.decrypt(futureHome.address) || "your property"}. Kleanr is pushing your appointment to priority cleaners within 10 miles now!`
+              : `A cleaner has been removed from the ${formattedDate} cleaning at ${EncryptionService.decrypt(futureHome.address) || "your property"} due to account issues. A new cleaner will need to be assigned.`;
+
+            notifications.unshift(inAppMessage);
             await futureHomeowner.update({ notifications: notifications.slice(0, 50) });
 
-            // Send email notification
-            if (futureHome) {
+            // Send email and push notifications
+            try {
               const futureAddress = {
                 street: EncryptionService.decrypt(futureHome.address),
                 city: EncryptionService.decrypt(futureHome.city),
                 state: EncryptionService.decrypt(futureHome.state),
                 zipcode: EncryptionService.decrypt(futureHome.zipcode),
               };
+
+              const notificationReason = isUrgentFill ? "urgent_fill" : "account_issues";
+
               await Email.sendEmailCancellation(
                 EncryptionService.decrypt(futureHomeowner.email),
                 futureAddress,
                 futureHomeowner.username,
-                futureAppointment.date
+                futureAppointment.date,
+                notificationReason
               );
 
-              // Send push notification
               if (futureHomeowner.expoPushToken) {
                 await PushNotification.sendPushCancellation(
                   futureHomeowner.expoPushToken,
                   futureHomeowner.username,
                   futureAppointment.date,
-                  futureAddress
+                  futureAddress,
+                  notificationReason
                 );
+              }
+            } catch (notifyErr) {
+              console.error("[Cancellation] Error sending homeowner notification:", notifyErr);
+            }
+
+            // For urgent fills (within 7 days), notify nearby cleaners
+            if (isUrgentFill) {
+              try {
+                const io = req.app.get("io");
+                const urgentResult = await LastMinuteNotificationService.notifyCleanersForUrgentFill(
+                  futureAppointment,
+                  futureHome,
+                  io,
+                  userId
+                );
+                console.log(
+                  `[Cancellation] Urgent fill: Notified ${urgentResult.notifiedCount} cleaners for appointment ${futureAppointment.id} (${daysUntil} days out)`
+                );
+              } catch (urgentErr) {
+                console.error("[Cancellation] Error sending urgent fill notifications:", urgentErr);
               }
             }
           }
+        }
+
+        // Notify cleaner that their account has been frozen
+        try {
+          const io = req.app.get("io");
+          await NotificationService.notifyUser({
+            userId: userId,
+            type: "account_frozen",
+            title: "Account Frozen",
+            message: "Your account has been frozen due to 3 or more last-minute cancellations within 3 months. Please contact support for assistance.",
+            data: {
+              frozenAt: new Date().toISOString(),
+              reason: "3 or more last-minute cancellations within 3 months",
+            },
+            io,
+          });
+        } catch (notifyErr) {
+          console.error("[Cancellation] Error sending freeze notification to cleaner:", notifyErr);
         }
       }
     }
@@ -4039,7 +4508,7 @@ appointmentRouter.patch("/:id", async (req, res) => {
       });
     }
 
-    // Map empoyeesNeeded to cleanersNeeded for client compatibility
+    // Map employeesNeeded to cleanersNeeded for client compatibility
     const responseData = userInfo.dataValues || userInfo;
 
     // Get cleanersConfirmed from MultiCleanerJob if it exists
@@ -4053,7 +4522,7 @@ appointmentRouter.patch("/:id", async (req, res) => {
 
     const mappedResponse = {
       ...responseData,
-      cleanersNeeded: responseData.empoyeesNeeded,
+      cleanersNeeded: responseData.employeesNeeded,
       cleanersConfirmed,
     };
 
@@ -4086,6 +4555,18 @@ appointmentRouter.post("/:id/respond", async (req, res) => {
     const userId = decoded.userId;
     const { id } = req.params;
     const { action, declineReason, suggestedDates } = req.body;
+
+    // Check if user account is frozen
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "accountFrozen", "accountFrozenReason"],
+    });
+    if (user && user.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot respond to booking requests.",
+        reason: user.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
 
     if (!action || !["accept", "decline"].includes(action)) {
       return res.status(400).json({ error: "Invalid action. Must be 'accept' or 'decline'" });
@@ -4257,7 +4738,7 @@ appointmentRouter.post("/:id/rebook", async (req, res) => {
         {
           model: User,
           as: "user",
-          attributes: ["id", "firstName", "lastName"],
+          attributes: ["id", "firstName", "lastName", "accountFrozen"],
         },
       ],
     });
@@ -4266,13 +4747,23 @@ appointmentRouter.post("/:id/rebook", async (req, res) => {
       return res.status(404).json({ error: "Original declined appointment not found" });
     }
 
+    // Check if homeowner account is frozen
+    if (originalAppointment.user && originalAppointment.user.accountFrozen) {
+      return res.status(403).json({
+        error: "Cannot rebook - homeowner account is suspended",
+        accountSuspended: true,
+      });
+    }
+
     // Check rebooking limit
     if (originalAppointment.rebookingAttempts >= 3) {
       return res.status(400).json({ error: "Maximum rebooking attempts reached" });
     }
 
-    // Calculate price
-    const appointmentPrice = price || originalAppointment.price;
+    // Calculate price (convert user input from dollars to cents if provided)
+    const appointmentPrice = price
+      ? Math.round(parseFloat(price) * 100) // User input is in dollars
+      : originalAppointment.price; // Already in cents
 
     // Calculate expiration
     const expiresAt = new Date();
@@ -4287,12 +4778,12 @@ appointmentRouter.post("/:id/rebook", async (req, res) => {
       userId: originalAppointment.userId,
       homeId: originalAppointment.homeId,
       date,
-      price: String(appointmentPrice),
+      price: appointmentPrice, // Price in cents
       paid: false,
       completed: false,
       hasBeenAssigned: true,
       employeesAssigned: [String(cleanerId)],
-      empoyeesNeeded: originalAppointment.empoyeesNeeded,
+      employeesNeeded: originalAppointment.employeesNeeded,
       timeToBeCompleted: timeWindow || originalAppointment.timeToBeCompleted,
       bringTowels: originalAppointment.bringTowels,
       bringSheets: originalAppointment.bringSheets,
@@ -4456,7 +4947,8 @@ appointmentRouter.post("/:id/decline-response", async (req, res) => {
         success: true,
         action: "confirm_marketplace",
         confirmRequired: true,
-        currentPrice: parseFloat(appointment.price),
+        currentPrice: (appointment.price || 0) / 100, // Convert cents to dollars for display
+        currentPriceCents: appointment.price || 0,
         marketplacePrice,
         homeId: home.id,
         message: "Please confirm to open this appointment to the marketplace.",
@@ -4531,7 +5023,7 @@ appointmentRouter.post("/:id/confirm-marketplace", async (req, res) => {
       openToMarket: true,
       openedToMarketAt: new Date(),
       businessOwnerPrice: appointment.price, // Save original business owner price
-      price: marketplacePrice.toString(),
+      price: marketplacePrice, // Already in cents from calculatePrice()
       bookedByCleanerId: null, // Remove business owner link
       hasBeenAssigned: false,
       employeesAssigned: [],
@@ -4582,8 +5074,39 @@ appointmentRouter.post("/:id/confirm-marketplace", async (req, res) => {
 // ==========================================
 
 appointmentRouter.get("/:homeId", async (req, res) => {
+  // Authentication check
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   const { homeId } = req.params;
+
   try {
+    // Verify token and get user ID
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Verify home exists and user has access
+    const home = await UserHomes.findByPk(homeId);
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    // Check if user owns this home or is assigned to clean appointments at this home
+    const isOwner = home.userId === userId;
+    const isAssignedCleaner = await UserAppointments.findOne({
+      where: {
+        homeId: homeId,
+        employeesAssigned: { [Op.contains]: [String(userId)] },
+      },
+    });
+
+    if (!isOwner && !isAssignedCleaner) {
+      return res.status(403).json({ error: "You don't have permission to view appointments for this home" });
+    }
+
     const appointments = await UserAppointments.findAll({
       where: {
         homeId: homeId,
@@ -4594,8 +5117,11 @@ appointmentRouter.get("/:homeId", async (req, res) => {
       AppointmentSerializer.serializeArray(appointments);
     return res.status(200).json({ appointments: serializedAppointments });
   } catch (error) {
-    console.log(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    console.error(error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    return res.status(500).json({ error: "Failed to fetch appointments" });
   }
 });
 

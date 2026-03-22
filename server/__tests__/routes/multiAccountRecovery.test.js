@@ -11,6 +11,11 @@ const request = require("supertest");
 const express = require("express");
 const bcrypt = require("bcrypt");
 
+// Mock express-rate-limit to disable rate limiting in tests
+jest.mock("express-rate-limit", () => {
+	return jest.fn(() => (req, res, next) => next());
+});
+
 // Mock all dependencies before requiring the router
 jest.mock("../../models", () => ({
 	User: {

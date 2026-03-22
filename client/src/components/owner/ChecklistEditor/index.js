@@ -9,7 +9,6 @@ import {
   Platform,
   Modal,
 } from "react-native";
-import { useNavigate } from "react-router-native";
 import DraggableFlatList from "react-native-draggable-flatlist";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import ChecklistService from "../../../services/fetchRequests/ChecklistService";
@@ -20,11 +19,12 @@ import PublishConfirmModal from "./PublishConfirmModal";
 import styles from "./ChecklistEditorStyles";
 import { colors } from "../../../services/styles/theme";
 
+import useSafeNavigation from "../../../hooks/useSafeNavigation";
 // Generate unique IDs
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 const ChecklistEditor = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const token = state?.currentUser?.token;
 
   // State
@@ -512,7 +512,7 @@ const ChecklistEditor = ({ state }) => {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
-            <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+            <Pressable onPress={() => goBack()} style={styles.backButton}>
               <Text style={styles.backButtonIcon}>←</Text>
               <Text style={styles.backButtonText}>Back</Text>
             </Pressable>

@@ -50,8 +50,22 @@ const mockModels = {
   Payment: {
     create: jest.fn(),
     findAndCountAll: jest.fn(),
+    generateTransactionId: jest.fn(() => `txn_test_${Date.now()}`),
   },
   UserHomes: {},
+  sequelize: {
+    transaction: jest.fn().mockImplementation(async (callback) => {
+      const mockTransaction = {
+        LOCK: { UPDATE: "UPDATE" },
+        commit: jest.fn().mockResolvedValue(undefined),
+        rollback: jest.fn().mockResolvedValue(undefined),
+      };
+      if (callback) {
+        return callback(mockTransaction);
+      }
+      return mockTransaction;
+    }),
+  },
 };
 
 // Mock node-cron
@@ -241,9 +255,8 @@ describe("Billing Service", () => {
       });
 
       mockModels.UserBills.findOne.mockResolvedValue({
-        appointmentPaid: 0,
-        totalPaid: 0,
         appointmentDue: 100,
+        cancellationFee: 0,
         totalDue: 100,
         update: jest.fn().mockResolvedValue(true),
       });

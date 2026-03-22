@@ -1,155 +1,84 @@
 /* eslint-disable no-console */
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class Review {
   // Submit a new multi-aspect review
   static async submitReview(token, reviewData) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/reviews/submit", {
-        method: "POST",
-        body: JSON.stringify(reviewData),
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const responseData = await response.json();
-      if (!response.ok) {
-        return { error: responseData.error || "Failed to submit review" };
-      }
-      return responseData;
-    } catch (err) {
-      console.error("Error submitting review:", err);
-      return { error: "Failed to submit review" };
+    const result = await HttpClient.post("/reviews/submit", reviewData, { token });
+
+    if (result.success === false) {
+      return { error: result.error || "Failed to submit review" };
     }
+
+    return result;
   }
 
   // Legacy method for backwards compatibility
   static async addReviewToDb(data) {
-    try {
-      const response = await fetch(baseURL + "/api/v1/reviews/submit-legacy", {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      if (!response.ok) {
-        if (response.status === 400) {
-          const responseData = await response.json();
-          return responseData;
-        }
-        const error = new Error(`${response.status}(${response.statusText})`);
-        throw error;
+    const result = await HttpClient.post("/reviews/submit-legacy", data, { skipAuth: true });
+
+    if (result.success === false) {
+      if (result.status === 400) {
+        return result;
       }
-      const responseData = await response.json();
-      return true;
-    } catch (err) {
-      return err;
+      throw new Error(result.error || "Failed to submit review");
     }
+
+    return true;
   }
 
   static async deleteReview(token, id) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/reviews/${id}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        if (response.status === 400) {
-          const responseData = await response.json();
-          throw new Error(`Bad Request: ${JSON.stringify(responseData)}`);
-        }
-        throw new Error(`${response.status} (${response.statusText})`);
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (err) {
-      console.error("Error deleting review:", err);
-      throw new Error(`Failed to delete review: ${err.message}`);
+    const result = await HttpClient.delete(`/reviews/${id}`, { token });
+
+    if (result.success === false) {
+      throw new Error(result.error || "Failed to delete review");
     }
+
+    return result;
   }
 
   // Get published reviews for authenticated user
   static async getReviews(token) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/reviews`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error("No data received");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching reviews:", error);
+    const result = await HttpClient.get("/reviews", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[Review] getReviews failed:", result.error);
       return { reviews: [] };
     }
+
+    return result;
   }
 
   // Get pending reviews for authenticated user
   static async getPendingReviews(token) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/reviews/pending`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error("Failed to fetch pending reviews");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching pending reviews:", error);
+    const result = await HttpClient.get("/reviews/pending", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[Review] getPendingReviews failed:", result.error);
       return { pendingReviews: [] };
     }
+
+    return result;
   }
 
   // Get review status for an appointment
   static async getReviewStatus(token, appointmentId) {
-    try {
-      const response = await fetch(
-        baseURL + `/api/v1/reviews/status/${appointmentId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        throw new Error("Failed to fetch review status");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching review status:", error);
+    const result = await HttpClient.get(`/reviews/status/${appointmentId}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[Review] getReviewStatus failed:", result.error);
       return null;
     }
+
+    return result;
   }
 
   // Get review statistics for authenticated user
   static async getReviewStats(token) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/reviews/stats`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error("Failed to fetch review stats");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching review stats:", error);
+    const result = await HttpClient.get("/reviews/stats", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[Review] getReviewStats failed:", result.error);
       return {
         averageRating: 0,
         totalReviews: 0,
@@ -157,40 +86,32 @@ class Review {
         aspectAverages: {},
       };
     }
+
+    return result;
   }
 
   // Get public reviews for a user profile
   static async getUserReviews(userId) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/reviews/user/${userId}`);
-      if (!response.ok) {
-        throw new Error("Failed to fetch user reviews");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching user reviews:", error);
+    const result = await HttpClient.get(`/reviews/user/${userId}`, { skipAuth: true });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[Review] getUserReviews failed:", result.error);
       return { reviews: [], stats: null };
     }
+
+    return result;
   }
 
   // Get reviews written by authenticated user
   static async getWrittenReviews(token) {
-    try {
-      const response = await fetch(baseURL + `/api/v1/reviews/written`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error("Failed to fetch written reviews");
-      }
-      const responseData = await response.json();
-      return responseData;
-    } catch (error) {
-      console.error("Error fetching written reviews:", error);
+    const result = await HttpClient.get("/reviews/written", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[Review] getWrittenReviews failed:", result.error);
       return { reviews: [] };
     }
+
+    return result;
   }
 }
 

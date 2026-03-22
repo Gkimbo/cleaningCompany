@@ -2,6 +2,7 @@ const { UserHomes, User, UserAppointments, UserBills, MultiCleanerJob } = requir
 const bcrypt = require("bcrypt");
 const { getPricingConfig, getCleanersNeeded } = require("../config/businessConfig");
 const HomeClass = require("./HomeClass");
+const TimezoneService = require("./TimezoneService");
 
 class UserInfoClass {
   static async addHomeToDB({
@@ -32,6 +33,15 @@ class UserInfoClass {
     dirtyTowelsLocation,
     bedConfigurations,
     bathroomConfigurations,
+    // Common room counts for large homes (4+ beds)
+    numKitchens,
+    numLivingRooms,
+    numDiningRooms,
+    numFamilyRooms,
+    numOffices,
+    numLaundryRooms,
+    numBonusRooms,
+    numBasements,
   }) {
     // Geocode the address to get accurate coordinates
     const { latitude, longitude } = await HomeClass.geocodeAddress(
@@ -40,6 +50,13 @@ class UserInfoClass {
       state,
       zipcode
     );
+
+    // Determine timezone from coordinates (with state fallback)
+    const timezone = TimezoneService.getTimezoneForHome({
+      latitude,
+      longitude,
+      state,
+    });
 
     const newHome = await UserHomes.create({
       userId,
@@ -70,6 +87,16 @@ class UserInfoClass {
       bathroomConfigurations,
       latitude,
       longitude,
+      timezone,
+      // Common room counts for large homes (4+ beds)
+      numKitchens,
+      numLivingRooms,
+      numDiningRooms,
+      numFamilyRooms,
+      numOffices,
+      numLaundryRooms,
+      numBonusRooms,
+      numBasements,
     });
     return newHome;
   }
@@ -102,6 +129,15 @@ class UserInfoClass {
     dirtyTowelsLocation,
     bedConfigurations,
     bathroomConfigurations,
+    // Common room counts for large homes (4+ beds)
+    numKitchens,
+    numLivingRooms,
+    numDiningRooms,
+    numFamilyRooms,
+    numOffices,
+    numLaundryRooms,
+    numBonusRooms,
+    numBasements,
   }) {
     const existingHome = await UserHomes.findOne({
       where: { id },
@@ -120,11 +156,18 @@ class UserInfoClass {
 
     let latitude = existingHome.latitude;
     let longitude = existingHome.longitude;
+    let timezone = existingHome.timezone;
 
     if (addressChanged) {
       const coords = await HomeClass.geocodeAddress(address, city, state, zipcode);
       latitude = coords.latitude;
       longitude = coords.longitude;
+      // Recalculate timezone based on new coordinates
+      timezone = TimezoneService.getTimezoneForHome({
+        latitude,
+        longitude,
+        state,
+      });
     }
 
     await existingHome.update({
@@ -155,6 +198,16 @@ class UserInfoClass {
       bathroomConfigurations,
       latitude,
       longitude,
+      timezone,
+      // Common room counts for large homes (4+ beds)
+      numKitchens,
+      numLivingRooms,
+      numDiningRooms,
+      numFamilyRooms,
+      numOffices,
+      numLaundryRooms,
+      numBonusRooms,
+      numBasements,
     });
 
     return existingHome;
@@ -248,7 +301,7 @@ class UserInfoClass {
     const home = existingAppointment.home;
     const numBeds = home?.numBeds || 1;
     const numBaths = home?.numBaths || 1;
-    const oldCleanersNeeded = existingAppointment.empoyeesNeeded || 1;
+    const oldCleanersNeeded = existingAppointment.employeesNeeded || 1;
     const newCleanersNeeded = getCleanersNeeded(numBeds, numBaths, timeToBeCompleted);
 
     try {
@@ -267,7 +320,7 @@ class UserInfoClass {
 
       // Update cleaners needed if it changed
       if (newCleanersNeeded !== oldCleanersNeeded) {
-        updateData.empoyeesNeeded = newCleanersNeeded;
+        updateData.employeesNeeded = newCleanersNeeded;
         console.log(`[TimeWindow Update] Appointment ${id}: cleaners needed changed from ${oldCleanersNeeded} to ${newCleanersNeeded}`);
 
         // Handle MultiCleanerJob updates

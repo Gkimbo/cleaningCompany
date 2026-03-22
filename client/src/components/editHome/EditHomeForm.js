@@ -28,6 +28,7 @@ import {
   typography,
 } from "../../services/styles/theme";
 import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
+import { parseDateString } from "../../services/formatters";
 import PreferredCleanersSection from "./PreferredCleanersSection";
 
 const STEPS = {
@@ -108,6 +109,15 @@ const EditHomeForm = ({ state, dispatch }) => {
     dirtyTowelsLocation: "",
     bedConfigurations: [],
     bathroomConfigurations: [],
+    // Common room counts for large homes (4+ beds)
+    numKitchens: 1,
+    numLivingRooms: 1,
+    numDiningRooms: 1,
+    numFamilyRooms: 0,
+    numOffices: 0,
+    numLaundryRooms: 0,
+    numBonusRooms: 0,
+    numBasements: 0,
   });
 
   useEffect(() => {
@@ -125,6 +135,15 @@ const EditHomeForm = ({ state, dispatch }) => {
         dirtyTowelsLocation: foundHome.dirtyTowelsLocation || "",
         bedConfigurations: foundHome.bedConfigurations || [],
         bathroomConfigurations: foundHome.bathroomConfigurations || [],
+        // Common room counts for large homes (4+ beds)
+        numKitchens: foundHome.numKitchens ?? 1,
+        numLivingRooms: foundHome.numLivingRooms ?? 1,
+        numDiningRooms: foundHome.numDiningRooms ?? 1,
+        numFamilyRooms: foundHome.numFamilyRooms ?? 0,
+        numOffices: foundHome.numOffices ?? 0,
+        numLaundryRooms: foundHome.numLaundryRooms ?? 0,
+        numBonusRooms: foundHome.numBonusRooms ?? 0,
+        numBasements: foundHome.numBasements ?? 0,
       });
       setIsMarketplaceEnabled(foundHome.isMarketplaceEnabled || false);
     }
@@ -238,6 +257,90 @@ const EditHomeForm = ({ state, dispatch }) => {
     }
   };
 
+  // Render a room counter with +/- buttons for common room configuration
+  const renderRoomCounter = (label, field, min = 0, max = 10) => {
+    const value = homeData[field] || 0;
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingVertical: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: "#e2e8f0",
+        }}
+      >
+        <Text style={{ fontSize: 15, color: "#334155" }}>{label}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <TouchableOpacity
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: value <= min ? "#e2e8f0" : "#f1f5f9",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+            onPress={() => {
+              if (value > min) {
+                updateField(field, value - 1);
+              }
+            }}
+            disabled={value <= min}
+          >
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "bold",
+                color: value <= min ? "#94a3b8" : "#334155",
+              }}
+            >
+              -
+            </Text>
+          </TouchableOpacity>
+          <Text
+            style={{
+              width: 40,
+              textAlign: "center",
+              fontSize: 16,
+              fontWeight: "600",
+              color: "#1e293b",
+            }}
+          >
+            {value}
+          </Text>
+          <TouchableOpacity
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: value >= max ? "#e2e8f0" : "#3b82f6",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+            onPress={() => {
+              if (value < max) {
+                updateField(field, value + 1);
+              }
+            }}
+            disabled={value >= max}
+          >
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "bold",
+                color: value >= max ? "#94a3b8" : "#fff",
+              }}
+            >
+              +
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   const formatPhoneNumber = (text) => {
     const cleaned = text.replace(/\D/g, "");
     if (cleaned.length <= 3) return cleaned;
@@ -330,6 +433,15 @@ const EditHomeForm = ({ state, dispatch }) => {
         // Always save configurations so they can be restored when toggled back on
         bedConfigurations: homeData.bedConfigurations,
         bathroomConfigurations: homeData.bathroomConfigurations,
+        // Common room counts (only meaningful for large homes with 4+ beds)
+        numKitchens: parseInt(homeData.numBeds) >= 4 ? homeData.numKitchens : null,
+        numLivingRooms: parseInt(homeData.numBeds) >= 4 ? homeData.numLivingRooms : null,
+        numDiningRooms: parseInt(homeData.numBeds) >= 4 ? homeData.numDiningRooms : null,
+        numFamilyRooms: parseInt(homeData.numBeds) >= 4 ? homeData.numFamilyRooms : null,
+        numOffices: parseInt(homeData.numBeds) >= 4 ? homeData.numOffices : null,
+        numLaundryRooms: parseInt(homeData.numBeds) >= 4 ? homeData.numLaundryRooms : null,
+        numBonusRooms: parseInt(homeData.numBeds) >= 4 ? homeData.numBonusRooms : null,
+        numBasements: parseInt(homeData.numBeds) >= 4 ? homeData.numBasements : null,
       };
 
       const response = await FetchData.editHomeInfo(submitData, user);
@@ -389,7 +501,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 
     if (appointments?.appointments) {
       appointments.appointments.forEach((appt) => {
-        const date = new Date(appt.date);
+        const date = parseDateString(appt.date);
         if (
           date.getTime() - currentDate.getTime() <= cancellation.windowDays * 24 * 60 * 60 * 1000 &&
           date.getTime() - currentDate.getTime() >= 0
@@ -713,6 +825,24 @@ const EditHomeForm = ({ state, dispatch }) => {
           )}
         </View>
       </View>
+
+      {/* Common Rooms Section - only shown for large homes (4+ beds) */}
+      {parseInt(homeData.numBeds) >= 4 && (
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Common Rooms</Text>
+          <Text style={[styles.inputHelper, { marginBottom: 12, marginTop: 0 }]}>
+            For larger homes, let us know how many of each room type you have for accurate cleaning assignments.
+          </Text>
+          {renderRoomCounter("Kitchens", "numKitchens", 1, 5)}
+          {renderRoomCounter("Living Rooms", "numLivingRooms", 0, 5)}
+          {renderRoomCounter("Dining Rooms", "numDiningRooms", 0, 5)}
+          {renderRoomCounter("Family Rooms", "numFamilyRooms", 0, 5)}
+          {renderRoomCounter("Offices", "numOffices", 0, 5)}
+          {renderRoomCounter("Laundry Rooms", "numLaundryRooms", 0, 3)}
+          {renderRoomCounter("Bonus Rooms", "numBonusRooms", 0, 5)}
+          {renderRoomCounter("Basements", "numBasements", 0, 3)}
+        </View>
+      )}
     </View>
   );
 
@@ -1025,8 +1155,8 @@ const EditHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Sheets</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.sheetsProvided === "yes" && homeData.bedConfigurations.length > 0
-              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * pricing.linens.sheetFeePerBed} ($${pricing.linens.sheetFeePerBed} x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
-              : homeData.numBeds ? `$${pricing.linens.sheetFeePerBed} x ${homeData.numBeds} beds = $${parseInt(homeData.numBeds) * pricing.linens.sheetFeePerBed}` : "Select to configure sheets for each bed"}
+              ? `$${(homeData.bedConfigurations.filter(b => b.needsSheets).length * pricing.linens.sheetFeePerBed / 100).toFixed(0)} ($${(pricing.linens.sheetFeePerBed / 100).toFixed(0)} x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
+              : homeData.numBeds ? `$${(pricing.linens.sheetFeePerBed / 100).toFixed(0)} x ${homeData.numBeds} beds = $${(parseInt(homeData.numBeds) * pricing.linens.sheetFeePerBed / 100).toFixed(0)}` : "Select to configure sheets for each bed"}
           </Text>
         </View>
         <View
@@ -1126,8 +1256,8 @@ const EditHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Towels</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.towelsProvided === "yes" && homeData.bathroomConfigurations.length > 0
-              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * pricing.linens.towelFee + (b.faceCloths || 0) * pricing.linens.faceClothFee, 0)} - $${pricing.linens.towelFee}/towel, $${pricing.linens.faceClothFee}/face cloth`
-              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $${pricing.linens.towelFee}/towel, $${pricing.linens.faceClothFee}/face cloth` : "Select to configure towels for each bathroom"}
+              ? `$${(homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * pricing.linens.towelFee + (b.faceCloths || 0) * pricing.linens.faceClothFee, 0) / 100).toFixed(0)} - $${(pricing.linens.towelFee / 100).toFixed(0)}/towel, $${(pricing.linens.faceClothFee / 100).toFixed(0)}/face cloth`
+              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $${(pricing.linens.towelFee / 100).toFixed(0)}/towel, $${(pricing.linens.faceClothFee / 100).toFixed(0)}/face cloth` : "Select to configure towels for each bathroom"}
           </Text>
         </View>
         <View
@@ -1163,7 +1293,7 @@ const EditHomeForm = ({ state, dispatch }) => {
                 Bathroom {bath.bathroomNumber}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                <Text style={{ flex: 1, color: "#555" }}>Towels (${pricing.linens.towelFee} each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Towels (${(pricing.linens.towelFee / 100).toFixed(0)} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{
@@ -1201,7 +1331,7 @@ const EditHomeForm = ({ state, dispatch }) => {
                 </View>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={{ flex: 1, color: "#555" }}>Face cloths (${pricing.linens.faceClothFee} each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Face cloths (${(pricing.linens.faceClothFee / 100).toFixed(0)} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{
@@ -1390,7 +1520,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 
                 {request.calculatedPrice && (
                   <Text style={localStyles.requestPrice}>
-                    Quoted Price: ${request.calculatedPrice}
+                    Quoted Price: ${(request.calculatedPrice / 100).toFixed(2)}
                   </Text>
                 )}
 
@@ -1606,7 +1736,7 @@ const EditHomeForm = ({ state, dispatch }) => {
               }}
             >
               {deleteFee > 0
-                ? `This will cancel all appointments. A $${deleteFee} cancellation fee will be charged for appointments within the next 7 days.`
+                ? `This will cancel all appointments. A $${(deleteFee / 100).toFixed(0)} cancellation fee will be charged for appointments within the next 7 days.`
                 : "This will permanently delete this home and all associated data."}
             </Text>
             <View style={{ flexDirection: "row", gap: spacing.md }}>

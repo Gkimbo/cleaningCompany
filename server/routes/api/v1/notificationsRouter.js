@@ -76,41 +76,8 @@ notificationsRouter.get("/unread-count", authenticateToken, async (req, res) => 
   }
 });
 
-// GET: Get a single notification by ID
-notificationsRouter.get("/:id", authenticateToken, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { id } = req.params;
-
-    // Skip if id is a route keyword
-    if (id === "unread-count" || id === "action-required") {
-      return res.status(400).json({ error: "Invalid notification ID" });
-    }
-
-    const notification = await Notification.findOne({
-      where: { id, userId },
-      include: [
-        {
-          model: UserAppointments,
-          as: "appointment",
-          attributes: ["id", "date", "price", "homeId", "clientResponse", "expiresAt"],
-          required: false,
-        },
-      ],
-    });
-
-    if (!notification) {
-      return res.status(404).json({ error: "Notification not found" });
-    }
-
-    return res.status(200).json({ notification: NotificationSerializer.serializeOne(notification) });
-  } catch (error) {
-    console.error("[Notifications] Error fetching notification:", error);
-    return res.status(500).json({ error: "Failed to fetch notification" });
-  }
-});
-
 // GET: Get action-required notifications (pending bookings, etc.)
+// NOTE: This must come BEFORE /:id to avoid route conflict
 notificationsRouter.get("/action-required", authenticateToken, async (req, res) => {
   try {
     const userId = req.userId;
@@ -153,6 +120,36 @@ notificationsRouter.get("/action-required", authenticateToken, async (req, res) 
   } catch (error) {
     console.error("[Notifications] Error fetching action-required notifications:", error);
     return res.status(500).json({ error: "Failed to fetch notifications" });
+  }
+});
+
+// GET: Get a single notification by ID
+// NOTE: This catch-all route must come AFTER all specific routes
+notificationsRouter.get("/:id", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { id } = req.params;
+
+    const notification = await Notification.findOne({
+      where: { id, userId },
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          attributes: ["id", "date", "price", "homeId", "clientResponse", "expiresAt"],
+          required: false,
+        },
+      ],
+    });
+
+    if (!notification) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+
+    return res.status(200).json({ notification: NotificationSerializer.serializeOne(notification) });
+  } catch (error) {
+    console.error("[Notifications] Error fetching notification:", error);
+    return res.status(500).json({ error: "Failed to fetch notification" });
   }
 });
 

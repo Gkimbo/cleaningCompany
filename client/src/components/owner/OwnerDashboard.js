@@ -7,31 +7,144 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
-import Icon from "react-native-vector-icons/FontAwesome";
+import Icon from "react-native-vector-icons/FontAwesome5";
 import OwnerDashboardService from "../../services/fetchRequests/OwnerDashboardService";
-import {
-  colors,
-  spacing,
-  radius,
-  typography,
-  shadows,
-} from "../../services/styles/theme";
+import { shadows } from "../../services/styles/theme";
 import TaxFormsSection from "../tax/TaxFormsSection";
 import { ConflictsStatsWidget } from "../conflicts";
 import { PreviewRoleModal } from "../preview";
 import { usePreview } from "../../context/PreviewContext";
 import CreateSupportTicketModal from "../conflicts/modals/CreateSupportTicketModal";
 
-const { width } = Dimensions.get("window");
+const { width: screenWidth } = Dimensions.get("window");
 
-// Simple Bar Chart Component
-const BarChart = ({ data, maxValue, label, color = colors.primary[500] }) => {
-  const chartHeight = 120;
-  const barWidth = Math.max(20, (width - 100) / Math.max(data.length, 1) - 8);
+// Modern Stat Card with icon and trend
+const StatCard = ({ title, value, icon, color, trend, trendUp, subtitle }) => (
+  <View style={[styles.statCard, { borderTopColor: color }]}>
+    <View style={styles.statCardHeader}>
+      <View style={[styles.statIconWrap, { backgroundColor: color + "15" }]}>
+        <Icon name={icon} size={16} color={color} />
+      </View>
+      {trend && (
+        <View style={[styles.trendBadge, { backgroundColor: trendUp ? "#DCFCE7" : "#FEE2E2" }]}>
+          <Icon name={trendUp ? "arrow-up" : "arrow-down"} size={8} color={trendUp ? "#16A34A" : "#DC2626"} />
+          <Text style={[styles.trendText, { color: trendUp ? "#16A34A" : "#DC2626" }]}>{trend}</Text>
+        </View>
+      )}
+    </View>
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{title}</Text>
+    {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
+  </View>
+);
+
+// Action Button
+const ActionButton = ({ icon, label, color, onPress, badge }) => (
+  <Pressable
+    style={({ pressed }) => [
+      styles.actionBtn,
+      pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] },
+    ]}
+    onPress={onPress}
+  >
+    <View style={[styles.actionBtnIcon, { backgroundColor: color }]}>
+      <Icon name={icon} size={18} color="#fff" />
+      {badge > 0 && (
+        <View style={styles.actionBadge}>
+          <Text style={styles.actionBadgeText}>{badge > 99 ? "99+" : badge}</Text>
+        </View>
+      )}
+    </View>
+    <Text style={styles.actionBtnLabel}>{label}</Text>
+  </Pressable>
+);
+
+// Section Header
+const SectionHeader = ({ title, icon, color, onPress, actionText }) => (
+  <View style={styles.sectionHeader}>
+    <View style={styles.sectionHeaderLeft}>
+      {icon && (
+        <View style={[styles.sectionIconWrap, { backgroundColor: (color || "#6366F1") + "15" }]}>
+          <Icon name={icon} size={14} color={color || "#6366F1"} />
+        </View>
+      )}
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+    {onPress && (
+      <Pressable onPress={onPress} style={styles.sectionActionBtn}>
+        <Text style={styles.sectionAction}>{actionText || "View All"}</Text>
+        <Icon name="chevron-right" size={10} color="#6366F1" />
+      </Pressable>
+    )}
+  </View>
+);
+
+// Period Pill
+const PeriodPill = ({ label, isActive, onPress }) => (
+  <Pressable
+    style={[styles.periodPill, isActive && styles.periodPillActive]}
+    onPress={onPress}
+  >
+    <Text style={[styles.periodPillText, isActive && styles.periodPillTextActive]}>
+      {label}
+    </Text>
+  </Pressable>
+);
+
+// Metric Card
+const MetricCard = ({ title, value, icon, color, size = "normal" }) => (
+  <View style={[
+    styles.metricCard,
+    size === "large" && styles.metricCardLarge,
+    { borderLeftColor: color || "#E5E7EB" }
+  ]}>
+    {icon && (
+      <View style={[styles.metricIconWrap, { backgroundColor: (color || "#6366F1") + "15" }]}>
+        <Icon name={icon} size={14} color={color || "#6366F1"} />
+      </View>
+    )}
+    <Text style={[styles.metricValue, size === "large" && styles.metricValueLarge]}>
+      {value}
+    </Text>
+    <Text style={styles.metricLabel}>{title}</Text>
+  </View>
+);
+
+// Info Row
+const InfoRow = ({ icon, label, value, color }) => (
+  <View style={styles.infoRow}>
+    <View style={[styles.infoRowIcon, { backgroundColor: (color || "#6366F1") + "15" }]}>
+      <Icon name={icon} size={12} color={color || "#6366F1"} />
+    </View>
+    <Text style={styles.infoRowLabel}>{label}</Text>
+    <Text style={styles.infoRowValue}>{value}</Text>
+  </View>
+);
+
+// Progress Bar
+const ProgressBar = ({ label, value, color, maxValue = 100 }) => {
+  const percentage = Math.min((value / maxValue) * 100, 100);
+  return (
+    <View style={styles.progressBarContainer}>
+      <View style={styles.progressBarHeader}>
+        <Text style={styles.progressBarLabel}>{label}</Text>
+        <Text style={[styles.progressBarValue, { color }]}>{value}%</Text>
+      </View>
+      <View style={styles.progressBarTrack}>
+        <View style={[styles.progressBarFill, { width: `${percentage}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+};
+
+// Bar Chart
+const BarChart = ({ data, label, color = "#6366F1" }) => {
+  const maxValue = Math.max(...data.map((d) => d.value), 1);
+  const chartHeight = 100;
+  const barWidth = Math.max(20, (screenWidth - 120) / Math.max(data.length, 1) - 10);
 
   return (
     <View style={styles.chartContainer}>
@@ -39,15 +152,14 @@ const BarChart = ({ data, maxValue, label, color = colors.primary[500] }) => {
       <View style={styles.chartArea}>
         <View style={styles.barsContainer}>
           {data.map((item, index) => {
-            const barHeight =
-              maxValue > 0 ? (item.value / maxValue) * chartHeight : 0;
+            const barHeight = maxValue > 0 ? (item.value / maxValue) * chartHeight : 0;
             return (
               <View key={index} style={styles.barWrapper}>
                 <View
                   style={[
                     styles.bar,
                     {
-                      height: Math.max(barHeight, 2),
+                      height: Math.max(barHeight, 4),
                       width: barWidth,
                       backgroundColor: color,
                     },
@@ -62,66 +174,6 @@ const BarChart = ({ data, maxValue, label, color = colors.primary[500] }) => {
     </View>
   );
 };
-
-// Stat Card Component
-const StatCard = ({
-  title,
-  value,
-  subtitle,
-  icon,
-  color = colors.primary[500],
-  onPress,
-}) => (
-  <Pressable
-    onPress={onPress}
-    style={({ pressed }) => [
-      styles.statCard,
-      { borderLeftColor: color },
-      pressed && onPress && styles.statCardPressed,
-    ]}
-  >
-    <Text style={styles.statValue}>{value}</Text>
-    <Text style={styles.statTitle}>{title}</Text>
-    {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
-  </Pressable>
-);
-
-// Section Header Component
-const SectionHeader = ({ title, onPress, actionText }) => (
-  <View style={styles.sectionHeader}>
-    <Text style={styles.sectionTitle}>{title}</Text>
-    {onPress && (
-      <Pressable onPress={onPress}>
-        <Text style={styles.sectionAction}>{actionText || "View All"}</Text>
-      </Pressable>
-    )}
-  </View>
-);
-
-// Period Selector Component
-const PeriodSelector = ({ selected, onSelect, options }) => (
-  <View style={styles.periodSelector}>
-    {options.map((option) => (
-      <Pressable
-        key={option.value}
-        style={[
-          styles.periodButton,
-          selected === option.value && styles.periodButtonActive,
-        ]}
-        onPress={() => onSelect(option.value)}
-      >
-        <Text
-          style={[
-            styles.periodButtonText,
-            selected === option.value && styles.periodButtonTextActive,
-          ]}
-        >
-          {option.label}
-        </Text>
-      </Pressable>
-    ))}
-  </View>
-);
 
 const OwnerDashboard = ({ state }) => {
   const navigate = useNavigate();
@@ -141,6 +193,7 @@ const OwnerDashboard = ({ state }) => {
   const [recheckResult, setRecheckResult] = useState(null);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [showCreateTicketModal, setShowCreateTicketModal] = useState(false);
+  const [activeSection, setActiveSection] = useState("overview");
 
   const handleSelectPreviewRole = async (role) => {
     const success = await enterPreviewMode(role);
@@ -174,7 +227,6 @@ const OwnerDashboard = ({ state }) => {
         OwnerDashboardService.getBusinessMetrics(state.currentUser.token),
       ]);
 
-      // Set data even if some endpoints return fallback values
       setFinancialData(financial);
       setUserAnalytics(users);
       setQuickStats(stats);
@@ -215,21 +267,12 @@ const OwnerDashboard = ({ state }) => {
     return data[selectedPeriod] || data.allTime || 0;
   };
 
-  const periodOptions = [
-    { label: "Day", value: "day" },
-    { label: "Week", value: "week" },
-    { label: "Month", value: "month" },
-    { label: "Year", value: "year" },
-    { label: "All", value: "allTime" },
-  ];
-
   const handleRecheckServiceAreas = async () => {
     setRecheckLoading(true);
     setRecheckResult(null);
     try {
       const result = await OwnerDashboardService.recheckServiceAreas(state.currentUser.token);
       setRecheckResult(result);
-      // Refresh service area data after recheck
       const updatedServiceAreas = await OwnerDashboardService.getServiceAreas(state.currentUser.token);
       setServiceAreaData(updatedServiceAreas);
     } catch (err) {
@@ -241,20 +284,25 @@ const OwnerDashboard = ({ state }) => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary[500]} />
-        <Text style={styles.loadingText}>Loading dashboard...</Text>
+      <View style={styles.loadingWrap}>
+        <View style={styles.loadingCard}>
+          <ActivityIndicator size="large" color="#6366F1" />
+          <Text style={styles.loadingText}>Loading Dashboard</Text>
+        </View>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <Pressable style={styles.retryButton} onPress={fetchDashboardData}>
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </Pressable>
+      <View style={styles.loadingWrap}>
+        <View style={styles.errorCard}>
+          <Icon name="exclamation-triangle" size={32} color="#EF4444" />
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable style={styles.retryBtn} onPress={() => fetchDashboardData()}>
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -264,387 +312,488 @@ const OwnerDashboard = ({ state }) => {
     .slice(-6)
     .map((m) => ({
       label: new Date(m.month).toLocaleDateString("en-US", { month: "short" }),
-      value: m.earningsCents || 0,
+      value: (m.earningsCents || 0) / 100,
     }));
-
-  const maxEarnings = Math.max(...monthlyEarningsData.map((d) => d.value), 1);
 
   const userGrowthData = (userAnalytics?.growth || []).slice(-6).map((m) => ({
     label: new Date(m.month).toLocaleDateString("en-US", { month: "short" }),
     value: (m.cleaners || 0) + (m.homeowners || 0),
   }));
 
-  const maxUsers = Math.max(...userGrowthData.map((d) => d.value), 1);
+  const periodOptions = [
+    { label: "Day", value: "day" },
+    { label: "Week", value: "week" },
+    { label: "Month", value: "month" },
+    { label: "Year", value: "year" },
+    { label: "All", value: "allTime" },
+  ];
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={[colors.primary[500]]}
-          tintColor={colors.primary[500]}
-        />
-      }
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Owner Dashboard</Text>
-        <Text style={styles.headerSubtitle}>
-          {new Date().toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-          })}
-        </Text>
-      </View>
-
-      {/* Preview as Role Section */}
-      <Pressable
-        style={({ pressed }) => [
-          styles.previewAsRoleCard,
-          pressed && styles.previewAsRoleCardPressed,
-        ]}
-        onPress={() => setPreviewModalVisible(true)}
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#6366F1"
+          />
+        }
       >
-        <View style={styles.previewAsRoleIcon}>
-          <Icon name="eye" size={20} color={colors.primary[600]} />
-        </View>
-        <View style={styles.previewAsRoleContent}>
-          <Text style={styles.previewAsRoleTitle}>Preview as Role</Text>
-          <Text style={styles.previewAsRoleDescription}>
-            Experience the app as a cleaner, homeowner, or employee
-          </Text>
-        </View>
-        <Icon name="chevron-right" size={16} color={colors.text.tertiary} />
-      </Pressable>
-
-      {/* Quick Stats Row */}
-      <View style={styles.quickStatsRow}>
-        <StatCard
-          title="Today's Jobs"
-          value={quickStats?.todaysAppointments || 0}
-          color={colors.primary[500]}
-        />
-        <StatCard
-          title="New Users"
-          value={quickStats?.newUsersThisWeek || 0}
-          subtitle="This Week"
-          color={colors.success[500]}
-        />
-        <StatCard
-          title="Completed"
-          value={quickStats?.completedThisWeek || 0}
-          subtitle="This Week"
-          color={colors.secondary[500]}
-        />
-      </View>
-
-      {/* Financial Section */}
-      <View style={styles.section}>
-        <SectionHeader title="Financials" />
-
-        {/* Earnings Cards */}
-        <View style={styles.earningsGrid}>
-          <View style={styles.earningsCard}>
-            <Text style={styles.earningsLabel}>Today</Text>
-            <Text style={styles.earningsValue}>
-              {formatCurrency(financialData?.current?.todayCents)}
+        {/* Hero Header */}
+        <View style={styles.hero}>
+          <View style={styles.heroContent}>
+            <Text style={styles.heroGreeting}>Platform Owner</Text>
+            <Text style={styles.heroTitle}>Dashboard</Text>
+            <Text style={styles.heroDate}>
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
             </Text>
           </View>
-          <View style={styles.earningsCard}>
-            <Text style={styles.earningsLabel}>This Week</Text>
-            <Text style={styles.earningsValue}>
-              {formatCurrency(financialData?.current?.weekCents)}
-            </Text>
-          </View>
-          <View style={styles.earningsCard}>
-            <Text style={styles.earningsLabel}>This Month</Text>
-            <Text style={styles.earningsValue}>
-              {formatCurrency(financialData?.current?.monthCents)}
-            </Text>
-          </View>
-          <View style={styles.earningsCard}>
-            <Text style={styles.earningsLabel}>This Year</Text>
-            <Text style={[styles.earningsValue, styles.earningsValueHighlight]}>
-              {formatCurrency(financialData?.current?.yearCents)}
-            </Text>
+          <View style={styles.heroIcon}>
+            <Icon name="crown" size={32} color="rgba(255,255,255,0.9)" />
           </View>
         </View>
 
-        {/* Account Balance */}
-        <View style={styles.balanceCard}>
-          <View style={styles.balanceRow}>
-            <View>
-              <Text style={styles.balanceLabel}>Pending Collection</Text>
-              <Text style={styles.balanceValue}>
-                {formatCurrency(financialData?.current?.pendingCents)}
-              </Text>
-            </View>
-            <View style={styles.balanceDivider} />
-            <View>
-              <Text style={styles.balanceLabel}>Net Earnings (YTD)</Text>
-              <Text
-                style={[styles.balanceValue, { color: colors.success[600] }]}
+        {/* Quick Actions */}
+        <View style={styles.actionsWrap}>
+          <ActionButton
+            icon="eye"
+            label="Preview"
+            color="#6366F1"
+            onPress={() => setPreviewModalVisible(true)}
+          />
+          <ActionButton
+            icon="envelope"
+            label="Messages"
+            color="#8B5CF6"
+            badge={messagesSummary?.unreadCount || 0}
+            onPress={() => navigate("/messages")}
+          />
+          <ActionButton
+            icon="gavel"
+            label="Conflicts"
+            color="#F59E0B"
+            onPress={() => navigate("/conflicts")}
+          />
+          <ActionButton
+            icon="flag"
+            label="Ticket"
+            color="#EF4444"
+            onPress={() => setShowCreateTicketModal(true)}
+          />
+        </View>
+
+        {/* Stats Grid */}
+        <View style={styles.statsWrap}>
+          <Text style={styles.sectionLabel}>Today's Overview</Text>
+          <View style={styles.statsGrid}>
+            <StatCard
+              title="Today's Jobs"
+              value={quickStats?.todaysAppointments || 0}
+              icon="calendar-check"
+              color="#6366F1"
+            />
+            <StatCard
+              title="Completed"
+              value={quickStats?.completedThisWeek || 0}
+              icon="check-circle"
+              color="#10B981"
+              subtitle="This Week"
+            />
+            <StatCard
+              title="New Users"
+              value={quickStats?.newUsersThisWeek || 0}
+              icon="user-plus"
+              color="#8B5CF6"
+              subtitle="This Week"
+            />
+            <StatCard
+              title="Today's Revenue"
+              value={formatCurrencyShort(financialData?.current?.todayCents)}
+              icon="dollar-sign"
+              color="#F59E0B"
+            />
+          </View>
+        </View>
+
+        {/* Section Tabs */}
+        <View style={styles.sectionTabsWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionTabs}>
+            {[
+              { key: "overview", label: "Overview", icon: "chart-pie" },
+              { key: "users", label: "Users", icon: "users" },
+              { key: "business", label: "Business", icon: "briefcase" },
+              { key: "app", label: "App Usage", icon: "mobile-alt" },
+            ].map((tab) => (
+              <Pressable
+                key={tab.key}
+                style={[styles.sectionTab, activeSection === tab.key && styles.sectionTabActive]}
+                onPress={() => setActiveSection(tab.key)}
               >
-                {formatCurrency(financialData?.current?.yearNetCents)}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.balanceNote}>
-            {financialData?.current?.transactionCount || 0} transactions this
-            year
-          </Text>
-        </View>
-
-        {/* Monthly Earnings Chart */}
-        {monthlyEarningsData.length > 0 && (
-          <BarChart
-            data={monthlyEarningsData}
-            maxValue={maxEarnings}
-            label="Monthly Platform Earnings"
-            color={colors.secondary[500]}
-          />
-        )}
-      </View>
-
-      {/* Messages Section */}
-      <View style={styles.section}>
-        <SectionHeader
-          title="Messages"
-          onPress={() => navigate("/messages")}
-          actionText="Open Inbox"
-        />
-        <View style={styles.messagesCard}>
-          <View style={styles.messageStats}>
-            <View style={styles.messageStat}>
-              <Text style={styles.messageStatValue}>
-                {messagesSummary?.unreadCount || 0}
-              </Text>
-              <Text style={styles.messageStatLabel}>Unread</Text>
-            </View>
-            <View style={styles.messageStatDivider} />
-            <View style={styles.messageStat}>
-              <Text style={styles.messageStatValue}>
-                {messagesSummary?.messagesThisWeek || 0}
-              </Text>
-              <Text style={styles.messageStatLabel}>This Week</Text>
-            </View>
-            <View style={styles.messageStatDivider} />
-            <View style={styles.messageStat}>
-              <Text style={styles.messageStatValue}>
-                {messagesSummary?.totalMessages || 0}
-              </Text>
-              <Text style={styles.messageStatLabel}>Total</Text>
-            </View>
-          </View>
-
-          {messagesSummary?.unreadCount > 0 && (
-            <Pressable
-              style={styles.messagesCTA}
-              onPress={() => navigate("/messages")}
-            >
-              <Text style={styles.messagesCTAText}>
-                You have {messagesSummary.unreadCount} unread message
-                {messagesSummary.unreadCount > 1 ? "s" : ""}
-              </Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
-
-      {/* Conflict Resolution Widget */}
-      <View style={styles.section}>
-        <ConflictsStatsWidget onNavigateToConflicts={() => navigate("/conflicts")} />
-      </View>
-
-      {/* Create Support Ticket */}
-      <Pressable
-        style={({ pressed }) => [
-          styles.createTicketCard,
-          pressed && styles.createTicketCardPressed,
-        ]}
-        onPress={() => setShowCreateTicketModal(true)}
-      >
-        <View style={styles.createTicketIcon}>
-          <Icon name="flag" size={20} color={colors.error[600]} />
-        </View>
-        <View style={styles.createTicketContent}>
-          <Text style={styles.createTicketTitle}>Create Support Ticket</Text>
-          <Text style={styles.createTicketDescription}>
-            Report issues or escalate conflicts
-          </Text>
-        </View>
-        <Icon name="chevron-right" size={16} color={colors.text.tertiary} />
-      </Pressable>
-
-      {/* User Analytics Section */}
-      <View style={styles.section}>
-        <SectionHeader title="User Activity" />
-        <PeriodSelector
-          selected={selectedPeriod}
-          onSelect={setSelectedPeriod}
-          options={periodOptions}
-        />
-
-        <View style={styles.analyticsGrid}>
-          <View
-            style={[
-              styles.analyticsCard,
-              { borderLeftColor: colors.primary[500] },
-            ]}
-          >
-            <Text style={styles.analyticsValue}>
-              {getActiveUserCount("cleaners")}
-            </Text>
-            <Text style={styles.analyticsLabel}>Active Cleaners</Text>
-            <Text style={styles.analyticsTotal}>
-              of {userAnalytics?.totals?.cleaners || 0} total
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.analyticsCard,
-              { borderLeftColor: colors.secondary[500] },
-            ]}
-          >
-            <Text style={styles.analyticsValue}>
-              {getActiveUserCount("homeowners")}
-            </Text>
-            <Text style={styles.analyticsLabel}>Active Homeowners</Text>
-            <Text style={styles.analyticsTotal}>
-              of {userAnalytics?.totals?.homeowners || 0} total
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.analyticsCard,
-              { borderLeftColor: colors.success[500] },
-            ]}
-          >
-            <Text style={styles.analyticsValue}>
-              {getActiveUserCount("combined")}
-            </Text>
-            <Text style={styles.analyticsLabel}>Total Active Users</Text>
-            <Text style={styles.analyticsTotal}>
-              of {userAnalytics?.totals?.total || 0} total
-            </Text>
-          </View>
-        </View>
-
-        {/* User Growth Chart */}
-        {userGrowthData.length > 0 && (
-          <BarChart
-            data={userGrowthData}
-            maxValue={maxUsers}
-            label="New User Signups"
-            color={colors.primary[500]}
-          />
-        )}
-      </View>
-
-      {/* Business Metrics Section */}
-      <View style={styles.section}>
-        <SectionHeader title="Business Metrics" />
-
-        {/* Cost Per Booking */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>Cost Per Booking</Text>
-          <View style={styles.businessMetricRow}>
-            <View style={[styles.businessMetricCard, styles.businessMetricCardHighlight]}>
-              <Text style={styles.businessMetricLabel}>Avg Platform Fee</Text>
-              <Text style={styles.businessMetricValue}>
-                {formatCurrency(businessMetrics?.costPerBooking?.avgFeeCents)}
-              </Text>
-            </View>
-            <View style={styles.businessMetricCard}>
-              <Text style={styles.businessMetricLabel}>Total Earned</Text>
-              <Text style={styles.businessMetricValue}>
-                {formatCurrencyShort(businessMetrics?.costPerBooking?.totalFeeCents)}
-              </Text>
-            </View>
-            <View style={styles.businessMetricCard}>
-              <Text style={styles.businessMetricLabel}>Bookings</Text>
-              <Text style={styles.businessMetricValue}>
-                {businessMetrics?.costPerBooking?.bookingCount || 0}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Repeat Booking Rate */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>Repeat Booking Rate</Text>
-          <View style={styles.businessMetricRow}>
-            <View style={[styles.businessMetricCard, styles.businessMetricCardLarge]}>
-              <Text style={styles.businessMetricValueLarge}>
-                {businessMetrics?.repeatBookingRate?.rate || 0}%
-              </Text>
-              <Text style={styles.businessMetricLabel}>Repeat Customers</Text>
-            </View>
-            <View style={styles.businessMetricCardStack}>
-              <View style={styles.businessMetricMini}>
-                <Text style={styles.businessMetricMiniValue}>
-                  {businessMetrics?.repeatBookingRate?.repeatBookers || 0}
+                <Icon
+                  name={tab.icon}
+                  size={14}
+                  color={activeSection === tab.key ? "#fff" : "#6366F1"}
+                />
+                <Text style={[styles.sectionTabText, activeSection === tab.key && styles.sectionTabTextActive]}>
+                  {tab.label}
                 </Text>
-                <Text style={styles.businessMetricMiniLabel}>Repeat</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Overview Section */}
+        {activeSection === "overview" && (
+          <>
+            {/* Financial Summary */}
+            <View style={styles.card}>
+              <SectionHeader title="Financial Summary" icon="chart-line" color="#10B981" />
+
+              <View style={styles.earningsGrid}>
+                <View style={[styles.earningsCard, styles.earningsCardPrimary]}>
+                  <Text style={styles.earningsLabel}>This Month</Text>
+                  <Text style={styles.earningsValueLarge}>
+                    {formatCurrency(financialData?.current?.monthCents)}
+                  </Text>
+                </View>
+                <View style={styles.earningsCard}>
+                  <Text style={styles.earningsLabel}>This Week</Text>
+                  <Text style={styles.earningsValue}>
+                    {formatCurrency(financialData?.current?.weekCents)}
+                  </Text>
+                </View>
+                <View style={styles.earningsCard}>
+                  <Text style={styles.earningsLabel}>This Year</Text>
+                  <Text style={styles.earningsValue}>
+                    {formatCurrencyShort(financialData?.current?.yearCents)}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.businessMetricMini}>
-                <Text style={styles.businessMetricMiniValue}>
-                  {businessMetrics?.repeatBookingRate?.singleBookers || 0}
-                </Text>
-                <Text style={styles.businessMetricMiniLabel}>Single</Text>
+
+              <View style={styles.balanceBanner}>
+                <View style={styles.balanceItem}>
+                  <Icon name="clock" size={14} color="#F59E0B" />
+                  <View style={styles.balanceContent}>
+                    <Text style={styles.balanceLabel}>Pending</Text>
+                    <Text style={styles.balanceValue}>
+                      {formatCurrency(financialData?.current?.pendingCents)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.balanceDivider} />
+                <View style={styles.balanceItem}>
+                  <Icon name="check-circle" size={14} color="#10B981" />
+                  <View style={styles.balanceContent}>
+                    <Text style={styles.balanceLabel}>Net YTD</Text>
+                    <Text style={[styles.balanceValue, { color: "#10B981" }]}>
+                      {formatCurrency(financialData?.current?.yearNetCents)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {monthlyEarningsData.length > 0 && (
+                <BarChart
+                  data={monthlyEarningsData}
+                  label="Monthly Earnings"
+                  color="#10B981"
+                />
+              )}
+            </View>
+
+            {/* Messages Summary */}
+            <View style={styles.card}>
+              <SectionHeader
+                title="Messages"
+                icon="envelope"
+                color="#8B5CF6"
+                onPress={() => navigate("/messages")}
+                actionText="Open Inbox"
+              />
+              <View style={styles.messagesGrid}>
+                <View style={[styles.messageCard, messagesSummary?.unreadCount > 0 && styles.messageCardAlert]}>
+                  <Text style={[styles.messageValue, messagesSummary?.unreadCount > 0 && { color: "#EF4444" }]}>
+                    {messagesSummary?.unreadCount || 0}
+                  </Text>
+                  <Text style={styles.messageLabel}>Unread</Text>
+                </View>
+                <View style={styles.messageCard}>
+                  <Text style={styles.messageValue}>{messagesSummary?.messagesThisWeek || 0}</Text>
+                  <Text style={styles.messageLabel}>This Week</Text>
+                </View>
+                <View style={styles.messageCard}>
+                  <Text style={styles.messageValue}>{messagesSummary?.totalMessages || 0}</Text>
+                  <Text style={styles.messageLabel}>Total</Text>
+                </View>
               </View>
             </View>
-          </View>
-        </View>
 
-        {/* Subscription Rate (Frequent Bookers) */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>Customer Loyalty</Text>
-          <View style={styles.businessMetricRow}>
-            <View style={[styles.loyaltyCard, { backgroundColor: colors.success[50] }]}>
-              <Text style={[styles.loyaltyValue, { color: colors.success[700] }]}>
-                {businessMetrics?.subscriptionRate?.frequentBookers || 0}
-              </Text>
-              <Text style={[styles.loyaltyLabel, { color: colors.success[600] }]}>
-                Loyal (5+)
-              </Text>
+            {/* Conflict Resolution Widget */}
+            <View style={styles.card}>
+              <ConflictsStatsWidget onNavigateToConflicts={() => navigate("/conflicts")} />
             </View>
-            <View style={[styles.loyaltyCard, { backgroundColor: colors.primary[50] }]}>
-              <Text style={[styles.loyaltyValue, { color: colors.primary[700] }]}>
-                {businessMetrics?.subscriptionRate?.regularBookers || 0}
-              </Text>
-              <Text style={[styles.loyaltyLabel, { color: colors.primary[600] }]}>
-                Regular (3-4)
-              </Text>
-            </View>
-            <View style={[styles.loyaltyCard, { backgroundColor: colors.neutral[100] }]}>
-              <Text style={styles.loyaltyValue}>
-                {businessMetrics?.subscriptionRate?.occasionalBookers || 0}
-              </Text>
-              <Text style={styles.loyaltyLabel}>
-                Occasional (1-2)
-              </Text>
-            </View>
-          </View>
-          <View style={styles.loyaltyRateContainer}>
-            <Text style={styles.loyaltyRateText}>
-              {businessMetrics?.subscriptionRate?.rate || 0}% of customers are loyal (5+ bookings)
-            </Text>
-          </View>
-        </View>
 
-        {/* Churn / Cancellations */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>Churn (Cancellations)</Text>
-          <View style={styles.churnContainer}>
-            <View style={styles.churnSection}>
-              <Text style={styles.churnSectionTitle}>Homeowner Cancellations</Text>
-              <View style={styles.churnRow}>
+            {/* Service Areas */}
+            <View style={styles.card}>
+              <SectionHeader
+                title="Service Areas"
+                icon="map-marker-alt"
+                color="#EF4444"
+                onPress={() => navigate("/owner/service-areas")}
+                actionText="Manage"
+              />
+              <View style={styles.serviceAreaGrid}>
+                <MetricCard
+                  title="Total Homes"
+                  value={serviceAreaData?.stats?.totalHomes || 0}
+                  icon="home"
+                  color="#6366F1"
+                />
+                <MetricCard
+                  title="In Service"
+                  value={serviceAreaData?.stats?.homesInArea || 0}
+                  icon="check"
+                  color="#10B981"
+                />
+                <MetricCard
+                  title="Outside"
+                  value={serviceAreaData?.stats?.homesOutsideArea || 0}
+                  icon="times"
+                  color="#F59E0B"
+                />
+              </View>
+
+              {serviceAreaData?.config?.enabled && (
+                <View style={styles.serviceAreaInfo}>
+                  {serviceAreaData?.config?.cities?.length > 0 && (
+                    <InfoRow
+                      icon="city"
+                      label="Cities"
+                      value={serviceAreaData.config.cities.join(", ")}
+                      color="#6366F1"
+                    />
+                  )}
+                  {serviceAreaData?.config?.states?.length > 0 && (
+                    <InfoRow
+                      icon="map"
+                      label="States"
+                      value={serviceAreaData.config.states.join(", ")}
+                      color="#8B5CF6"
+                    />
+                  )}
+                </View>
+              )}
+
+              <Pressable
+                style={[styles.recheckBtn, recheckLoading && { opacity: 0.6 }]}
+                onPress={handleRecheckServiceAreas}
+                disabled={recheckLoading}
+              >
+                {recheckLoading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Icon name="sync" size={14} color="#fff" />
+                    <Text style={styles.recheckBtnText}>Recheck All Homes</Text>
+                  </>
+                )}
+              </Pressable>
+
+              {recheckResult && (
+                <View style={[
+                  styles.recheckResult,
+                  recheckResult.success ? styles.recheckResultSuccess : styles.recheckResultError
+                ]}>
+                  <Icon
+                    name={recheckResult.success ? "check-circle" : "exclamation-circle"}
+                    size={16}
+                    color={recheckResult.success ? "#10B981" : "#EF4444"}
+                  />
+                  <Text style={[
+                    styles.recheckResultText,
+                    { color: recheckResult.success ? "#065F46" : "#DC2626" }
+                  ]}>
+                    {recheckResult.success ? recheckResult.message : recheckResult.error}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
+        )}
+
+        {/* Users Section */}
+        {activeSection === "users" && (
+          <>
+            <View style={styles.card}>
+              <SectionHeader title="User Activity" icon="users" color="#6366F1" />
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.periodScroll}>
+                {periodOptions.map((opt) => (
+                  <PeriodPill
+                    key={opt.value}
+                    label={opt.label}
+                    isActive={selectedPeriod === opt.value}
+                    onPress={() => setSelectedPeriod(opt.value)}
+                  />
+                ))}
+              </ScrollView>
+
+              <View style={styles.userStatsGrid}>
+                <View style={[styles.userStatCard, { borderLeftColor: "#6366F1" }]}>
+                  <Text style={styles.userStatValue}>{getActiveUserCount("cleaners")}</Text>
+                  <Text style={styles.userStatLabel}>Active Cleaners</Text>
+                  <Text style={styles.userStatTotal}>of {userAnalytics?.totals?.cleaners || 0}</Text>
+                </View>
+                <View style={[styles.userStatCard, { borderLeftColor: "#8B5CF6" }]}>
+                  <Text style={styles.userStatValue}>{getActiveUserCount("homeowners")}</Text>
+                  <Text style={styles.userStatLabel}>Active Homeowners</Text>
+                  <Text style={styles.userStatTotal}>of {userAnalytics?.totals?.homeowners || 0}</Text>
+                </View>
+                <View style={[styles.userStatCard, { borderLeftColor: "#10B981" }]}>
+                  <Text style={styles.userStatValue}>{getActiveUserCount("combined")}</Text>
+                  <Text style={styles.userStatLabel}>Total Active</Text>
+                  <Text style={styles.userStatTotal}>of {userAnalytics?.totals?.total || 0}</Text>
+                </View>
+              </View>
+
+              {userGrowthData.length > 0 && (
+                <BarChart data={userGrowthData} label="New User Signups" color="#6366F1" />
+              )}
+            </View>
+
+            <View style={styles.card}>
+              <SectionHeader title="Platform Overview" icon="layer-group" color="#8B5CF6" />
+              <View style={styles.platformGrid}>
+                <MetricCard title="Cleaners" value={userAnalytics?.totals?.cleaners || 0} icon="broom" color="#6366F1" />
+                <MetricCard title="Homeowners" value={userAnalytics?.totals?.homeowners || 0} icon="home" color="#8B5CF6" />
+                <MetricCard title="Homes" value={userAnalytics?.totals?.homes || 0} icon="building" color="#10B981" />
+              </View>
+
+              <View style={styles.applicationsSection}>
+                <Text style={styles.subsectionTitle}>Applications</Text>
+                <View style={styles.applicationsGrid}>
+                  <View style={styles.appCard}>
+                    <Text style={styles.appValue}>{userAnalytics?.applications?.total || 0}</Text>
+                    <Text style={styles.appLabel}>Total</Text>
+                  </View>
+                  <View style={[styles.appCard, { backgroundColor: "#FEF3C7" }]}>
+                    <Text style={[styles.appValue, { color: "#D97706" }]}>
+                      {userAnalytics?.applications?.pending || 0}
+                    </Text>
+                    <Text style={[styles.appLabel, { color: "#92400E" }]}>Pending</Text>
+                  </View>
+                  <View style={[styles.appCard, { backgroundColor: "#DCFCE7" }]}>
+                    <Text style={[styles.appValue, { color: "#059669" }]}>
+                      {userAnalytics?.applications?.approved || 0}
+                    </Text>
+                    <Text style={[styles.appLabel, { color: "#065F46" }]}>Approved</Text>
+                  </View>
+                  <View style={[styles.appCard, { backgroundColor: "#FEE2E2" }]}>
+                    <Text style={[styles.appValue, { color: "#DC2626" }]}>
+                      {userAnalytics?.applications?.rejected || 0}
+                    </Text>
+                    <Text style={[styles.appLabel, { color: "#991B1B" }]}>Rejected</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* Business Section */}
+        {activeSection === "business" && (
+          <>
+            <View style={styles.card}>
+              <SectionHeader title="Cost Per Booking" icon="calculator" color="#F59E0B" />
+              <View style={styles.businessGrid}>
+                <View style={[styles.businessCard, styles.businessCardHighlight]}>
+                  <Text style={styles.businessLabel}>Avg Platform Fee</Text>
+                  <Text style={styles.businessValueLarge}>
+                    {formatCurrency(businessMetrics?.costPerBooking?.avgFeeCents)}
+                  </Text>
+                </View>
+                <View style={styles.businessCard}>
+                  <Text style={styles.businessLabel}>Total Earned</Text>
+                  <Text style={styles.businessValue}>
+                    {formatCurrencyShort(businessMetrics?.costPerBooking?.totalFeeCents)}
+                  </Text>
+                </View>
+                <View style={styles.businessCard}>
+                  <Text style={styles.businessLabel}>Bookings</Text>
+                  <Text style={styles.businessValue}>
+                    {businessMetrics?.costPerBooking?.bookingCount || 0}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <SectionHeader title="Customer Loyalty" icon="heart" color="#EF4444" />
+              <View style={styles.loyaltyGrid}>
+                <View style={[styles.loyaltyCard, { backgroundColor: "#DCFCE7" }]}>
+                  <Text style={[styles.loyaltyValue, { color: "#059669" }]}>
+                    {businessMetrics?.subscriptionRate?.frequentBookers || 0}
+                  </Text>
+                  <Text style={[styles.loyaltyLabel, { color: "#065F46" }]}>Loyal (5+)</Text>
+                </View>
+                <View style={[styles.loyaltyCard, { backgroundColor: "#EEF2FF" }]}>
+                  <Text style={[styles.loyaltyValue, { color: "#4F46E5" }]}>
+                    {businessMetrics?.subscriptionRate?.regularBookers || 0}
+                  </Text>
+                  <Text style={[styles.loyaltyLabel, { color: "#3730A3" }]}>Regular (3-4)</Text>
+                </View>
+                <View style={[styles.loyaltyCard, { backgroundColor: "#F3F4F6" }]}>
+                  <Text style={styles.loyaltyValue}>
+                    {businessMetrics?.subscriptionRate?.occasionalBookers || 0}
+                  </Text>
+                  <Text style={styles.loyaltyLabel}>Occasional</Text>
+                </View>
+              </View>
+              <View style={styles.loyaltyBanner}>
+                <Icon name="award" size={16} color="#059669" />
+                <Text style={styles.loyaltyBannerText}>
+                  {businessMetrics?.subscriptionRate?.rate || 0}% of customers are loyal (5+ bookings)
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <SectionHeader title="Repeat Booking Rate" icon="redo" color="#8B5CF6" />
+              <View style={styles.repeatGrid}>
+                <View style={[styles.repeatCardLarge, { backgroundColor: "#EEF2FF" }]}>
+                  <Text style={[styles.repeatValueLarge, { color: "#4F46E5" }]}>
+                    {businessMetrics?.repeatBookingRate?.rate || 0}%
+                  </Text>
+                  <Text style={[styles.repeatLabel, { color: "#3730A3" }]}>Repeat Customers</Text>
+                </View>
+                <View style={styles.repeatStack}>
+                  <View style={styles.repeatCard}>
+                    <Text style={styles.repeatValue}>
+                      {businessMetrics?.repeatBookingRate?.repeatBookers || 0}
+                    </Text>
+                    <Text style={styles.repeatLabel}>Repeat</Text>
+                  </View>
+                  <View style={styles.repeatCard}>
+                    <Text style={styles.repeatValue}>
+                      {businessMetrics?.repeatBookingRate?.singleBookers || 0}
+                    </Text>
+                    <Text style={styles.repeatLabel}>Single</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <SectionHeader title="Cancellations & Churn" icon="ban" color="#EF4444" />
+
+              <Text style={styles.subsectionTitle}>Homeowner Cancellations</Text>
+              <View style={styles.churnGrid}>
                 <View style={styles.churnCard}>
                   <Text style={styles.churnValue}>
                     {businessMetrics?.churn?.homeownerCancellations?.usersWithCancellations || 0}
@@ -658,21 +807,20 @@ const OwnerDashboard = ({ state }) => {
                   <Text style={styles.churnLabel}>Total Fees</Text>
                 </View>
               </View>
-            </View>
-            <View style={[styles.churnSection, { marginTop: spacing.md }]}>
-              <Text style={styles.churnSectionTitle}>Cleaner Cancellations (Penalties)</Text>
-              <View style={styles.churnRow}>
-                <View style={[styles.churnCard, { backgroundColor: colors.error[50] }]}>
-                  <Text style={[styles.churnValue, { color: colors.error[700] }]}>
+
+              <Text style={[styles.subsectionTitle, { marginTop: 16 }]}>Cleaner Penalties</Text>
+              <View style={styles.churnGrid}>
+                <View style={[styles.churnCard, { backgroundColor: "#FEE2E2" }]}>
+                  <Text style={[styles.churnValue, { color: "#DC2626" }]}>
                     {businessMetrics?.churn?.cleanerCancellations?.last30Days || 0}
                   </Text>
-                  <Text style={[styles.churnLabel, { color: colors.error[600] }]}>Last 30 Days</Text>
+                  <Text style={[styles.churnLabel, { color: "#991B1B" }]}>Last 30 Days</Text>
                 </View>
-                <View style={[styles.churnCard, { backgroundColor: colors.warning[50] }]}>
-                  <Text style={[styles.churnValue, { color: colors.warning[700] }]}>
+                <View style={[styles.churnCard, { backgroundColor: "#FEF3C7" }]}>
+                  <Text style={[styles.churnValue, { color: "#D97706" }]}>
                     {businessMetrics?.churn?.cleanerCancellations?.last90Days || 0}
                   </Text>
-                  <Text style={[styles.churnLabel, { color: colors.warning[600] }]}>Last 90 Days</Text>
+                  <Text style={[styles.churnLabel, { color: "#92400E" }]}>Last 90 Days</Text>
                 </View>
                 <View style={styles.churnCard}>
                   <Text style={styles.churnValue}>
@@ -682,494 +830,149 @@ const OwnerDashboard = ({ state }) => {
                 </View>
               </View>
             </View>
-          </View>
-        </View>
 
-        {/* Cleaner Reliability */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>Cleaner Reliability</Text>
-          <View style={styles.reliabilityOverview}>
-            <View style={[styles.reliabilityCard, { backgroundColor: colors.success[50] }]}>
-              <Text style={[styles.reliabilityValueLarge, { color: colors.success[700] }]}>
-                {businessMetrics?.cleanerReliability?.overallCompletionRate || 0}%
-              </Text>
-              <Text style={[styles.reliabilityLabel, { color: colors.success[600] }]}>
-                Completion Rate
-              </Text>
-            </View>
-            <View style={styles.reliabilityCard}>
-              <Text style={styles.reliabilityValue}>
-                {businessMetrics?.cleanerReliability?.avgRating || 0}
-              </Text>
-              <Text style={styles.reliabilityLabel}>Avg Rating</Text>
-            </View>
-            <View style={styles.reliabilityCard}>
-              <Text style={styles.reliabilityValue}>
-                {businessMetrics?.cleanerReliability?.totalCompleted || 0}
-              </Text>
-              <Text style={styles.reliabilityLabel}>Completed</Text>
-            </View>
-          </View>
-
-          {/* Top Cleaners */}
-          {businessMetrics?.cleanerReliability?.cleanerStats?.length > 0 && (
-            <View style={styles.topCleanersContainer}>
-              <Text style={styles.topCleanersTitle}>Top Performers</Text>
-              {businessMetrics.cleanerReliability.cleanerStats.slice(0, 5).map((cleaner, index) => (
-                <View key={cleaner.id} style={styles.topCleanerRow}>
-                  <View style={styles.topCleanerRank}>
-                    <Text style={styles.topCleanerRankText}>{index + 1}</Text>
-                  </View>
-                  <Text style={styles.topCleanerName} numberOfLines={1}>
-                    {cleaner.username}
+            <View style={styles.card}>
+              <SectionHeader title="Cleaner Reliability" icon="user-check" color="#10B981" />
+              <View style={styles.reliabilityGrid}>
+                <View style={[styles.reliabilityCardLarge, { backgroundColor: "#DCFCE7" }]}>
+                  <Text style={[styles.reliabilityValueLarge, { color: "#059669" }]}>
+                    {businessMetrics?.cleanerReliability?.overallCompletionRate || 0}%
                   </Text>
-                  <View style={styles.topCleanerStats}>
-                    <Text style={styles.topCleanerStat}>
-                      {cleaner.completionRate}%
-                    </Text>
-                    <Text style={styles.topCleanerStatLabel}>
-                      ({cleaner.completed}/{cleaner.assigned})
-                    </Text>
-                  </View>
+                  <Text style={[styles.reliabilityLabel, { color: "#065F46" }]}>Completion Rate</Text>
                 </View>
-              ))}
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* App Usage Analytics Section */}
-      <View style={styles.section}>
-        <SectionHeader title="App Usage Analytics" />
-
-        {/* Platform Overview */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>Platform Overview</Text>
-          <View style={styles.platformOverviewGrid}>
-            <View
-              style={[
-                styles.platformOverviewCard,
-                { borderLeftColor: colors.primary[500] },
-              ]}
-            >
-              <Text style={styles.platformOverviewValue}>
-                {userAnalytics?.totals?.cleaners || 0}
-              </Text>
-              <Text style={styles.platformOverviewLabel}>Cleaners</Text>
-            </View>
-            <View
-              style={[
-                styles.platformOverviewCard,
-                { borderLeftColor: colors.secondary[500] },
-              ]}
-            >
-              <Text style={styles.platformOverviewValue}>
-                {userAnalytics?.totals?.homeowners || 0}
-              </Text>
-              <Text style={styles.platformOverviewLabel}>Homeowners</Text>
-            </View>
-            <View
-              style={[
-                styles.platformOverviewCard,
-                { borderLeftColor: colors.success[500] },
-              ]}
-            >
-              <Text style={styles.platformOverviewValue}>
-                {userAnalytics?.totals?.homes || 0}
-              </Text>
-              <Text style={styles.platformOverviewLabel}>Homes</Text>
-            </View>
-          </View>
-
-          {/* Applications Overview */}
-          <View style={[styles.applicationsSection, { marginTop: spacing.md }]}>
-            <Text style={styles.applicationsSectionTitle}>Applications</Text>
-            <View style={styles.applicationsGrid}>
-              <View style={styles.applicationCard}>
-                <Text style={styles.applicationValue}>
-                  {userAnalytics?.applications?.total || 0}
-                </Text>
-                <Text style={styles.applicationLabel}>Total</Text>
-              </View>
-              <View style={[styles.applicationCard, { backgroundColor: colors.warning[50] }]}>
-                <Text style={[styles.applicationValue, { color: colors.warning[700] }]}>
-                  {userAnalytics?.applications?.pending || 0}
-                </Text>
-                <Text style={[styles.applicationLabel, { color: colors.warning[600] }]}>Pending</Text>
-              </View>
-              <View style={[styles.applicationCard, { backgroundColor: colors.success[50] }]}>
-                <Text style={[styles.applicationValue, { color: colors.success[700] }]}>
-                  {userAnalytics?.applications?.approved || 0}
-                </Text>
-                <Text style={[styles.applicationLabel, { color: colors.success[600] }]}>Approved</Text>
-              </View>
-              <View style={[styles.applicationCard, { backgroundColor: colors.error[50] }]}>
-                <Text style={[styles.applicationValue, { color: colors.error[700] }]}>
-                  {userAnalytics?.applications?.rejected || 0}
-                </Text>
-                <Text style={[styles.applicationLabel, { color: colors.error[600] }]}>Rejected</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Signups Overview */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>User Signups</Text>
-          <View style={styles.appUsageGrid}>
-            <View style={[styles.appUsageCard, styles.appUsageCardHighlight]}>
-              <Text style={styles.appUsageValue}>
-                {appUsageData?.signups?.allTime || 0}
-              </Text>
-              <Text style={styles.appUsageLabel}>All Time</Text>
-            </View>
-            <View style={styles.appUsageCard}>
-              <Text style={styles.appUsageValue}>
-                {appUsageData?.signups?.thisYear || 0}
-              </Text>
-              <Text style={styles.appUsageLabel}>This Year</Text>
-            </View>
-            <View style={styles.appUsageCard}>
-              <Text style={styles.appUsageValue}>
-                {appUsageData?.signups?.thisMonth || 0}
-              </Text>
-              <Text style={styles.appUsageLabel}>This Month</Text>
-            </View>
-            <View style={styles.appUsageCard}>
-              <Text style={styles.appUsageValue}>
-                {appUsageData?.signups?.thisWeek || 0}
-              </Text>
-              <Text style={styles.appUsageLabel}>This Week</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Visits / Sessions */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>App Visits</Text>
-          <View style={styles.appUsageGrid}>
-            <View style={styles.appUsageCard}>
-              <Text style={styles.appUsageValue}>
-                {appUsageData?.sessions?.allTime || 0}
-              </Text>
-              <Text style={styles.appUsageLabel}>Total Sessions</Text>
-            </View>
-            <View style={styles.appUsageCard}>
-              <Text style={styles.appUsageValue}>
-                {appUsageData?.sessions?.thisMonth || 0}
-              </Text>
-              <Text style={styles.appUsageLabel}>This Month</Text>
-            </View>
-            <View style={styles.appUsageCard}>
-              <Text style={styles.appUsageValue}>
-                {appUsageData?.sessions?.uniqueVisitorsMonth || 0}
-              </Text>
-              <Text style={styles.appUsageLabel}>Unique Visitors (Month)</Text>
-            </View>
-            <View style={styles.appUsageCard}>
-              <Text style={styles.appUsageValue}>
-                {appUsageData?.sessions?.today || 0}
-              </Text>
-              <Text style={styles.appUsageLabel}>Today</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Page Views */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>Page Views</Text>
-          <View style={styles.appUsageGrid}>
-            <View style={[styles.appUsageCard, styles.appUsageCardWide]}>
-              <Text style={styles.appUsageValueLarge}>
-                {appUsageData?.pageViews?.allTime || 0}
-              </Text>
-              <Text style={styles.appUsageLabel}>Total Page Views</Text>
-            </View>
-            <View style={styles.appUsageCard}>
-              <Text style={styles.appUsageValue}>
-                {appUsageData?.pageViews?.thisMonth || 0}
-              </Text>
-              <Text style={styles.appUsageLabel}>This Month</Text>
-            </View>
-            <View style={styles.appUsageCard}>
-              <Text style={styles.appUsageValue}>
-                {appUsageData?.pageViews?.thisWeek || 0}
-              </Text>
-              <Text style={styles.appUsageLabel}>This Week</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Engagement Metrics */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>Engagement</Text>
-          <View style={styles.engagementGrid}>
-            <View style={styles.engagementCard}>
-              <Text style={styles.engagementValue}>
-                {appUsageData?.engagement?.totalLogins || 0}
-              </Text>
-              <Text style={styles.engagementLabel}>Total Logins</Text>
-            </View>
-            <View style={styles.engagementCard}>
-              <Text style={styles.engagementValue}>
-                {(appUsageData?.engagement?.avgLoginsPerUser || 0).toFixed(1)}
-              </Text>
-              <Text style={styles.engagementLabel}>Avg Logins/User</Text>
-            </View>
-            <View style={styles.engagementCard}>
-              <Text style={styles.engagementValue}>
-                {appUsageData?.engagement?.engagementRate || 0}%
-              </Text>
-              <Text style={styles.engagementLabel}>Engagement Rate</Text>
-            </View>
-            <View style={styles.engagementCard}>
-              <Text style={styles.engagementValue}>
-                {appUsageData?.engagement?.returningUserRate || 0}%
-              </Text>
-              <Text style={styles.engagementLabel}>Returning Users</Text>
-            </View>
-          </View>
-          <View style={[styles.engagementGrid, { marginTop: spacing.sm }]}>
-            <View style={styles.engagementCard}>
-              <Text style={styles.engagementValue}>
-                {appUsageData?.engagement?.usersWhoLoggedIn || 0}
-              </Text>
-              <Text style={styles.engagementLabel}>Active Users</Text>
-            </View>
-            <View style={styles.engagementCard}>
-              <Text style={styles.engagementValue}>
-                {appUsageData?.engagement?.returningUsers || 0}
-              </Text>
-              <Text style={styles.engagementLabel}>Returning Users</Text>
-            </View>
-            <View style={styles.engagementCard}>
-              <Text style={styles.engagementValue}>
-                {appUsageData?.engagement?.highlyEngagedUsers || 0}
-              </Text>
-              <Text style={styles.engagementLabel}>Power Users (5+)</Text>
-            </View>
-            <View style={styles.engagementCard}>
-              <Text style={styles.engagementValue}>
-                {appUsageData?.engagement?.powerUserRate || 0}%
-              </Text>
-              <Text style={styles.engagementLabel}>Power User Rate</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* User Retention */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>User Retention</Text>
-          <View style={styles.retentionContainer}>
-            <View style={styles.retentionBar}>
-              <View style={styles.retentionLabels}>
-                <Text style={styles.retentionLabel}>Day 1</Text>
-                <Text style={styles.retentionLabel}>Day 7</Text>
-                <Text style={styles.retentionLabel}>Day 30</Text>
-              </View>
-              <View style={styles.retentionBars}>
-                <View style={styles.retentionBarTrack}>
-                  <View
-                    style={[
-                      styles.retentionBarFill,
-                      {
-                        width: `${Math.min(appUsageData?.retention?.day1 || 0, 100)}%`,
-                        backgroundColor: colors.success[500],
-                      },
-                    ]}
-                  />
-                  <Text style={styles.retentionPercent}>
-                    {(appUsageData?.retention?.day1 || 0).toFixed(0)}%
+                <View style={styles.reliabilityCard}>
+                  <Text style={styles.reliabilityValue}>
+                    {businessMetrics?.cleanerReliability?.avgRating || 0}
                   </Text>
+                  <Text style={styles.reliabilityLabel}>Avg Rating</Text>
                 </View>
-                <View style={styles.retentionBarTrack}>
-                  <View
-                    style={[
-                      styles.retentionBarFill,
-                      {
-                        width: `${Math.min(appUsageData?.retention?.day7 || 0, 100)}%`,
-                        backgroundColor: colors.primary[500],
-                      },
-                    ]}
-                  />
-                  <Text style={styles.retentionPercent}>
-                    {(appUsageData?.retention?.day7 || 0).toFixed(0)}%
+                <View style={styles.reliabilityCard}>
+                  <Text style={styles.reliabilityValue}>
+                    {businessMetrics?.cleanerReliability?.totalCompleted || 0}
                   </Text>
-                </View>
-                <View style={styles.retentionBarTrack}>
-                  <View
-                    style={[
-                      styles.retentionBarFill,
-                      {
-                        width: `${Math.min(appUsageData?.retention?.day30 || 0, 100)}%`,
-                        backgroundColor: colors.secondary[500],
-                      },
-                    ]}
-                  />
-                  <Text style={styles.retentionPercent}>
-                    {(appUsageData?.retention?.day30 || 0).toFixed(0)}%
-                  </Text>
+                  <Text style={styles.reliabilityLabel}>Completed</Text>
                 </View>
               </View>
-            </View>
-          </View>
-        </View>
 
-        {/* Device Breakdown */}
-        <View style={styles.appUsageSubsection}>
-          <Text style={styles.appUsageSubtitle}>Device Breakdown</Text>
-          <View style={styles.deviceGrid}>
-            <View style={[styles.deviceCard, { borderLeftColor: colors.primary[500] }]}>
-              <Text style={styles.deviceIcon}>📱</Text>
-              <Text style={styles.deviceValue}>
-                {appUsageData?.deviceBreakdown?.mobile || 0}%
-              </Text>
-              <Text style={styles.deviceLabel}>Mobile</Text>
-            </View>
-            <View style={[styles.deviceCard, { borderLeftColor: colors.secondary[500] }]}>
-              <Text style={styles.deviceIcon}>💻</Text>
-              <Text style={styles.deviceValue}>
-                {appUsageData?.deviceBreakdown?.desktop || 0}%
-              </Text>
-              <Text style={styles.deviceLabel}>Desktop</Text>
-            </View>
-            <View style={[styles.deviceCard, { borderLeftColor: colors.success[500] }]}>
-              <Text style={styles.deviceIcon}>📲</Text>
-              <Text style={styles.deviceValue}>
-                {appUsageData?.deviceBreakdown?.tablet || 0}%
-              </Text>
-              <Text style={styles.deviceLabel}>Tablet</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Top Pages */}
-        {appUsageData?.pageViews?.topPages?.length > 0 && (
-          <View style={styles.appUsageSubsection}>
-            <Text style={styles.appUsageSubtitle}>Top Pages</Text>
-            <View style={styles.topPagesContainer}>
-              {appUsageData.pageViews.topPages.slice(0, 5).map((page, index) => (
-                <View key={index} style={styles.topPageRow}>
-                  <View style={styles.topPageRank}>
-                    <Text style={styles.topPageRankText}>{index + 1}</Text>
-                  </View>
-                  <Text style={styles.topPageName} numberOfLines={1}>
-                    {page.name || page.path}
-                  </Text>
-                  <Text style={styles.topPageViews}>{page.views} views</Text>
+              {businessMetrics?.cleanerReliability?.cleanerStats?.length > 0 && (
+                <View style={styles.topPerformers}>
+                  <Text style={styles.subsectionTitle}>Top Performers</Text>
+                  {businessMetrics.cleanerReliability.cleanerStats.slice(0, 5).map((cleaner, index) => (
+                    <View key={cleaner.id} style={styles.performerRow}>
+                      <View style={styles.performerRank}>
+                        <Text style={styles.performerRankText}>{index + 1}</Text>
+                      </View>
+                      <Text style={styles.performerName} numberOfLines={1}>{cleaner.username}</Text>
+                      <View style={styles.performerStats}>
+                        <Text style={styles.performerRate}>{cleaner.completionRate}%</Text>
+                        <Text style={styles.performerCount}>({cleaner.completed}/{cleaner.assigned})</Text>
+                      </View>
+                    </View>
+                  ))}
                 </View>
-              ))}
+              )}
             </View>
-          </View>
-        )}
-      </View>
-
-      {/* Service Area Section */}
-      <View style={styles.section}>
-        <SectionHeader title="Service Area Management" />
-
-        {/* Current Stats */}
-        <View style={styles.serviceAreaStats}>
-          <View style={styles.serviceAreaStatCard}>
-            <Text style={styles.serviceAreaStatValue}>
-              {serviceAreaData?.stats?.totalHomes || 0}
-            </Text>
-            <Text style={styles.serviceAreaStatLabel}>Total Homes</Text>
-          </View>
-          <View style={[styles.serviceAreaStatCard, { backgroundColor: colors.success[50] }]}>
-            <Text style={[styles.serviceAreaStatValue, { color: colors.success[700] }]}>
-              {serviceAreaData?.stats?.homesInArea || 0}
-            </Text>
-            <Text style={[styles.serviceAreaStatLabel, { color: colors.success[600] }]}>In Service Area</Text>
-          </View>
-          <View style={[styles.serviceAreaStatCard, { backgroundColor: colors.warning[50] }]}>
-            <Text style={[styles.serviceAreaStatValue, { color: colors.warning[700] }]}>
-              {serviceAreaData?.stats?.homesOutsideArea || 0}
-            </Text>
-            <Text style={[styles.serviceAreaStatLabel, { color: colors.warning[600] }]}>Outside Area</Text>
-          </View>
-        </View>
-
-        {/* Service Area Config Info */}
-        {serviceAreaData?.config?.enabled && (
-          <View style={styles.serviceAreaConfig}>
-            <Text style={styles.serviceAreaConfigTitle}>Current Service Areas</Text>
-            {serviceAreaData?.config?.cities?.length > 0 && (
-              <Text style={styles.serviceAreaConfigText}>
-                Cities: {serviceAreaData.config.cities.join(", ")}
-              </Text>
-            )}
-            {serviceAreaData?.config?.states?.length > 0 && (
-              <Text style={styles.serviceAreaConfigText}>
-                States: {serviceAreaData.config.states.join(", ")}
-              </Text>
-            )}
-            {serviceAreaData?.config?.zipcodes?.length > 0 && (
-              <Text style={styles.serviceAreaConfigText}>
-                Zipcodes: {serviceAreaData.config.zipcodes.join(", ")}
-              </Text>
-            )}
-          </View>
+          </>
         )}
 
-        {/* Recheck Button */}
-        <Pressable
-          style={[
-            styles.recheckButton,
-            recheckLoading && styles.recheckButtonDisabled,
-          ]}
-          onPress={handleRecheckServiceAreas}
-          disabled={recheckLoading}
-        >
-          {recheckLoading ? (
-            <ActivityIndicator size="small" color={colors.neutral[0]} />
-          ) : (
-            <Text style={styles.recheckButtonText}>
-              Recheck All Homes Against Service Area
-            </Text>
-          )}
-        </Pressable>
+        {/* App Usage Section */}
+        {activeSection === "app" && (
+          <>
+            <View style={styles.card}>
+              <SectionHeader title="User Signups" icon="user-plus" color="#6366F1" />
+              <View style={styles.signupGrid}>
+                <View style={[styles.signupCard, styles.signupCardHighlight]}>
+                  <Text style={styles.signupValueLarge}>{appUsageData?.signups?.allTime || 0}</Text>
+                  <Text style={styles.signupLabel}>All Time</Text>
+                </View>
+                <View style={styles.signupCard}>
+                  <Text style={styles.signupValue}>{appUsageData?.signups?.thisYear || 0}</Text>
+                  <Text style={styles.signupLabel}>This Year</Text>
+                </View>
+                <View style={styles.signupCard}>
+                  <Text style={styles.signupValue}>{appUsageData?.signups?.thisMonth || 0}</Text>
+                  <Text style={styles.signupLabel}>This Month</Text>
+                </View>
+                <View style={styles.signupCard}>
+                  <Text style={styles.signupValue}>{appUsageData?.signups?.thisWeek || 0}</Text>
+                  <Text style={styles.signupLabel}>This Week</Text>
+                </View>
+              </View>
+            </View>
 
-        {/* Recheck Results */}
-        {recheckResult && (
-          <View style={[
-            styles.recheckResult,
-            recheckResult.success ? styles.recheckResultSuccess : styles.recheckResultError,
-          ]}>
-            {recheckResult.success ? (
-              <>
-                <Text style={styles.recheckResultTitle}>
-                  Service Area Check Complete
-                </Text>
-                <Text style={styles.recheckResultText}>
-                  {recheckResult.message}
-                </Text>
-                {recheckResult.updated > 0 && recheckResult.results && (
-                  <View style={styles.recheckResultsList}>
-                    {recheckResult.results.map((item, index) => (
-                      <Text key={index} style={styles.recheckResultItem}>
-                        {item.nickName || "Home"} ({item.city}, {item.state}): {item.previousStatus} → {item.newStatus}
-                      </Text>
-                    ))}
-                  </View>
-                )}
-              </>
-            ) : (
-              <Text style={styles.recheckResultErrorText}>
-                {recheckResult.error || "An error occurred"}
-              </Text>
-            )}
-          </View>
+            <View style={styles.card}>
+              <SectionHeader title="App Sessions" icon="clock" color="#8B5CF6" />
+              <View style={styles.sessionGrid}>
+                <MetricCard title="Total Sessions" value={appUsageData?.sessions?.allTime || 0} icon="history" color="#8B5CF6" />
+                <MetricCard title="This Month" value={appUsageData?.sessions?.thisMonth || 0} icon="calendar" color="#6366F1" />
+                <MetricCard title="Unique (Month)" value={appUsageData?.sessions?.uniqueVisitorsMonth || 0} icon="users" color="#10B981" />
+                <MetricCard title="Today" value={appUsageData?.sessions?.today || 0} icon="sun" color="#F59E0B" />
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <SectionHeader title="Engagement" icon="chart-bar" color="#10B981" />
+              <View style={styles.engagementGrid}>
+                <View style={styles.engagementCard}>
+                  <Text style={styles.engagementValue}>{appUsageData?.engagement?.totalLogins || 0}</Text>
+                  <Text style={styles.engagementLabel}>Total Logins</Text>
+                </View>
+                <View style={styles.engagementCard}>
+                  <Text style={styles.engagementValue}>
+                    {(appUsageData?.engagement?.avgLoginsPerUser || 0).toFixed(1)}
+                  </Text>
+                  <Text style={styles.engagementLabel}>Avg Logins/User</Text>
+                </View>
+                <View style={styles.engagementCard}>
+                  <Text style={styles.engagementValue}>{appUsageData?.engagement?.engagementRate || 0}%</Text>
+                  <Text style={styles.engagementLabel}>Engagement Rate</Text>
+                </View>
+                <View style={styles.engagementCard}>
+                  <Text style={styles.engagementValue}>{appUsageData?.engagement?.returningUserRate || 0}%</Text>
+                  <Text style={styles.engagementLabel}>Returning Users</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <SectionHeader title="User Retention" icon="user-clock" color="#EF4444" />
+              <View style={styles.retentionContainer}>
+                <ProgressBar label="Day 1" value={appUsageData?.retention?.day1 || 0} color="#10B981" />
+                <ProgressBar label="Day 7" value={appUsageData?.retention?.day7 || 0} color="#6366F1" />
+                <ProgressBar label="Day 30" value={appUsageData?.retention?.day30 || 0} color="#8B5CF6" />
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <SectionHeader title="Device Breakdown" icon="mobile-alt" color="#F59E0B" />
+              <View style={styles.deviceGrid}>
+                <View style={[styles.deviceCard, { borderLeftColor: "#6366F1" }]}>
+                  <Icon name="mobile-alt" size={24} color="#6366F1" />
+                  <Text style={styles.deviceValue}>{appUsageData?.deviceBreakdown?.mobile || 0}%</Text>
+                  <Text style={styles.deviceLabel}>Mobile</Text>
+                </View>
+                <View style={[styles.deviceCard, { borderLeftColor: "#8B5CF6" }]}>
+                  <Icon name="laptop" size={24} color="#8B5CF6" />
+                  <Text style={styles.deviceValue}>{appUsageData?.deviceBreakdown?.desktop || 0}%</Text>
+                  <Text style={styles.deviceLabel}>Desktop</Text>
+                </View>
+                <View style={[styles.deviceCard, { borderLeftColor: "#10B981" }]}>
+                  <Icon name="tablet-alt" size={24} color="#10B981" />
+                  <Text style={styles.deviceValue}>{appUsageData?.deviceBreakdown?.tablet || 0}%</Text>
+                  <Text style={styles.deviceLabel}>Tablet</Text>
+                </View>
+              </View>
+            </View>
+          </>
         )}
-      </View>
 
-      {/* Tax Section - Platform earnings for owner's taxes */}
-      <TaxFormsSection state={state} />
+        {/* Tax Section */}
+        <TaxFormsSection state={state} />
 
-      {/* Footer Spacer */}
-      <View style={{ height: 40 }} />
+        <View style={{ height: 100 }} />
+      </ScrollView>
 
-      {/* Preview Role Modal */}
+      {/* Modals */}
       <PreviewRoleModal
         visible={previewModalVisible}
         onClose={() => setPreviewModalVisible(false)}
@@ -1178,7 +981,6 @@ const OwnerDashboard = ({ state }) => {
         error={previewError}
       />
 
-      {/* Create Support Ticket Modal */}
       <CreateSupportTicketModal
         visible={showCreateTicketModal}
         onClose={() => setShowCreateTicketModal(false)}
@@ -1188,979 +990,961 @@ const OwnerDashboard = ({ state }) => {
         }}
         token={state.currentUser.token}
       />
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.tertiary,
+    backgroundColor: "#F3F4F6",
   },
-  contentContainer: {
-    paddingTop: 20,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing["3xl"],
-  },
-  loadingContainer: {
+  scrollView: {
     flex: 1,
+  },
+
+  // Loading
+  loadingWrap: {
+    flex: 1,
+    backgroundColor: "#F3F4F6",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.background.tertiary,
+  },
+  loadingCard: {
+    backgroundColor: "#fff",
+    padding: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    ...shadows.lg,
   },
   loadingText: {
-    marginTop: spacing.md,
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
+    marginTop: 16,
+    fontSize: 16,
+    color: "#6B7280",
+    fontWeight: "500",
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
+  errorCard: {
+    backgroundColor: "#fff",
+    padding: 32,
+    borderRadius: 16,
     alignItems: "center",
-    backgroundColor: colors.background.tertiary,
-    padding: spacing.xl,
+    ...shadows.lg,
   },
   errorText: {
-    color: colors.error[600],
-    fontSize: typography.fontSize.base,
-    marginBottom: spacing.lg,
+    marginTop: 16,
+    fontSize: 16,
+    color: "#DC2626",
     textAlign: "center",
   },
-  retryButton: {
-    backgroundColor: colors.primary[500],
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.lg,
+  retryBtn: {
+    marginTop: 16,
+    backgroundColor: "#6366F1",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
   },
-  retryButtonText: {
-    color: colors.neutral[0],
-    fontWeight: typography.fontWeight.semibold,
-  },
-
-  // Header
-  header: {
-    marginBottom: spacing.lg,
-  },
-  headerTitle: {
-    fontSize: typography.fontSize["2xl"],
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  headerSubtitle: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
+  retryBtnText: {
+    color: "#fff",
+    fontWeight: "600",
   },
 
-  // Preview as Role Card
-  previewAsRoleCard: {
+  // Hero Header
+  hero: {
+    backgroundColor: "#6366F1",
+    paddingTop: 48,
+    paddingBottom: 32,
+    paddingHorizontal: 20,
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    ...shadows.sm,
-    borderWidth: 1,
-    borderColor: colors.primary[100],
   },
-  previewAsRoleCardPressed: {
-    backgroundColor: colors.primary[50],
-    transform: [{ scale: 0.99 }],
+  heroContent: {
+    flex: 1,
   },
-  previewAsRoleIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.lg,
-    backgroundColor: colors.primary[50],
+  heroGreeting: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "500",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  heroTitle: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#fff",
+    marginTop: 4,
+  },
+  heroDate: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    marginTop: 8,
+  },
+  heroIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(255,255,255,0.15)",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: spacing.md,
-  },
-  previewAsRoleContent: {
-    flex: 1,
-  },
-  previewAsRoleTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-  },
-  previewAsRoleDescription: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginTop: 2,
   },
 
-  // Create Ticket Card
-  createTicketCard: {
+  // Actions
+  actionsWrap: {
     flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: "#fff",
+    marginTop: -16,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    ...shadows.md,
+  },
+  actionBtn: {
+    flex: 1,
     alignItems: "center",
-    backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    ...shadows.sm,
-    borderWidth: 1,
-    borderColor: colors.error[100],
   },
-  createTicketCardPressed: {
-    backgroundColor: colors.error[50],
-    transform: [{ scale: 0.99 }],
-  },
-  createTicketIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.lg,
-    backgroundColor: colors.error[50],
+  actionBtnIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: spacing.md,
+    marginBottom: 8,
+    position: "relative",
   },
-  createTicketContent: {
-    flex: 1,
-  },
-  createTicketTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-  },
-  createTicketDescription: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginTop: 2,
-  },
-
-  // Platform Overview
-  platformOverviewGrid: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  platformOverviewCard: {
-    flex: 1,
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderLeftWidth: 4,
+  actionBadge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    backgroundColor: "#EF4444",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: "#fff",
   },
-  platformOverviewValue: {
-    fontSize: typography.fontSize["2xl"],
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+  actionBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
   },
-  platformOverviewLabel: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
+  actionBtnLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    fontWeight: "500",
   },
 
-  // Applications Section
-  applicationsSection: {
-    marginTop: spacing.lg,
-    paddingTop: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.light,
+  // Stats
+  statsWrap: {
+    paddingHorizontal: 16,
+    marginTop: 24,
   },
-  applicationsSectionTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    marginBottom: spacing.md,
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 12,
   },
-  applicationsGrid: {
+  statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  applicationCard: {
-    flex: 1,
-    minWidth: 70,
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    alignItems: "center",
-  },
-  applicationValue: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  applicationLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-    marginTop: 2,
-  },
-
-  // Quick Stats
-  quickStatsRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
+    gap: 12,
   },
   statCard: {
-    flex: 1,
-    backgroundColor: colors.neutral[0],
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderLeftWidth: 4,
+    width: (screenWidth - 44) / 2,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    borderTopWidth: 3,
     ...shadows.sm,
   },
-  statCardPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
+  statCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  statIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  trendBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 2,
+  },
+  trendText: {
+    fontSize: 10,
+    fontWeight: "600",
   },
   statValue: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#1F2937",
   },
-  statTitle: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+  statLabel: {
+    fontSize: 12,
+    color: "#9CA3AF",
     marginTop: 2,
   },
   statSubtitle: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
+    fontSize: 10,
+    color: "#D1D5DB",
+    marginTop: 2,
   },
 
-  // Section
-  section: {
-    backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    ...shadows.md,
+  // Section Tabs
+  sectionTabsWrap: {
+    marginTop: 24,
+    paddingHorizontal: 16,
   },
+  sectionTabs: {
+    gap: 8,
+    paddingRight: 16,
+  },
+  sectionTab: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    gap: 8,
+  },
+  sectionTabActive: {
+    backgroundColor: "#6366F1",
+    borderColor: "#6366F1",
+  },
+  sectionTabText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#6366F1",
+  },
+  sectionTabTextActive: {
+    color: "#fff",
+  },
+
+  // Card
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    ...shadows.sm,
+  },
+
+  // Section Header
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing.md,
+    marginBottom: 16,
+  },
+  sectionHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  sectionIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
   },
   sectionTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1F2937",
+  },
+  sectionActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   sectionAction: {
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[600],
-    fontWeight: typography.fontWeight.medium,
+    fontSize: 13,
+    color: "#6366F1",
+    fontWeight: "500",
   },
 
-  // Earnings Grid
+  // Earnings
   earningsGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    gap: 10,
+    marginBottom: 12,
   },
   earningsCard: {
     flex: 1,
-    minWidth: (width - 80) / 2 - spacing.sm,
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 12,
+    alignItems: "center",
+  },
+  earningsCardPrimary: {
+    backgroundColor: "#EEF2FF",
+    borderWidth: 1,
+    borderColor: "#C7D2FE",
   },
   earningsLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+    fontSize: 11,
+    color: "#9CA3AF",
     marginBottom: 4,
   },
   earningsValue: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
   },
-  earningsValueHighlight: {
-    color: colors.secondary[600],
+  earningsValueLarge: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#4F46E5",
   },
 
-  // Balance Card
-  balanceCard: {
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.primary[100],
-  },
-  balanceRow: {
+  // Balance Banner
+  balanceBanner: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 16,
+  },
+  balanceItem: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
+    gap: 10,
+  },
+  balanceContent: {
+    flex: 1,
+  },
+  balanceLabel: {
+    fontSize: 11,
+    color: "#9CA3AF",
+  },
+  balanceValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginTop: 2,
   },
   balanceDivider: {
     width: 1,
-    height: 40,
-    backgroundColor: colors.primary[200],
-  },
-  balanceLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.primary[700],
-    textAlign: "center",
-  },
-  balanceValue: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.primary[800],
-    textAlign: "center",
-    marginTop: 4,
-  },
-  balanceNote: {
-    fontSize: typography.fontSize.xs,
-    color: colors.primary[600],
-    textAlign: "center",
-    marginTop: spacing.md,
+    backgroundColor: "#E5E7EB",
+    marginHorizontal: 14,
   },
 
   // Chart
   chartContainer: {
-    marginTop: spacing.md,
+    marginTop: 8,
   },
   chartLabel: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.secondary,
-    marginBottom: spacing.sm,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginBottom: 10,
   },
   chartArea: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 12,
   },
   barsContainer: {
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "flex-end",
-    height: 140,
+    height: 110,
   },
   barWrapper: {
     alignItems: "center",
   },
   bar: {
-    borderRadius: radius.sm,
-    minHeight: 2,
+    borderRadius: 4,
+    minHeight: 4,
   },
   barLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
-    marginTop: spacing.xs,
+    fontSize: 10,
+    color: "#9CA3AF",
+    marginTop: 6,
   },
 
   // Messages
-  messagesCard: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-  },
-  messageStats: {
+  messagesGrid: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
+    gap: 10,
   },
-  messageStat: {
-    alignItems: "center",
+  messageCard: {
     flex: 1,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 14,
+    alignItems: "center",
   },
-  messageStatValue: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+  messageCardAlert: {
+    backgroundColor: "#FEE2E2",
   },
-  messageStatLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-    marginTop: 2,
+  messageValue: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#1F2937",
   },
-  messageStatDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: colors.border.light,
+  messageLabel: {
+    fontSize: 11,
+    color: "#9CA3AF",
+    marginTop: 4,
   },
-  messagesCTA: {
-    backgroundColor: colors.primary[500],
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginTop: spacing.md,
+
+  // Service Area
+  serviceAreaGrid: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
   },
-  messagesCTAText: {
-    color: colors.neutral[0],
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
+  serviceAreaInfo: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    gap: 8,
+  },
+  recheckBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#6366F1",
+    borderRadius: 10,
+    padding: 14,
+    gap: 8,
+  },
+  recheckBtnText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  recheckResult: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 12,
+    gap: 10,
+  },
+  recheckResultSuccess: {
+    backgroundColor: "#DCFCE7",
+  },
+  recheckResultError: {
+    backgroundColor: "#FEE2E2",
+  },
+  recheckResultText: {
+    flex: 1,
+    fontSize: 13,
+  },
+
+  // Metric Card
+  metricCard: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 12,
+    alignItems: "center",
+    borderLeftWidth: 3,
+  },
+  metricCardLarge: {
+    flex: 2,
+  },
+  metricIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  metricValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  metricValueLarge: {
+    fontSize: 28,
+  },
+  metricLabel: {
+    fontSize: 11,
+    color: "#9CA3AF",
+    marginTop: 4,
     textAlign: "center",
   },
 
-  // Period Selector
-  periodSelector: {
+  // Info Row
+  infoRow: {
     flexDirection: "row",
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: 4,
-    marginBottom: spacing.md,
+    alignItems: "center",
+    gap: 10,
   },
-  periodButton: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+  infoRowIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    justifyContent: "center",
     alignItems: "center",
   },
-  periodButtonActive: {
-    backgroundColor: colors.primary[500],
+  infoRowLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    flex: 1,
   },
-  periodButtonText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.text.secondary,
-  },
-  periodButtonTextActive: {
-    color: colors.neutral[0],
+  infoRowValue: {
+    fontSize: 12,
+    color: "#1F2937",
+    fontWeight: "500",
+    flex: 2,
   },
 
-  // Analytics
-  analyticsGrid: {
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+  // Period Pills
+  periodScroll: {
+    marginBottom: 16,
   },
-  analyticsCard: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+  periodPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    marginRight: 8,
+  },
+  periodPillActive: {
+    backgroundColor: "#6366F1",
+  },
+  periodPillText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#6B7280",
+  },
+  periodPillTextActive: {
+    color: "#fff",
+  },
+
+  // User Stats
+  userStatsGrid: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  userStatCard: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 14,
     borderLeftWidth: 4,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  analyticsValue: {
-    fontSize: typography.fontSize["2xl"],
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+  userStatValue: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#1F2937",
   },
-  analyticsLabel: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+  userStatLabel: {
+    fontSize: 14,
+    color: "#6B7280",
     flex: 1,
-    marginLeft: spacing.md,
+    marginLeft: 12,
   },
-  analyticsTotal: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
+  userStatTotal: {
+    fontSize: 12,
+    color: "#9CA3AF",
   },
 
-  // Service Area Section
-  serviceAreaStats: {
+  // Platform Grid
+  platformGrid: {
     flexDirection: "row",
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: 10,
+    marginBottom: 16,
   },
-  serviceAreaStatCard: {
-    flex: 1,
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    alignItems: "center",
-  },
-  serviceAreaStatValue: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  serviceAreaStatLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-    marginTop: 2,
-    textAlign: "center",
-  },
-  serviceAreaConfig: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  serviceAreaConfigTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    marginBottom: spacing.sm,
-  },
-  serviceAreaConfigText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-    marginBottom: 4,
-  },
-  recheckButton: {
-    backgroundColor: colors.primary[600],
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-  },
-  recheckButtonDisabled: {
-    opacity: 0.6,
-  },
-  recheckButtonText: {
-    color: colors.neutral[0],
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  recheckResult: {
-    marginTop: spacing.md,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
-  recheckResultSuccess: {
-    backgroundColor: colors.success[50],
-    borderWidth: 1,
-    borderColor: colors.success[200],
-  },
-  recheckResultError: {
-    backgroundColor: colors.error[50],
-    borderWidth: 1,
-    borderColor: colors.error[200],
-  },
-  recheckResultTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.success[700],
-    marginBottom: spacing.xs,
-  },
-  recheckResultText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.success[600],
-  },
-  recheckResultsList: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
+
+  // Applications
+  applicationsSection: {
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: colors.success[200],
+    borderTopColor: "#F3F4F6",
   },
-  recheckResultItem: {
-    fontSize: typography.fontSize.xs,
-    color: colors.success[700],
-    marginBottom: 4,
+  subsectionTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginBottom: 10,
   },
-  recheckResultErrorText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.error[600],
-  },
-
-  // App Usage Analytics Styles
-  appUsageSubsection: {
-    marginBottom: spacing.lg,
-  },
-  appUsageSubtitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.secondary,
-    marginBottom: spacing.sm,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  appUsageGrid: {
+  applicationsGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
+    gap: 8,
   },
-  appUsageCard: {
+  appCard: {
     flex: 1,
-    minWidth: (width - 80) / 2 - spacing.sm,
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    padding: 10,
     alignItems: "center",
   },
-  appUsageCardHighlight: {
-    backgroundColor: colors.primary[50],
-    borderWidth: 1,
-    borderColor: colors.primary[200],
+  appValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
   },
-  appUsageCardWide: {
-    minWidth: "100%",
-    backgroundColor: colors.success[50],
-    borderWidth: 1,
-    borderColor: colors.success[200],
-  },
-  appUsageValue: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  appUsageValueLarge: {
-    fontSize: typography.fontSize["2xl"],
-    fontWeight: typography.fontWeight.bold,
-    color: colors.success[700],
-  },
-  appUsageLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-    marginTop: 4,
-    textAlign: "center",
-  },
-
-  // Engagement Grid
-  engagementGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  engagementCard: {
-    flex: 1,
-    minWidth: (width - 80) / 2 - spacing.sm,
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    alignItems: "center",
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary[400],
-  },
-  engagementValue: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.primary[700],
-  },
-  engagementLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.primary[600],
-    marginTop: 4,
-    textAlign: "center",
-  },
-
-  // Retention Styles
-  retentionContainer: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
-  retentionBar: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  retentionLabels: {
-    width: 60,
-    gap: spacing.md,
-  },
-  retentionLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-    fontWeight: typography.fontWeight.medium,
-  },
-  retentionBars: {
-    flex: 1,
-    gap: spacing.md,
-  },
-  retentionBarTrack: {
-    height: 24,
-    backgroundColor: colors.neutral[200],
-    borderRadius: radius.full,
-    overflow: "hidden",
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  retentionBarFill: {
-    height: "100%",
-    borderRadius: radius.full,
-    minWidth: 2,
-  },
-  retentionPercent: {
-    position: "absolute",
-    right: spacing.sm,
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-
-  // Device Breakdown
-  deviceGrid: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  deviceCard: {
-    flex: 1,
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    alignItems: "center",
-    borderLeftWidth: 4,
-  },
-  deviceIcon: {
-    fontSize: 24,
-    marginBottom: spacing.xs,
-  },
-  deviceValue: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  deviceLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+  appLabel: {
+    fontSize: 10,
+    color: "#9CA3AF",
     marginTop: 2,
   },
 
-  // Top Pages
-  topPagesContainer: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.sm,
-  },
-  topPageRow: {
+  // Business Grid
+  businessGrid: {
     flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    gap: 10,
   },
-  topPageRank: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary[100],
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: spacing.sm,
-  },
-  topPageRankText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.primary[700],
-  },
-  topPageName: {
+  businessCard: {
     flex: 1,
-    fontSize: typography.fontSize.sm,
-    color: colors.text.primary,
-  },
-  topPageViews: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
-    fontWeight: typography.fontWeight.medium,
-  },
-
-  // Terms & Conditions
-  termsDescription: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginBottom: spacing.md,
-    lineHeight: 20,
-  },
-  termsButton: {
-    backgroundColor: colors.primary[600],
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 14,
     alignItems: "center",
   },
-  termsButtonText: {
-    color: colors.neutral[0],
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-  },
-
-  // Business Metrics Styles
-  businessMetricRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  businessMetricCard: {
-    flex: 1,
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    alignItems: "center",
-  },
-  businessMetricCardHighlight: {
-    backgroundColor: colors.secondary[50],
+  businessCardHighlight: {
+    backgroundColor: "#FEF3C7",
     borderWidth: 1,
-    borderColor: colors.secondary[200],
+    borderColor: "#FDE68A",
   },
-  businessMetricCardLarge: {
-    flex: 2,
-    backgroundColor: colors.primary[50],
-    borderWidth: 1,
-    borderColor: colors.primary[200],
-  },
-  businessMetricCardStack: {
-    flex: 1,
-    gap: spacing.sm,
-  },
-  businessMetricLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+  businessLabel: {
+    fontSize: 11,
+    color: "#9CA3AF",
     marginBottom: 4,
-    textAlign: "center",
   },
-  businessMetricValue: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+  businessValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
   },
-  businessMetricValueLarge: {
-    fontSize: typography.fontSize["2xl"],
-    fontWeight: typography.fontWeight.bold,
-    color: colors.primary[700],
-  },
-  businessMetricMini: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.sm,
-    alignItems: "center",
-  },
-  businessMetricMiniValue: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  businessMetricMiniLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+  businessValueLarge: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#D97706",
   },
 
-  // Loyalty Styles
+  // Loyalty
+  loyaltyGrid: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
+  },
   loyaltyCard: {
     flex: 1,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    borderRadius: 10,
+    padding: 14,
     alignItems: "center",
   },
   loyaltyValue: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#1F2937",
   },
   loyaltyLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+    fontSize: 11,
+    color: "#9CA3AF",
     marginTop: 4,
     textAlign: "center",
   },
-  loyaltyRateContainer: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.success[50],
-    borderRadius: radius.md,
-    padding: spacing.sm,
+  loyaltyBanner: {
+    flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#DCFCE7",
+    borderRadius: 8,
+    padding: 12,
+    gap: 8,
   },
-  loyaltyRateText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.success[700],
-    fontWeight: typography.fontWeight.medium,
+  loyaltyBannerText: {
+    fontSize: 12,
+    color: "#065F46",
+    fontWeight: "500",
   },
 
-  // Churn Styles
-  churnContainer: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
-  churnSection: {},
-  churnSectionTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    marginBottom: spacing.sm,
-  },
-  churnRow: {
+  // Repeat
+  repeatGrid: {
     flexDirection: "row",
-    gap: spacing.sm,
+    gap: 10,
+  },
+  repeatCardLarge: {
+    flex: 2,
+    borderRadius: 10,
+    padding: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  repeatValueLarge: {
+    fontSize: 32,
+    fontWeight: "700",
+  },
+  repeatStack: {
+    flex: 1,
+    gap: 10,
+  },
+  repeatCard: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 12,
+    alignItems: "center",
+  },
+  repeatValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  repeatLabel: {
+    fontSize: 11,
+    color: "#9CA3AF",
+    marginTop: 2,
+  },
+
+  // Churn
+  churnGrid: {
+    flexDirection: "row",
+    gap: 10,
   },
   churnCard: {
     flex: 1,
-    backgroundColor: colors.neutral[0],
-    borderRadius: radius.md,
-    padding: spacing.sm,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 12,
     alignItems: "center",
   },
   churnValue: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
   },
   churnLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+    fontSize: 10,
+    color: "#9CA3AF",
     marginTop: 2,
     textAlign: "center",
   },
 
-  // Reliability Styles
-  reliabilityOverview: {
+  // Reliability
+  reliabilityGrid: {
     flexDirection: "row",
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: 10,
+    marginBottom: 16,
+  },
+  reliabilityCardLarge: {
+    flex: 2,
+    borderRadius: 10,
+    padding: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   reliabilityCard: {
     flex: 1,
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 12,
     alignItems: "center",
   },
-  reliabilityValue: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
   reliabilityValueLarge: {
-    fontSize: typography.fontSize["2xl"],
-    fontWeight: typography.fontWeight.bold,
+    fontSize: 28,
+    fontWeight: "700",
+  },
+  reliabilityValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1F2937",
   },
   reliabilityLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+    fontSize: 11,
+    color: "#9CA3AF",
     marginTop: 4,
     textAlign: "center",
   },
 
-  // Top Cleaners Styles
-  topCleanersContainer: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+  // Top Performers
+  topPerformers: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 12,
   },
-  topCleanersTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    marginBottom: spacing.sm,
-  },
-  topCleanerRow: {
+  performerRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: spacing.sm,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    borderBottomColor: "#E5E7EB",
   },
-  topCleanerRank: {
+  performerRank: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.primary[100],
-    alignItems: "center",
+    backgroundColor: "#EEF2FF",
     justifyContent: "center",
-    marginRight: spacing.sm,
+    alignItems: "center",
+    marginRight: 10,
   },
-  topCleanerRankText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.primary[700],
+  performerRankText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#4F46E5",
   },
-  topCleanerName: {
+  performerName: {
     flex: 1,
-    fontSize: typography.fontSize.sm,
-    color: colors.text.primary,
+    fontSize: 13,
+    color: "#1F2937",
   },
-  topCleanerStats: {
+  performerStats: {
     alignItems: "flex-end",
   },
-  topCleanerStat: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.success[600],
+  performerRate: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#059669",
   },
-  topCleanerStatLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
+  performerCount: {
+    fontSize: 10,
+    color: "#9CA3AF",
+  },
+
+  // Signups
+  signupGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  signupCard: {
+    flex: 1,
+    minWidth: (screenWidth - 80) / 2 - 5,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 14,
+    alignItems: "center",
+  },
+  signupCardHighlight: {
+    minWidth: "100%",
+    backgroundColor: "#EEF2FF",
+    borderWidth: 1,
+    borderColor: "#C7D2FE",
+  },
+  signupValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1F2937",
+  },
+  signupValueLarge: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#4F46E5",
+  },
+  signupLabel: {
+    fontSize: 11,
+    color: "#9CA3AF",
+    marginTop: 4,
+  },
+
+  // Sessions
+  sessionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+
+  // Engagement
+  engagementGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  engagementCard: {
+    flex: 1,
+    minWidth: (screenWidth - 80) / 2 - 5,
+    backgroundColor: "#EEF2FF",
+    borderRadius: 10,
+    padding: 14,
+    alignItems: "center",
+    borderLeftWidth: 3,
+    borderLeftColor: "#6366F1",
+  },
+  engagementValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#4F46E5",
+  },
+  engagementLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginTop: 4,
+    textAlign: "center",
+  },
+
+  // Retention
+  retentionContainer: {
+    gap: 12,
+  },
+  progressBarContainer: {
+    marginBottom: 4,
+  },
+  progressBarHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  progressBarLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontWeight: "500",
+  },
+  progressBarValue: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  progressBarTrack: {
+    height: 8,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+
+  // Devices
+  deviceGrid: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  deviceCard: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 14,
+    alignItems: "center",
+    borderLeftWidth: 4,
+  },
+  deviceValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1F2937",
+    marginTop: 8,
+  },
+  deviceLabel: {
+    fontSize: 11,
+    color: "#9CA3AF",
+    marginTop: 4,
   },
 });
 

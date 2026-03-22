@@ -20,6 +20,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
+import { useOffline } from "../../services/offline/OfflineContext";
 
 const TIME_WINDOWS = [
   { value: "anytime", label: "Anytime" },
@@ -29,6 +30,21 @@ const TIME_WINDOWS = [
 ];
 
 const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes = [], selectedHome = null }) => {
+  const { isOffline } = useOffline();
+
+  // Helper to check offline and show alert
+  const requiresOnline = (action = "This action") => {
+    if (isOffline) {
+      Alert.alert(
+        "Internet Required",
+        `${action} requires an internet connection. Please connect to the internet and try again.`,
+        [{ text: "OK" }]
+      );
+      return true;
+    }
+    return false;
+  };
+
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [customPrice, setCustomPrice] = useState("");
@@ -51,10 +67,11 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
     : "No address set";
 
   // Use the selected home's defaultPrice if available, otherwise fall back to client-level price
+  // Prices are stored in cents, convert to dollars for display
   const defaultPrice = activeHome?.defaultPrice
-    ? parseFloat(activeHome.defaultPrice).toFixed(0)
+    ? (parseFloat(activeHome.defaultPrice) / 100).toFixed(0)
     : client?.defaultPrice
-    ? parseFloat(client.defaultPrice).toFixed(0)
+    ? (parseFloat(client.defaultPrice) / 100).toFixed(0)
     : null;
 
   // Determine the correct cleanerClientId - use selected home's cleanerClientId if available
@@ -83,7 +100,8 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
 
   const handleUsePlatformPrice = () => {
     if (platformPriceData?.platformPrice) {
-      setCustomPrice(platformPriceData.platformPrice.toString());
+      // Convert cents to dollars for the input field
+      setCustomPrice((platformPriceData.platformPrice / 100).toString());
     }
   };
 
@@ -156,6 +174,7 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
   };
 
   const handleSubmit = async () => {
+    if (requiresOnline("Booking an appointment")) return;
     if (!selectedDate) {
       Alert.alert("Error", "Please select a date for the appointment");
       return;
@@ -164,6 +183,23 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
     if (!activeHome) {
       Alert.alert("Error", "No home selected for this booking");
       return;
+    }
+
+    // Validate price if provided
+    if (customPrice && customPrice.trim()) {
+      const priceValue = parseFloat(customPrice);
+      if (isNaN(priceValue) || priceValue < 0) {
+        Alert.alert("Error", "Please enter a valid price");
+        return;
+      }
+      if (priceValue < 50) {
+        Alert.alert("Error", "Minimum price is $50");
+        return;
+      }
+      if (priceValue > 10000) {
+        Alert.alert("Error", "Price cannot exceed $10,000");
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -408,7 +444,7 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
                 >
                   <Feather name="trending-up" size={14} color={colors.primary[600]} />
                   <Text style={styles.platformPriceButtonText}>
-                    Use Platform Price: ${platformPriceData.platformPrice}
+                    Use Platform Price: ${((platformPriceData.platformPrice || 0) / 100).toFixed(0)}
                   </Text>
                   <Text style={styles.platformPriceBreakdown}>
                     ({platformPriceData.numBeds} bed, {platformPriceData.numBaths} bath)

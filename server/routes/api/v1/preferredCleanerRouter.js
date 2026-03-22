@@ -65,6 +65,15 @@ const verifyHomeowner = async (req, res, next) => {
       return res.status(403).json({ error: "Homeowner access required" });
     }
 
+    // Check if account is frozen
+    if (user.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended",
+        reason: user.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
+
     req.user = user;
     next();
   } catch (err) {

@@ -45,73 +45,73 @@ describe("PricingConfig Model", () => {
       );
     });
 
-    describe("Base Pricing Fields", () => {
-      it("should have basePrice field as INTEGER with default 150", () => {
+    describe("Base Pricing Fields (in cents)", () => {
+      it("should have basePrice field as INTEGER with default 15000 cents ($150)", () => {
         const attributes = mockDefine.mock.calls[0][1];
         expect(attributes.basePrice.type).toBe("INTEGER");
         expect(attributes.basePrice.allowNull).toBe(false);
-        expect(attributes.basePrice.defaultValue).toBe(150);
+        expect(attributes.basePrice.defaultValue).toBe(15000);
       });
 
-      it("should have extraBedBathFee field as INTEGER with default 50", () => {
+      it("should have extraBedBathFee field as INTEGER with default 5000 cents ($50)", () => {
         const attributes = mockDefine.mock.calls[0][1];
         expect(attributes.extraBedBathFee.type).toBe("INTEGER");
         expect(attributes.extraBedBathFee.allowNull).toBe(false);
-        expect(attributes.extraBedBathFee.defaultValue).toBe(50);
+        expect(attributes.extraBedBathFee.defaultValue).toBe(5000);
       });
     });
 
-    describe("Linen Service Fields", () => {
-      it("should have sheetFeePerBed field as INTEGER with default 30", () => {
+    describe("Linen Service Fields (in cents)", () => {
+      it("should have sheetFeePerBed field as INTEGER with default 3000 cents ($30)", () => {
         const attributes = mockDefine.mock.calls[0][1];
         expect(attributes.sheetFeePerBed.type).toBe("INTEGER");
-        expect(attributes.sheetFeePerBed.defaultValue).toBe(30);
+        expect(attributes.sheetFeePerBed.defaultValue).toBe(3000);
       });
 
-      it("should have towelFee field as INTEGER with default 5", () => {
+      it("should have towelFee field as INTEGER with default 500 cents ($5)", () => {
         const attributes = mockDefine.mock.calls[0][1];
         expect(attributes.towelFee.type).toBe("INTEGER");
-        expect(attributes.towelFee.defaultValue).toBe(5);
+        expect(attributes.towelFee.defaultValue).toBe(500);
       });
 
-      it("should have faceClothFee field as INTEGER with default 2", () => {
+      it("should have faceClothFee field as INTEGER with default 200 cents ($2)", () => {
         const attributes = mockDefine.mock.calls[0][1];
         expect(attributes.faceClothFee.type).toBe("INTEGER");
-        expect(attributes.faceClothFee.defaultValue).toBe(2);
+        expect(attributes.faceClothFee.defaultValue).toBe(200);
       });
     });
 
-    describe("Time Window Fields", () => {
-      it("should have timeWindowAnytime field with default 0", () => {
+    describe("Time Window Fields (in cents)", () => {
+      it("should have timeWindowAnytime field with default 0 cents", () => {
         const attributes = mockDefine.mock.calls[0][1];
         expect(attributes.timeWindowAnytime.type).toBe("INTEGER");
         expect(attributes.timeWindowAnytime.defaultValue).toBe(0);
       });
 
-      it("should have timeWindow10To3 field with default 25", () => {
+      it("should have timeWindow10To3 field with default 2500 cents ($25)", () => {
         const attributes = mockDefine.mock.calls[0][1];
         expect(attributes.timeWindow10To3.type).toBe("INTEGER");
-        expect(attributes.timeWindow10To3.defaultValue).toBe(25);
+        expect(attributes.timeWindow10To3.defaultValue).toBe(2500);
       });
 
-      it("should have timeWindow11To4 field with default 25", () => {
+      it("should have timeWindow11To4 field with default 2500 cents ($25)", () => {
         const attributes = mockDefine.mock.calls[0][1];
         expect(attributes.timeWindow11To4.type).toBe("INTEGER");
-        expect(attributes.timeWindow11To4.defaultValue).toBe(25);
+        expect(attributes.timeWindow11To4.defaultValue).toBe(2500);
       });
 
-      it("should have timeWindow12To2 field with default 30", () => {
+      it("should have timeWindow12To2 field with default 3000 cents ($30)", () => {
         const attributes = mockDefine.mock.calls[0][1];
         expect(attributes.timeWindow12To2.type).toBe("INTEGER");
-        expect(attributes.timeWindow12To2.defaultValue).toBe(30);
+        expect(attributes.timeWindow12To2.defaultValue).toBe(3000);
       });
     });
 
-    describe("Cancellation Policy Fields", () => {
-      it("should have cancellationFee field with default 25", () => {
+    describe("Cancellation Policy Fields (in cents)", () => {
+      it("should have cancellationFee field with default 2500 cents ($25)", () => {
         const attributes = mockDefine.mock.calls[0][1];
         expect(attributes.cancellationFee.type).toBe("INTEGER");
-        expect(attributes.cancellationFee.defaultValue).toBe(25);
+        expect(attributes.cancellationFee.defaultValue).toBe(2500);
       });
 
       it("should have cancellationWindowDays field with default 7", () => {
@@ -158,10 +158,10 @@ describe("PricingConfig Model", () => {
         expect(attributes.businessOwnerFeePercent.allowNull).toBe(false);
       });
 
-      it("should have highVolumeFee field with default 50", () => {
+      it("should have highVolumeFee field with default 5000 cents ($50)", () => {
         const attributes = mockDefine.mock.calls[0][1];
         expect(attributes.highVolumeFee.type).toBe("INTEGER");
-        expect(attributes.highVolumeFee.defaultValue).toBe(50);
+        expect(attributes.highVolumeFee.defaultValue).toBe(5000);
       });
     });
 

@@ -1,7 +1,16 @@
-import OwnerDashboardService from "../../src/services/fetchRequests/OwnerDashboardService";
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
 
-// Mock global fetch
-global.fetch = jest.fn();
+import HttpClient from "../../src/services/HttpClient";
+import OwnerDashboardService from "../../src/services/fetchRequests/OwnerDashboardService";
 
 describe("OwnerDashboardService", () => {
   const mockToken = "test-owner-token";
@@ -54,27 +63,19 @@ describe("OwnerDashboardService", () => {
     };
 
     it("should fetch business metrics successfully", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockBusinessMetrics,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockBusinessMetrics);
 
       const result = await OwnerDashboardService.getBusinessMetrics(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/owner-dashboard/business-metrics"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/api/v1/owner-dashboard/business-metrics",
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result).toEqual(mockBusinessMetrics);
     });
 
     it("should return fallback on API error", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Server error" });
 
       const result = await OwnerDashboardService.getBusinessMetrics(mockToken);
 
@@ -86,7 +87,7 @@ describe("OwnerDashboardService", () => {
     });
 
     it("should return fallback on network error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await OwnerDashboardService.getBusinessMetrics(mockToken);
 
@@ -98,10 +99,7 @@ describe("OwnerDashboardService", () => {
     });
 
     it("should include all expected metric categories", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockBusinessMetrics,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockBusinessMetrics);
 
       const result = await OwnerDashboardService.getBusinessMetrics(mockToken);
 
@@ -143,24 +141,19 @@ describe("OwnerDashboardService", () => {
         monthly: [],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockData);
 
       const result = await OwnerDashboardService.getFinancialSummary(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/owner-dashboard/financial-summary"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/api/v1/owner-dashboard/financial-summary",
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.current).toBeDefined();
     });
 
     it("should return fallback on error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await OwnerDashboardService.getFinancialSummary(mockToken);
 
@@ -180,10 +173,7 @@ describe("OwnerDashboardService", () => {
         growth: [],
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockData);
 
       const result = await OwnerDashboardService.getUserAnalytics(mockToken);
 
@@ -201,10 +191,7 @@ describe("OwnerDashboardService", () => {
         completedThisWeek: 25,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockData);
 
       const result = await OwnerDashboardService.getQuickStats(mockToken);
 
@@ -222,10 +209,7 @@ describe("OwnerDashboardService", () => {
         retention: { day1: 80, day7: 50, day30: 30 },
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockData);
 
       const result = await OwnerDashboardService.getAppUsageAnalytics(mockToken);
 
@@ -244,31 +228,20 @@ describe("OwnerDashboardService", () => {
         updated: 5,
       };
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResult,
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResult);
 
       const result = await OwnerDashboardService.recheckServiceAreas(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/owner-dashboard/recheck-service-areas"),
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-            "Content-Type": "application/json",
-          },
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/api/v1/owner-dashboard/recheck-service-areas",
+        {},
+        { token: mockToken, useBaseUrl: true }
       );
       expect(result.success).toBe(true);
     });
 
     it("should handle recheck errors", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Failed to recheck" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Failed to recheck" });
 
       const result = await OwnerDashboardService.recheckServiceAreas(mockToken);
 

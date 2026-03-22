@@ -14,11 +14,13 @@ import { Feather } from "@expo/vector-icons";
 import { UserContext } from "../../context/UserContext";
 import NotificationsService from "../../services/fetchRequests/NotificationsService";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
+import { formatCurrency } from "../../services/formatters";
 
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 const NotificationDetailScreen = () => {
   const { id } = useParams();
   const { state } = useContext(UserContext);
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
 
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -173,7 +175,7 @@ const NotificationDetailScreen = () => {
 
     Alert.alert(
       "Accept Home Request",
-      `Accept this home and add it to your client list?\n\nCalculated Price: $${notification.data.calculatedPrice || "N/A"}`,
+      `Accept this home and add it to your client list?\n\nCalculated Price: $${notification.data?.calculatedPriceDollars || (notification.data?.calculatedPrice ? (notification.data.calculatedPrice / 100).toFixed(2) : "N/A")}`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -248,7 +250,7 @@ const NotificationDetailScreen = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+          <Pressable onPress={() => goBack()} style={styles.backButton}>
             <Feather name="arrow-left" size={24} color={colors.neutral[700]} />
           </Pressable>
           <Text style={styles.headerTitle}>Notification</Text>
@@ -271,7 +273,7 @@ const NotificationDetailScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+        <Pressable onPress={() => goBack()} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color={colors.neutral[700]} />
         </Pressable>
         <Text style={styles.headerTitle}>Notification Details</Text>
@@ -310,7 +312,7 @@ const NotificationDetailScreen = () => {
                 <View style={styles.detailContent}>
                   <Text style={styles.detailLabel}>Date</Text>
                   <Text style={styles.detailValue}>
-                    {new Date(notification.data.date + "T00:00:00").toLocaleDateString("en-US", {
+                    {new Date(notification.data.date + "T12:00:00").toLocaleDateString("en-US", {
                       weekday: "long",
                       month: "long",
                       day: "numeric",
@@ -336,7 +338,7 @@ const NotificationDetailScreen = () => {
                 <Feather name="dollar-sign" size={16} color={colors.neutral[600]} />
                 <View style={styles.detailContent}>
                   <Text style={styles.detailLabel}>Price</Text>
-                  <Text style={styles.detailValue}>${notification.data.price}</Text>
+                  <Text style={styles.detailValue}>{formatCurrency(notification.data.price)}</Text>
                 </View>
               </View>
             )}
@@ -391,10 +393,10 @@ const NotificationDetailScreen = () => {
               Would you like to add this home to your client list?
             </Text>
 
-            {notification.data.calculatedPrice && (
+            {notification.data?.calculatedPrice && (
               <View style={styles.priceDisplay}>
                 <Text style={styles.priceLabel}>Calculated Price</Text>
-                <Text style={styles.priceValue}>${notification.data.calculatedPrice}</Text>
+                <Text style={styles.priceValue}>${notification.data?.calculatedPriceDollars || (notification.data?.calculatedPrice / 100).toFixed(2)}</Text>
               </View>
             )}
 

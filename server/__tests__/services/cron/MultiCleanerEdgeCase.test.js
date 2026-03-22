@@ -1495,9 +1495,10 @@ describe("Payment Capture Blocking for Edge Case Decisions", () => {
 
   describe("payment capture flow scenarios", () => {
     it("should correctly identify 3-day window for edge case processing", () => {
-      const appointmentDate = new Date();
-      appointmentDate.setDate(appointmentDate.getDate() + 3);
+      // Use direct millisecond addition to avoid DST and date boundary issues
       const now = new Date();
+      const threeDaysInMs = 3 * 24 * 60 * 60 * 1000;
+      const appointmentDate = new Date(now.getTime() + threeDaysInMs);
 
       const diffInMs = appointmentDate.getTime() - now.getTime();
       const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
@@ -1507,9 +1508,10 @@ describe("Payment Capture Blocking for Edge Case Decisions", () => {
     });
 
     it("should correctly identify appointments outside 3-day window", () => {
-      const appointmentDate = new Date();
-      appointmentDate.setDate(appointmentDate.getDate() + 5);
+      // Use direct millisecond addition to avoid DST and date boundary issues
       const now = new Date();
+      const fiveDaysInMs = 5 * 24 * 60 * 60 * 1000;
+      const appointmentDate = new Date(now.getTime() + fiveDaysInMs);
 
       const diffInMs = appointmentDate.getTime() - now.getTime();
       const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));

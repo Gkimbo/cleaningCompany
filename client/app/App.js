@@ -10,6 +10,8 @@ import { UserContext } from "../src/context/UserContext";
 import getCurrentUser from "../src/services/fetchRequests/getCurrentUser";
 import reducer from "../src/services/reducerFunction";
 import { API_BASE } from "../src/services/config";
+import FetchData from "../src/services/fetchRequests/fetchData";
+import SecureStorage from "../src/services/SecureStorage";
 
 // Import components
 import AddHomeForm from "../src/components/addUserInformation/AddHomeForm";
@@ -84,10 +86,20 @@ import AcceptEmployeeInvitationScreen from "../src/components/employee/AcceptEmp
 import TermsEditor from "../src/components/owner/TermsEditor";
 import PricingManagement from "../src/components/owner/PricingManagement";
 import TierManagement from "../src/components/owner/TierManagement";
+import ServiceAreaManagement from "../src/components/owner/ServiceAreaManagement";
 import IncentivesManagement from "../src/components/owner/IncentivesManagement";
 import PlatformWithdrawals from "../src/components/owner/PlatformWithdrawals";
 import HREmployeeManagement from "../src/components/owner/HREmployeeManagement";
+import ITEmployeeManagement from "../src/components/owner/ITEmployeeManagement";
 import ChecklistEditor from "../src/components/owner/ChecklistEditor";
+import PlatformEarningsCalculator from "../src/components/owner/PlatformEarningsCalculator";
+import CleanerManagement from "../src/components/owner/CleanerManagement";
+import CleanerDetailPage from "../src/components/owner/CleanerDetailPage";
+
+// Shared components
+import FrozenAccountWrapper from "../src/components/shared/FrozenAccountWrapper";
+import ErrorBoundary from "../src/components/shared/ErrorBoundary";
+import ProtectedRoute from "../src/components/shared/ProtectedRoute";
 
 // Cleaner components
 import RecommendedSupplies from "../src/components/cleaner/RecommendedSupplies";
@@ -129,6 +141,10 @@ import { PricingProvider } from "../src/context/PricingContext";
 // Preview Mode Context
 import { PreviewProvider } from "../src/context/PreviewContext";
 import { ExitPreviewButton } from "../src/components/preview";
+
+// Offline Mode
+import { OfflineProvider } from "../src/services/offline/OfflineContext";
+import { OfflineBanner, LowStorageWarning } from "../src/components/offline";
 
 // Terms and Conditions
 import { TermsAcceptanceScreen } from "../src/components/terms";
@@ -176,6 +192,7 @@ export default function App() {
   const [employeeDays, setEmployeeDays] = useState(null);
   const [state, dispatch] = useReducer(reducer, {
     account: null,
+    activeRole: null, // For dual-role users (cleaner + homeowner)
     currentUser: { token: null, id: null },
     bill: { cancellationFee: 0, totalPaid: 0 },
     homes: [],
@@ -192,6 +209,10 @@ export default function App() {
     businessName: null,
     businessLogo: null,
     yearsInBusiness: null,
+    // Frozen account state
+    accountFrozen: false,
+    accountFrozenReason: null,
+    accountFrozenAt: null,
   });
 
   const fetchStripeConfig = async () => {
@@ -224,6 +245,25 @@ export default function App() {
       }
       if (user.user.type === "cleaner") {
         dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
+        // For dual-role support: fetch homes for non-business-owner cleaners
+        // Business owner cleaners don't use dual-role switching
+        if (!user.user.isBusinessOwner) {
+          try {
+            const userInfo = await FetchData.get("/api/v1/user-info", user.token);
+            if (userInfo?.user?.homes && userInfo.user.homes.length > 0) {
+              dispatch({ type: "USER_HOME", payload: userInfo.user.homes });
+              // Restore persisted activeRole or default to "cleaner"
+              const persistedRole = await SecureStorage.getItem("activeRole");
+              dispatch({
+                type: "SET_ACTIVE_ROLE",
+                payload: persistedRole === "homeowner" ? "homeowner" : "cleaner",
+              });
+            }
+          } catch (err) {
+            // Dual-role fetch failed, continue with cleaner-only view
+            console.warn("Could not fetch homes for cleaner:", err);
+          }
+        }
       }
       if (user.user.type === "employee") {
         dispatch({ type: "USER_ACCOUNT", payload: "employee" });
@@ -234,6 +274,17 @@ export default function App() {
       // Set marketplace cleaner flag
       if (user.user.isMarketplaceCleaner !== undefined) {
         dispatch({ type: "SET_MARKETPLACE_CLEANER", payload: user.user.isMarketplaceCleaner });
+      }
+      // Set frozen account state if applicable
+      if (user.user.accountFrozen) {
+        dispatch({
+          type: "SET_ACCOUNT_FROZEN",
+          payload: {
+            isFrozen: true,
+            reason: user.user.accountFrozenReason,
+            frozenAt: user.user.accountFrozenAt,
+          },
+        });
       }
       if (user.user.daysWorking !== null) {
         setEmployeeDays(user.user.daysWorking);
@@ -281,8 +332,14 @@ export default function App() {
           <UserContext.Provider value={{ state, dispatch, currentUser: state.currentUser }}>
           <PreviewProvider dispatch={dispatch} state={state}>
           <NativeRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <OfflineProvider>
             <SafeAreaView style={appStyles.container}>
               <TopBar dispatch={dispatch} state={state} />
+              <OfflineBanner />
+              <LowStorageWarning />
+              <ErrorBoundary>
+              <ProtectedRoute state={state}>
+              <FrozenAccountWrapper state={state}>
               <Routes>
               <Route
                 path="/"
@@ -352,6 +409,11 @@ export default function App() {
               <Route
                 path="/earnings-calculator"
                 element={<BusinessCalculator state={state} />}
+              />
+              {/* Platform Earnings Calculator (Owner) */}
+              <Route
+                path="/platform-earnings-calculator"
+                element={<PlatformEarningsCalculator state={state} />}
               />
               <Route
                 path="/all-reviews"
@@ -514,6 +576,10 @@ export default function App() {
                 element={<MyClientsPage state={state} />}
               />
               <Route
+                path="/my-clients/:clientId"
+                element={<ClientDetailPage state={state} dispatch={dispatch} />}
+              />
+              <Route
                 path="/client-detail/:clientId"
                 element={<ClientDetailPage state={state} dispatch={dispatch} />}
               />
@@ -607,6 +673,11 @@ export default function App() {
                 path="/owner/tiers"
                 element={<TierManagement state={state} />}
               />
+              {/* Owner Service Area Management */}
+              <Route
+                path="/owner/service-areas"
+                element={<ServiceAreaManagement state={state} />}
+              />
               {/* Owner Incentives */}
               <Route
                 path="/owner/incentives"
@@ -621,6 +692,21 @@ export default function App() {
               <Route
                 path="/owner/hr-management"
                 element={<HREmployeeManagement state={state} />}
+              />
+              {/* Owner IT Management */}
+              <Route
+                path="/owner/it-management"
+                element={<ITEmployeeManagement state={state} />}
+              />
+              {/* Owner Cleaner Management */}
+              <Route
+                path="/owner/cleaners"
+                element={<CleanerManagement state={state} />}
+              />
+              {/* Owner Cleaner Detail Page */}
+              <Route
+                path="/owner/cleaners/:cleanerId"
+                element={<CleanerDetailPage state={state} />}
               />
               {/* Owner Checklist Editor */}
               <Route
@@ -772,8 +858,12 @@ export default function App() {
                 element={<EmployeeProfilePage state={state} />}
               />
             </Routes>
+              </FrozenAccountWrapper>
+              </ProtectedRoute>
+              </ErrorBoundary>
               <ExitPreviewButton />
             </SafeAreaView>
+            </OfflineProvider>
           </NativeRouter>
           </PreviewProvider>
           </UserContext.Provider>

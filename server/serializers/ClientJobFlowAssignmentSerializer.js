@@ -83,12 +83,12 @@ class ClientJobFlowAssignmentSerializer {
 
     const data = client.dataValues || client;
 
-    // CleanerClient may have encrypted user fields if linked to a user
+    // CleanerClient has encrypted PII fields (invitedEmail, invitedPhone, invitedName)
     const serialized = {
       id: data.id,
       displayName: data.displayName,
-      email: data.email,
-      phone: data.phone,
+      email: this.decryptField(data.email) || this.decryptField(data.invitedEmail),
+      phone: this.decryptField(data.phone) || this.decryptField(data.invitedPhone),
     };
 
     // If client has a linked user, decrypt their fields
@@ -115,7 +115,10 @@ class ClientJobFlowAssignmentSerializer {
 
     return {
       id: data.id,
-      address: data.address,
+      address: this.decryptField(data.address),
+      city: this.decryptField(data.city),
+      state: this.decryptField(data.state),
+      zipcode: this.decryptField(data.zipcode),
       numBeds: data.numBeds,
       numBaths: data.numBaths,
     };
@@ -143,10 +146,10 @@ class ClientJobFlowAssignmentSerializer {
       serialized.flowName = data.flow.name;
     }
 
-    // Add target name
+    // Add target name (decrypt PII fields)
     if (data.home) {
       serialized.targetType = "home";
-      serialized.targetName = data.home.address;
+      serialized.targetName = this.decryptField(data.home.address);
     } else if (data.cleanerClient) {
       serialized.targetType = "client";
       serialized.targetName = data.cleanerClient.displayName;

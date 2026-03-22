@@ -111,11 +111,11 @@ describe("HomeSizeAdjustmentSerializer", () => {
           homeownerId: 1,
           originalNumBeds: "3",
           originalNumBaths: "2",
-          originalPrice: "150.00",
+          originalPrice: 15000,
           reportedNumBeds: "4",
           reportedNumBaths: "3",
-          calculatedNewPrice: "200.00",
-          priceDifference: "50.00",
+          calculatedNewPrice: 20000,
+          priceDifference: 5000,
           status: "pending_homeowner",
           cleanerNote: "Home is larger",
           homeownerResponse: null,
@@ -134,9 +134,9 @@ describe("HomeSizeAdjustmentSerializer", () => {
 
       expect(result.id).toBe(1);
       expect(result.appointmentId).toBe(10);
-      expect(result.originalPrice).toBe(150.0);
-      expect(result.calculatedNewPrice).toBe(200.0);
-      expect(result.priceDifference).toBe(50.0);
+      expect(result.originalPrice).toBe("150.00");
+      expect(result.calculatedNewPrice).toBe("200.00");
+      expect(result.priceDifference).toBe("50.00");
       expect(result.status).toBe("pending_homeowner");
     });
 
@@ -256,7 +256,7 @@ describe("HomeSizeAdjustmentSerializer", () => {
           originalNumBaths: "2",
           reportedNumBeds: "4",
           reportedNumBaths: "3",
-          priceDifference: "50.00",
+          priceDifference: 5000,
           status: "pending_homeowner",
           expiresAt: new Date("2025-02-15"),
           createdAt: new Date("2025-02-14"),
@@ -276,7 +276,7 @@ describe("HomeSizeAdjustmentSerializer", () => {
       const result = HomeSizeAdjustmentSerializer.serializeForList(request);
 
       expect(result.id).toBe(1);
-      expect(result.priceDifference).toBe(50.0);
+      expect(result.priceDifference).toBe("50.00");
       expect(result.cleaner.firstName).toBe("John");
       // Should not include detailed fields
       expect(result.cleanerNote).toBeUndefined();
@@ -291,16 +291,16 @@ describe("HomeSizeAdjustmentSerializer", () => {
           id: 1,
           originalNumBeds: "3",
           originalNumBaths: "2",
-          originalPrice: "150.00",
+          originalPrice: 15000,
           reportedNumBeds: "4",
           reportedNumBaths: "3",
-          calculatedNewPrice: "200.00",
-          priceDifference: "50.00",
+          calculatedNewPrice: 20000,
+          priceDifference: 5000,
           cleanerNote: "The home has 4 bedrooms",
         },
         photos: [
-          { id: 1, photoData: "base64data1", room: "bedroom", notes: "Bedroom 4" },
-          { id: 2, photoData: "base64data2", room: "bathroom", notes: "Bathroom 3" },
+          { id: 1, photoUrl: "https://example.com/photo1.jpg", roomType: "bedroom", roomNumber: 4 },
+          { id: 2, photoUrl: "https://example.com/photo2.jpg", roomType: "bathroom", roomNumber: 3 },
         ],
         cleaner: {
           dataValues: {
@@ -314,7 +314,8 @@ describe("HomeSizeAdjustmentSerializer", () => {
       const result = HomeSizeAdjustmentSerializer.serializeForHomeowner(request);
 
       expect(result.photos).toHaveLength(2);
-      expect(result.photos[0].photoData).toBe("base64data1");
+      expect(result.photos[0].photoUrl).toBe("https://example.com/photo1.jpg");
+      expect(result.photos[0].roomType).toBe("bedroom");
       expect(result.cleanerNote).toBe("The home has 4 bedrooms");
       expect(result.cleaner.firstName).toBe("Cleaner");
     });

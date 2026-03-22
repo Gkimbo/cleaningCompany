@@ -4,6 +4,7 @@
  * Handles storage quotas, cleanup of old data, and storage health monitoring.
  */
 
+import { Q } from "@nozbe/watermelondb";
 import database, {
   offlineJobsCollection,
   offlinePhotosCollection,
@@ -55,21 +56,27 @@ class StorageManager {
       // Get photo storage stats
       const photoStats = await PhotoStorage.getStorageStats();
 
-      // Get database record counts
-      const [jobs, photos, checklistItems, syncQueue, conflicts] = await Promise.all([
-        offlineJobsCollection.query().fetch(),
-        offlinePhotosCollection.query().fetch(),
-        offlineChecklistItemsCollection.query().fetch(),
-        syncQueueCollection.query().fetch(),
-        syncConflictsCollection.query().fetch(),
+      // Get database record counts - use optimized queries with filters where possible
+      const [
+        jobCount,
+        photoCount,
+        checklistItemCount,
+        syncQueueCount,
+        conflictCount,
+        pendingPhotos,
+        pendingSyncOps,
+        unresolvedConflicts,
+      ] = await Promise.all([
+        offlineJobsCollection.query().fetchCount(),
+        offlinePhotosCollection.query().fetchCount(),
+        offlineChecklistItemsCollection.query().fetchCount(),
+        syncQueueCollection.query().fetchCount(),
+        syncConflictsCollection.query().fetchCount(),
+        // Filtered counts - more efficient than fetching all and filtering in JS
+        offlinePhotosCollection.query(Q.where("uploaded", false)).fetchCount(),
+        syncQueueCollection.query(Q.where("status", Q.oneOf(["pending", "failed"]))).fetchCount(),
+        syncConflictsCollection.query(Q.where("resolved", false)).fetchCount(),
       ]);
-
-      // Calculate pending items
-      const pendingPhotos = photos.filter((p) => !p.uploaded).length;
-      const pendingSyncOps = syncQueue.filter(
-        (op) => op.status === "pending" || op.status === "failed"
-      ).length;
-      const unresolvedConflicts = conflicts.filter((c) => !c.resolved).length;
 
       // Determine storage health
       const sizeInMB = photoStats.totalSize / (1024 * 1024);
@@ -89,11 +96,11 @@ class StorageManager {
         uploadedPhotoCount: photoStats.photoCount - pendingPhotos,
 
         // Database records
-        jobCount: jobs.length,
-        checklistItemCount: checklistItems.length,
-        syncQueueCount: syncQueue.length,
+        jobCount,
+        checklistItemCount,
+        syncQueueCount,
         pendingSyncCount: pendingSyncOps,
-        conflictCount: conflicts.length,
+        conflictCount,
         unresolvedConflictCount: unresolvedConflicts,
 
         // Health
@@ -185,29 +192,48 @@ class StorageManager {
       const threshold = Date.now() - OLD_JOB_THRESHOLD_HOURS * 60 * 60 * 1000;
       let cleaned = 0;
 
-      await database.write(async () => {
-        for (const job of jobs) {
-          // Only clean up completed, synced jobs older than threshold
-          if (
-            job.status === OFFLINE_JOB_STATUS.COMPLETED &&
-            !job.requiresSync &&
-            job.completedAt &&
-            job.completedAt.getTime() < threshold
-          ) {
-            // Clean up associated photos first
-            await PhotoStorage.cleanupUploadedPhotos(job.id);
+      // Filter jobs first to identify which ones need cleanup
+      const jobsToCleanup = jobs.filter(
+        (job) =>
+          job.status === OFFLINE_JOB_STATUS.COMPLETED &&
+          !job.requiresSync &&
+          job.completedAt &&
+          job.completedAt.getTime() < threshold
+      );
 
-            // Clean up checklist items
-            const items = await offlineChecklistItemsCollection.query().fetch();
-            const jobItems = items.filter((i) => i.jobId === job.id);
-            for (const item of jobItems) {
-              await item.markAsDeleted();
-            }
+      if (jobsToCleanup.length === 0) {
+        return { cleaned: 0 };
+      }
 
-            // Delete the job
-            await job.markAsDeleted();
-            cleaned++;
+      // Fetch checklist items ONCE (not inside loop) to avoid N+1 queries
+      const allChecklistItems = await offlineChecklistItemsCollection.query().fetch();
+      const jobIdsToCleanup = new Set(jobsToCleanup.map((j) => j.id));
+
+      // Group checklist items by jobId for O(1) lookup
+      const checklistItemsByJobId = new Map();
+      for (const item of allChecklistItems) {
+        if (jobIdsToCleanup.has(item.jobId)) {
+          if (!checklistItemsByJobId.has(item.jobId)) {
+            checklistItemsByJobId.set(item.jobId, []);
           }
+          checklistItemsByJobId.get(item.jobId).push(item);
+        }
+      }
+
+      await database.write(async () => {
+        for (const job of jobsToCleanup) {
+          // Clean up associated photos first
+          await PhotoStorage.cleanupUploadedPhotos(job.id);
+
+          // Clean up checklist items (using pre-fetched data, not a new query)
+          const jobItems = checklistItemsByJobId.get(job.id) || [];
+          for (const item of jobItems) {
+            await item.markAsDeleted();
+          }
+
+          // Delete the job
+          await job.markAsDeleted();
+          cleaned++;
         }
       });
 
@@ -225,22 +251,33 @@ class StorageManager {
     try {
       const photos = await offlinePhotosCollection.query().fetch();
       let cleaned = 0;
+      let failed = 0;
 
       for (const photo of photos) {
-        // Clean up uploaded photos
-        if (photo.uploaded) {
-          await PhotoStorage.deletePhoto(photo.id);
-          cleaned++;
-        }
-        // Also clean up photos that have exceeded max upload attempts
-        else if (photo.uploadAttempts >= FAILED_PHOTO_MAX_ATTEMPTS) {
-          console.warn(`[StorageManager] Giving up on photo ${photo.id} after ${photo.uploadAttempts} attempts`);
-          await PhotoStorage.deletePhoto(photo.id);
-          cleaned++;
+        try {
+          // Clean up uploaded photos
+          if (photo.uploaded) {
+            await PhotoStorage.deletePhoto(photo.id);
+            cleaned++;
+          }
+          // Also clean up photos that have exceeded max upload attempts
+          else if (photo.uploadAttempts >= FAILED_PHOTO_MAX_ATTEMPTS) {
+            console.warn(`[StorageManager] Giving up on photo ${photo.id} after ${photo.uploadAttempts} attempts`);
+            await PhotoStorage.deletePhoto(photo.id);
+            cleaned++;
+          }
+        } catch (deleteError) {
+          // Log error but continue with other photos
+          console.error(`[StorageManager] Failed to delete photo ${photo.id}:`, deleteError);
+          failed++;
         }
       }
 
-      return { cleaned };
+      if (failed > 0) {
+        console.warn(`[StorageManager] Photo cleanup completed with ${failed} failures`);
+      }
+
+      return { cleaned, failed };
     } catch (error) {
       console.error("[StorageManager] Failed to cleanup photos:", error);
       return { cleaned: 0, error: error.message };
@@ -259,7 +296,8 @@ class StorageManager {
       await database.write(async () => {
         for (const op of operations) {
           // Only clean up completed operations older than threshold
-          if (op.status === "completed" && op.createdAt.getTime() < threshold) {
+          // Guard against null createdAt to prevent null reference error
+          if (op.status === "completed" && op.createdAt && op.createdAt.getTime() < threshold) {
             await op.markAsDeleted();
             cleaned++;
           }
@@ -285,7 +323,8 @@ class StorageManager {
       await database.write(async () => {
         for (const conflict of conflicts) {
           // Only clean up resolved conflicts older than threshold
-          if (conflict.resolved && conflict.createdAt.getTime() < threshold) {
+          // Guard against null createdAt to prevent null reference error
+          if (conflict.resolved && conflict.createdAt && conflict.createdAt.getTime() < threshold) {
             await conflict.markAsDeleted();
             cleaned++;
           }
@@ -336,11 +375,15 @@ class StorageManager {
     const recommendations = [];
 
     if (stats.uploadedPhotoCount > 0) {
+      // Calculate estimated savings, avoiding division by zero
+      const estimatedSavings = stats.totalPhotoCount > 0
+        ? Math.round((stats.photoStorageBytes * stats.uploadedPhotoCount) / stats.totalPhotoCount / (1024 * 1024))
+        : 0;
       recommendations.push({
         type: "uploaded_photos",
         message: `${stats.uploadedPhotoCount} uploaded photos can be removed`,
         action: "cleanupUploadedPhotos",
-        savingsEstimate: `~${Math.round((stats.photoStorageBytes * stats.uploadedPhotoCount) / stats.totalPhotoCount / (1024 * 1024))}MB`,
+        savingsEstimate: `~${estimatedSavings}MB`,
       });
     }
 

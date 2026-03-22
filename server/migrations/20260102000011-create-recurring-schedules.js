@@ -67,8 +67,9 @@ module.exports = {
         defaultValue: "anytime",
       },
       price: {
-        type: Sequelize.DECIMAL(10, 2),
+        type: Sequelize.INTEGER,
         allowNull: false,
+        comment: "Price in cents",
       },
 
       // === Date range ===

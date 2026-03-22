@@ -23,7 +23,7 @@ describe("RecurringScheduleSerializer", () => {
           frequency: "weekly",
           dayOfWeek: 1,
           timeWindow: "10-3",
-          price: "250.00",
+          price: 25000,
           startDate: "2026-01-01",
           endDate: null,
           nextScheduledDate: "2026-01-08",
@@ -53,17 +53,17 @@ describe("RecurringScheduleSerializer", () => {
       expect(result.isPaused).toBe(false);
     });
 
-    it("should parse price decimal field as number", () => {
+    it("should return price in cents", () => {
       const mockSchedule = {
         dataValues: {
           id: 1,
-          price: "250.00",
+          price: 25000, // cents
         },
       };
 
       const result = RecurringScheduleSerializer.serializeOne(mockSchedule);
 
-      expect(result.price).toBe(250);
+      expect(result.price).toBe(25000); // Returns cents
       expect(typeof result.price).toBe("number");
     });
 
@@ -201,7 +201,7 @@ describe("RecurringScheduleSerializer", () => {
         id: 1,
         frequency: "biweekly",
         dayOfWeek: 3,
-        price: "300.00",
+        price: 30000,
       };
 
       const result = RecurringScheduleSerializer.serializeOne(mockSchedule);
@@ -210,7 +210,7 @@ describe("RecurringScheduleSerializer", () => {
       expect(result.frequency).toBe("biweekly");
       expect(result.dayOfWeek).toBe(3);
       expect(result.dayName).toBe("Wednesday");
-      expect(result.price).toBe(300);
+      expect(result.price).toBe(30000); // Returns cents
     });
   });
 
@@ -222,7 +222,7 @@ describe("RecurringScheduleSerializer", () => {
             id: 1,
             frequency: "weekly",
             dayOfWeek: 1,
-            price: "200.00",
+            price: 20000,
           },
         },
         {
@@ -230,7 +230,7 @@ describe("RecurringScheduleSerializer", () => {
             id: 2,
             frequency: "biweekly",
             dayOfWeek: 5,
-            price: "250.00",
+            price: 25000,
           },
         },
       ];
@@ -241,11 +241,11 @@ describe("RecurringScheduleSerializer", () => {
       expect(result[0].id).toBe(1);
       expect(result[0].frequency).toBe("weekly");
       expect(result[0].dayName).toBe("Monday");
-      expect(result[0].price).toBe(200);
+      expect(result[0].price).toBe(20000); // Returns cents
       expect(result[1].id).toBe(2);
       expect(result[1].frequency).toBe("biweekly");
       expect(result[1].dayName).toBe("Friday");
-      expect(result[1].price).toBe(250);
+      expect(result[1].price).toBe(25000); // Returns cents
     });
 
     it("should handle empty array", () => {
@@ -262,7 +262,7 @@ describe("RecurringScheduleSerializer", () => {
           frequency: "weekly",
           dayOfWeek: 2,
           timeWindow: "anytime",
-          price: "175.00",
+          price: 17500,
           nextScheduledDate: "2026-01-14",
           isActive: true,
           isPaused: false,
@@ -280,7 +280,7 @@ describe("RecurringScheduleSerializer", () => {
       expect(result.dayOfWeek).toBe(2);
       expect(result.dayName).toBe("Tuesday");
       expect(result.timeWindow).toBe("anytime");
-      expect(result.price).toBe(175);
+      expect(result.price).toBe(17500); // Returns cents
       expect(result.nextScheduledDate).toBe("2026-01-14");
       expect(result.isActive).toBe(true);
       expect(result.isPaused).toBe(false);
@@ -291,18 +291,18 @@ describe("RecurringScheduleSerializer", () => {
       expect(result.startDate).toBeUndefined();
     });
 
-    it("should parse price as number in list view", () => {
+    it("should return price in cents in list view", () => {
       const mockSchedule = {
         dataValues: {
           id: 1,
-          price: "225.50",
+          price: 22550,
           dayOfWeek: 0,
         },
       };
 
       const result = RecurringScheduleSerializer.serializeForList(mockSchedule);
 
-      expect(result.price).toBe(225.5);
+      expect(result.price).toBe(22550); // Returns cents
       expect(typeof result.price).toBe("number");
     });
 
@@ -329,7 +329,7 @@ describe("RecurringScheduleSerializer", () => {
             id: 1,
             frequency: "weekly",
             dayOfWeek: 1,
-            price: "200.00",
+            price: 20000,
             isActive: true,
           },
         },
@@ -338,7 +338,7 @@ describe("RecurringScheduleSerializer", () => {
             id: 2,
             frequency: "monthly",
             dayOfWeek: 4,
-            price: "300.00",
+            price: 30000,
             isActive: false,
           },
         },
@@ -348,9 +348,9 @@ describe("RecurringScheduleSerializer", () => {
 
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe(1);
-      expect(result[0].price).toBe(200);
+      expect(result[0].price).toBe(20000); // Returns cents
       expect(result[1].id).toBe(2);
-      expect(result[1].price).toBe(300);
+      expect(result[1].price).toBe(30000); // Returns cents
     });
 
     it("should handle empty array", () => {

@@ -11,7 +11,8 @@ import {
 
 const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBookCleaning, onSetupRecurring, onMessage, onPriceUpdate, platformPrice }) => {
   const [editingPrice, setEditingPrice] = useState(false);
-  const [priceInput, setPriceInput] = useState(client.defaultPrice?.toString() || "");
+  // Convert cents to dollars for display
+  const [priceInput, setPriceInput] = useState(client.defaultPrice ? (client.defaultPrice / 100).toString() : "");
   const isPending = client.status === "pending_invite";
   const isActive = client.status === "active";
   const isInactive = client.status === "inactive";
@@ -49,15 +50,17 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
   const handlePriceEdit = (e) => {
     e.stopPropagation();
     setEditingPrice(true);
-    setPriceInput(client.defaultPrice?.toString() || "");
+    // Convert cents to dollars for editing
+    setPriceInput(client.defaultPrice ? (client.defaultPrice / 100).toString() : "");
   };
 
-  const savePrice = async (newPrice) => {
+  const savePrice = async (newPriceInCents) => {
     setEditingPrice(false);
     if (onPriceUpdate) {
-      const success = await onPriceUpdate(client.id, newPrice);
+      const success = await onPriceUpdate(client.id, newPriceInCents);
       if (!success) {
-        setPriceInput(client.defaultPrice?.toString() || "");
+        // Reset to original price in dollars
+        setPriceInput(client.defaultPrice ? (client.defaultPrice / 100).toString() : "");
       }
     }
   };
@@ -69,10 +72,11 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
       return;
     }
 
-    const newPrice = parseFloat(priceInput);
-    const oldPrice = client.defaultPrice;
+    // Convert user input (dollars) to cents for storage
+    const newPriceInCents = Math.round(parseFloat(priceInput) * 100);
+    const oldPriceInCents = client.defaultPrice;
 
-    if (isActive && newPrice !== oldPrice) {
+    if (isActive && newPriceInCents !== oldPriceInCents) {
       Alert.alert(
         "Change Price?",
         "Are you sure you'd like to change the price to clean this home? The client will be notified.",
@@ -80,19 +84,20 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
           { text: "Cancel", style: "cancel" },
           {
             text: "Yes, Change Price",
-            onPress: () => savePrice(newPrice),
+            onPress: () => savePrice(newPriceInCents),
           },
         ]
       );
     } else {
-      savePrice(newPrice);
+      savePrice(newPriceInCents);
     }
   };
 
   const handlePriceCancel = (e) => {
     e.stopPropagation();
     setEditingPrice(false);
-    setPriceInput(client.defaultPrice?.toString() || "");
+    // Convert cents to dollars for display
+    setPriceInput(client.defaultPrice ? (client.defaultPrice / 100).toString() : "");
   };
 
   const handleUsePlatformPrice = (e) => {
@@ -206,7 +211,7 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
             disabled={!onPriceUpdate}
           >
             <Text style={styles.pricePillText}>
-              ${client.defaultPrice ? parseFloat(client.defaultPrice).toFixed(0) : "—"}
+              ${client.defaultPrice ? (parseFloat(client.defaultPrice) / 100).toFixed(0) : "—"}
             </Text>
             {onPriceUpdate && (
               <Feather name="edit-2" size={10} color={colors.success[600]} />
@@ -313,10 +318,10 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
           <View style={styles.pendingInfo}>
             <Feather name="send" size={12} color={colors.neutral[400]} />
             <Text style={styles.pendingText}>
-              Sent {new Date(client.invitedAt).toLocaleDateString("en-US", {
+              Sent {client.invitedAt ? new Date(client.invitedAt).toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
-              })}
+              }) : "—"}
             </Text>
           </View>
           <View style={styles.pendingActions}>

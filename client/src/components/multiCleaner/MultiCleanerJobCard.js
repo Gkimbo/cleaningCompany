@@ -20,9 +20,15 @@ import {
   shadows,
 } from "../../services/styles/theme";
 
-// Format time constraint for display: "10-3" → "10am - 3pm"
+// Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (time) => {
   if (!time || time.toLowerCase() === "anytime") return "Anytime";
+  // Check if it's a numeric hours limit (e.g., "2.5", "3") - must be purely numeric
+  const numericValue = parseFloat(time);
+  if (!isNaN(numericValue) && numericValue > 0 && numericValue <= 12 && /^\d+\.?\d*$/.test(time.trim())) {
+    const unit = numericValue === 1 ? "hr" : "hrs";
+    return `Within ${numericValue} ${unit}`;
+  }
   const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
   if (!match) return time;
   const startHour = parseInt(match[1], 10);
@@ -51,7 +57,7 @@ const MultiCleanerJobCard = ({
   const hasTimeConstraint = timeToBeCompleted &&
     timeToBeCompleted.toLowerCase() !== "anytime";
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -61,8 +67,8 @@ const MultiCleanerJobCard = ({
 
   const formatPrice = (amount) => {
     if (!amount) return "TBD";
-    // Prices are stored in dollars
-    return `$${parseFloat(amount).toFixed(2)}`;
+    // Prices are stored in cents, convert to dollars for display
+    return `$${(parseFloat(amount) / 100).toFixed(2)}`;
   };
 
   const formatTime = (dateString) => {

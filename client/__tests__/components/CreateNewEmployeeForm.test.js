@@ -4,6 +4,7 @@ import { render, fireEvent, waitFor, act } from "@testing-library/react-native";
 // Mock the dependencies before importing the component
 jest.mock("react-router-native", () => ({
   useNavigate: () => jest.fn(),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 jest.mock("../../src/services/AuthContext", () => {

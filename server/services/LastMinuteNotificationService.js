@@ -194,8 +194,8 @@ class LastMinuteNotificationService {
       return { notifiedCount: 0, cleanerIds: [] };
     }
 
-    // Prepare notification content
-    const priceDisplay = `$${parseFloat(appointment.price).toFixed(2)}`;
+    // Prepare notification content (price is stored in cents)
+    const priceDisplay = `$${(appointment.price / 100).toFixed(2)}`;
     const cityDisplay = home.city || "your area";
     const appointmentDate = appointment.date;
 
@@ -368,7 +368,7 @@ class LastMinuteNotificationService {
     }
 
     // Prepare notification content
-    const priceDisplay = `$${parseFloat(appointment.price).toFixed(2)}`;
+    const priceDisplay = `$${(appointment.price / 100).toFixed(2)}`;
     const cityDisplay = home.city ? EncryptionService.decrypt(home.city) : "your area";
     const appointmentDate = appointment.date;
 
@@ -399,7 +399,7 @@ class LastMinuteNotificationService {
           await PushNotification.sendPushUrgentReplacement(
             cleaner.expoPushToken,
             appointmentDate,
-            parseFloat(appointment.price).toFixed(0),
+            (appointment.price / 100).toFixed(0), // Convert cents to dollars
             cityDisplay,
             cleaner.distanceMiles
           );
@@ -450,6 +450,190 @@ class LastMinuteNotificationService {
 
     console.log(
       `[ReplacementNotification] Notified ${notifiedCleanerIds.length} cleaners for replacement on appointment ${appointment.id}`
+    );
+
+    return {
+      notifiedCount: notifiedCleanerIds.length,
+      cleanerIds: notifiedCleanerIds,
+    };
+  }
+
+  /**
+   * Send urgent fill notifications when a cleaner is frozen and removed from appointments
+   * Uses 10-mile radius and marks as priority
+   * @param {Object} appointment - The UserAppointments record
+   * @param {Object} home - The UserHomes record with lat/long
+   * @param {Object} io - Socket.io instance for real-time updates
+   * @param {number} frozenCleanerId - The frozen cleaner's ID to exclude
+   * @returns {Promise<{notifiedCount: number, cleanerIds: Array}>}
+   */
+  static async notifyCleanersForUrgentFill(appointment, home, io = null, frozenCleanerId = null) {
+    const URGENT_FILL_RADIUS_MILES = 10; // Fixed 10-mile radius for urgent fills
+
+    // Get home coordinates (they're encrypted, need to decrypt)
+    let homeLat, homeLon;
+
+    try {
+      homeLat = parseFloat(EncryptionService.decrypt(home.latitude));
+      homeLon = parseFloat(EncryptionService.decrypt(home.longitude));
+    } catch (e) {
+      console.error(
+        "[UrgentFill] Could not decrypt home coordinates:",
+        home.id
+      );
+      return { notifiedCount: 0, cleanerIds: [] };
+    }
+
+    if (isNaN(homeLat) || isNaN(homeLon)) {
+      console.error(
+        "[UrgentFill] Home has invalid coordinates:",
+        home.id
+      );
+      return { notifiedCount: 0, cleanerIds: [] };
+    }
+
+    // Find nearby cleaners within 10-mile radius
+    const nearbyCleaners = await this.findNearbyCleaners(
+      homeLat,
+      homeLon,
+      URGENT_FILL_RADIUS_MILES
+    );
+
+    if (nearbyCleaners.length === 0) {
+      console.log(
+        "[UrgentFill] No cleaners found within 10 miles for appointment",
+        appointment.id
+      );
+      return { notifiedCount: 0, cleanerIds: [] };
+    }
+
+    // Get cleaners who have already declined this job
+    const declinedRequests = await UserPendingRequests.findAll({
+      where: {
+        appointmentId: appointment.id,
+        status: "declined",
+      },
+      attributes: ["cleanerId"],
+    });
+    const declinedCleanerIds = declinedRequests.map(r => r.cleanerId);
+
+    // Exclude frozen cleaner and declined cleaners
+    const excludeIds = frozenCleanerId
+      ? [parseInt(frozenCleanerId, 10), ...declinedCleanerIds.map(id => parseInt(id, 10))]
+      : declinedCleanerIds.map(id => parseInt(id, 10));
+
+    // Filter out excluded cleaners
+    const eligibleCleaners = nearbyCleaners.filter(
+      cleaner => !excludeIds.includes(cleaner.id)
+    );
+
+    if (eligibleCleaners.length === 0) {
+      console.log(
+        "[UrgentFill] All nearby cleaners are excluded for appointment",
+        appointment.id
+      );
+      return { notifiedCount: 0, cleanerIds: [] };
+    }
+
+    // Prepare notification content
+    const priceDisplay = `$${(appointment.price / 100).toFixed(2)}`;
+    const cityDisplay = home.city ? EncryptionService.decrypt(home.city) : "your area";
+    const appointmentDate = appointment.date;
+
+    // Calculate days until appointment
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const apptDate = new Date(appointmentDate);
+    const daysUntil = Math.ceil((apptDate - today) / (1000 * 60 * 60 * 24));
+
+    const notifiedCleanerIds = [];
+
+    for (const cleaner of eligibleCleaners) {
+      try {
+        // 1. Create in-app notification
+        await Notification.create({
+          userId: cleaner.id,
+          type: "urgent_fill_priority",
+          title: "🚨 PRIORITY: Urgent Fill Needed!",
+          body: `${priceDisplay} cleaning in ${cityDisplay} (${cleaner.distanceMiles} mi) in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}. Priority booking - respond now!`,
+          data: {
+            appointmentId: appointment.id,
+            homeId: home.id,
+            price: appointment.price,
+            distanceMiles: cleaner.distanceMiles,
+            isUrgentFill: true,
+            isPriority: true,
+            daysUntil,
+          },
+          actionRequired: true,
+          relatedAppointmentId: appointment.id,
+          expiresAt: new Date(appointmentDate + "T23:59:59"),
+        });
+
+        // 2. Send push notification
+        if (cleaner.expoPushToken) {
+          await PushNotification.sendPushNotification(
+            cleaner.expoPushToken,
+            "🚨 PRIORITY: Urgent Fill Needed!",
+            `${priceDisplay} in ${cityDisplay} - ${cleaner.distanceMiles} mi away. ${daysUntil} day${daysUntil !== 1 ? 's' : ''} out. Tap to claim!`,
+            {
+              type: "urgent_fill_priority",
+              appointmentId: appointment.id,
+              screen: "JobDetails",
+              isPriority: true,
+            }
+          );
+        }
+
+        // 3. Send email if user has email notifications enabled
+        if (cleaner.notifications?.includes("email") && cleaner.email) {
+          await Email.sendUrgentFillEmail(
+            cleaner.email,
+            cleaner.firstName,
+            appointmentDate,
+            priceDisplay,
+            cityDisplay,
+            cleaner.distanceMiles,
+            daysUntil
+          );
+        }
+
+        // 4. Emit socket event for real-time update
+        if (io) {
+          io.to(`user_${cleaner.id}`).emit("urgent_fill_priority", {
+            appointmentId: appointment.id,
+            price: appointment.price,
+            city: cityDisplay,
+            distanceMiles: cleaner.distanceMiles,
+            daysUntil,
+            isPriority: true,
+          });
+
+          // Also emit notification count update
+          const unreadCount = await Notification.getUnreadCount(cleaner.id);
+          io.to(`user_${cleaner.id}`).emit("notification_count_update", {
+            unreadCount,
+          });
+        }
+
+        notifiedCleanerIds.push(cleaner.id);
+      } catch (error) {
+        console.error(
+          `[UrgentFill] Error notifying cleaner ${cleaner.id}:`,
+          error
+        );
+        // Continue with other cleaners
+      }
+    }
+
+    // Mark appointment as urgent fill priority
+    await appointment.update({
+      urgentFillNotificationsSentAt: new Date(),
+      isUrgentFill: true,
+    });
+
+    console.log(
+      `[UrgentFill] Notified ${notifiedCleanerIds.length} cleaners within 10 miles for urgent fill on appointment ${appointment.id}`
     );
 
     return {

@@ -36,10 +36,17 @@ import {
 } from "../../../services/styles/theme";
 import { usePricing } from "../../../context/PricingContext";
 import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
+import { getTodayString } from "../../../services/formatters";
 
-// Format time constraint for display: "10-3" → "10am - 3pm"
+// Format time constraint for display: "10-3" → "10am - 3pm", "2.5" → "Within 2.5 hrs"
 const formatTimeConstraint = (time) => {
   if (!time || time.toLowerCase() === "anytime") return "Anytime";
+  // Check if it's a numeric hours limit (e.g., "2.5", "3")
+  const numericValue = parseFloat(time);
+  if (!isNaN(numericValue) && numericValue > 0 && numericValue <= 12) {
+    const unit = numericValue === 1 ? "hr" : "hrs";
+    return `Within ${numericValue} ${unit}`;
+  }
   const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
   if (!match) return time;
   const startHour = parseInt(match[1], 10);
@@ -121,9 +128,8 @@ const MyRequests = ({ state }) => {
           getCurrentUser(state?.currentUser?.token),
         ]);
 
-        const now = new Date();
-        const isUpcoming = (item) =>
-          new Date(item.date) >= new Date(now.toDateString());
+        const todayStr = getTodayString();
+        const isUpcoming = (item) => item.date >= todayStr;
 
         setAllRequests((response?.requested || []).filter(isUpcoming));
         setUserId(userResponse?.user?.id || null);
@@ -311,7 +317,7 @@ const MyRequests = ({ state }) => {
       return {
         ...appointment,
         type: "solo",
-        sortDate: new Date(appointment.date + "T00:00:00"),
+        sortDate: new Date(appointment.date + "T12:00:00"),
         distance,
         // Normalize price for sorting
         sortPrice: Number(appointment.price) || 0,
@@ -346,7 +352,7 @@ const MyRequests = ({ state }) => {
       return {
         ...request,
         type: "team",
-        sortDate: new Date(request.appointment?.date + "T00:00:00"),
+        sortDate: request.appointment?.date ? new Date(request.appointment.date + "T12:00:00") : new Date(),
         homeId: teamHomeId,
         distance,
         sortPrice: cleanerShare, // Sort by cleaner's share
@@ -443,7 +449,7 @@ const MyRequests = ({ state }) => {
             </Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{totalEarnings.toFixed(0)}</Text>
+            <Text style={styles.statValue}>{(totalEarnings / 100).toFixed(0)}</Text>
             <Text style={styles.statLabel}>Potential</Text>
           </View>
         </View>
@@ -547,7 +553,7 @@ const MyRequests = ({ state }) => {
                         </Text>
                         <Text style={styles.multiCleanerRequestDate}>
                           {new Date(
-                            request.appointment?.date + "T00:00:00"
+                            request.appointment?.date + "T12:00:00"
                           ).toLocaleDateString("en-US", {
                             weekday: "short",
                             month: "short",
@@ -667,7 +673,7 @@ const MyRequests = ({ state }) => {
                             color={colors.success[600]}
                           />
                           <Text style={styles.multiCleanerRequestEarningsText}>
-                            {request.cleanerEarnings.toFixed(0)} your share
+                            {(request.cleanerEarnings / 100).toFixed(2)} your share
                           </Text>
                         </View>
 

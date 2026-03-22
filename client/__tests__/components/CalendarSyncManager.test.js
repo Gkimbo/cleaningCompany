@@ -22,6 +22,7 @@ const mockNavigate = jest.fn();
 jest.mock("react-router-native", () => ({
   useNavigate: () => mockNavigate,
   useParams: () => ({ homeId: "1" }),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 // Mock AuthContext with a real React context

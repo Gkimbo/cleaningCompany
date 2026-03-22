@@ -266,9 +266,9 @@ describe("LastMinuteNotificationService", () => {
   describe("notifyNearbyCleaners", () => {
     const mockAppointment = {
       id: 100,
-      price: "250.00",
+      price: 25000, // $250 in cents
       date: "2026-01-15",
-      lastMinuteFeeApplied: 50,
+      lastMinuteFeeApplied: 5000, // $50 in cents
       update: jest.fn(),
     };
 
@@ -574,7 +574,7 @@ describe("LastMinuteNotificationService", () => {
   describe("notifyCleanersForReplacement", () => {
     const mockAppointment = {
       id: 100,
-      price: "250.00",
+      price: 25000, // $250 in cents
       date: "2026-01-15",
       update: jest.fn(),
     };

@@ -12,6 +12,7 @@ global.fetch = jest.fn();
 // Mock dependencies
 jest.mock("react-router-native", () => ({
   useNavigate: () => jest.fn(),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 jest.mock("expo-location", () => ({
@@ -33,6 +34,8 @@ jest.mock("../../src/services/fetchRequests/fetchData", () => ({
     get: jest.fn(() => Promise.resolve({ employee: { firstName: "Test" } })),
     getHome: jest.fn(() => Promise.resolve({ home: {} })),
     getLatAndLong: jest.fn(() => Promise.resolve({ latitude: 0, longitude: 0 })),
+    getMyConfirmedMultiCleanerJobs: jest.fn(() => Promise.resolve({ jobs: [] })),
+    getMyMultiCleanerRequests: jest.fn(() => Promise.resolve({ requests: [] })),
   },
 }));
 
@@ -111,6 +114,7 @@ describe("CleanerDashboard Payment Setup Banner", () => {
 
   describe("Banner Visibility Logic", () => {
     it("should show payment banner when Stripe account does not exist", async () => {
+      jest.setTimeout(15000);
       global.fetch.mockImplementation((url) => {
         if (url.includes("/stripe-connect/account-status/")) {
           return Promise.resolve({

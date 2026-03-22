@@ -365,7 +365,7 @@ const ClientRequestsList = ({ state, dispatch }) => {
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
+    const date = new Date(dateString + "T12:00:00");
     const options = {
       weekday: "short",
       month: "short",
@@ -376,7 +376,7 @@ const ClientRequestsList = ({ state, dispatch }) => {
 
   const getAverageRating = (reviews) => {
     if (!reviews || reviews.length === 0) return 0;
-    const totalRating = reviews.reduce((sum, review) => sum + review.review, 0);
+    const totalRating = reviews.reduce((sum, review) => sum + (review.review || 0), 0);
     return totalRating / reviews.length;
   };
 

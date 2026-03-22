@@ -3,14 +3,19 @@
  * Covers: updateConversationTitle, deleteConversation, deleteMessage, addReaction
  */
 
-// Mock fetch globally
-global.fetch = jest.fn();
-
-// Mock the config module
-jest.mock("../../src/services/config", () => ({
-  API_BASE: "http://localhost:3000/api/v1",
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
 }));
 
+import HttpClient from "../../src/services/HttpClient";
 import MessageService from "../../src/services/fetchRequests/MessageClass";
 
 describe("MessageClass", () => {
@@ -28,32 +33,23 @@ describe("MessageClass", () => {
         systemMessage: { id: 100, content: "John changed the name", messageType: "system" },
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await MessageService.updateConversationTitle(1, "New Title", mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/messages/conversation/1/title",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mockToken}`,
-          },
-          body: JSON.stringify({ title: "New Title" }),
-        }
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/messages/conversation/1/title",
+        { title: "New Title" },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.conversation.title).toBe("New Title");
     });
 
     it("should return error when update fails", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Only owner or HR can edit titles" }),
+      HttpClient.patch.mockResolvedValueOnce({
+        success: false,
+        error: "Only owner or HR can edit titles",
       });
 
       const result = await MessageService.updateConversationTitle(1, "New Title", mockToken);
@@ -62,9 +58,9 @@ describe("MessageClass", () => {
     });
 
     it("should return error for non-internal conversations", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Can only edit titles of internal conversations" }),
+      HttpClient.patch.mockResolvedValueOnce({
+        success: false,
+        error: "Can only edit titles of internal conversations",
       });
 
       const result = await MessageService.updateConversationTitle(1, "New Title", mockToken);
@@ -73,7 +69,7 @@ describe("MessageClass", () => {
     });
 
     it("should handle network errors gracefully", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.patch.mockResolvedValueOnce({ success: false, error: "Network error" });
 
       const result = await MessageService.updateConversationTitle(1, "New Title", mockToken);
 
@@ -88,29 +84,21 @@ describe("MessageClass", () => {
         message: "Conversation deleted successfully",
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      HttpClient.delete.mockResolvedValueOnce(mockResponse);
 
       const result = await MessageService.deleteConversation(1, mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/messages/conversation/1",
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        }
+      expect(HttpClient.delete).toHaveBeenCalledWith(
+        "/messages/conversation/1",
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error when user is not owner", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Only the owner can delete conversations" }),
+      HttpClient.delete.mockResolvedValueOnce({
+        success: false,
+        error: "Only the owner can delete conversations",
       });
 
       const result = await MessageService.deleteConversation(1, mockToken);
@@ -119,9 +107,9 @@ describe("MessageClass", () => {
     });
 
     it("should return error for non-existent conversation", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Conversation not found" }),
+      HttpClient.delete.mockResolvedValueOnce({
+        success: false,
+        error: "Conversation not found",
       });
 
       const result = await MessageService.deleteConversation(999, mockToken);
@@ -130,7 +118,7 @@ describe("MessageClass", () => {
     });
 
     it("should handle network errors gracefully", async () => {
-      fetch.mockRejectedValueOnce(new Error("Connection refused"));
+      HttpClient.delete.mockResolvedValueOnce({ success: false, error: "Connection refused" });
 
       const result = await MessageService.deleteConversation(1, mockToken);
 
@@ -146,30 +134,22 @@ describe("MessageClass", () => {
         deletedAt: "2025-12-26T12:00:00Z",
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      HttpClient.delete.mockResolvedValueOnce(mockResponse);
 
       const result = await MessageService.deleteMessage(1, mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/messages/1",
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        }
+      expect(HttpClient.delete).toHaveBeenCalledWith(
+        "/messages/1",
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.deletedAt).toBeDefined();
     });
 
     it("should return error when user is not message sender", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "You can only delete your own messages" }),
+      HttpClient.delete.mockResolvedValueOnce({
+        success: false,
+        error: "You can only delete your own messages",
       });
 
       const result = await MessageService.deleteMessage(1, mockToken);
@@ -178,9 +158,9 @@ describe("MessageClass", () => {
     });
 
     it("should return error for non-existent message", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Message not found" }),
+      HttpClient.delete.mockResolvedValueOnce({
+        success: false,
+        error: "Message not found",
       });
 
       const result = await MessageService.deleteMessage(999, mockToken);
@@ -197,23 +177,14 @@ describe("MessageClass", () => {
         reactions: [{ emoji: "👍", userId: 1, user: { firstName: "John" } }],
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await MessageService.addReaction(1, "👍", mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/messages/1/react",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mockToken}`,
-          },
-          body: JSON.stringify({ emoji: "👍" }),
-        }
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/messages/1/react",
+        { emoji: "👍" },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.action).toBe("added");
@@ -226,10 +197,7 @@ describe("MessageClass", () => {
         reactions: [],
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await MessageService.addReaction(1, "👍", mockToken);
 
@@ -238,14 +206,14 @@ describe("MessageClass", () => {
     });
 
     it("should handle reaction errors", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Message not found" }),
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
+        error: "Message not found",
       });
 
       const result = await MessageService.addReaction(999, "👍", mockToken);
 
-      expect(result.error).toBe("Failed to add reaction");  // Generic error thrown
+      expect(result.error).toBe("Message not found");
     });
   });
 
@@ -259,34 +227,27 @@ describe("MessageClass", () => {
         conversation: { id: 1, title: "Test Chat" },
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await MessageService.getMessages(1, mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/messages/conversation/1",
-        {
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        }
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/messages/conversation/1",
+        { token: mockToken }
       );
       expect(result.messages).toHaveLength(2);
       expect(result.conversation.title).toBe("Test Chat");
     });
 
     it("should return error when not a participant", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Not authorized to view this conversation" }),
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
+        error: "Not authorized to view this conversation",
       });
 
       const result = await MessageService.getMessages(1, mockToken);
 
-      expect(result.error).toBe("Failed to fetch messages");  // Generic error thrown
+      expect(result.error).toBe("Not authorized to view this conversation");
     });
   });
 
@@ -302,47 +263,38 @@ describe("MessageClass", () => {
         },
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await MessageService.sendMessage(1, "Hello World", mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/messages/send",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mockToken}`,
-          },
-          body: JSON.stringify({ conversationId: 1, content: "Hello World" }),
-        }
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/messages/send",
+        { conversationId: 1, content: "Hello World" },
+        { token: mockToken }
       );
       expect(result.message.content).toBe("Hello World");
     });
 
     it("should return error for empty content", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Message content is required" }),
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
+        error: "Message content is required",
       });
 
       const result = await MessageService.sendMessage(1, "   ", mockToken);
 
-      expect(result.error).toBe("Failed to send message");  // Generic error thrown
+      expect(result.error).toBe("Message content is required");
     });
 
     it("should return error when not a participant", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Not authorized to send messages in this conversation" }),
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
+        error: "Not authorized to send messages in this conversation",
       });
 
       const result = await MessageService.sendMessage(999, "Hello", mockToken);
 
-      expect(result.error).toBe("Failed to send message");  // Generic error thrown
+      expect(result.error).toBe("Not authorized to send messages in this conversation");
     });
   });
 
@@ -355,10 +307,7 @@ describe("MessageClass", () => {
         ],
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await MessageService.getConversations(mockToken);
 
@@ -369,21 +318,14 @@ describe("MessageClass", () => {
 
   describe("markAsRead", () => {
     it("should mark conversation as read", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true }),
-      });
+      HttpClient.patch.mockResolvedValueOnce({ success: true });
 
       const result = await MessageService.markAsRead(1, mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/messages/mark-read/1",
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-          },
-        }
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/messages/mark-read/1",
+        {},
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
@@ -391,10 +333,7 @@ describe("MessageClass", () => {
 
   describe("getUnreadCount", () => {
     it("should return total unread count", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ unreadCount: 5 }),
-      });
+      HttpClient.get.mockResolvedValueOnce({ unreadCount: 5 });
 
       const result = await MessageService.getUnreadCount(mockToken);
 
@@ -413,32 +352,23 @@ describe("MessageClass", () => {
         },
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await MessageService.createDirectConversation(2, mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        "http://localhost:3000/api/v1/messages/conversation/hr-direct",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${mockToken}`,
-          },
-          body: JSON.stringify({ targetUserId: 2 }),
-        }
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/messages/conversation/hr-direct",
+        { targetUserId: 2 },
+        { token: mockToken }
       );
       expect(result.conversation.title).toBe("John Doe");
       expect(result.conversation.title).not.toContain("Direct -");
     });
 
     it("should return error for non-HR/non-owner users", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ error: "Only owner or HR can use this endpoint" }),
+      HttpClient.post.mockResolvedValueOnce({
+        success: false,
+        error: "Only owner or HR can use this endpoint",
       });
 
       const result = await MessageService.createDirectConversation(2, mockToken);
@@ -462,31 +392,22 @@ describe("MessageClass", () => {
           },
         };
 
-        fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockResponse,
-        });
+        HttpClient.post.mockResolvedValueOnce(mockResponse);
 
         const result = await MessageService.createCleanerClientConversation(200, null, mockToken);
 
-        expect(fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/messages/conversation/cleaner-client",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${mockToken}`,
-            },
-            body: JSON.stringify({ clientUserId: 200 }),
-          }
+        expect(HttpClient.post).toHaveBeenCalledWith(
+          "/messages/conversation/cleaner-client",
+          { clientUserId: 200 },
+          { token: mockToken }
         );
         expect(result.conversation.conversationType).toBe("cleaner-client");
       });
 
       it("should return error when no active relationship with client", async () => {
-        fetch.mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ error: "No active relationship with this client" }),
+        HttpClient.post.mockResolvedValueOnce({
+          success: false,
+          error: "No active relationship with this client",
         });
 
         const result = await MessageService.createCleanerClientConversation(999, null, mockToken);
@@ -504,10 +425,7 @@ describe("MessageClass", () => {
           },
         };
 
-        fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockResponse,
-        });
+        HttpClient.post.mockResolvedValueOnce(mockResponse);
 
         const result = await MessageService.createCleanerClientConversation(200, null, mockToken);
 
@@ -526,23 +444,14 @@ describe("MessageClass", () => {
           },
         };
 
-        fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockResponse,
-        });
+        HttpClient.post.mockResolvedValueOnce(mockResponse);
 
         const result = await MessageService.createCleanerClientConversation(null, 100, mockToken);
 
-        expect(fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/messages/conversation/cleaner-client",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${mockToken}`,
-            },
-            body: JSON.stringify({ cleanerUserId: 100 }),
-          }
+        expect(HttpClient.post).toHaveBeenCalledWith(
+          "/messages/conversation/cleaner-client",
+          { cleanerUserId: 100 },
+          { token: mockToken }
         );
       });
 
@@ -555,30 +464,21 @@ describe("MessageClass", () => {
           },
         };
 
-        fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => mockResponse,
-        });
+        HttpClient.post.mockResolvedValueOnce(mockResponse);
 
         const result = await MessageService.createCleanerClientConversation(null, null, mockToken);
 
-        expect(fetch).toHaveBeenCalledWith(
-          "http://localhost:3000/api/v1/messages/conversation/cleaner-client",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${mockToken}`,
-            },
-            body: JSON.stringify({}),
-          }
+        expect(HttpClient.post).toHaveBeenCalledWith(
+          "/messages/conversation/cleaner-client",
+          {},
+          { token: mockToken }
         );
       });
 
       it("should return error if no preferred cleaner found", async () => {
-        fetch.mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ error: "No preferred cleaner found. Please specify cleanerUserId." }),
+        HttpClient.post.mockResolvedValueOnce({
+          success: false,
+          error: "No preferred cleaner found. Please specify cleanerUserId.",
         });
 
         const result = await MessageService.createCleanerClientConversation(null, null, mockToken);
@@ -587,9 +487,9 @@ describe("MessageClass", () => {
       });
 
       it("should return error if no relationship with specified cleaner", async () => {
-        fetch.mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ error: "No active relationship with this cleaner" }),
+        HttpClient.post.mockResolvedValueOnce({
+          success: false,
+          error: "No active relationship with this cleaner",
         });
 
         const result = await MessageService.createCleanerClientConversation(null, 999, mockToken);
@@ -600,7 +500,7 @@ describe("MessageClass", () => {
 
     describe("Error handling", () => {
       it("should handle network errors gracefully", async () => {
-        fetch.mockRejectedValueOnce(new Error("Network error"));
+        HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network error" });
 
         const result = await MessageService.createCleanerClientConversation(200, null, mockToken);
 
@@ -608,9 +508,9 @@ describe("MessageClass", () => {
       });
 
       it("should handle server errors", async () => {
-        fetch.mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ error: "Internal server error" }),
+        HttpClient.post.mockResolvedValueOnce({
+          success: false,
+          error: "Internal server error",
         });
 
         const result = await MessageService.createCleanerClientConversation(200, null, mockToken);
@@ -619,9 +519,8 @@ describe("MessageClass", () => {
       });
 
       it("should handle invalid response format", async () => {
-        fetch.mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({}), // No error message
+        HttpClient.post.mockResolvedValueOnce({
+          success: false,
         });
 
         const result = await MessageService.createCleanerClientConversation(200, null, mockToken);

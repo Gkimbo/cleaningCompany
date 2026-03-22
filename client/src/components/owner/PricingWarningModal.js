@@ -39,7 +39,7 @@ const PricingWarningModal = ({
       onRequestClose={handleClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
+        <View style={styles.modalContainer} testID="warning-modal">
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.iconContainer}>
@@ -114,6 +114,7 @@ const PricingWarningModal = ({
               style={styles.checkboxContainer}
               onPress={() => setAgreed(!agreed)}
               activeOpacity={0.7}
+              testID="warning-checkbox"
             >
               <Checkbox
                 status={agreed ? "checked" : "unchecked"}
@@ -132,6 +133,7 @@ const PricingWarningModal = ({
               style={[styles.button, styles.cancelButton]}
               onPress={handleClose}
               disabled={loading}
+              testID="modal-cancel"
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
@@ -144,6 +146,7 @@ const PricingWarningModal = ({
               ]}
               onPress={handleConfirm}
               disabled={!agreed || loading}
+              testID="modal-confirm"
             >
               {loading ? (
                 <ActivityIndicator size="small" color={colors.neutral[0]} />

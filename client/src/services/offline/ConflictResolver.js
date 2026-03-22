@@ -5,6 +5,7 @@
  * like cancellation and multi-cleaner conflicts.
  */
 
+import { Q } from "@nozbe/watermelondb";
 import database, { syncConflictsCollection, offlineJobsCollection } from "./database";
 import { CONFLICT_TYPES, RESOLUTION_TYPES } from "./database/models/SyncConflict";
 
@@ -13,22 +14,36 @@ class ConflictResolver {
    * Get all unresolved conflicts
    */
   async getUnresolvedConflicts() {
-    const conflicts = await syncConflictsCollection.query().fetch();
-    return conflicts.filter((c) => !c.resolved);
+    // Query directly at database level (more efficient than fetching all and filtering in JS)
+    return await syncConflictsCollection.query(Q.where("resolved", false)).fetch();
   }
 
   /**
    * Get conflicts for a specific job
    */
   async getConflictsForJob(jobId) {
-    const conflicts = await syncConflictsCollection.query().fetch();
-    return conflicts.filter((c) => c.jobId === jobId);
+    // Query directly at database level (more efficient than fetching all and filtering in JS)
+    return await syncConflictsCollection.query(Q.where("job_id", jobId)).fetch();
   }
 
   /**
    * Auto-resolve a conflict based on rules
    */
   async autoResolve(conflict) {
+    // Validate conflict object
+    if (!conflict) {
+      return { resolved: false, reason: "No conflict provided" };
+    }
+
+    if (!conflict.conflictType) {
+      return { resolved: false, reason: "Conflict missing conflictType property" };
+    }
+
+    // Validate that localData and serverData exist (even if empty objects)
+    if (conflict.localData === undefined && conflict.serverData === undefined) {
+      console.warn(`[ConflictResolver] Conflict ${conflict.id} missing both localData and serverData`);
+    }
+
     switch (conflict.conflictType) {
       case CONFLICT_TYPES.CANCELLATION:
         return await this._resolveCancellation(conflict);
@@ -37,7 +52,7 @@ class ConflictResolver {
       case CONFLICT_TYPES.DATA_MISMATCH:
         return await this._resolveDataMismatch(conflict);
       default:
-        return { resolved: false, reason: "Unknown conflict type" };
+        return { resolved: false, reason: `Unknown conflict type: ${conflict.conflictType}` };
     }
   }
 
@@ -184,7 +199,9 @@ class ConflictResolver {
   async _getJob(localJobId) {
     try {
       return await offlineJobsCollection.find(localJobId);
-    } catch {
+    } catch (error) {
+      // Job may have been deleted, log for debugging but return null gracefully
+      console.warn(`[ConflictResolver] Failed to get job ${localJobId}:`, error.message);
       return null;
     }
   }

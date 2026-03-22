@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Image,
 } from "react-native";
 import { TextInput, Checkbox } from "react-native-paper";
 import { useNavigate, useParams } from "react-router-native";
@@ -62,6 +63,9 @@ const AcceptEmployeeInvitationScreen = ({ inviteToken: propToken }) => {
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [privacyId, setPrivacyId] = useState(null);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [paymentTermsAccepted, setPaymentTermsAccepted] = useState(false);
+  const [paymentTermsId, setPaymentTermsId] = useState(null);
+  const [showPaymentTermsModal, setShowPaymentTermsModal] = useState(false);
 
   const [formErrors, setFormErrors] = useState([]);
 
@@ -173,6 +177,10 @@ const AcceptEmployeeInvitationScreen = ({ inviteToken: propToken }) => {
       errors.push("You must accept the Privacy Policy.");
     }
 
+    if (!paymentTermsAccepted) {
+      errors.push("You must accept the Payment Terms.");
+    }
+
     setFormErrors(errors);
     return errors.length === 0;
   };
@@ -194,6 +202,7 @@ const AcceptEmployeeInvitationScreen = ({ inviteToken: propToken }) => {
         phone: phone.replace(/\D/g, ""),
         termsId,
         privacyPolicyId: privacyId,
+        paymentTermsId,
       });
 
       if (result.success) {
@@ -254,6 +263,12 @@ const AcceptEmployeeInvitationScreen = ({ inviteToken: propToken }) => {
     setPrivacyId(acceptedPrivacyId);
     setPrivacyAccepted(true);
     setShowPrivacyModal(false);
+  };
+
+  const handlePaymentTermsAccepted = (acceptedPaymentTermsId) => {
+    setPaymentTermsId(acceptedPaymentTermsId);
+    setPaymentTermsAccepted(true);
+    setShowPaymentTermsModal(false);
   };
 
   // Loading state
@@ -349,9 +364,16 @@ const AcceptEmployeeInvitationScreen = ({ inviteToken: propToken }) => {
         {invitation && (
           <View style={styles.invitationCard}>
             <View style={styles.inviterSection}>
-              <View style={styles.inviterAvatar}>
-                <Feather name="briefcase" size={24} color={colors.primary[600]} />
-              </View>
+              {invitation.businessLogo ? (
+                <Image
+                  source={{ uri: invitation.businessLogo }}
+                  style={styles.inviterLogo}
+                />
+              ) : (
+                <View style={styles.inviterAvatar}>
+                  <Feather name="briefcase" size={24} color={colors.primary[600]} />
+                </View>
+              )}
               <View style={styles.inviterInfo}>
                 <Text style={styles.inviterLabel}>Employer</Text>
                 <Text style={styles.inviterName}>
@@ -552,6 +574,36 @@ const AcceptEmployeeInvitationScreen = ({ inviteToken: propToken }) => {
           {privacyAccepted && (
             <Text style={styles.acceptedText}>Privacy Policy accepted</Text>
           )}
+
+          <View style={[styles.termsRow, { marginTop: spacing.sm }]}>
+            <Checkbox
+              status={paymentTermsAccepted ? "checked" : "unchecked"}
+              onPress={() => {
+                if (!paymentTermsAccepted) {
+                  setShowPaymentTermsModal(true);
+                } else {
+                  setPaymentTermsAccepted(false);
+                  setPaymentTermsId(null);
+                }
+              }}
+              color={colors.primary[600]}
+            />
+            <View style={styles.termsTextContainer}>
+              <Text style={styles.termsText}>
+                I agree to the{" "}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => setShowPaymentTermsModal(true)}
+                >
+                  Payment Terms
+                </Text>
+                {" *"}
+              </Text>
+            </View>
+          </View>
+          {paymentTermsAccepted && (
+            <Text style={styles.acceptedText}>Payment Terms accepted</Text>
+          )}
         </View>
 
         {/* Decline Link */}
@@ -586,7 +638,7 @@ const AcceptEmployeeInvitationScreen = ({ inviteToken: propToken }) => {
         visible={showTermsModal}
         onClose={() => setShowTermsModal(false)}
         onAccept={handleTermsAccepted}
-        type="employee"
+        type="cleaner"
         required={true}
         title="Terms and Conditions"
       />
@@ -599,6 +651,16 @@ const AcceptEmployeeInvitationScreen = ({ inviteToken: propToken }) => {
         type="privacy_policy"
         required={true}
         title="Privacy Policy"
+      />
+
+      {/* Payment Terms Modal */}
+      <TermsModal
+        visible={showPaymentTermsModal}
+        onClose={() => setShowPaymentTermsModal(false)}
+        onAccept={handlePaymentTermsAccepted}
+        type="payment_terms"
+        required={true}
+        title="Payment Terms"
       />
     </KeyboardAvoidingView>
   );
@@ -768,6 +830,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[100],
     alignItems: "center",
     justifyContent: "center",
+  },
+  inviterLogo: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   inviterInfo: {
     marginLeft: spacing.md,

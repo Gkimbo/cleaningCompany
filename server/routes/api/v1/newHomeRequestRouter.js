@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../../../middleware/authenticatedToken");
 const NewHomeRequestService = require("../../../services/NewHomeRequestService");
+const EncryptionService = require("../../../services/EncryptionService");
 const { NewHomeRequest, UserHomes } = require("../../../models");
 
 /**
@@ -32,7 +33,7 @@ router.get("/pending", async (req, res) => {
       homeId: request.homeId,
       clientId: request.clientId,
       status: request.status,
-      calculatedPrice: request.calculatedPrice,
+      calculatedPrice: request.calculatedPrice || null, // Return cents, frontend handles conversion
       numBeds: request.numBeds,
       numBaths: request.numBaths,
       expiresAt: request.expiresAt,
@@ -42,16 +43,15 @@ router.get("/pending", async (req, res) => {
         ? {
             id: request.home.id,
             nickName: request.home.nickName,
-            address: request.home.address,
-            city: request.home.city,
-            state: request.home.state,
+            address: EncryptionService.decrypt(request.home.address),
+            city: EncryptionService.decrypt(request.home.city),
+            state: EncryptionService.decrypt(request.home.state),
           }
         : null,
       client: request.client
         ? {
             id: request.client.id,
-            name: `${request.client.firstName} ${request.client.lastName}`.trim(),
-            profileImage: request.client.profileImage,
+            name: `${EncryptionService.decrypt(request.client.firstName)} ${EncryptionService.decrypt(request.client.lastName)}`.trim(),
           }
         : null,
     }));
@@ -81,7 +81,7 @@ router.get("/", async (req, res) => {
       homeId: request.homeId,
       businessOwnerId: request.businessOwnerId,
       status: request.status,
-      calculatedPrice: request.calculatedPrice,
+      calculatedPrice: request.calculatedPrice || null, // Return cents, frontend handles conversion
       numBeds: request.numBeds,
       numBaths: request.numBaths,
       declineReason: request.declineReason,
@@ -94,15 +94,15 @@ router.get("/", async (req, res) => {
         ? {
             id: request.home.id,
             nickName: request.home.nickName,
-            address: request.home.address,
-            city: request.home.city,
+            address: EncryptionService.decrypt(request.home.address),
+            city: EncryptionService.decrypt(request.home.city),
             isMarketplaceEnabled: request.home.isMarketplaceEnabled,
           }
         : null,
       businessOwner: request.businessOwner
         ? {
             id: request.businessOwner.id,
-            name: `${request.businessOwner.firstName} ${request.businessOwner.lastName}`.trim(),
+            name: `${EncryptionService.decrypt(request.businessOwner.firstName)} ${EncryptionService.decrypt(request.businessOwner.lastName)}`.trim(),
           }
         : null,
     }));
@@ -130,7 +130,7 @@ router.get("/:homeId/status", async (req, res) => {
       id: request.id,
       businessOwnerId: request.businessOwnerId,
       status: request.status,
-      calculatedPrice: request.calculatedPrice,
+      calculatedPrice: request.calculatedPrice || null, // Return cents, frontend handles conversion
       declineReason: request.declineReason,
       requestCount: request.requestCount,
       canRequestAgain: request.canRequestAgain(),

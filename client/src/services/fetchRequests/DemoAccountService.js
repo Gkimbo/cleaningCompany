@@ -5,249 +5,147 @@
  * Handles API calls to demo account endpoints.
  */
 
-import { API_BASE } from "../config";
+import HttpClient from "../HttpClient";
 
 class DemoAccountService {
-	/**
-	 * Get list of available demo accounts
-	 * @param {string} token - Owner's auth token
-	 * @returns {Object} { success, demoAccounts, availableRoles }
-	 */
-	static async getDemoAccounts(token) {
-		try {
-			const response = await fetch(`${API_BASE}/demo-accounts`, {
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			});
+  /**
+   * Get list of available demo accounts
+   * @param {string} token - Owner's auth token
+   * @returns {Object} { success, demoAccounts, availableRoles }
+   */
+  static async getDemoAccounts(token) {
+    const result = await HttpClient.get("/demo-accounts", { token });
 
-			const data = await response.json();
+    if (result.success === false) {
+      __DEV__ && console.warn("[DemoAccountService] getDemoAccounts failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to fetch demo accounts",
+      };
+    }
 
-			if (!response.ok) {
-				return {
-					success: false,
-					error: data.error || "Failed to fetch demo accounts",
-				};
-			}
+    return result;
+  }
 
-			return data;
-		} catch (error) {
-			console.error("[DemoAccountService] Error fetching demo accounts:", error);
-			return {
-				success: false,
-				error: "Network error. Please check your connection.",
-			};
-		}
-	}
+  /**
+   * Get available preview roles
+   * @param {string} token - Owner's auth token
+   * @returns {Object} { success, roles }
+   */
+  static async getAvailableRoles(token) {
+    const result = await HttpClient.get("/demo-accounts/roles", { token });
 
-	/**
-	 * Get available preview roles
-	 * @param {string} token - Owner's auth token
-	 * @returns {Object} { success, roles }
-	 */
-	static async getAvailableRoles(token) {
-		try {
-			const response = await fetch(`${API_BASE}/demo-accounts/roles`, {
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			});
+    if (result.success === false) {
+      __DEV__ && console.warn("[DemoAccountService] getAvailableRoles failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to fetch roles",
+      };
+    }
 
-			const data = await response.json();
+    return result;
+  }
 
-			if (!response.ok) {
-				return {
-					success: false,
-					error: data.error || "Failed to fetch roles",
-				};
-			}
+  /**
+   * Enter preview mode for a specific role
+   * @param {string} token - Owner's auth token
+   * @param {string} role - Role to preview: 'cleaner', 'homeowner', 'businessOwner', 'employee'
+   * @returns {Object} { success, token, user, previewRole, originalOwnerId }
+   */
+  static async enterPreviewMode(token, role) {
+    const result = await HttpClient.post(`/demo-accounts/enter/${role}`, {}, { token });
 
-			return data;
-		} catch (error) {
-			console.error("[DemoAccountService] Error fetching roles:", error);
-			return {
-				success: false,
-				error: "Network error. Please check your connection.",
-			};
-		}
-	}
+    if (result.success === false) {
+      __DEV__ && console.warn("[DemoAccountService] enterPreviewMode failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to enter preview mode",
+      };
+    }
 
-	/**
-	 * Enter preview mode for a specific role
-	 * @param {string} token - Owner's auth token
-	 * @param {string} role - Role to preview: 'cleaner', 'homeowner', 'businessOwner', 'employee'
-	 * @returns {Object} { success, token, user, previewRole, originalOwnerId }
-	 */
-	static async enterPreviewMode(token, role) {
-		try {
-			const response = await fetch(`${API_BASE}/demo-accounts/enter/${role}`, {
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${token}`,
-					"Content-Type": "application/json",
-				},
-			});
+    return result;
+  }
 
-			const data = await response.json();
+  /**
+   * Exit preview mode and return to owner
+   * @param {string} token - Current session token (could be demo account token)
+   * @param {number} ownerId - Original owner's user ID
+   * @returns {Object} { success, token, user }
+   */
+  static async exitPreviewMode(token, ownerId) {
+    const result = await HttpClient.post("/demo-accounts/exit", { ownerId }, { token });
 
-			if (!response.ok) {
-				return {
-					success: false,
-					error: data.error || "Failed to enter preview mode",
-				};
-			}
+    if (result.success === false) {
+      __DEV__ && console.warn("[DemoAccountService] exitPreviewMode failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to exit preview mode",
+      };
+    }
 
-			return data;
-		} catch (error) {
-			console.error("[DemoAccountService] Error entering preview mode:", error);
-			return {
-				success: false,
-				error: "Network error. Please check your connection.",
-			};
-		}
-	}
+    return result;
+  }
 
-	/**
-	 * Exit preview mode and return to owner
-	 * @param {string} token - Current session token (could be demo account token)
-	 * @param {number} ownerId - Original owner's user ID
-	 * @returns {Object} { success, token, user }
-	 */
-	static async exitPreviewMode(token, ownerId) {
-		try {
-			const response = await fetch(`${API_BASE}/demo-accounts/exit`, {
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${token}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({ ownerId }),
-			});
+  /**
+   * Check if a demo account exists for a role
+   * @param {string} token - Owner's auth token
+   * @param {string} role - Role to check
+   * @returns {Object} { exists, role, account }
+   */
+  static async checkDemoAccount(token, role) {
+    const result = await HttpClient.get(`/demo-accounts/check/${role}`, { token });
 
-			const data = await response.json();
+    if (result.success === false) {
+      __DEV__ && console.warn("[DemoAccountService] checkDemoAccount failed:", result.error);
+      return {
+        exists: false,
+        error: result.error || "Failed to check demo account",
+      };
+    }
 
-			if (!response.ok) {
-				return {
-					success: false,
-					error: data.error || "Failed to exit preview mode",
-				};
-			}
+    return result;
+  }
 
-			return data;
-		} catch (error) {
-			console.error("[DemoAccountService] Error exiting preview mode:", error);
-			return {
-				success: false,
-				error: "Network error. Please check your connection.",
-			};
-		}
-	}
+  /**
+   * Reset all demo data back to original seeder state
+   * @param {string} token - Owner's auth token (can be demo account token during preview)
+   * @param {string} currentRole - Current preview role (optional, used to get new session after reset)
+   * @returns {Object} { success, message, deleted, created, newSession }
+   */
+  static async resetDemoData(token, currentRole = null) {
+    const result = await HttpClient.post("/demo-accounts/reset", { currentRole }, { token });
 
-	/**
-	 * Check if a demo account exists for a role
-	 * @param {string} token - Owner's auth token
-	 * @param {string} role - Role to check
-	 * @returns {Object} { exists, role, account }
-	 */
-	static async checkDemoAccount(token, role) {
-		try {
-			const response = await fetch(`${API_BASE}/demo-accounts/check/${role}`, {
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			});
+    if (result.success === false) {
+      __DEV__ && console.warn("[DemoAccountService] resetDemoData failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to reset demo data",
+      };
+    }
 
-			const data = await response.json();
+    return result;
+  }
 
-			if (!response.ok) {
-				return {
-					exists: false,
-					error: data.error || "Failed to check demo account",
-				};
-			}
+  /**
+   * Switch to a different demo role without exiting preview mode
+   * @param {string} token - Current session token (demo account token)
+   * @param {string} role - Target role to switch to
+   * @param {number} ownerId - Original owner's user ID
+   * @returns {Object} { success, token, user, previewRole, switched }
+   */
+  static async switchPreviewRole(token, role, ownerId) {
+    const result = await HttpClient.post(`/demo-accounts/switch/${role}`, { ownerId }, { token });
 
-			return data;
-		} catch (error) {
-			console.error("[DemoAccountService] Error checking demo account:", error);
-			return {
-				exists: false,
-				error: "Network error. Please check your connection.",
-			};
-		}
-	}
+    if (result.success === false) {
+      __DEV__ && console.warn("[DemoAccountService] switchPreviewRole failed:", result.error);
+      return {
+        success: false,
+        error: result.error || "Failed to switch preview role",
+      };
+    }
 
-	/**
-	 * Reset all demo data back to original seeder state
-	 * @param {string} token - Owner's auth token (can be demo account token during preview)
-	 * @param {string} currentRole - Current preview role (optional, used to get new session after reset)
-	 * @returns {Object} { success, message, deleted, created, newSession }
-	 */
-	static async resetDemoData(token, currentRole = null) {
-		try {
-			const response = await fetch(`${API_BASE}/demo-accounts/reset`, {
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${token}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({ currentRole }),
-			});
-
-			const data = await response.json();
-
-			if (!response.ok) {
-				return {
-					success: false,
-					error: data.error || "Failed to reset demo data",
-				};
-			}
-
-			return data;
-		} catch (error) {
-			console.error("[DemoAccountService] Error resetting demo data:", error);
-			return {
-				success: false,
-				error: "Network error. Please check your connection.",
-			};
-		}
-	}
-
-	/**
-	 * Switch to a different demo role without exiting preview mode
-	 * @param {string} token - Current session token (demo account token)
-	 * @param {string} role - Target role to switch to
-	 * @param {number} ownerId - Original owner's user ID
-	 * @returns {Object} { success, token, user, previewRole, switched }
-	 */
-	static async switchPreviewRole(token, role, ownerId) {
-		try {
-			const response = await fetch(`${API_BASE}/demo-accounts/switch/${role}`, {
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${token}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({ ownerId }),
-			});
-
-			const data = await response.json();
-
-			if (!response.ok) {
-				return {
-					success: false,
-					error: data.error || "Failed to switch preview role",
-				};
-			}
-
-			return data;
-		} catch (error) {
-			console.error("[DemoAccountService] Error switching preview role:", error);
-			return {
-				success: false,
-				error: "Network error. Please check your connection.",
-			};
-		}
-	}
+    return result;
+  }
 }
 
 export default DemoAccountService;

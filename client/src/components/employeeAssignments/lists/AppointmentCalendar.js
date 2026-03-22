@@ -24,6 +24,7 @@ import {
   typography,
   shadows,
 } from "../../../services/styles/theme";
+import { toLocalDateString, getTodayString } from "../../../services/formatters";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -100,8 +101,8 @@ const AppointmentCalendar = ({ state }) => {
         getCurrentUser(state.currentUser.token),
       ]);
 
-      const now = new Date();
-      const isUpcoming = (item) => new Date(item.date) >= new Date(now.toDateString());
+      const todayStr = getTodayString();
+      const isUpcoming = (item) => item.date >= todayStr;
 
       // Filter out jobs that have already been assigned to anyone (including yourself)
       // Those should only show on the "My Jobs" page
@@ -260,7 +261,8 @@ const AppointmentCalendar = ({ state }) => {
 
   const formatSelectedDate = (dateString) => {
     if (!dateString) return "";
-    const date = new Date(dateString + "T00:00:00");
+    // Use noon to avoid timezone edge cases that could shift the day
+    const date = new Date(dateString + "T12:00:00");
     const options = { weekday: "long", month: "long", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
   };
@@ -270,9 +272,8 @@ const AppointmentCalendar = ({ state }) => {
   // Calendar day render
   const renderDay = useCallback(
     ({ date }) => {
-      const today = new Date();
-      const dayDate = new Date(date.dateString);
-      const isPast = dayDate < new Date(today.toDateString());
+      const todayString = getTodayString();
+      const isPast = date.dateString < todayString;
 
       const appointmentCount = appointments.filter((a) => a.date === date.dateString).length;
       const requestCount = requests.filter((r) => r.date === date.dateString).length;
@@ -358,7 +359,7 @@ const AppointmentCalendar = ({ state }) => {
         {/* Calendar */}
         <View style={styles.calendarContainer}>
           <Calendar
-            current={new Date().toISOString().split("T")[0]}
+            current={toLocalDateString(new Date())}
             onDayPress={handleDateSelect}
             dayComponent={renderDay}
             renderArrow={(direction) => (

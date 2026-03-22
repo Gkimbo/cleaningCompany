@@ -4,14 +4,14 @@
  */
 
 describe("BusinessOwnerAllJobs Component Logic", () => {
-  // Mock job data
+  // Mock job data (prices in cents as stored in database)
   const mockJobs = [
     {
       id: 1,
       clientName: "John Smith",
       date: "2025-02-10",
       time: "09:00",
-      price: 150,
+      price: 15000, // $150.00 in cents
       city: "Boston",
       state: "MA",
       numBeds: "3",
@@ -26,7 +26,7 @@ describe("BusinessOwnerAllJobs Component Logic", () => {
       clientName: "Jane Doe",
       date: "2025-02-10",
       time: "14:00",
-      price: 200,
+      price: 20000, // $200.00 in cents
       city: "Cambridge",
       state: "MA",
       numBeds: "4",
@@ -41,7 +41,7 @@ describe("BusinessOwnerAllJobs Component Logic", () => {
       clientName: "Bob Wilson",
       date: "2025-02-11",
       time: "10:00",
-      price: 175,
+      price: 17500, // $175.00 in cents
       city: "Somerville",
       state: "MA",
       numBeds: "2",
@@ -56,7 +56,7 @@ describe("BusinessOwnerAllJobs Component Logic", () => {
       clientName: "Alice Brown",
       date: "2025-02-12",
       time: "11:00",
-      price: 225,
+      price: 22500, // $225.00 in cents
       city: "Brookline",
       state: "MA",
       numBeds: "5",
@@ -71,7 +71,7 @@ describe("BusinessOwnerAllJobs Component Logic", () => {
       clientName: "Completed Job",
       date: "2025-02-01",
       time: "09:00",
-      price: 100,
+      price: 10000, // $100.00 in cents
       city: "Boston",
       state: "MA",
       numBeds: "2",
@@ -407,12 +407,12 @@ describe("BusinessOwnerAllJobs Component Logic", () => {
     });
 
     it("should format price correctly", () => {
-      // In the component, price is in dollars and gets multiplied by 100 for formatCurrency
+      // Price is stored in cents in DB, formatCurrency expects cents
       const formatCurrency = (cents) => `$${(cents / 100).toFixed(2)}`;
-      const job = mockJobs[0]; // price: 150 (dollars)
+      const job = mockJobs[0]; // price: 15000 (cents = $150.00)
 
-      // The component calls formatCurrency((job.price || 0) * 100)
-      expect(formatCurrency(job.price * 100)).toBe("$150.00");
+      // The component calls formatCurrency(job.price || 0) - price is already in cents
+      expect(formatCurrency(job.price)).toBe("$150.00");
     });
 
     it("should display assignment status text", () => {

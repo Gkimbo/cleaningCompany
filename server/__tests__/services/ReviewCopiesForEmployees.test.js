@@ -245,7 +245,13 @@ describe("ReviewsClass - Multi-Employee Review Copies", () => {
       // Mock all dependencies
       UserReviews.findOne.mockResolvedValue(null); // No existing review
       User.findByPk.mockResolvedValue({ id: 50, firstName: "enc_John", lastName: "enc_Doe" });
-      UserAppointments.findByPk.mockResolvedValue({ id: 200 });
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 200,
+        completed: true,
+        cancelled: false,
+        home: { userId: 50 }, // homeowner is the reviewer
+        employeesAssigned: ["100"], // cleaner 100 was assigned
+      });
 
       const createdReview = {
         id: 1,
@@ -282,7 +288,13 @@ describe("ReviewsClass - Multi-Employee Review Copies", () => {
 
       UserReviews.findOne.mockResolvedValue(null);
       User.findByPk.mockResolvedValue({ id: 100, firstName: "enc_Jane", lastName: "enc_Cleaner" });
-      UserAppointments.findByPk.mockResolvedValue({ id: 200 });
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 200,
+        completed: true,
+        cancelled: false,
+        home: { userId: 50 }, // homeowner is being reviewed
+        employeesAssigned: ["100"], // cleaner 100 is the reviewer
+      });
 
       const createdReview = { id: 1, ...mockReviewData };
       UserReviews.create.mockResolvedValue(createdReview);

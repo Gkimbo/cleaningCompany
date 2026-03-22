@@ -5,7 +5,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/Tests-5128_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-5961_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
 
@@ -21,19 +21,22 @@ The Kleanr mobile app is a React Native application built with Expo that provide
 
 **Key Features:**
 - Full offline-first architecture with background sync
-- Multi-user role support (7 user types including Business Client)
+- Multi-user role support (8 user types including IT Support)
 - Real-time messaging with WebSocket
 - Stripe payment integration with Apple Pay/Google Pay
 - iCal calendar sync for vacation rentals
 - Photo documentation with offline capture
 - Push notifications via Expo
-- Conflict Resolution Center for HR staff
+- Conflict Resolution Center for HR staff with support tickets
+- IT Support Dashboard with ticket management
 - Cancellation Appeals system with 72-hour window
+- New Home Request system for business owner notifications
 - Preview as Role for platform owners
 - Employee timesheet management and hours tracking
 - Transit time calculation between jobs
 - Bi-weekly batch payouts for employees with pending earnings display
 - Database-driven pricing configuration
+- Service Area Management for geographic restrictions
 
 ---
 
@@ -106,7 +109,7 @@ export const API_BASE = "http://localhost:3000/api/v1";
 - Digital cleaning checklists (73 tasks)
 - Earnings dashboard with charts
 - Stripe Connect payouts
-- W-9 submission & 1099-NEC access
+- Tax documents via Stripe Dashboard
 - Preferred cleaner tier status
 - Guest-not-left reporting
 - Home size adjustment filing
@@ -124,6 +127,7 @@ export const API_BASE = "http://localhost:3000/api/v1";
 - Payroll tracking (hourly/flat rate)
 - **Timesheet management** with hours tracking
 - **My Clients page** with full client management
+- **New Home Requests** - accept/decline when clients add homes
 - **Business Client portal** for corporate clients
 - Client invitation via email with home details
 - Book appointments for clients directly
@@ -156,7 +160,7 @@ export const API_BASE = "http://localhost:3000/api/v1";
 <td width="50%" valign="top">
 
 #### HR Staff
-- **Conflict Resolution Center** - unified queue for all disputes
+- **Conflict Resolution Center** - unified queue for disputes and support tickets
 - **Cancellation Appeals** - review and decide within 48-hour SLA
 - Photo comparison tools for evidence review
 - Financial breakdown with refund/payout calculations
@@ -168,6 +172,21 @@ export const API_BASE = "http://localhost:3000/api/v1";
 - Application processing
 
 </td>
+<td width="50%" valign="top">
+
+#### IT Support Staff
+- **IT Dashboard** - centralized ticket queue
+- Ticket assignment and resolution
+- User search by email/username/ID
+- Account freeze/unfreeze actions
+- Password reset assistance
+- Quick stats with SLA tracking
+- Priority management (Low/Normal/High/Critical)
+- Resolution notes documentation
+
+</td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 
 #### Platform Owner/Admin
@@ -183,6 +202,8 @@ export const API_BASE = "http://localhost:3000/api/v1";
 - Broadcast messaging
 - Tax reporting
 - Platform withdrawals
+- **IT Employee Management** - CRUD for IT staff
+- **Service Area Management** - geographic restrictions
 
 </td>
 </tr>
@@ -204,14 +225,21 @@ export const API_BASE = "http://localhost:3000/api/v1";
 | **Multi-Cleaner Jobs** | Large home support with job offers, room assignments, and split pricing |
 | **Last-Minute Booking** | Urgent booking support with 48-hour threshold and fee display |
 | **Guest-Not-Left** | GPS-verified reporting when guests haven't left by checkout |
-| **Conflict Resolution** | Unified case management for disputes with photo comparison, evidence gallery, message threads, and audit trail |
+| **Conflict Resolution** | Unified case management for disputes and support tickets with photo comparison, evidence gallery, message threads, and audit trail |
 | **Cancellation Appeals** | Submit appeals within 72 hours, HR review within 48-hour SLA, penalty waiver and refund options |
+| **New Home Requests** | Business owners notified when clients add new homes. 48-hour response window with accept/decline. Automatic pricing calculation. Re-request after 30 days if declined. |
 | **Preview as Role** | Platform owners can preview app as Cleaner, Homeowner, Business Owner, or Employee using demo accounts |
 | **Internal Analytics** | Platform metrics dashboard: flow abandonment funnels, job duration stats, offline usage monitoring, dispute/pay override frequency |
 | **Transit Time** | Automatic calculation of travel time between jobs for scheduling optimization. Displays estimated arrival times and prevents overbooking. |
 | **Employee Timesheets** | Track and submit hours worked per job. Business owners can review and approve timesheets with payroll integration. |
 | **Bi-Weekly Payouts** | Employees view pending earnings and next payout date. Business owners see payroll summary and can trigger early payouts. Supports hourly, percentage, and flat pay types. |
 | **Database Pricing** | All platform fees configured via database. Displays accurate fee breakdowns in earnings and payout screens. |
+| **IT Support System** | Users can submit technical support tickets with categories (app crashes, login issues, billing errors, security, data requests). Priority levels and status tracking. IT staff dashboard for ticket management. |
+| **Service Area Management** | Platform owners configure geographic restrictions for cleaners. City-based or radius-based modes. Visual configuration interface. |
+| **Account Freezing** | Frozen account banner and wrapper prevent access to platform features. Displays reason and contact information for appeals. |
+| **Verified Business Badge** | Display verified status for approved business owners. Builds trust with potential clients. |
+| **HR Staff Dashboard** | Manage suspicious activity reports, dispute resolution, and content moderation. Track reported messages and user warnings. |
+| **Custom Job Flows** | Business owners create custom job flows with specialized checklists. Assign flows to specific clients for tailored cleaning requirements. |
 
 ---
 
@@ -242,8 +270,19 @@ client/
 │   │   │   ├── JobAssignment.js
 │   │   │   ├── FinancialsScreen.js
 │   │   │   ├── PayrollScreen.js
-│   │   │   ├── TimesheetManagement.js
-│   │   │   └── BusinessOwnerCalendar.js
+│   │   │   ├── TimesheetScreen.js
+│   │   │   ├── BusinessOwnerCalendar.js
+│   │   │   ├── BusinessAnalyticsDashboard.js
+│   │   │   └── jobFlows/
+│   │   │       ├── JobFlowsList.js
+│   │   │       ├── FlowDetailScreen.js
+│   │   │       ├── ChecklistEditor.js
+│   │   │       └── CreateEditFlowModal.js
+│   │   │   └── profile/
+│   │   │       ├── DashboardOverview.js
+│   │   │       ├── MyClientsSection.js
+│   │   │       ├── MyTeamSection.js
+│   │   │       └── PayrollSection.js
 │   │   ├── calendarSync/         # iCal integration
 │   │   ├── cleaner/              # Cleaner dashboard
 │   │   │   ├── MyClientsPage.js
@@ -262,6 +301,10 @@ client/
 │   │   │   ├── lists/
 │   │   │   └── tiles/
 │   │   ├── hr/                   # HR staff features
+│   │   ├── it/                   # IT support staff features
+│   │   │   ├── ITDashboard.js
+│   │   │   ├── ITDisputeDetail.js
+│   │   │   └── ITSupportForm.js
 │   │   ├── conflicts/            # Conflict resolution center
 │   │   │   ├── ConflictResolutionCenter.js
 │   │   │   ├── ConflictCaseView.js
@@ -309,6 +352,16 @@ client/
 │   │   ├── tax/                  # Tax documents
 │   │   ├── terms/                # Terms & Conditions
 │   │   ├── tiles/                # Reusable UI tiles
+│   │   ├── shared/               # Shared components
+│   │   │   ├── FrozenAccountBanner.js
+│   │   │   ├── FrozenAccountWrapper.js
+│   │   │   ├── VerifiedBusinessBadge.js
+│   │   │   └── ITSupportForm.js
+│   │   ├── navBar/               # Navigation components (37 buttons)
+│   │   │   ├── TopBar.js
+│   │   │   ├── AccountSettingsButton.js
+│   │   │   ├── MessagesButton.js
+│   │   │   └── [35 more navigation buttons]
 │   │   └── userAuthentication/   # Login/registration
 │   │
 │   ├── context/
@@ -346,7 +399,12 @@ client/
 │       │   ├── DemoAccountService.js
 │       │   ├── AnalyticsService.js
 │       │   ├── TimesheetService.js
-│       │   └── TransitTimeService.js
+│       │   ├── TransitTimeService.js
+│       │   ├── NewHomeRequestService.js
+│       │   ├── ITDashboardService.js
+│       │   ├── ITDisputeService.js
+│       │   ├── ITManagementService.js
+│       │   └── ServiceAreaService.js
 │       │
 │       ├── offline/              # Offline sync system
 │       │   ├── OfflineManager.js
@@ -423,7 +481,7 @@ const initialState = {
     token: null,
     id: null,
     email: null,
-    type: null,        // 'cleaner', 'owner1', 'hr', 'businessOwner', 'businessEmployee'
+    type: null,        // 'cleaner', 'owner1', 'hr', 'it', 'businessOwner', 'businessEmployee'
   },
   homes: [],           // User's properties
   appointments: [],    // Scheduled cleanings
@@ -522,14 +580,17 @@ await PreferredCleanerService.updateAvailabilityConfig(token, config);
 ```javascript
 import TaxService from './services/fetchRequests/TaxService';
 
-// Cleaner: Get tax summary
-const summary = await TaxService.getCleanerTaxSummary(token, 2024);
+// Cleaner: Get earnings summary
+const earnings = await TaxService.getEarnings(token, 2024);
 
-// Cleaner: Get 1099-NEC data
-const form = await TaxService.get1099NECData(token, 2024);
+// Cleaner: Get Stripe dashboard link (for 1099 forms)
+const link = await TaxService.getDashboardLink(token);
 
-// Owner: Get platform tax report
-const report = await TaxService.getPlatformTaxReport(token, 2024);
+// Cleaner: Check tax status
+const status = await TaxService.getTaxStatus(token);
+
+// Owner: Get platform income summary
+const summary = await TaxService.getPlatformIncomeSummary(token, 2024);
 ```
 
 ### CleanerClientService
@@ -828,7 +889,7 @@ npm test -- CleaningChecklist.test.js
 |------------|-------|----------|
 | CalendarSyncManager | 73 | Calendar sync UI, API calls |
 | CleaningChecklist | 42 | Checklist interactions |
-| TaxService | 24 | All tax API methods |
+| TaxService | 24 | Earnings, dashboard link, tax status |
 | ReviewComponents | 54 | Review forms & display |
 | EarningsComponents | 12 | Earnings calculations |
 | AuthContext | 18 | Authentication flow |
@@ -851,7 +912,13 @@ npm test -- CleaningChecklist.test.js
 | Employee Timesheets | 24 | Timesheet submission, approval, hours tracking |
 | Transit Time | 18 | Distance calculation, scheduling optimization |
 | Bi-Weekly Payouts | 24 | Pending earnings display, payout date calculation |
-| **Total** | **5128** | 175 test suites |
+| New Home Requests | 32 | Accept/decline, re-request, marketplace toggle |
+| Support Tickets | 28 | Create from conversation, category selection |
+| IT Dashboard | 58 | Ticket management, assignment, resolution |
+| IT Employee Management | 40 | CRUD operations, password generation |
+| IT Services | 92 | ITDashboardService, ITDisputeService, ITManagementService |
+| Service Area | 24 | Configuration, validation, history |
+| **Total** | **5961** | 210 test suites |
 
 ---
 

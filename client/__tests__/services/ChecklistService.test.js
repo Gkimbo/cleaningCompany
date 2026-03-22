@@ -1,14 +1,23 @@
-import ChecklistService from "../../src/services/fetchRequests/ChecklistService";
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
 
-// Mock fetch globally
-global.fetch = jest.fn();
+import HttpClient from "../../src/services/HttpClient";
+import ChecklistService from "../../src/services/fetchRequests/ChecklistService";
 
 describe("ChecklistService", () => {
   const mockToken = "test-token-123";
 
   beforeEach(() => {
     jest.clearAllMocks();
-    fetch.mockClear();
   });
 
   describe("getPublishedChecklist", () => {
@@ -20,25 +29,17 @@ describe("ChecklistService", () => {
         metadata: { version: 1 },
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await ChecklistService.getPublishedChecklist(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/checklist/published"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/checklist/published", { token: mockToken });
       expect(result.sections).toHaveLength(1);
       expect(result.metadata.version).toBe(1);
     });
 
     it("should return fallback on fetch failure", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ChecklistService.getPublishedChecklist(mockToken);
 
@@ -46,10 +47,7 @@ describe("ChecklistService", () => {
     });
 
     it("should return fallback on non-ok response", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Server error" });
 
       const result = await ChecklistService.getPublishedChecklist(mockToken);
 
@@ -66,24 +64,16 @@ describe("ChecklistService", () => {
         },
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockDraft),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockDraft);
 
       const result = await ChecklistService.getDraft(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/checklist/draft"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/checklist/draft", { token: mockToken });
       expect(result.draftData.sections).toHaveLength(1);
     });
 
     it("should return null on failure", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ChecklistService.getDraft(mockToken);
 
@@ -97,32 +87,20 @@ describe("ChecklistService", () => {
         sections: [{ id: "s1", title: "Kitchen", items: [] }],
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, draft: { id: 1 } }),
-      });
+      HttpClient.put.mockResolvedValueOnce({ draft: { id: 1 } });
 
       const result = await ChecklistService.saveDraft(mockToken, draftData);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/checklist/draft"),
-        expect.objectContaining({
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ draftData }),
-        })
+      expect(HttpClient.put).toHaveBeenCalledWith(
+        "/checklist/draft",
+        { draftData },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on save failure", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: "Save failed" }),
-      });
+      HttpClient.put.mockResolvedValueOnce({ success: false, error: "Save failed" });
 
       const result = await ChecklistService.saveDraft(mockToken, {});
 
@@ -131,46 +109,34 @@ describe("ChecklistService", () => {
     });
 
     it("should handle network errors", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.put.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ChecklistService.saveDraft(mockToken, {});
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Network error");
+      expect(result.error).toContain("Network request failed");
     });
   });
 
   describe("publishDraft", () => {
     it("should publish draft successfully", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          success: true,
-          version: { id: 1, version: 2 },
-        }),
+      HttpClient.post.mockResolvedValueOnce({
+        version: { id: 1, version: 2 },
       });
 
       const result = await ChecklistService.publishDraft(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/checklist/publish"),
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-            "Content-Type": "application/json",
-          },
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/checklist/publish",
+        {},
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.version.version).toBe(2);
     });
 
     it("should return error on publish failure", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: "No draft to publish" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "No draft to publish" });
 
       const result = await ChecklistService.publishDraft(mockToken);
 
@@ -179,12 +145,12 @@ describe("ChecklistService", () => {
     });
 
     it("should handle network errors", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ChecklistService.publishDraft(mockToken);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Network error");
+      expect(result.error).toContain("Network request failed");
     });
   });
 
@@ -197,24 +163,16 @@ describe("ChecklistService", () => {
         ],
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockVersions),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockVersions);
 
       const result = await ChecklistService.getVersionHistory(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/checklist/versions"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/checklist/versions", { token: mockToken });
       expect(result.versions).toHaveLength(2);
     });
 
     it("should return empty versions on failure", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ChecklistService.getVersionHistory(mockToken);
 
@@ -230,27 +188,16 @@ describe("ChecklistService", () => {
         snapshotData: { sections: [] },
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockVersion),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockVersion);
 
       const result = await ChecklistService.getVersion(mockToken, 1);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/checklist/versions/1"),
-        expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
-        })
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/checklist/versions/1", { token: mockToken });
       expect(result.version).toBe(1);
     });
 
     it("should return null on failure", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-      });
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Not found" });
 
       const result = await ChecklistService.getVersion(mockToken, 999);
 
@@ -260,34 +207,22 @@ describe("ChecklistService", () => {
 
   describe("revertToVersion", () => {
     it("should revert to version successfully", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          success: true,
-          draft: { draftData: { sections: [] } },
-        }),
+      HttpClient.post.mockResolvedValueOnce({
+        draft: { draftData: { sections: [] } },
       });
 
       const result = await ChecklistService.revertToVersion(mockToken, 1);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/checklist/revert/1"),
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${mockToken}`,
-            "Content-Type": "application/json",
-          },
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/checklist/revert/1",
+        {},
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on revert failure", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: "Version not found" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Version not found" });
 
       const result = await ChecklistService.revertToVersion(mockToken, 999);
 
@@ -296,41 +231,33 @@ describe("ChecklistService", () => {
     });
 
     it("should handle network errors", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ChecklistService.revertToVersion(mockToken, 1);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Network error");
+      expect(result.error).toContain("Network request failed");
     });
   });
 
   describe("seedFromHardcoded", () => {
     it("should seed successfully", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          success: true,
-          message: "Checklist seeded successfully",
-        }),
+      HttpClient.post.mockResolvedValueOnce({
+        message: "Checklist seeded successfully",
       });
 
       const result = await ChecklistService.seedFromHardcoded(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/checklist/seed"),
-        expect.objectContaining({
-          method: "POST",
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/checklist/seed",
+        {},
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error if already seeded", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: "Checklist already exists" }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Checklist already exists" });
 
       const result = await ChecklistService.seedFromHardcoded(mockToken);
 
@@ -339,48 +266,42 @@ describe("ChecklistService", () => {
     });
 
     it("should handle network errors", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ChecklistService.seedFromHardcoded(mockToken);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Network error");
+      expect(result.error).toContain("Network request failed");
     });
   });
 
   describe("Authorization header", () => {
-    it("should include Bearer token in all requests", async () => {
-      fetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+    it("should include token in all requests", async () => {
+      HttpClient.get.mockResolvedValue({});
 
       await ChecklistService.getPublishedChecklist(mockToken);
       await ChecklistService.getDraft(mockToken);
       await ChecklistService.getVersionHistory(mockToken);
 
-      expect(fetch).toHaveBeenCalledTimes(3);
-      fetch.mock.calls.forEach((call) => {
-        expect(call[1].headers.Authorization).toBe(`Bearer ${mockToken}`);
+      expect(HttpClient.get).toHaveBeenCalledTimes(3);
+      HttpClient.get.mock.calls.forEach((call) => {
+        expect(call[1]).toEqual({ token: mockToken });
       });
     });
   });
 
   describe("Content-Type header", () => {
-    it("should include Content-Type for POST/PUT requests", async () => {
-      fetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ success: true }),
-      });
+    it("should use POST/PUT methods for write requests", async () => {
+      HttpClient.put.mockResolvedValue({});
+      HttpClient.post.mockResolvedValue({});
 
       await ChecklistService.saveDraft(mockToken, {});
       await ChecklistService.publishDraft(mockToken);
       await ChecklistService.revertToVersion(mockToken, 1);
       await ChecklistService.seedFromHardcoded(mockToken);
 
-      fetch.mock.calls.forEach((call) => {
-        expect(call[1].headers["Content-Type"]).toBe("application/json");
-      });
+      expect(HttpClient.put).toHaveBeenCalledTimes(1);
+      expect(HttpClient.post).toHaveBeenCalledTimes(3);
     });
   });
 });

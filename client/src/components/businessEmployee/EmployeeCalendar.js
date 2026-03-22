@@ -10,6 +10,7 @@ import {
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessEmployeeService from "../../services/fetchRequests/BusinessEmployeeService";
+import useSafeNavigation from "../../hooks/useSafeNavigation";
 import {
   colors,
   spacing,
@@ -129,7 +130,7 @@ const SelectedDayJobCard = ({ job, onPress }) => {
           )}
           {job.payAmount !== undefined && (
             <Text style={styles.selectedJobPay}>
-              ${(job.payAmount / 100).toFixed(0)}
+              ${((job.payAmount || 0) / 100).toFixed(0)}
             </Text>
           )}
         </View>
@@ -185,7 +186,7 @@ const MonthStats = ({ jobs }) => {
 
 // Main Component
 const EmployeeCalendar = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack, navigate } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [jobs, setJobs] = useState([]);
@@ -216,7 +217,8 @@ const EmployeeCalendar = ({ state }) => {
   // Get jobs for a specific date
   const getJobsForDate = useCallback((date) => {
     return jobs.filter(job => {
-      const jobDate = new Date(job.appointment?.date + "T00:00:00");
+      if (!job.appointment?.date) return false;
+      const jobDate = new Date(job.appointment.date + "T12:00:00");
       return jobDate.toDateString() === date.toDateString();
     });
   }, [jobs]);
@@ -277,7 +279,8 @@ const EmployeeCalendar = ({ state }) => {
 
   // Get all jobs for current month for stats
   const monthJobs = jobs.filter(job => {
-    const jobDate = new Date(job.appointment?.date + "T00:00:00");
+    if (!job.appointment?.date) return false;
+    const jobDate = new Date(job.appointment.date + "T12:00:00");
     return jobDate.getMonth() === currentMonth.getMonth() &&
            jobDate.getFullYear() === currentMonth.getFullYear();
   });
@@ -311,7 +314,7 @@ const EmployeeCalendar = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={() => goBack()}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.headerTitle}>My Calendar</Text>

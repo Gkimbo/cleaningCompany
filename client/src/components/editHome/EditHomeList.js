@@ -12,11 +12,12 @@ import FetchData from "../../services/fetchRequests/fetchData";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
 import { usePricing } from "../../context/PricingContext";
+import { parseDateString } from "../../services/formatters";
 
 const EditHomeList = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { pricing } = usePricing();
-  const cancellationFeePerAppt = pricing?.cancellation?.fee ?? 25;
+  const cancellationFeePerAppt = pricing?.cancellation?.fee ?? 2500; // Fee in cents ($25.00)
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedHomeId, setSelectedHomeId] = useState(null);
   const [deleteFee, setDeleteFee] = useState(0);
@@ -41,7 +42,7 @@ const EditHomeList = ({ state, dispatch }) => {
 
     if (appointments?.appointments) {
       appointments.appointments.forEach((appt) => {
-        const date = new Date(appt.date);
+        const date = parseDateString(appt.date);
         if (date.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000 &&
             date.getTime() - currentDate.getTime() >= 0) {
           fee += cancellationFeePerAppt;
@@ -176,7 +177,7 @@ const EditHomeList = ({ state, dispatch }) => {
             <Text style={styles.modalTitle}>Delete Home?</Text>
             <Text style={styles.modalText}>
               {deleteFee > 0
-                ? `This will cancel all appointments. A $${deleteFee} cancellation fee will be charged for appointments within the next 7 days.`
+                ? `This will cancel all appointments. A $${(deleteFee / 100).toFixed(0)} cancellation fee will be charged for appointments within the next 7 days.`
                 : "This will permanently delete this home and all associated data."}
             </Text>
             <View style={styles.modalButtons}>

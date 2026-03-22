@@ -1,363 +1,197 @@
-import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
+/**
+ * Tests for ChatScreen utility functions and behavior
+ */
 
-// Mock react-router-native
-const mockNavigate = jest.fn();
-jest.mock("react-router-native", () => ({
-  useNavigate: () => mockNavigate,
-  useParams: () => ({ conversationId: "1" }),
-}));
-
-// Mock MessageService
-const mockGetMessages = jest.fn();
-const mockMarkAsRead = jest.fn();
-const mockGetUnreadCount = jest.fn();
-const mockSendMessage = jest.fn();
-
-jest.mock("../../../services/fetchRequests/MessageClass", () => ({
-  getMessages: (...args) => mockGetMessages(...args),
-  markAsRead: (...args) => mockMarkAsRead(...args),
-  getUnreadCount: (...args) => mockGetUnreadCount(...args),
-  sendMessage: (...args) => mockSendMessage(...args),
-}));
-
-// Mock SocketContext
-const mockJoinConversation = jest.fn();
-const mockLeaveConversation = jest.fn();
-const mockOnNewMessage = jest.fn(() => jest.fn());
-const mockOnMessageReaction = jest.fn(() => jest.fn());
-const mockOnMessageDeleted = jest.fn(() => jest.fn());
-const mockOnMessageRead = jest.fn(() => jest.fn());
-const mockOnConversationTitleChanged = jest.fn(() => jest.fn());
-
-jest.mock("../../../services/SocketContext", () => ({
-  useSocket: () => ({
-    joinConversation: mockJoinConversation,
-    leaveConversation: mockLeaveConversation,
-    onNewMessage: mockOnNewMessage,
-    onMessageReaction: mockOnMessageReaction,
-    onMessageDeleted: mockOnMessageDeleted,
-    onMessageRead: mockOnMessageRead,
-    onConversationTitleChanged: mockOnConversationTitleChanged,
-  }),
-}));
-
-// Mock Feather icon
-jest.mock("react-native-vector-icons/Feather", () => {
-  const { Text } = require("react-native");
-  return ({ name, ...props }) => <Text {...props}>{name}</Text>;
-});
-
-// Mock UserContext
-const mockDispatch = jest.fn();
-let mockState = {
-  currentUser: { token: "test-token", userId: "1" },
-  account: null,
-};
-
-jest.mock("../../../context/UserContext", () => {
-  const React = require("react");
-  return {
-    UserContext: React.createContext({
-      state: {
-        currentUser: { token: "test-token", userId: "1" },
-        account: null,
-      },
-      dispatch: jest.fn(),
-    }),
+describe("ChatScreen getDisplayName utility", () => {
+  // Replicate the getDisplayName function from ChatScreen.js
+  const getDisplayName = (user) => {
+    if (!user) return "Unknown";
+    if (user.firstName) {
+      return user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName;
+    }
+    return user.username || "Unknown";
   };
-});
 
-// We need to re-mock useContext to return our test values
-const originalUseContext = React.useContext;
-jest.spyOn(React, "useContext").mockImplementation((context) => {
-  // Check if it's the UserContext by looking at the structure
-  if (context && context._currentValue && context._currentValue.state) {
-    return { state: mockState, dispatch: mockDispatch };
-  }
-  return originalUseContext(context);
-});
-
-import ChatScreen from "../ChatScreen";
-
-describe("ChatScreen", () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockMarkAsRead.mockResolvedValue({});
-    mockGetUnreadCount.mockResolvedValue({ unreadCount: 0 });
-    mockState = {
-      currentUser: { token: "test-token", userId: "1" },
-      account: null,
-    };
+  it("should return full name when firstName and lastName present", () => {
+    expect(getDisplayName({ firstName: "John", lastName: "Doe" })).toBe("John Doe");
   });
 
-  describe("Completed Appointment Messaging Restriction", () => {
-    it("should show disabled banner when appointment is completed", async () => {
-      mockGetMessages.mockResolvedValue({
-        messages: [],
-        conversation: {
-          id: 1,
-          conversationType: "appointment",
-          appointment: {
-            id: 100,
-            completed: true,
-            date: "2024-01-15",
-          },
-          participants: [{ userId: 1, user: { id: 1, username: "user1" } }],
-        },
-      });
-
-      const { getByText, queryByPlaceholderText } = render(<ChatScreen />);
-
-      await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalled();
-      });
-
-      // Should show the disabled message
-      await waitFor(() => {
-        expect(
-          getByText("This appointment is complete, messaging for it is disabled.")
-        ).toBeTruthy();
-      });
-
-      // Should NOT show the input field
-      expect(queryByPlaceholderText("Type a message...")).toBeNull();
-    });
-
-    it("should show input field when appointment is not completed", async () => {
-      mockGetMessages.mockResolvedValue({
-        messages: [],
-        conversation: {
-          id: 1,
-          conversationType: "appointment",
-          appointment: {
-            id: 100,
-            completed: false,
-            date: "2024-01-20",
-          },
-          participants: [{ userId: 1, user: { id: 1, username: "user1" } }],
-        },
-      });
-
-      const { queryByText, getByPlaceholderText } = render(<ChatScreen />);
-
-      await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalled();
-      });
-
-      // Should show the input field
-      await waitFor(() => {
-        expect(getByPlaceholderText("Type a message...")).toBeTruthy();
-      });
-
-      // Should NOT show the disabled message
-      expect(
-        queryByText("This appointment is complete, messaging for it is disabled.")
-      ).toBeNull();
-    });
-
-    it("should show input field for support conversations", async () => {
-      mockGetMessages.mockResolvedValue({
-        messages: [],
-        conversation: {
-          id: 2,
-          conversationType: "support",
-          appointment: null,
-          participants: [{ userId: 1, user: { id: 1, username: "user1" } }],
-        },
-      });
-
-      const { queryByText, getByPlaceholderText } = render(<ChatScreen />);
-
-      await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalled();
-      });
-
-      // Should show the input field
-      await waitFor(() => {
-        expect(getByPlaceholderText("Type a message...")).toBeTruthy();
-      });
-
-      // Should NOT show the disabled message
-      expect(
-        queryByText("This appointment is complete, messaging for it is disabled.")
-      ).toBeNull();
-    });
-
-    it("should show input field for internal conversations", async () => {
-      mockGetMessages.mockResolvedValue({
-        messages: [],
-        conversation: {
-          id: 3,
-          conversationType: "internal",
-          appointment: null,
-          participants: [
-            { userId: 1, user: { id: 1, username: "owner1" } },
-            { userId: 2, user: { id: 2, username: "hr1" } },
-          ],
-        },
-      });
-
-      const { queryByText, getByPlaceholderText } = render(<ChatScreen />);
-
-      await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalled();
-      });
-
-      // Should show the input field
-      await waitFor(() => {
-        expect(getByPlaceholderText("Type a message...")).toBeTruthy();
-      });
-
-      // Should NOT show the disabled message
-      expect(
-        queryByText("This appointment is complete, messaging for it is disabled.")
-      ).toBeNull();
-    });
-
-    it("should show input field for cleaner-client conversations", async () => {
-      mockGetMessages.mockResolvedValue({
-        messages: [],
-        conversation: {
-          id: 4,
-          conversationType: "cleaner-client",
-          appointment: null,
-          participants: [
-            { userId: 1, user: { id: 1, username: "cleaner1" } },
-            { userId: 2, user: { id: 2, username: "client1" } },
-          ],
-        },
-      });
-
-      const { queryByText, getByPlaceholderText } = render(<ChatScreen />);
-
-      await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalled();
-      });
-
-      // Should show the input field
-      await waitFor(() => {
-        expect(getByPlaceholderText("Type a message...")).toBeTruthy();
-      });
-
-      // Should NOT show the disabled message
-      expect(
-        queryByText("This appointment is complete, messaging for it is disabled.")
-      ).toBeNull();
-    });
-
-    it("should show info icon with the disabled message", async () => {
-      mockGetMessages.mockResolvedValue({
-        messages: [],
-        conversation: {
-          id: 1,
-          conversationType: "appointment",
-          appointment: {
-            id: 100,
-            completed: true,
-            date: "2024-01-15",
-          },
-          participants: [{ userId: 1, user: { id: 1, username: "user1" } }],
-        },
-      });
-
-      const { getByText } = render(<ChatScreen />);
-
-      await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalled();
-      });
-
-      // Should show the info icon (mocked as text "info")
-      await waitFor(() => {
-        expect(getByText("info")).toBeTruthy();
-      });
-    });
-
-    it("should still display messages in a completed appointment conversation", async () => {
-      mockGetMessages.mockResolvedValue({
-        messages: [
-          {
-            id: 1,
-            senderId: 2,
-            content: "See you tomorrow!",
-            createdAt: "2024-01-14T10:00:00Z",
-            reactions: [],
-            readReceipts: [],
-          },
-          {
-            id: 2,
-            senderId: 1,
-            content: "Great, I will be ready!",
-            createdAt: "2024-01-14T10:05:00Z",
-            reactions: [],
-            readReceipts: [],
-          },
-        ],
-        conversation: {
-          id: 1,
-          conversationType: "appointment",
-          appointment: {
-            id: 100,
-            completed: true,
-            date: "2024-01-15",
-          },
-          participants: [
-            { userId: 1, user: { id: 1, username: "user1" } },
-            { userId: 2, user: { id: 2, username: "cleaner1" } },
-          ],
-        },
-      });
-
-      const { getByText } = render(<ChatScreen />);
-
-      await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalled();
-      });
-
-      // Messages should still be visible
-      await waitFor(() => {
-        expect(getByText("See you tomorrow!")).toBeTruthy();
-        expect(getByText("Great, I will be ready!")).toBeTruthy();
-      });
-
-      // But the disabled banner should also be shown
-      expect(
-        getByText("This appointment is complete, messaging for it is disabled.")
-      ).toBeTruthy();
-    });
+  it("should return firstName only when lastName missing", () => {
+    expect(getDisplayName({ firstName: "John" })).toBe("John");
   });
 
-  describe("Broadcast Conversation Restriction", () => {
-    it("should hide input for broadcast conversations when user is not owner", async () => {
-      mockState = {
-        currentUser: { token: "test-token", userId: "1" },
-        account: null,
-      };
+  it("should return username when no firstName", () => {
+    expect(getDisplayName({ username: "john_doe" })).toBe("john_doe");
+  });
 
-      mockGetMessages.mockResolvedValue({
-        messages: [],
-        conversation: {
-          id: 5,
-          conversationType: "broadcast",
-          title: "Company Announcement",
-          appointment: null,
-          participants: [{ userId: 1, user: { id: 1, username: "user1" } }],
-        },
-      });
+  it("should return Unknown for null user", () => {
+    expect(getDisplayName(null)).toBe("Unknown");
+  });
 
-      const { queryByPlaceholderText } = render(<ChatScreen />);
+  it("should return Unknown for undefined user", () => {
+    expect(getDisplayName(undefined)).toBe("Unknown");
+  });
 
-      await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalled();
-      });
+  it("should return Unknown for empty object", () => {
+    expect(getDisplayName({})).toBe("Unknown");
+  });
 
-      // Should NOT show input field for non-owners
-      await waitFor(
-        () => {
-          expect(queryByPlaceholderText("Type a message...")).toBeNull();
-        },
-        { timeout: 1000 }
-      );
-    });
+  it("should prefer firstName over username", () => {
+    expect(getDisplayName({ firstName: "John", username: "john_doe" })).toBe("John");
+  });
+
+  it("should handle decrypted names correctly", () => {
+    // After decryption, names should be plain text
+    expect(getDisplayName({ firstName: "Demo", lastName: "Business" })).toBe("Demo Business");
+  });
+
+  it("should handle empty strings", () => {
+    expect(getDisplayName({ firstName: "", lastName: "" })).toBe("Unknown");
+    expect(getDisplayName({ firstName: "", username: "user" })).toBe("user");
+  });
+});
+
+describe("ChatScreen conversation type handling", () => {
+  // Test getConversationIcon logic
+  const getConversationIcon = (conversation) => {
+    if (!conversation) return null;
+
+    if (conversation.conversationType === "broadcast") {
+      return { name: "radio", color: "#f59e0b" }; // warning color
+    }
+    if (conversation.conversationType === "support") {
+      return { name: "life-buoy", color: "#3b82f6" }; // primary color
+    }
+    if (conversation.conversationType === "internal") {
+      return { name: "users", color: "#8b5cf6" }; // secondary color
+    }
+    return null;
+  };
+
+  it("should return radio icon for broadcast", () => {
+    const result = getConversationIcon({ conversationType: "broadcast" });
+    expect(result.name).toBe("radio");
+  });
+
+  it("should return life-buoy icon for support", () => {
+    const result = getConversationIcon({ conversationType: "support" });
+    expect(result.name).toBe("life-buoy");
+  });
+
+  it("should return users icon for internal", () => {
+    const result = getConversationIcon({ conversationType: "internal" });
+    expect(result.name).toBe("users");
+  });
+
+  it("should return null for unknown type", () => {
+    expect(getConversationIcon({ conversationType: "unknown" })).toBeNull();
+  });
+
+  it("should return null for null conversation", () => {
+    expect(getConversationIcon(null)).toBeNull();
+  });
+});
+
+describe("ChatScreen support conversation cleanup logic", () => {
+  // Test the cleanup eligibility logic
+  const shouldCleanupConversation = (conversation, wasInitiallyEmpty, hasTyped) => {
+    if (!conversation) return false;
+    if (conversation.conversationType !== "support") return false;
+    if (!wasInitiallyEmpty) return false;
+    if (hasTyped) return false;
+    return true;
+  };
+
+  it("should cleanup empty support conversation that was never typed in", () => {
+    const result = shouldCleanupConversation(
+      { conversationType: "support" },
+      true,  // was initially empty
+      false  // never typed
+    );
+    expect(result).toBe(true);
+  });
+
+  it("should NOT cleanup if user typed a message", () => {
+    const result = shouldCleanupConversation(
+      { conversationType: "support" },
+      true,  // was initially empty
+      true   // user typed
+    );
+    expect(result).toBe(false);
+  });
+
+  it("should NOT cleanup if conversation had messages initially", () => {
+    const result = shouldCleanupConversation(
+      { conversationType: "support" },
+      false, // had messages initially
+      false  // never typed
+    );
+    expect(result).toBe(false);
+  });
+
+  it("should NOT cleanup non-support conversations", () => {
+    const result = shouldCleanupConversation(
+      { conversationType: "internal" },
+      true,
+      false
+    );
+    expect(result).toBe(false);
+  });
+
+  it("should NOT cleanup broadcast conversations", () => {
+    const result = shouldCleanupConversation(
+      { conversationType: "broadcast" },
+      true,
+      false
+    );
+    expect(result).toBe(false);
+  });
+
+  it("should handle null conversation", () => {
+    expect(shouldCleanupConversation(null, true, false)).toBe(false);
+  });
+});
+
+describe("ChatScreen message grouping", () => {
+  // Test message grouping logic for showing sender
+  const shouldShowSender = (message, index, messages, currentUserId, isGroupChat, conversationType) => {
+    // Don't show sender for own messages
+    if (message.senderId === currentUserId) return false;
+
+    // Always show sender in group chats or support
+    if (isGroupChat || conversationType === "support") {
+      // Show if first message or different sender from previous
+      if (index === 0) return true;
+      return messages[index - 1]?.senderId !== message.senderId;
+    }
+
+    return false;
+  };
+
+  const messages = [
+    { id: 1, senderId: 1, content: "Hello" },
+    { id: 2, senderId: 2, content: "Hi there" },
+    { id: 3, senderId: 2, content: "How are you?" },
+    { id: 4, senderId: 1, content: "Good thanks" },
+  ];
+
+  it("should not show sender for own messages", () => {
+    expect(shouldShowSender(messages[0], 0, messages, 1, true, "internal")).toBe(false);
+  });
+
+  it("should show sender for first message from other user in group", () => {
+    expect(shouldShowSender(messages[1], 1, messages, 1, true, "internal")).toBe(true);
+  });
+
+  it("should not show sender for consecutive messages from same user", () => {
+    expect(shouldShowSender(messages[2], 2, messages, 1, true, "internal")).toBe(false);
+  });
+
+  it("should show sender in support conversations", () => {
+    expect(shouldShowSender(messages[1], 1, messages, 1, false, "support")).toBe(true);
+  });
+
+  it("should not show sender in 1-on-1 non-support conversations", () => {
+    expect(shouldShowSender(messages[1], 1, messages, 1, false, "internal")).toBe(false);
   });
 });

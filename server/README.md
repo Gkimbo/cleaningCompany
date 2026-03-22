@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-5128_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-5445_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -18,7 +18,7 @@
 
 ## Overview
 
-Kleanr is a comprehensive cleaning service marketplace platform that connects homeowners with professional cleaners and cleaning businesses. The platform supports multiple user types including platform clients, independent cleaners, business owners with their own clients, HR staff, and platform administrators.
+Kleanr is a comprehensive cleaning service marketplace platform that connects homeowners with professional cleaners and cleaning businesses. The platform supports multiple user types including platform clients, independent cleaners, business owners with their own clients, HR staff, IT support staff, and platform administrators.
 
 **Key Capabilities:**
 - Multi-tenant cleaning service marketplace with offline support
@@ -32,7 +32,8 @@ Kleanr is a comprehensive cleaning service marketplace platform that connects ho
 - Preferred cleaner tier system (Bronze/Silver/Gold/Platinum) with bonuses
 - Stripe Connect for instant cleaner payouts
 - iCal calendar synchronization with vacation rental platforms
-- Comprehensive tax document generation (1099-NEC with IRS filing tracking)
+- **New Home Request System** - automated business owner notifications when clients add homes
+- Stripe-integrated tax reporting (1099 forms via Stripe Dashboard)
 - Guest-not-left tracking with GPS verification
 - HR dispute management and content moderation
 - Before/after job photo documentation with offline capture
@@ -48,6 +49,8 @@ Kleanr is a comprehensive cleaning service marketplace platform that connects ho
 - **Bi-weekly batch payouts** for employees (every other Friday)
 - **Database-driven pricing** with owner-configurable fees via PricingConfig
 - **Employee pay types** supporting hourly, percentage, and flat/per-job rates
+- **IT Support System** with ticket management and user search
+- **Service Area Management** with city-based and radius-based restrictions
 
 ---
 
@@ -155,7 +158,8 @@ API_NINJA_API_KEY=your_api_ninja_key
 | **Business Client** | Corporate client of a business owner, book via business portal |
 | **Business Employee** | Works for a business owner, accepts assigned jobs, tracks earnings |
 | **HR Staff** | Handle disputes, review suspicious activity reports, manage support |
-| **Owner** | Platform administrator with full access to all features |
+| **IT Support** | Handle technical tickets, user search, account management |
+| **Owner** | Platform administrator with full access to all features, IT staff management |
 
 ### Authentication & Account Management
 
@@ -179,6 +183,7 @@ Business owners are cleaners who can manage their own clients directly:
 
 - **Upgrade Path**: Existing cleaners can upgrade to business owner status
 - **Invite Clients**: Send invitations to new clients by email with home details
+- **New Home Requests**: Receive notifications when existing clients add new homes with 48-hour response window
 - **Client Setup Flow**: Guided onboarding for invited clients
 - **Invitation Management**: Resend invitations, track pending responses
 - **Recurring Schedules**: Configure weekly/biweekly/monthly cleanings during invite
@@ -321,7 +326,7 @@ Handle situations when guests haven't left by checkout time:
 
 ### HR Staff Features
 
-- **Conflict Resolution Center**: Unified queue for all disputes and appeals
+- **Conflict Resolution Center**: Unified queue for disputes, appeals, and support tickets
 - **Cancellation Appeals Review**: Review appeals within 48-hour SLA
 - **Photo Comparison Tools**: Side-by-side evidence examination
 - **Financial Breakdown**: View detailed charges, refunds, payouts per case
@@ -336,13 +341,26 @@ Handle situations when guests haven't left by checkout time:
 - **Internal Messaging**: Communicate with owner and other HR staff
 - **Quick Stats Dashboard**: Overview of pending items and metrics
 
+### IT Support Staff Features
+
+- **IT Dashboard**: Centralized queue for technical support tickets
+- **Ticket Categories**: App crashes, login problems, billing errors, security issues, data requests
+- **Priority Levels**: Low/Normal/High/Critical with SLA tracking
+- **Ticket Assignment**: Self-assign tickets from queue
+- **Status Workflow**: Submitted → In Progress → Awaiting Info → Resolved → Closed
+- **User Search**: Find users by email, username, or ID
+- **Account Actions**: Freeze/unfreeze accounts, assist with password resets
+- **Resolution Notes**: Document solutions and outcomes
+- **Quick Stats**: Open tickets, SLA compliance, average resolution time
+
 ### Owner/Admin Features
 
 - **Financial Dashboard**: Revenue metrics (today, week, month, year, all-time)
 - **Platform Withdrawals**: Transfer earnings to bank via Stripe
 - **Stripe Balance**: View pending and available platform balance
 - **Preview as Role**: Test the app as any user type via demo accounts
-- **Employee Management**: Create/edit/delete HR staff and cleaner employees
+- **Employee Management**: Create/edit/delete HR staff, IT staff, and cleaner employees
+- **IT Staff Management**: Full CRUD for IT support staff with auto-generated passwords
 - **Pricing Configuration**: Set base prices, per-bed/bath fees, cancellation fees
 - **Advanced Pricing**: Half bath fees, sheet/towel fees, time window premiums
 - **Incentive Programs**: Configure cleaner fee reductions and homeowner discounts
@@ -442,18 +460,18 @@ Handle situations when guests haven't left by checkout time:
 - **Referrer Rewards**: Bonus for successful referrals
 - **Referee Rewards**: Welcome bonus for new users
 
-### Tax & Compliance
+### Tax & Compliance (Stripe-Based)
 
-- **W-9 Collection**: Secure tax information submission
-- **Tax Info Fields**: Legal name, business name, entity type, TIN
-- **1099-NEC Generation**: Automatic generation for contractors
-- **1099-K Calculations**: Expected amounts for high-volume contractors
-- **Encrypted Storage**: TIN encrypted with AES-256
-- **Platform Tax Reports**: Annual income summaries, quarterly estimates
+- **Stripe Tax Reporting**: Cleaners collect SSN/EIN during Stripe Connect onboarding
+- **1099 via Stripe**: Cleaners access 1099 forms through Stripe Express Dashboard
+- **Earnings Summaries**: Local tracking of annual earnings with 1099 threshold ($600)
+- **Dashboard Links**: Generate Stripe dashboard login links for tax form access
+- **Tax Status Check**: Verify cleaner's Stripe account is tax-ready
+- **Platform Tax Reports**: Annual income summaries, quarterly estimates for business owners
 - **Monthly Earnings Breakdown**: Detailed income by month
-- **Schedule C Support**: Data for contractor tax filing
+- **Schedule C Support**: Data for business owner tax filing
+- **1099-K Expectation**: Track platform's own 1099-K threshold
 - **Tax Deadlines**: Track important tax filing dates
-- **Tax Document History**: Access previous years' documents
 
 ### Calendar Integration
 
@@ -721,18 +739,30 @@ Handle situations when guests haven't left by checkout time:
 | `GET` | `/api/v1/referrals/code/:code` | Validate referral code | No |
 | `POST` | `/api/v1/referrals/apply` | Apply referral code | Yes |
 
-### Tax Documents
+### Stripe Tax (Cleaner Tax Forms)
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| `GET` | `/api/v1/tax/info` | Get W-9 info | Yes |
-| `POST` | `/api/v1/tax/info` | Submit W-9 | Yes |
+| `GET` | `/api/v1/tax/earnings/:year` | Get annual earnings summary | Yes |
+| `GET` | `/api/v1/tax/dashboard-link` | Get Stripe Dashboard link for tax forms | Yes |
+| `GET` | `/api/v1/tax/status` | Check tax readiness status | Yes |
 | `GET` | `/api/v1/tax/contractor/tax-summary/:year` | Cleaner tax summary | Yes |
-| `GET` | `/api/v1/tax/contractor/1099-nec/:year` | Get 1099-NEC | Yes |
-| `GET` | `/api/v1/tax/contractor/monthly-breakdown/:year` | Monthly earnings | Yes |
-| `GET` | `/api/v1/tax/platform/comprehensive-report/:year` | Full platform report | Owner |
-| `GET` | `/api/v1/tax/platform/1099-k-summary/:year` | Platform 1099-K summary | Owner |
-| `GET` | `/api/v1/tax/deadlines/:year` | Tax filing deadlines | Yes |
+| `GET` | `/api/v1/tax/platform/income-summary/:year` | Platform annual income | Owner |
+| `GET` | `/api/v1/tax/platform/quarterly-tax/:year/:quarter` | Quarterly estimates | Owner |
+| `GET` | `/api/v1/tax/platform/schedule-c/:year` | Schedule C form data | Owner |
+| `GET` | `/api/v1/tax/platform/1099-k-expectation/:year` | 1099-K threshold check | Owner |
+| `GET` | `/api/v1/tax/platform/deadlines/:year` | Tax deadlines | Owner |
+
+### New Home Requests
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/new-home-requests` | Get pending requests for business owner | Business Owner |
+| `GET` | `/api/v1/new-home-requests/:id` | Get request details | Business Owner |
+| `POST` | `/api/v1/new-home-requests/:id/accept` | Accept request (creates CleanerClient) | Business Owner |
+| `POST` | `/api/v1/new-home-requests/:id/decline` | Decline request | Business Owner |
+| `POST` | `/api/v1/new-home-requests/:id/re-request` | Re-request after 30 days | Homeowner |
+| `PATCH` | `/api/v1/homes/:id/marketplace` | Toggle marketplace visibility | Homeowner |
 
 ### Reviews
 
@@ -930,6 +960,63 @@ Handle situations when guests haven't left by checkout time:
 | `GET` | `/api/v1/analytics/disputes` | Get dispute frequency | Owner |
 | `GET` | `/api/v1/analytics/pay-overrides` | Get pay override statistics | Owner |
 
+### IT Dashboard
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/it-dashboard/quick-stats` | Get IT dashboard statistics | IT/Owner |
+| `GET` | `/api/v1/it-dashboard/disputes` | Get IT disputes queue | IT/Owner |
+| `POST` | `/api/v1/it-dashboard/disputes/:id/assign` | Assign dispute to self | IT/Owner |
+| `POST` | `/api/v1/it-dashboard/disputes/:id/resolve` | Resolve dispute | IT/Owner |
+| `PATCH` | `/api/v1/it-dashboard/disputes/:id/status` | Update dispute status | IT/Owner |
+
+### IT Disputes
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/it-disputes/submit` | Submit new IT dispute | Yes |
+| `GET` | `/api/v1/it-disputes/my-disputes` | Get user's own disputes | Yes |
+| `GET` | `/api/v1/it-disputes/:id` | Get dispute details | Yes |
+| `POST` | `/api/v1/it-disputes/:id/add-info` | Add additional information | Yes |
+| `GET` | `/api/v1/it-disputes/categories/list` | Get dispute categories | Yes |
+
+### IT Support Tools
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/it-support/user-search` | Search users by email/username/ID | IT/Owner |
+| `GET` | `/api/v1/it-support/user/:id` | Get user details | IT/Owner |
+| `POST` | `/api/v1/it-support/user/:id/freeze` | Freeze user account | IT/Owner |
+| `POST` | `/api/v1/it-support/user/:id/unfreeze` | Unfreeze user account | IT/Owner |
+
+### Service Areas
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/service-areas/config` | Get current service area config | Owner |
+| `PUT` | `/api/v1/service-areas/config` | Update service area config | Owner |
+| `POST` | `/api/v1/service-areas/validate` | Validate address against service area | Yes |
+| `GET` | `/api/v1/service-areas/history` | Get config change history | Owner |
+| `POST` | `/api/v1/service-areas/recheck-all-homes` | Recheck all homes against config | Owner |
+
+### Support Tickets
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/support-tickets` | Create support ticket from conversation | Yes |
+| `GET` | `/api/v1/support-tickets` | Get all support tickets | Owner/HR |
+| `GET` | `/api/v1/support-tickets/:id` | Get ticket details | Owner/HR |
+| `PATCH` | `/api/v1/support-tickets/:id` | Update ticket status | Owner/HR |
+| `POST` | `/api/v1/support-tickets/:id/resolve` | Resolve ticket | Owner/HR |
+
+### Employee Bonuses
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/business-owner/employees/:id/bonus` | Award bonus to employee | Business Owner |
+| `GET` | `/api/v1/business-owner/employees/:id/bonuses` | Get employee bonus history | Business Owner |
+| `GET` | `/api/v1/business-employee/my-bonuses` | Get own bonus history | Employee |
+
 ### Employee Timesheets
 
 | Method | Endpoint | Description | Auth |
@@ -954,7 +1041,7 @@ Handle situations when guests haven't left by checkout time:
 
 ## Database
 
-### Models (66 Total)
+### Models (68 Total)
 
 #### Core Models
 
@@ -1041,9 +1128,13 @@ Handle situations when guests haven't left by checkout time:
 
 | Model | Description |
 |-------|-------------|
-| `TaxInfo` | W-9 information with encrypted TIN |
-| `TaxDocument` | 1099-NEC documents with IRS filing tracking |
 | `TermsAndConditions` | Terms versions with PDF/text support |
+
+#### New Home Request Models
+
+| Model | Description |
+|-------|-------------|
+| `NewHomeRequest` | Requests from clients adding homes to existing business owner relationships |
 
 #### Program Models
 
@@ -1085,6 +1176,16 @@ Handle situations when guests haven't left by checkout time:
 | Model | Description |
 |-------|-------------|
 | `AnalyticsEvent` | Event tracking for flows, job duration, offline usage, disputes, pay overrides |
+
+#### IT Support Models
+
+| Model | Description |
+|-------|-------------|
+| `ITDispute` | IT support tickets with category, priority, status, and resolution tracking |
+| `ServiceAreaConfig` | Geographic service area configuration (city-based or radius-based modes) |
+| `SecurityAuditLog` | Immutable security audit trail for password changes, login events, account freezes |
+| `SupportTicket` | Support tickets created from conversations with category and priority |
+| `EmployeeBonus` | Bonus tracking for employees with reason and payment status |
 
 ### Migrations
 
@@ -1234,18 +1335,24 @@ const price = await CalculatePrice.calculate({
 });
 ```
 
-### TaxDocumentService
+### NewHomeRequestService
 
-Generates tax documents for contractors:
+Handles new home request workflow:
 
 ```javascript
-const TaxDocumentService = require('./services/TaxDocumentService');
+const NewHomeRequestService = require('./services/NewHomeRequestService');
 
-// Generate 1099-NEC
-const form = await TaxDocumentService.generate1099NECData(userId, 2024);
+// Create request when client adds home
+await NewHomeRequestService.createRequestsForHome(homeId, clientId);
 
-// Get tax filing deadlines
-const deadlines = TaxDocumentService.getTaxDeadlines(2024);
+// Accept request (creates CleanerClient relationship)
+await NewHomeRequestService.acceptRequest(requestId, businessOwnerId);
+
+// Decline request
+await NewHomeRequestService.declineRequest(requestId, businessOwnerId);
+
+// Get pending requests for business owner
+const requests = await NewHomeRequestService.getPendingRequests(businessOwnerId);
 ```
 
 ### SuspiciousContentDetector
@@ -1612,6 +1719,7 @@ const optimized = await TransitTimeService.optimizeJobOrder(jobIds);
 | `0 6 * * 5` | Bi-Weekly Payout | Processes employee batch payouts (every other Friday) |
 | `*/5 * * * *` | Auto-Complete Monitor | Sends reminders and auto-completes jobs past scheduled time |
 | `*/15 * * * *` | Completion Approval | Auto-approves homeowner/cleaner completion after timeout |
+| `0 */4 * * *` | Expired Requests | Expires unanswered new home requests after 48 hours |
 
 ### Cron Job Details
 
@@ -1679,7 +1787,7 @@ socket.on('mark_read', { conversationId, userId });
 ## Testing
 
 ```bash
-# Run all tests (5038 tests across 178 test suites)
+# Run all tests (5445 tests across 215 test suites)
 npm test
 
 # Run specific test file
@@ -1705,7 +1813,9 @@ npm test -- --watch
 | Pricing | 67 | Dynamic pricing, configuration |
 | Incentives | 54 | Qualification, discounts |
 | Referrals | 48 | Codes, rewards, tracking |
-| Tax Documents | 89 | W-9, 1099-NEC, platform taxes |
+| Tax Documents | 89 | Earnings, dashboard link, platform taxes |
+| New Home Requests | 45 | Accept/decline, re-request, expiration |
+| Support Tickets | 67 | Create, link conversation, categories |
 | Reviews | 67 | Create, read, summaries, bidirectional |
 | Messaging | 234 | Conversations, reactions, suspicious content |
 | HR Dashboard | 78 | Disputes, reports |
@@ -1735,7 +1845,12 @@ npm test -- --watch
 | Transit Time | 28 | Distance calculation, scheduling optimization |
 | Business Client | 35 | Business client portal, corporate bookings |
 | Bi-Weekly Payouts | 34 | Employee batch payout processing |
-| **Total** | **5128** | 202 test suites |
+| IT Dashboard | 67 | Ticket queue, assignment, resolution |
+| IT Disputes | 45 | Submission, categories, status workflow |
+| IT Support Tools | 34 | User search, account freeze/unfreeze |
+| IT Account Management | 56 | CRUD for IT staff, password generation |
+| Service Areas | 49 | Config, validation, history, bulk recheck |
+| **Total** | **5445** | 215 test suites |
 
 ---
 
@@ -1760,6 +1875,13 @@ npm test -- --watch
 - User reporting system for inappropriate content
 - Warning and account freeze capabilities
 - False report tracking
+
+### Security Audit Logging
+- Immutable audit trail for security-sensitive actions
+- Password change tracking with actor identification
+- Login event logging with IP address and device type
+- Account freeze/unfreeze actions with reasons
+- Failed login attempt tracking with lockout after 5 attempts (15 min cooldown)
 
 ---
 

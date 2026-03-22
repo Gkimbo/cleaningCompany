@@ -337,7 +337,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
 		}
 
 		// Users can only view their own appeals
-		const isOwnerOrHr = ["hr", "owner"].includes(req.user.type);
+		const isOwnerOrHr = ["humanResources", "owner"].includes(req.user.type);
 		if (!isOwnerOrHr && appeal.appealerId !== req.user.id) {
 			return res.status(403).json({
 				success: false,

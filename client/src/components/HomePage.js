@@ -2,42 +2,39 @@ import React, { useEffect, useState } from "react";
 import {
   Dimensions,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   Text,
   View,
-  Platform,
 } from "react-native";
 import { useNavigate } from "react-router-native";
+import { defaultPricing, usePricing } from "../context/PricingContext";
 import { cleaningCompany } from "../services/data/companyInfo";
-import { usePricing, defaultPricing } from "../context/PricingContext";
 import FetchData from "../services/fetchRequests/fetchData";
+import IncentivesService from "../services/fetchRequests/IncentivesService";
 import image1 from "../services/photos/Best-Cleaning-Service.jpeg";
-import image2 from "../services/photos/clean-laptop.jpg";
-import image3 from "../services/photos/cleaning-tech.png";
-import image4 from "../services/photos/cleaning_supplies_on_floor.jpg";
 import homePageStyles from "../services/styles/HomePageStyles";
 import {
   colors,
-  spacing,
   radius,
-  shadows,
-  typography,
   responsive,
+  shadows,
+  spacing,
+  typography,
 } from "../services/styles/theme";
-import NextAppointment from "./employeeAssignments/tiles/NextAppointment";
-import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
-import ReviewsOverview from "./reviews/ReviewsOverview";
-import GetHelpButton from "./messaging/GetHelpButton";
-import TaxFormsSection from "./tax/TaxFormsSection";
-import OwnerDashboard from "./owner/OwnerDashboard";
-import HRDashboard from "./hr/HRDashboard";
-import ClientDashboard from "./client/ClientDashboard";
-import CleanerDashboard from "./cleaner/CleanerDashboard";
+import { getTodayString } from "../services/formatters";
 import { EmployeeDashboard } from "./businessEmployee";
 import BusinessOwnerProfile from "./businessOwner/BusinessOwnerProfile";
+import CleanerDashboard from "./cleaner/CleanerDashboard";
+import ClientDashboard from "./client/ClientDashboard";
+import NextAppointment from "./employeeAssignments/tiles/NextAppointment";
+import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
+import HRDashboard from "./hr/HRDashboard";
 import IncentiveBanner from "./incentives/IncentiveBanner";
-import IncentivesService from "../services/fetchRequests/IncentivesService";
+import ITDashboard from "./it/ITDashboard";
+import OwnerDashboard from "./owner/OwnerDashboard";
+import FrozenAccountBanner from "./shared/FrozenAccountBanner";
 
 const HomePage = ({ state, dispatch }) => {
   const [redirect, setRedirect] = useState(false);
@@ -60,8 +57,18 @@ const HomePage = ({ state, dispatch }) => {
   const pricing = fetchedPricing?.basePrice ? fetchedPricing : defaultPricing;
 
   // Display the full base price (no platform fee deduction - that's only shown to cleaners)
+  // Prices from API are in cents - convert to dollars for display
   const displayBasePrice = Math.round(
-    pricing.basePrice ?? defaultPricing.basePrice
+    (pricing.basePrice ?? defaultPricing.basePrice) / 100
+  );
+  const displayExtraBedBathFee = Math.round(
+    (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee) / 100
+  );
+  const displaySheetFee = Math.round(
+    (pricing.linens?.sheetFeePerBed ?? defaultPricing.linens.sheetFeePerBed) / 100
+  );
+  const displayTowelFee = Math.round(
+    (pricing.linens?.towelFee ?? defaultPricing.linens.towelFee) / 100
   );
 
   useEffect(() => {
@@ -124,17 +131,16 @@ const HomePage = ({ state, dispatch }) => {
   let upcomingPayment = 0;
 
   const sortedAppointments = state.appointments.sort(
-    (a, b) => new Date(a.date) - new Date(b.date)
+    (a, b) => a.date.localeCompare(b.date)
   );
 
   const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
+  const todayStr = getTodayString();
   sortedAppointments.forEach((appointment, index) => {
     const correctedAmount = Number(appointment.price) * cleanerSharePercent;
     upcomingPayment += correctedAmount;
-    const today = new Date();
-    const appointmentDate = new Date(appointment.date);
 
-    if (appointmentDate.toDateString() === today.toDateString()) {
+    if (appointment.date === todayStr) {
       foundToday = true;
       todaysAppointment = (
         <TodaysAppointment
@@ -169,7 +175,7 @@ const HomePage = ({ state, dispatch }) => {
           </View>
         );
       }
-    } else if (!nextAppointment && appointmentDate > today) {
+    } else if (!nextAppointment && appointment.date > todayStr) {
       nextAppointment = (
         <View style={{ marginVertical: 15 }}>
           <NextAppointment appointment={appointment} />
@@ -274,6 +280,11 @@ const HomePage = ({ state, dispatch }) => {
     return <HRDashboard state={state} dispatch={dispatch} />;
   }
 
+  // Show IT Dashboard for IT staff
+  if (state.account === "it" && state.currentUser.token) {
+    return <ITDashboard state={state} dispatch={dispatch} />;
+  }
+
   // Show Employee Dashboard for business employees (no marketplace access)
   if (state.account === "employee" && state.currentUser.token) {
     return <EmployeeDashboard state={state} />;
@@ -286,6 +297,19 @@ const HomePage = ({ state, dispatch }) => {
 
   // Show Cleaner Dashboard for marketplace cleaners
   if (state.account === "cleaner" && state.currentUser.token) {
+    // Dual-role: cleaner viewing as homeowner - show client dashboard
+    if (state.homes && state.homes.length > 0 && state.activeRole === "homeowner") {
+      return <ClientDashboard state={state} dispatch={dispatch} />;
+    }
+    // Show frozen banner for frozen cleaners
+    if (state.accountFrozen) {
+      return (
+        <ScrollView style={{ flex: 1 }}>
+          <FrozenAccountBanner reason={state.accountFrozenReason} />
+          <CleanerDashboard state={state} dispatch={dispatch} />
+        </ScrollView>
+      );
+    }
     return <CleanerDashboard state={state} dispatch={dispatch} />;
   }
 
@@ -332,7 +356,19 @@ const HomePage = ({ state, dispatch }) => {
       icon: "calendar",
       title: "Smart Calendar Sync",
       description:
-        "Connect your AirBNB, VRBO, or any other app calendar. When guests check out, we automatically schedule the clean—no coordination required.",
+        "Connect your AirBNB, VRBO, or any other app calendar. When guests book their stay, we automatically schedule the cleaning for their checkout date — no coordination required.",
+    },
+    {
+      icon: "camera",
+      title: "Before & After Photos",
+      description:
+        "Every cleaning comes with photo documentation. See before and after pictures of each room so you always know your property is spotless and guest-ready.",
+    },
+    {
+      icon: "star",
+      title: "Priority Cleaners",
+      description:
+        "Found a cleaner you love? Mark them as a favorite and they'll get first dibs on all your future bookings — building consistency and trust for your property.",
     },
   ];
 
@@ -380,6 +416,7 @@ const HomePage = ({ state, dispatch }) => {
       shield: "🛡️",
       clock: "⏰",
       star: "⭐",
+      camera: "📸",
       "dollar-sign": "💰",
       "trending-up": "📈",
     };
@@ -748,16 +785,9 @@ const HomePage = ({ state, dispatch }) => {
           >
             {[
               "1 bed / 1 bath base rate",
-              `+$${
-                pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee
-              } per additional bed or bath`,
-              `Fresh sheets (+$${
-                pricing.linens?.sheetFeePerBed ??
-                defaultPricing.linens.sheetFeePerBed
-              }/bed)`,
-              `Fresh towels (+$${
-                pricing.linens?.towelFee ?? defaultPricing.linens.towelFee
-              }/towel)`,
+              `+$${displayExtraBedBathFee} per additional bed or bath`,
+              `Fresh sheets (+$${displaySheetFee}/bed)`,
+              `Fresh towels (+$${displayTowelFee}/towel)`,
               "Flexible 10am-4pm scheduling",
             ].map((item, index) => (
               <View
@@ -971,6 +1001,11 @@ const HomePage = ({ state, dispatch }) => {
             },
             {
               step: "3",
+              title: "Add Payment Method",
+              desc: "Add your payment method via Stripe",
+            },
+            {
+              step: "4",
               title: "Book Cleaning",
               desc: "Schedule with a few taps",
             },
@@ -1187,7 +1222,7 @@ const HomePage = ({ state, dispatch }) => {
                 fontSize: typography.fontSize.sm,
               }}
             >
-              Satisfaction guaranteed or we re-clean free
+              Satisfaction guaranteed
             </Text>
           </View>
         </View>

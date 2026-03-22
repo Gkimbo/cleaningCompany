@@ -7,6 +7,7 @@ import homePageStyles from "../../services/styles/HomePageStyles";
 import topBarStyles from "../../services/styles/TopBarStyles";
 import HomeAppointmentTile from "../tiles/HomeAppointmentTile";
 import { colors, spacing, radius, typography } from "../../services/styles/theme";
+import { getTodayString, toLocalDateString } from "../../services/formatters";
 
 const AppointmentList = ({ state, dispatch }) => {
   const [allHomes, setAllHomes] = useState([]);
@@ -113,30 +114,26 @@ const AppointmentList = ({ state, dispatch }) => {
     return filteredAppointmentsForDisplay.filter((apt) => apt.homeId === homeId).length;
   };
 
-  // Calculate total stats
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const sevenDaysFromNow = new Date(today);
+  // Calculate total stats using timezone-safe string comparisons
+  const todayStr = getTodayString();
+  const sevenDaysFromNow = new Date();
   sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+  const sevenDaysStr = toLocalDateString(sevenDaysFromNow);
 
   const totalAppointments = allAppointments.length;
   const upcomingAppointments = allAppointments.filter((apt) => {
-    const aptDate = new Date(apt.date);
-    return aptDate >= today && aptDate <= sevenDaysFromNow && !apt.completed;
+    return apt.date >= todayStr && apt.date <= sevenDaysStr && !apt.completed;
   }).length;
   const completedAppointments = allAppointments.filter((apt) => apt.completed).length;
   const assignedAppointments = allAppointments.filter((apt) => apt.hasBeenAssigned && !apt.completed).length;
   const unassignedAppointments = allAppointments.filter((apt) => {
-    const aptDate = new Date(apt.date);
-    return aptDate >= today && !apt.hasBeenAssigned && !apt.completed;
+    return apt.date >= todayStr && !apt.hasBeenAssigned && !apt.completed;
   }).length;
   const withRequestsAppointments = allAppointments.filter((apt) => {
-    const aptDate = new Date(apt.date);
-    return aptDate >= today && !apt.completed && (apt.pendingRequestCount > 0);
+    return apt.date >= todayStr && !apt.completed && (apt.pendingRequestCount > 0);
   }).length;
   const noRequestsAppointments = allAppointments.filter((apt) => {
-    const aptDate = new Date(apt.date);
-    return aptDate >= today && !apt.completed && !apt.hasBeenAssigned && (!apt.pendingRequestCount || apt.pendingRequestCount === 0);
+    return apt.date >= todayStr && !apt.completed && !apt.hasBeenAssigned && (!apt.pendingRequestCount || apt.pendingRequestCount === 0);
   }).length;
 
   // Filter appointments based on active filter
@@ -144,25 +141,21 @@ const AppointmentList = ({ state, dispatch }) => {
     switch (activeFilter) {
       case "next7days":
         return allAppointments.filter((apt) => {
-          const aptDate = new Date(apt.date);
-          return aptDate >= today && aptDate <= sevenDaysFromNow && !apt.completed;
+          return apt.date >= todayStr && apt.date <= sevenDaysStr && !apt.completed;
         });
       case "assigned":
         return allAppointments.filter((apt) => apt.hasBeenAssigned && !apt.completed);
       case "unassigned":
         return allAppointments.filter((apt) => {
-          const aptDate = new Date(apt.date);
-          return aptDate >= today && !apt.hasBeenAssigned && !apt.completed;
+          return apt.date >= todayStr && !apt.hasBeenAssigned && !apt.completed;
         });
       case "withRequests":
         return allAppointments.filter((apt) => {
-          const aptDate = new Date(apt.date);
-          return aptDate >= today && !apt.completed && (apt.pendingRequestCount > 0);
+          return apt.date >= todayStr && !apt.completed && (apt.pendingRequestCount > 0);
         });
       case "noRequests":
         return allAppointments.filter((apt) => {
-          const aptDate = new Date(apt.date);
-          return aptDate >= today && !apt.completed && !apt.hasBeenAssigned && (!apt.pendingRequestCount || apt.pendingRequestCount === 0);
+          return apt.date >= todayStr && !apt.completed && !apt.hasBeenAssigned && (!apt.pendingRequestCount || apt.pendingRequestCount === 0);
         });
       case "all":
       default:

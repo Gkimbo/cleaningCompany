@@ -10,6 +10,8 @@ const GuestNotLeftService = require("../../../services/GuestNotLeftService");
 const EmployeeStripeConnectService = require("../../../services/EmployeeStripeConnectService");
 const BusinessEmployeeSerializer = require("../../../serializers/BusinessEmployeeSerializer");
 const EmployeeJobAssignmentSerializer = require("../../../serializers/EmployeeJobAssignmentSerializer");
+const EncryptionService = require("../../../services/EncryptionService");
+const TimezoneService = require("../../../services/TimezoneService");
 const { BusinessEmployee, EmployeeJobAssignment, User, JobPhoto, AppointmentJobFlow, sequelize } = require("../../../models");
 
 // =====================================
@@ -85,7 +87,7 @@ router.post("/invite/:token/accept", authenticateToken, async (req, res) => {
  */
 router.post("/invite/:token/accept-with-signup", async (req, res) => {
   try {
-    const { firstName, lastName, username, password, phone, termsId, privacyPolicyId } = req.body;
+    const { firstName, lastName, username, password, phone, termsId, privacyPolicyId, paymentTermsId } = req.body;
 
     // Validate password strength
     if (!password || password.length < 8) {
@@ -94,17 +96,18 @@ router.post("/invite/:token/accept-with-signup", async (req, res) => {
 
     const uppercaseCount = (password.match(/[A-Z]/g) || []).length;
     const lowercaseCount = (password.match(/[a-z]/g) || []).length;
+    const numberCount = (password.match(/\d/g) || []).length;
     const specialCharCount = (password.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/g) || []).length;
 
-    if (uppercaseCount < 2 || lowercaseCount < 2 || specialCharCount < 2) {
+    if (uppercaseCount < 2 || lowercaseCount < 2 || numberCount < 1 || specialCharCount < 2) {
       return res.status(400).json({
-        error: "Password must contain at least 2 uppercase letters, 2 lowercase letters, and 2 special characters",
+        error: "Password must contain at least 2 uppercase letters, 2 lowercase letters, 1 number, and 2 special characters",
       });
     }
 
     const result = await BusinessEmployeeService.acceptInviteWithSignup(
       req.params.token,
-      { firstName, lastName, username, password, phone, termsId, privacyPolicyId }
+      { firstName, lastName, username, password, phone, termsId, privacyPolicyId, paymentTermsId }
     );
 
     // Generate JWT token for the new user
@@ -203,7 +206,7 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
     const { EmployeeJobAssignment, UserAppointments, UserHomes, User, BusinessEmployee } = require("../../../models");
     const { Op } = require("sequelize");
 
-    const assignmentId = parseInt(req.params.assignmentId);
+    const assignmentId = parseInt(req.params.assignmentId, 10);
     const employeeId = req.employeeRecord.id;
 
     console.log(`[DEBUG] Fetching job details: assignmentId=${assignmentId}, employeeId=${employeeId}`);
@@ -267,10 +270,11 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
     if (plainAssignment.appointment.home) {
       if (addressRestricted) {
         // Restrict address for marketplace jobs not yet within 24 hours
-        const fullAddress = plainAssignment.appointment.home.address;
-        const parts = fullAddress ? fullAddress.split(",") : [];
-        const generalArea = parts.length >= 2
-          ? parts[parts.length - 2].trim().split(" ")[0] + " area"
+        // Decrypt the address first before parsing
+        const decryptedAddress = EncryptionService.decrypt(plainAssignment.appointment.home.address);
+        const decryptedCity = EncryptionService.decrypt(plainAssignment.appointment.home.city);
+        const generalArea = decryptedCity
+          ? `${decryptedCity} area`
           : "Location confirmed";
 
         plainAssignment.appointment.home = {
@@ -329,12 +333,12 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
       ],
     });
 
-    // Format co-workers list
+    // Format co-workers list - only include phone if employee has permission to view client details
     jobData.coWorkers = coWorkerAssignments.map((cw) => ({
       id: cw.employee?.id,
       firstName: cw.employee?.firstName,
       lastName: cw.employee?.lastName,
-      phone: cw.employee?.phone,
+      ...(canViewDetails && cw.employee?.phone ? { phone: cw.employee.phone } : {}),
     }));
 
     // Add current employee info
@@ -368,7 +372,7 @@ router.post("/my-jobs/:assignmentId/guest-not-left", async (req, res) => {
     const io = req.app.get("io");
 
     const result = await GuestNotLeftService.reportGuestNotLeft(
-      parseInt(req.params.assignmentId),
+      parseInt(req.params.assignmentId, 10),
       req.user.id,
       { latitude, longitude },
       notes,
@@ -393,7 +397,7 @@ router.post("/my-jobs/:assignmentId/guest-not-left", async (req, res) => {
 router.get("/my-jobs/:assignmentId/guest-not-left-status", async (req, res) => {
   try {
     const status = await GuestNotLeftService.getGuestNotLeftStatus(
-      parseInt(req.params.assignmentId)
+      parseInt(req.params.assignmentId, 10)
     );
 
     if (!status) {
@@ -416,7 +420,7 @@ router.get("/my-jobs/:assignmentId/flow", async (req, res) => {
     const AppointmentJobFlowService = require("../../../services/AppointmentJobFlowService");
     const { EmployeeJobAssignment } = require("../../../models");
 
-    const assignmentId = parseInt(req.params.assignmentId);
+    const assignmentId = parseInt(req.params.assignmentId, 10);
     const employeeId = req.employeeRecord.id;
 
     // Verify the assignment belongs to this employee
@@ -460,7 +464,7 @@ router.post("/my-jobs/:assignmentId/start", async (req, res) => {
     }
 
     const assignment = await EmployeeJobAssignmentService.startJob(
-      parseInt(req.params.assignmentId),
+      parseInt(req.params.assignmentId, 10),
       req.user.id,
       { latitude, longitude }
     );
@@ -483,7 +487,7 @@ router.post("/my-jobs/:assignmentId/complete", async (req, res) => {
     const { hoursWorked } = req.body;
 
     const assignment = await EmployeeJobAssignmentService.completeJob(
-      parseInt(req.params.assignmentId),
+      parseInt(req.params.assignmentId, 10),
       req.user.id,
       hoursWorked
     );
@@ -505,8 +509,8 @@ router.get("/my-earnings", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const now = new Date();
-    const start = startDate || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const end = endDate || now.toISOString().split("T")[0];
+    const start = startDate || TimezoneService.formatDateInTimezone(new Date(now.getFullYear(), now.getMonth(), 1));
+    const end = endDate || TimezoneService.getTodayInTimezone();
 
     // Get completed assignments
     const assignments = await EmployeeJobAssignment.findAll({
@@ -535,8 +539,9 @@ router.get("/my-earnings", async (req, res) => {
       (a) => a.payoutStatus === "paid" || a.payoutStatus === "paid_outside_platform"
     ).length;
     const pendingCount = jobCount - paidCount;
+    // Include null/undefined payoutStatus as pending (jobs not yet processed)
     const pendingAmount = assignments
-      .filter((a) => a.payoutStatus === "pending")
+      .filter((a) => a.payoutStatus === "pending" || a.payoutStatus === "pending_batch" || !a.payoutStatus)
       .reduce((sum, a) => sum + a.payAmount, 0);
 
     res.json({
@@ -554,13 +559,21 @@ router.get("/my-earnings", async (req, res) => {
       },
       // Only include job breakdown if allowed
       jobs: req.employeeRecord.canViewJobEarnings
-        ? assignments.map((a) => ({
-            date: a.appointment.date,
-            payAmount: a.payAmount,
-            formattedPay: `$${(a.payAmount / 100).toFixed(2)}`,
-            status: a.payoutStatus,
-          }))
+        ? assignments.map((a) => {
+            const payAmount = a.payAmount || 0;
+            const job = {
+              date: a.appointment.date,
+              payAmount: payAmount,
+              formattedPay: `$${(payAmount / 100).toFixed(2)}`,
+              status: a.payoutStatus,
+              payType: a.payType,
+              hoursWorked: a.hoursWorked ? parseFloat(a.hoursWorked) : null,
+            };
+            return job;
+          })
         : undefined,
+      // Pay type only (not rates) - employees see their actual pay per job, not the formula
+      payType: req.employeeRecord.payType,
     });
   } catch (error) {
     console.error("Error fetching earnings:", error);
@@ -602,7 +615,7 @@ router.get("/my-profile", async (req, res) => {
         {
           model: User,
           as: "businessOwner",
-          attributes: ["id", "firstName", "lastName", "businessName"],
+          attributes: ["id", "firstName", "lastName", "businessName", "businessLogo", "isBusinessOwner"],
         },
       ],
     });
@@ -694,17 +707,20 @@ router.post("/stripe-connect/onboard", async (req, res) => {
  *
  * Called by Stripe after employee completes onboarding.
  * Redirects to app with success/failure status.
+ * Uses authenticated employee's ID - ignores any employeeId in query params for security.
  */
 router.get("/stripe-connect/onboarding-complete", async (req, res) => {
-  const { employeeId } = req.query;
-
   try {
-    if (!employeeId) {
-      return res.redirect("keanr://stripe-onboarding?status=error&message=Missing+employee+ID");
+    // Use authenticated employee's ID from middleware, not query params
+    // This prevents attackers from completing onboarding for other employees
+    const authenticatedEmployeeId = req.employeeRecord?.id;
+
+    if (!authenticatedEmployeeId) {
+      return res.redirect("keanr://stripe-onboarding?status=error&message=Authentication+required");
     }
 
     const result = await EmployeeStripeConnectService.completeOnboarding(
-      parseInt(employeeId)
+      authenticatedEmployeeId
     );
 
     if (result.onboarded && result.payoutsEnabled) {
@@ -729,18 +745,21 @@ router.get("/stripe-connect/onboarding-complete", async (req, res) => {
  *
  * Called when onboarding link expires or user navigates away.
  * Generates a new onboarding link.
+ * Uses authenticated employee's ID - ignores any employeeId in query params for security.
  */
 router.get("/stripe-connect/onboarding-refresh", async (req, res) => {
-  const { employeeId } = req.query;
-
   try {
-    if (!employeeId) {
-      return res.status(400).json({ error: "Missing employee ID" });
+    // Use authenticated employee's ID from middleware, not query params
+    // This prevents attackers from generating onboarding links for other employees
+    const authenticatedEmployeeId = req.employeeRecord?.id;
+
+    if (!authenticatedEmployeeId) {
+      return res.redirect("keanr://stripe-onboarding?status=error&message=Authentication+required");
     }
 
     const baseUrl = getBaseUrl(req);
     const linkResult = await EmployeeStripeConnectService.generateOnboardingLink(
-      parseInt(employeeId),
+      authenticatedEmployeeId,
       baseUrl
     );
 
@@ -810,7 +829,7 @@ router.get("/stripe-connect/dashboard", async (req, res) => {
  */
 router.get("/my-jobs/:assignmentId/checklist", async (req, res) => {
   try {
-    const assignmentId = parseInt(req.params.assignmentId);
+    const assignmentId = parseInt(req.params.assignmentId, 10);
 
     // Verify employee is assigned to this job
     const assignment = await EmployeeJobAssignment.findOne({
@@ -863,7 +882,7 @@ router.get("/my-jobs/:assignmentId/checklist", async (req, res) => {
  */
 router.put("/my-jobs/:assignmentId/checklist", async (req, res) => {
   try {
-    const assignmentId = parseInt(req.params.assignmentId);
+    const assignmentId = parseInt(req.params.assignmentId, 10);
     const { sectionId, itemId, status, completed } = req.body;
 
     // Normalize status - prefer 'status' param, fall back to 'completed' boolean
@@ -935,7 +954,7 @@ router.put("/my-jobs/:assignmentId/checklist", async (req, res) => {
  */
 router.put("/my-jobs/:assignmentId/checklist/bulk", async (req, res) => {
   try {
-    const assignmentId = parseInt(req.params.assignmentId);
+    const assignmentId = parseInt(req.params.assignmentId, 10);
     const { updates } = req.body;
 
     // Verify employee is assigned to this job
@@ -989,7 +1008,7 @@ router.put("/my-jobs/:assignmentId/checklist/bulk", async (req, res) => {
  */
 router.post("/my-jobs/:assignmentId/photos", async (req, res) => {
   try {
-    const assignmentId = parseInt(req.params.assignmentId);
+    const assignmentId = parseInt(req.params.assignmentId, 10);
     const { photoType, photoData, room, notes } = req.body;
 
     if (!photoType || !photoData) {
@@ -1080,7 +1099,7 @@ router.post("/my-jobs/:assignmentId/photos", async (req, res) => {
  */
 router.get("/my-jobs/:assignmentId/photos", async (req, res) => {
   try {
-    const assignmentId = parseInt(req.params.assignmentId);
+    const assignmentId = parseInt(req.params.assignmentId, 10);
 
     // Verify employee is assigned to this job
     const assignment = await EmployeeJobAssignment.findOne({
@@ -1125,8 +1144,8 @@ router.get("/my-jobs/:assignmentId/photos", async (req, res) => {
  */
 router.delete("/my-jobs/:assignmentId/photos/:photoId", async (req, res) => {
   try {
-    const assignmentId = parseInt(req.params.assignmentId);
-    const photoId = parseInt(req.params.photoId);
+    const assignmentId = parseInt(req.params.assignmentId, 10);
+    const photoId = parseInt(req.params.photoId, 10);
 
     // Verify employee is assigned to this job
     const assignment = await EmployeeJobAssignment.findOne({
@@ -1193,7 +1212,7 @@ router.delete("/my-jobs/:assignmentId/photos/:photoId", async (req, res) => {
  */
 router.get("/my-jobs/:assignmentId/completion-status", async (req, res) => {
   try {
-    const assignmentId = parseInt(req.params.assignmentId);
+    const assignmentId = parseInt(req.params.assignmentId, 10);
 
     // Verify employee is assigned to this job
     const assignment = await EmployeeJobAssignment.findOne({
@@ -1232,7 +1251,7 @@ router.get("/my-jobs/:assignmentId/completion-status", async (req, res) => {
  */
 router.get("/my-jobs/:assignmentId/flow-details", async (req, res) => {
   try {
-    const assignmentId = parseInt(req.params.assignmentId);
+    const assignmentId = parseInt(req.params.assignmentId, 10);
 
     // Verify employee is assigned to this job
     const assignment = await EmployeeJobAssignment.findOne({
@@ -1260,7 +1279,7 @@ router.get("/my-jobs/:assignmentId/flow-details", async (req, res) => {
  */
 router.post("/my-jobs/:assignmentId/notes", async (req, res) => {
   try {
-    const assignmentId = parseInt(req.params.assignmentId);
+    const assignmentId = parseInt(req.params.assignmentId, 10);
     const { notes } = req.body;
 
     // Verify employee is assigned to this job

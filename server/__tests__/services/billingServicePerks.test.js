@@ -58,8 +58,22 @@ const mockModels = {
   Payment: {
     create: jest.fn(),
     findAndCountAll: jest.fn(),
+    generateTransactionId: jest.fn(() => `txn_test_${Date.now()}`),
   },
   UserHomes: {},
+  sequelize: {
+    transaction: jest.fn().mockImplementation(async (callback) => {
+      const mockTransaction = {
+        LOCK: { UPDATE: "UPDATE" },
+        commit: jest.fn().mockResolvedValue(undefined),
+        rollback: jest.fn().mockResolvedValue(undefined),
+      };
+      if (callback) {
+        return callback(mockTransaction);
+      }
+      return mockTransaction;
+    }),
+  },
   HomePreferredCleaner: {
     findOne: jest.fn(),
   },
@@ -119,6 +133,7 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
       mockModels.Payout.findOne.mockResolvedValue(null);
       mockModels.Payout.create.mockResolvedValue({
         id: 1,
+        netAmount: 9030, // $90.30 in cents
         update: payoutUpdate,
       });
 
@@ -161,14 +176,16 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
           preferredBonusPercent: 3,
           preferredBonusAmount: 30,
           cleanerTierAtPayout: "silver",
-        })
+        }),
+        expect.anything()
       );
 
       // Verify transfer was for the correct amount (with bonus)
       expect(mockStripe.transfers.create).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 9030, // $90.30 in cents
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -184,6 +201,7 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
       mockModels.Payout.findOne.mockResolvedValue(null);
       mockModels.Payout.create.mockResolvedValue({
         id: 1,
+        netAmount: 9050, // $90.50 in cents
         update: payoutUpdate,
       });
 
@@ -220,7 +238,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
         expect.objectContaining({
           preferredBonusPercent: 5,
           cleanerTierAtPayout: "gold",
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -236,6 +255,7 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
       mockModels.Payout.findOne.mockResolvedValue(null);
       mockModels.Payout.create.mockResolvedValue({
         id: 1,
+        netAmount: 9070, // $90.70 in cents
         update: payoutUpdate,
       });
 
@@ -272,7 +292,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
         expect.objectContaining({
           preferredBonusPercent: 7,
           cleanerTierAtPayout: "platinum",
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -288,6 +309,7 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
       mockModels.Payout.findOne.mockResolvedValue(null);
       mockModels.Payout.create.mockResolvedValue({
         id: 1,
+        netAmount: 9000, // $90.00 in cents
         update: payoutUpdate,
       });
 
@@ -326,7 +348,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
           preferredBonusPercent: null,
           preferredBonusAmount: null,
           cleanerTierAtPayout: null,
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -342,6 +365,7 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
       mockModels.Payout.findOne.mockResolvedValue(null);
       mockModels.Payout.create.mockResolvedValue({
         id: 1,
+        netAmount: 9000, // $90.00 in cents
         update: payoutUpdate,
       });
 
@@ -378,7 +402,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
           isPreferredHomeJob: true,
           preferredBonusApplied: false,
           cleanerTierAtPayout: "bronze",
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -394,6 +419,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
       // Return existing payout
       mockModels.Payout.findOne.mockResolvedValue({
         id: 1,
+        netAmount: 9050, // Will be updated to 9050 after bonus calculation
+        status: "pending",
         update: existingPayoutUpdate,
       });
 
@@ -419,7 +446,7 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
 
       await BillingService.processCleanerPayout(appointment, mockModels);
 
-      // Verify existing payout was updated
+      // Verify existing payout was updated with bonus fields (first call updates bonus info)
       expect(existingPayoutUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           isPreferredHomeJob: true,
@@ -427,7 +454,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
           preferredBonusPercent: 5,
           preferredBonusAmount: 50,
           cleanerTierAtPayout: "gold",
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -448,10 +476,17 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
         });
 
       mockModels.Payout.findOne.mockResolvedValue(null);
-      mockModels.Payout.create.mockResolvedValue({
-        id: 1,
-        update: jest.fn().mockResolvedValue(true),
-      });
+      mockModels.Payout.create
+        .mockResolvedValueOnce({
+          id: 1,
+          netAmount: 9050, // Gold tier: $90.50
+          update: jest.fn().mockResolvedValue(true),
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          netAmount: 9000, // No bonus: $90.00
+          update: jest.fn().mockResolvedValue(true),
+        });
 
       // Cleaner 100: Gold tier (5% bonus)
       // Cleaner 101: Not preferred
@@ -508,6 +543,7 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
       mockModels.Payout.findOne.mockResolvedValue(null);
       mockModels.Payout.create.mockResolvedValue({
         id: 1,
+        netAmount: 45250, // $452.50 in cents
         update: jest.fn().mockResolvedValue(true),
       });
 
@@ -542,7 +578,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
       expect(mockStripe.transfers.create).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 45250, // $452.50 in cents
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -589,7 +626,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
         expect.objectContaining({
           payoutPriority: "high",
           expectedPayoutHours: 24,
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -636,7 +674,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
         expect.objectContaining({
           payoutPriority: "normal",
           expectedPayoutHours: 48,
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -685,7 +724,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
           payoutPriority: "normal",
           expectedPayoutHours: 48,
           cleanerTierAtPayout: "gold",
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -733,7 +773,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
           payoutPriority: "high",
           expectedPayoutHours: 24,
           cleanerTierAtPayout: "platinum",
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -780,7 +821,8 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
         expect.objectContaining({
           payoutPriority: "normal",
           expectedPayoutHours: 48,
-        })
+        }),
+        expect.anything()
       );
     });
   });

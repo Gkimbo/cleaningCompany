@@ -142,9 +142,14 @@ class BackgroundSync {
    * Check if tasks are registered
    */
   async isRegistered() {
-    const syncRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_SYNC_TASK);
-    const fetchRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
-    return syncRegistered && fetchRegistered;
+    try {
+      const syncRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_SYNC_TASK);
+      const fetchRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
+      return syncRegistered && fetchRegistered;
+    } catch (error) {
+      console.error("[BackgroundSync] isRegistered check error:", error);
+      return false;
+    }
   }
 
   /**
@@ -154,23 +159,39 @@ class BackgroundSync {
   async triggerImmediateSync() {
     if (!NetworkMonitor.isOnline) return { success: false, reason: "offline" };
 
-    // Use orchestrator for cooldown and retry logic consistency
-    return await AutoSyncOrchestrator.onConnectivityRestored();
+    try {
+      // Use orchestrator for cooldown and retry logic consistency
+      return await AutoSyncOrchestrator.onConnectivityRestored();
+    } catch (error) {
+      console.error("[BackgroundSync] triggerImmediateSync error:", error);
+      return { success: false, error: error.message };
+    }
   }
 
   /**
    * Get background fetch status
    */
   async getStatus() {
-    const status = await BackgroundFetch.getStatusAsync();
-    const registered = await this.isRegistered();
+    try {
+      const status = await BackgroundFetch.getStatusAsync();
+      const registered = await this.isRegistered();
 
-    return {
-      available: status === BackgroundFetch.BackgroundFetchStatus.Available,
-      restricted: status === BackgroundFetch.BackgroundFetchStatus.Restricted,
-      denied: status === BackgroundFetch.BackgroundFetchStatus.Denied,
-      registered,
-    };
+      return {
+        available: status === BackgroundFetch.BackgroundFetchStatus.Available,
+        restricted: status === BackgroundFetch.BackgroundFetchStatus.Restricted,
+        denied: status === BackgroundFetch.BackgroundFetchStatus.Denied,
+        registered,
+      };
+    } catch (error) {
+      console.error("[BackgroundSync] getStatus error:", error);
+      return {
+        available: false,
+        restricted: false,
+        denied: false,
+        registered: false,
+        error: error.message,
+      };
+    }
   }
 }
 

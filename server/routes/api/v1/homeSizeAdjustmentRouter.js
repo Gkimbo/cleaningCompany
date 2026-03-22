@@ -17,6 +17,7 @@ const AnalyticsService = require("../../../services/AnalyticsService");
 const NotificationService = require("../../../services/NotificationService");
 const { recordPaymentTransaction } = require("./paymentRouter");
 const HomeSizeAdjustmentSerializer = require("../../../serializers/HomeSizeAdjustmentSerializer");
+const TimezoneService = require("../../../services/TimezoneService");
 
 const homeSizeAdjustmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -122,6 +123,19 @@ homeSizeAdjustmentRouter.post("/", authenticateToken, async (req, res) => {
     const appointment = await UserAppointments.findByPk(appointmentId);
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Check if appointment is paused (homeowner account frozen)
+    if (appointment.isPaused) {
+      return res.status(403).json({
+        error: "This appointment is currently paused",
+        isPaused: true,
+      });
+    }
+
+    // Check if appointment was cancelled
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "This appointment has been cancelled" });
     }
 
     // Verify cleaner is assigned to this appointment
@@ -490,19 +504,21 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
         numBaths: request.reportedNumBaths,
       });
 
-      // Update the triggering appointment price
+      // Update the triggering appointment price (calculatedNewPrice is in cents)
       await appointment.update({
-        price: String(request.calculatedNewPrice),
+        price: request.calculatedNewPrice,
       });
 
       // Update ALL future/current appointments for this home with recalculated prices
-      const today = new Date().toISOString().split('T')[0];
+      const today = TimezoneService.getTodayInTimezone();
       const futureAppointments = await UserAppointments.findAll({
         where: {
           homeId: request.homeId,
           completed: false,
           id: { [Op.ne]: appointment.id }, // Exclude the one we just updated
-          date: { [Op.gte]: today }
+          date: { [Op.gte]: today },
+          isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner frozen)
+          wasCancelled: { [Op.ne]: true }, // Exclude cancelled appointments
         }
       });
 
@@ -516,7 +532,7 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
           appt.sheetConfigurations,
           appt.towelConfigurations
         );
-        await appt.update({ price: String(newApptPrice) });
+        await appt.update({ price: newApptPrice }); // calculatePrice returns cents
       }
 
       console.log(`📋 Updated ${futureAppointments.length} future appointments with new pricing for home ${request.homeId}`);
@@ -540,7 +556,7 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
               chargeStatus = "failed";
             } else {
               const chargeIntent = await stripe.paymentIntents.create({
-                amount: Math.round(request.priceDifference * 100), // cents
+                amount: request.priceDifference, // Already in cents
                 currency: "usd",
                 customer: homeowner.stripeCustomerId,
                 payment_method: paymentMethodId,
@@ -563,7 +579,7 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
                 await recordPaymentTransaction({
                   type: "charge",
                   status: "succeeded",
-                  amount: Math.round(request.priceDifference * 100),
+                  amount: request.priceDifference, // Already in cents
                   userId: homeowner.id,
                   appointmentId: request.appointmentId,
                   stripePaymentIntentId: chargeIntent.id,
@@ -740,7 +756,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
         appointment.towelConfigurations
       );
 
-      const priceDiff = finalPrice - parseFloat(appointment.price);
+      const priceDiff = finalPrice - appointment.price; // Both in cents
 
       // Update home
       await home.update({
@@ -748,19 +764,21 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
         numBaths: String(bathsToUse),
       });
 
-      // Update the triggering appointment price
+      // Update the triggering appointment price (finalPrice is in cents)
       await appointment.update({
-        price: String(finalPrice),
+        price: finalPrice,
       });
 
       // Update ALL future/current appointments for this home with recalculated prices
-      const today = new Date().toISOString().split('T')[0];
+      const today = TimezoneService.getTodayInTimezone();
       const futureAppointments = await UserAppointments.findAll({
         where: {
           homeId: request.homeId,
           completed: false,
           id: { [Op.ne]: appointment.id }, // Exclude the one we just updated
-          date: { [Op.gte]: today }
+          date: { [Op.gte]: today },
+          isPaused: { [Op.ne]: true }, // Exclude paused appointments (homeowner frozen)
+          wasCancelled: { [Op.ne]: true }, // Exclude cancelled appointments
         }
       });
 
@@ -774,7 +792,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
           appt.sheetConfigurations,
           appt.towelConfigurations
         );
-        await appt.update({ price: String(newApptPrice) });
+        await appt.update({ price: newApptPrice }); // calculatePrice returns cents
       }
 
       console.log(`📋 Updated ${futureAppointments.length} future appointments with new pricing for home ${request.homeId}`);
@@ -810,7 +828,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
               chargeStatus = "failed";
             } else {
               const chargeIntent = await stripe.paymentIntents.create({
-                amount: Math.round(priceDiff * 100), // cents
+                amount: priceDiff, // Already in cents
                 currency: "usd",
                 customer: homeowner.stripeCustomerId,
                 payment_method: paymentMethodId,
@@ -834,7 +852,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
                 await recordPaymentTransaction({
                   type: "charge",
                   status: "succeeded",
-                  amount: Math.round(priceDiff * 100),
+                  amount: priceDiff, // Already in cents
                   userId: homeowner.id,
                   appointmentId: request.appointmentId,
                   stripePaymentIntentId: chargeIntent.id,

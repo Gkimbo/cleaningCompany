@@ -87,7 +87,7 @@ async function createTestAppointment(userId, homeId, overrides = {}) {
     keyLocation: "Under mat",
     completed: false,
     hasBeenAssigned: false,
-    empoyeesNeeded: 1,
+    employeesNeeded: 1,
     timeToBeCompleted: "3",
     paymentStatus: "pending",
     ...overrides,

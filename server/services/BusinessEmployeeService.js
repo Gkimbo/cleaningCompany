@@ -9,6 +9,8 @@ const {
   BusinessEmployee,
   User,
   EmployeeJobAssignment,
+  TermsAndConditions,
+  UserTermsAcceptance,
   sequelize,
 } = require("../models");
 
@@ -22,8 +24,8 @@ class BusinessEmployeeService {
     let attempts = 0;
 
     while (attempts < maxAttempts) {
-      // Generate a 32-character hex token
-      const token = crypto.randomBytes(16).toString("hex");
+      // Generate a 64-character hex token (256-bit entropy for better security)
+      const token = crypto.randomBytes(32).toString("hex");
 
       // Check if token already exists
       const existing = await BusinessEmployee.findOne({
@@ -72,7 +74,7 @@ class BusinessEmployeeService {
 
     // Check if employee with same email already exists for this business owner
     const emailHash = EncryptionService.hash(email.toLowerCase());
-    const existing = await BusinessEmployee.findOne({
+    const existingForOwner = await BusinessEmployee.findOne({
       where: {
         businessOwnerId,
         emailHash,
@@ -80,8 +82,20 @@ class BusinessEmployeeService {
       },
     });
 
-    if (existing) {
+    if (existingForOwner) {
       throw new Error("An employee with this email already exists");
+    }
+
+    // Check if email is already an active employee for ANY business owner
+    const existingActiveEmployee = await BusinessEmployee.findOne({
+      where: {
+        emailHash,
+        status: "active",
+      },
+    });
+
+    if (existingActiveEmployee) {
+      throw new Error("This email is already registered as an active employee. Please have them accept your invitation using their existing account.");
     }
 
     // Generate invite token
@@ -147,7 +161,9 @@ class BusinessEmployeeService {
    * @returns {Promise<Object|null>} BusinessEmployee record or null if invalid
    */
   static async validateInviteToken(token) {
-    if (!token || typeof token !== "string" || token.length !== 32) {
+    // Strict validation: must be exactly 32 or 64 lowercase hex characters
+    // (64-char for new tokens, 32-char for backward compatibility with existing)
+    if (!token || typeof token !== "string" || !/^[a-f0-9]{32}([a-f0-9]{32})?$/.test(token)) {
       return null;
     }
 
@@ -157,7 +173,7 @@ class BusinessEmployeeService {
         {
           model: User,
           as: "businessOwner",
-          attributes: ["id", "firstName", "lastName", "businessName"],
+          attributes: ["id", "firstName", "lastName", "businessName", "businessLogo", "isBusinessOwner"],
         },
       ],
     });
@@ -219,6 +235,13 @@ class BusinessEmployeeService {
       throw new Error("User not found");
     }
 
+    // Verify the accepting user's email matches the invitation email
+    const userEmail = user.email ? EncryptionService.decrypt(user.email) : null;
+    const inviteEmail = employee.email ? EncryptionService.decrypt(employee.email) : null;
+    if (!userEmail || !inviteEmail || userEmail.toLowerCase() !== inviteEmail.toLowerCase()) {
+      throw new Error("Your email does not match the invitation email. Please log in with the correct account.");
+    }
+
     // Check if user is already an employee of another business
     if (user.employeeOfBusinessId) {
       throw new Error("User is already an employee of another business");
@@ -265,6 +288,7 @@ class BusinessEmployeeService {
    * @param {string} [userData.phone]
    * @param {number} [userData.termsId]
    * @param {number} [userData.privacyPolicyId]
+   * @param {number} [userData.paymentTermsId]
    * @returns {Promise<Object>} { user, employee }
    */
   static async acceptInviteWithSignup(inviteToken, userData) {
@@ -286,7 +310,7 @@ class BusinessEmployeeService {
       throw new Error("This employee record has been terminated");
     }
 
-    const { firstName, lastName, username, password, phone, termsId, privacyPolicyId } = userData;
+    const { firstName, lastName, username, password, phone, termsId, privacyPolicyId, paymentTermsId } = userData;
 
     // Validate required fields
     if (!firstName || !lastName || !username || !password) {
@@ -316,6 +340,34 @@ class BusinessEmployeeService {
       throw new Error("An account with this email already exists");
     }
 
+    // Get terms versions if IDs provided
+    let termsVersion = null;
+    let termsRecord = null;
+    if (termsId) {
+      termsRecord = await TermsAndConditions.findByPk(termsId);
+      if (termsRecord) {
+        termsVersion = termsRecord.version;
+      }
+    }
+
+    let privacyVersion = null;
+    let privacyRecord = null;
+    if (privacyPolicyId) {
+      privacyRecord = await TermsAndConditions.findByPk(privacyPolicyId);
+      if (privacyRecord) {
+        privacyVersion = privacyRecord.version;
+      }
+    }
+
+    let paymentTermsVersion = null;
+    let paymentTermsRecord = null;
+    if (paymentTermsId) {
+      paymentTermsRecord = await TermsAndConditions.findByPk(paymentTermsId);
+      if (paymentTermsRecord) {
+        paymentTermsVersion = paymentTermsRecord.version;
+      }
+    }
+
     // Transaction to create user and update employee
     const result = await sequelize.transaction(async (t) => {
       // Create the user account
@@ -330,11 +382,51 @@ class BusinessEmployeeService {
           type: "employee",
           employeeOfBusinessId: employee.businessOwnerId,
           isMarketplaceCleaner: false,
-          termsId: termsId || null,
-          privacyPolicyId: privacyPolicyId || null,
+          termsAcceptedVersion: termsVersion,
+          privacyPolicyAcceptedVersion: privacyVersion,
+          paymentTermsAcceptedVersion: paymentTermsVersion,
         },
         { transaction: t }
       );
+
+      // Record terms acceptance
+      if (termsId && termsRecord) {
+        await UserTermsAcceptance.create(
+          {
+            userId: newUser.id,
+            termsId,
+            acceptedAt: new Date(),
+            termsContentSnapshot: termsRecord.contentType === "text" ? termsRecord.content : null,
+          },
+          { transaction: t }
+        );
+      }
+
+      // Record privacy policy acceptance
+      if (privacyPolicyId && privacyRecord) {
+        await UserTermsAcceptance.create(
+          {
+            userId: newUser.id,
+            termsId: privacyPolicyId,
+            acceptedAt: new Date(),
+            termsContentSnapshot: privacyRecord.contentType === "text" ? privacyRecord.content : null,
+          },
+          { transaction: t }
+        );
+      }
+
+      // Record payment terms acceptance
+      if (paymentTermsId && paymentTermsRecord) {
+        await UserTermsAcceptance.create(
+          {
+            userId: newUser.id,
+            termsId: paymentTermsId,
+            acceptedAt: new Date(),
+            termsContentSnapshot: paymentTermsRecord.contentType === "text" ? paymentTermsRecord.content : null,
+          },
+          { transaction: t }
+        );
+      }
 
       // Update the employee record
       await employee.update(
@@ -344,9 +436,9 @@ class BusinessEmployeeService {
           acceptedAt: new Date(),
           inviteToken: null,
           inviteExpiresAt: null,
-          // Update names if provided differently
-          firstName: firstName || employee.firstName,
-          lastName: lastName || employee.lastName,
+          // Update names if provided differently, with fallback to prevent undefined display
+          firstName: firstName || employee.firstName || "Unknown",
+          lastName: lastName || employee.lastName || "",
           phone: phone || employee.phone,
         },
         { transaction: t }
@@ -487,6 +579,36 @@ class BusinessEmployeeService {
       if (updates[key] !== undefined) {
         filteredUpdates[key] = updates[key];
       }
+    }
+
+    // Validate payRate is between 0-100 (percentage)
+    if (filteredUpdates.payRate !== undefined) {
+      const payRate = parseFloat(filteredUpdates.payRate);
+      if (isNaN(payRate)) {
+        throw new Error("Pay rate must be a valid number");
+      }
+      if (payRate < 0 || payRate > 100) {
+        throw new Error("Pay rate must be between 0 and 100 (percentage)");
+      }
+      filteredUpdates.payRate = payRate;
+    }
+
+    // Validate defaultHourlyRate is non-negative
+    if (filteredUpdates.defaultHourlyRate !== undefined) {
+      const rate = parseInt(filteredUpdates.defaultHourlyRate, 10);
+      if (isNaN(rate) || rate < 0) {
+        throw new Error("Hourly rate must be a non-negative number");
+      }
+      filteredUpdates.defaultHourlyRate = rate;
+    }
+
+    // Validate defaultJobRate is non-negative
+    if (filteredUpdates.defaultJobRate !== undefined) {
+      const rate = parseInt(filteredUpdates.defaultJobRate, 10);
+      if (isNaN(rate) || rate < 0) {
+        throw new Error("Job rate must be a non-negative number");
+      }
+      filteredUpdates.defaultJobRate = rate;
     }
 
     await employee.update(filteredUpdates);

@@ -1,6 +1,4 @@
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 class PricingService {
   /**
@@ -8,17 +6,14 @@ class PricingService {
    * Used by all components that need pricing info
    */
   static async getCurrentPricing() {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/pricing/current`);
-      if (!response.ok) {
-        console.warn(`[PricingService] getCurrentPricing returned ${response.status}`);
-        return null;
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn("[PricingService] getCurrentPricing failed:", error.message);
+    const result = await HttpClient.get("/pricing/current", { skipAuth: true });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[PricingService] getCurrentPricing failed:", result.error);
       return null;
     }
+
+    return result;
   }
 
   /**
@@ -26,19 +21,14 @@ class PricingService {
    * Includes audit info and all fields
    */
   static async getFullConfig(token) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/pricing/config`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        console.warn(`[PricingService] getFullConfig returned ${response.status}`);
-        return null;
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn("[PricingService] getFullConfig failed:", error.message);
+    const result = await HttpClient.get("/pricing/config", { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[PricingService] getFullConfig failed:", result.error);
       return null;
     }
+
+    return result;
   }
 
   /**
@@ -48,36 +38,22 @@ class PricingService {
    * @returns {object} { success, message, config } or { success: false, error }
    */
   static async updatePricing(token, pricingData) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/pricing/config`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(pricingData),
-      });
+    const result = await HttpClient.put("/pricing/config", pricingData, { token });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: data.error || "Failed to update pricing",
-          missingFields: data.missingFields,
-        };
-      }
-
+    if (result.success === false) {
       return {
-        success: true,
-        message: data.message,
-        config: data.config,
-        formattedPricing: data.formattedPricing,
+        success: false,
+        error: result.error || "Failed to update pricing",
+        missingFields: result.details?.missingFields,
       };
-    } catch (error) {
-      console.error("[PricingService] updatePricing failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
     }
+
+    return {
+      success: true,
+      message: result.message,
+      config: result.config,
+      formattedPricing: result.formattedPricing,
+    };
   }
 
   /**
@@ -86,22 +62,14 @@ class PricingService {
    * @param {number} limit - Max number of history items to return
    */
   static async getPricingHistory(token, limit = 20) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/pricing/history?limit=${limit}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (!response.ok) {
-        console.warn(`[PricingService] getPricingHistory returned ${response.status}`);
-        return { count: 0, history: [] };
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn("[PricingService] getPricingHistory failed:", error.message);
+    const result = await HttpClient.get(`/pricing/history?limit=${limit}`, { token });
+
+    if (result.success === false) {
+      if (__DEV__) console.warn("[PricingService] getPricingHistory failed:", result.error);
       return { count: 0, history: [] };
     }
+
+    return result;
   }
 }
 

@@ -10,9 +10,9 @@ import {
   Alert,
   Modal,
 } from "react-native";
-import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { colors, spacing, radius, typography, shadows } from "../../../services/styles/theme";
+import useSafeNavigation from "../../../hooks/useSafeNavigation";
 import JobFlowService from "../../../services/fetchRequests/JobFlowService";
 
 const AssignFlowModal = ({ visible, flows, clients, token, onClose, onAssigned }) => {
@@ -299,7 +299,7 @@ const AssignFlowModal = ({ visible, flows, clients, token, onClose, onAssigned }
 };
 
 const FlowAssignmentsScreen = ({ state }) => {
-  const navigate = useNavigate();
+  const { goBack } = useSafeNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [assignments, setAssignments] = useState([]);
@@ -398,7 +398,7 @@ const FlowAssignmentsScreen = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+        <Pressable style={styles.backButton} onPress={goBack}>
           <Icon name="arrow-left" size={16} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.headerTitle}>Flow Assignments</Text>

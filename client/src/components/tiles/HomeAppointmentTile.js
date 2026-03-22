@@ -6,6 +6,7 @@ import Appointment from "../../services/fetchRequests/AppointmentClass";
 import EachAppointment from "./EachAppointment";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
+import { formatCurrency } from "../../services/formatters";
 
 // Helper functions to generate default configurations
 const initializeBedConfigurations = (beds) => {
@@ -163,12 +164,14 @@ const HomeAppointmentTile = ({
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return "—";
     const [year, month, day] = dateString.split("-").map(Number);
     const newDate = new Date(year, month - 1, day);
     return newDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   };
 
   const parseDate = (dateString) => {
+    if (!dateString) return new Date();
     const [year, month, day] = dateString.split("-").map(Number);
     return new Date(year, month - 1, day);
   };
@@ -296,14 +299,14 @@ const HomeAppointmentTile = ({
           {needsPayment.length > 0 && (
             <View style={[styles.statCard, styles.statCardWarning]}>
               <Icon name="credit-card" size={14} color={colors.warning[600]} />
-              <Text style={[styles.statNumber, styles.statNumberWarning]}>${totalDue}</Text>
+              <Text style={[styles.statNumber, styles.statNumberWarning]}>{formatCurrency(totalDue)}</Text>
               <Text style={styles.statLabel}>Due</Text>
             </View>
           )}
           {upcomingTotal > 0 && (
             <View style={styles.statCard}>
               <Icon name="dollar" size={14} color={colors.text.tertiary} />
-              <Text style={styles.statNumber}>${upcomingTotal}</Text>
+              <Text style={styles.statNumber}>{formatCurrency(upcomingTotal)}</Text>
               <Text style={styles.statLabel}>Scheduled</Text>
             </View>
           )}

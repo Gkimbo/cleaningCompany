@@ -1,6 +1,4 @@
-import { API_BASE } from "../config";
-
-const baseURL = API_BASE.replace("/api/v1", "");
+import HttpClient from "../HttpClient";
 
 /**
  * PreferredPerksService - Client-side service for managing preferred cleaner tier configuration (owner only)
@@ -11,19 +9,14 @@ class PreferredPerksService {
    * Includes audit info and all fields
    */
   static async getConfig(token) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/preferred-cleaner/perks-config`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        console.warn(`[PreferredPerksService] getConfig returned ${response.status}`);
-        return null;
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn("[PreferredPerksService] getConfig failed:", error.message);
+    const result = await HttpClient.get("/preferred-cleaner/perks-config", { token });
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredPerksService] getConfig failed:", result.error);
       return null;
     }
+
+    return result;
   }
 
   /**
@@ -33,33 +26,20 @@ class PreferredPerksService {
    * @returns {object} { success, config } or { success: false, error }
    */
   static async updateConfig(token, configData) {
-    try {
-      const response = await fetch(`${baseURL}/api/v1/preferred-cleaner/perks-config`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(configData),
-      });
+    const result = await HttpClient.put("/preferred-cleaner/perks-config", configData, { token });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: data.error || "Failed to update tier configuration",
-        };
-      }
-
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredPerksService] updateConfig failed:", result.error);
       return {
-        success: true,
-        config: data.config,
+        success: false,
+        error: result.error || "Failed to update tier configuration",
       };
-    } catch (error) {
-      console.error("[PreferredPerksService] updateConfig failed:", error.message);
-      return { success: false, error: "Network error. Please try again." };
     }
+
+    return {
+      success: true,
+      config: result.config,
+    };
   }
 
   /**
@@ -68,22 +48,17 @@ class PreferredPerksService {
    * @param {number} limit - Max number of history items to return
    */
   static async getHistory(token, limit = 20) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/preferred-cleaner/perks-config/history?limit=${limit}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (!response.ok) {
-        console.warn(`[PreferredPerksService] getHistory returned ${response.status}`);
-        return { history: [] };
-      }
-      return await response.json();
-    } catch (error) {
-      console.warn("[PreferredPerksService] getHistory failed:", error.message);
+    const result = await HttpClient.get(
+      `/preferred-cleaner/perks-config/history?limit=${limit}`,
+      { token }
+    );
+
+    if (result.success === false) {
+      __DEV__ && console.warn("[PreferredPerksService] getHistory failed:", result.error);
       return { history: [] };
     }
+
+    return result;
   }
 }
 

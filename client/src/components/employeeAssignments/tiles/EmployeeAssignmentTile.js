@@ -18,6 +18,7 @@ import {
   getEffectiveTowelConfigs,
   getTowelTotals,
 } from "../../../utils/linensUtils";
+import { formatCurrency } from "../../../services/formatters";
 
 const EmployeeAssignmentTile = ({
   id,
@@ -82,11 +83,13 @@ const EmployeeAssignmentTile = ({
   const numCleaners = isMultiCleanerJob
     ? (multiCleanerJob?.totalCleanersRequired || employeesAssigned?.length || 1)
     : 1;
-  // Price is stored in dollars
+  // Price is stored in cents - formatCurrency handles conversion to dollars
   const amount = (Number(price) / numCleaners) * cleanerSharePercent;
 
   const formatDate = (dateString) => {
-    const dateObj = new Date(dateString + "T00:00:00");
+    if (!dateString) return "—";
+    // Use noon to avoid timezone edge cases that could shift the day
+    const dateObj = new Date(dateString + "T12:00:00");
     const options = { weekday: "short", month: "short", day: "numeric" };
     return dateObj.toLocaleDateString(undefined, options);
   };
@@ -94,7 +97,8 @@ const EmployeeAssignmentTile = ({
   const getDateStatus = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const appointmentDate = new Date(date + "T00:00:00");
+    // Use noon to avoid timezone edge cases
+    const appointmentDate = new Date(date + "T12:00:00");
     const diffTime = appointmentDate - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -125,9 +129,9 @@ const EmployeeAssignmentTile = ({
 
   const isToday = () => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const appointmentDate = new Date(date + "T00:00:00");
-    return appointmentDate.getTime() === today.getTime();
+    // Use noon to avoid timezone edge cases
+    const appointmentDate = new Date(date + "T12:00:00");
+    return appointmentDate.toDateString() === today.toDateString();
   };
 
   const isWithin48Hours = () => {
@@ -244,7 +248,7 @@ const EmployeeAssignmentTile = ({
     if (completed) return colors.success[500];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const appointmentDate = new Date(date + "T00:00:00");
+    const appointmentDate = new Date(date + "T12:00:00");
     const diffTime = appointmentDate - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -389,7 +393,7 @@ const EmployeeAssignmentTile = ({
             {completed ? "You Earned" : "You'll Earn"}
           </Text>
           <Text style={[styles.earningsAmount, completed && styles.earningsAmountCompleted]}>
-            ${amount.toFixed(2)}
+            {formatCurrency(amount)}
           </Text>
         </View>
 

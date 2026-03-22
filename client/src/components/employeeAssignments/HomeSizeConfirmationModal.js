@@ -17,6 +17,8 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
 import FetchData from "../../services/fetchRequests/fetchData";
+import { useOffline } from "../../services/offline/OfflineContext";
+import OfflineManager from "../../services/offline/OfflineManager";
 
 const HomeSizeConfirmationModal = ({
   visible,
@@ -33,6 +35,9 @@ const HomeSizeConfirmationModal = ({
   const [cleanerNote, setCleanerNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Offline support
+  const { isOffline } = useOffline();
 
   // Camera state
   const [permission, requestPermission] = useCameraPermissions();
@@ -165,13 +170,31 @@ const HomeSizeConfirmationModal = ({
     setError("");
 
     try {
-      const result = await FetchData.createHomeSizeAdjustment(token, {
-        appointmentId: appointment.id,
-        reportedNumBeds: reportedBeds,
-        reportedNumBaths: reportedBaths,
-        cleanerNote: cleanerNote.trim() || null,
-        photos: photos,
-      });
+      let result;
+
+      if (isOffline && OfflineManager.isAvailable) {
+        // Offline mode: Queue the report for sync later
+        result = await OfflineManager.submitHomeSizeMismatch(appointment.jobId || appointment.id, {
+          appointmentId: appointment.id,
+          reportedNumBeds: reportedBeds,
+          reportedNumBaths: reportedBaths,
+          cleanerNote: cleanerNote.trim() || null,
+          photos: photos,
+        });
+
+        if (result.success) {
+          result = { queuedForSync: true };
+        }
+      } else {
+        // Online mode: Submit directly to server
+        result = await FetchData.createHomeSizeAdjustment(token, {
+          appointmentId: appointment.id,
+          reportedNumBeds: reportedBeds,
+          reportedNumBaths: reportedBaths,
+          cleanerNote: cleanerNote.trim() || null,
+          photos: photos,
+        });
+      }
 
       if (result.error) {
         setError(result.error);
@@ -190,7 +213,7 @@ const HomeSizeConfirmationModal = ({
       setError("");
       onConfirm();
     } catch (err) {
-      setError("Failed to submit report. Please try again.");
+      setError(isOffline ? "Failed to queue report. Please try again." : "Failed to submit report. Please try again.");
       setIsSubmitting(false);
     }
   };
@@ -551,7 +574,9 @@ const HomeSizeConfirmationModal = ({
 
                   <View style={styles.infoBox}>
                     <Text style={styles.infoText}>
-                      The homeowner will be notified to confirm your report. Photos will only be visible to owners if the report is disputed.
+                      {isOffline
+                        ? "You're offline. Your report will be queued and submitted automatically when you're back online."
+                        : "The homeowner will be notified to confirm your report. Photos will only be visible to owners if the report is disputed."}
                     </Text>
                   </View>
 
@@ -564,7 +589,9 @@ const HomeSizeConfirmationModal = ({
                       {isSubmitting ? (
                         <ActivityIndicator color={colors.neutral[0]} />
                       ) : (
-                        <Text style={styles.submitButtonText}>Submit Report & Start Job</Text>
+                        <Text style={styles.submitButtonText}>
+                          {isOffline ? "Queue Report & Start Job" : "Submit Report & Start Job"}
+                        </Text>
                       )}
                     </TouchableOpacity>
 

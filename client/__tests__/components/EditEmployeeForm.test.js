@@ -6,6 +6,7 @@ const mockNavigate = jest.fn();
 jest.mock("react-router-native", () => ({
   useNavigate: () => mockNavigate,
   useParams: () => ({ id: "1" }),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 jest.mock("../../src/services/fetchRequests/fetchData", () => ({

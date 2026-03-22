@@ -1,14 +1,19 @@
 const EncryptionService = require("../services/EncryptionService");
 
 class StripeConnectAccountSerializer {
+	static decryptField(value) {
+		if (!value) return null;
+		return EncryptionService.decrypt(value);
+	}
+
 	static serializeUser(user) {
 		if (!user) return null;
 		const data = user.dataValues || user;
 		return {
 			id: data.id,
-			firstName: EncryptionService.decrypt(data.firstName),
-			lastName: EncryptionService.decrypt(data.lastName),
-			email: EncryptionService.decrypt(data.email)
+			firstName: this.decryptField(data.firstName),
+			lastName: this.decryptField(data.lastName),
+			email: this.decryptField(data.email)
 		};
 	}
 

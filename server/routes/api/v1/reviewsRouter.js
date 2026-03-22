@@ -166,6 +166,18 @@ reviewsRouter.get("/stats", verifyToken, async (req, res) => {
 // Submit a new review (multi-aspect)
 reviewsRouter.post("/submit", verifyToken, async (req, res) => {
   try {
+    // Check if user account is frozen
+    const reviewer = await User.findByPk(req.userId, {
+      attributes: ["id", "accountFrozen", "accountFrozenReason"],
+    });
+    if (reviewer && reviewer.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot submit reviews.",
+        reason: reviewer.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
+
     const reviewData = {
       ...req.body,
       reviewerId: req.userId,
@@ -275,7 +287,7 @@ reviewsRouter.post("/submit", verifyToken, async (req, res) => {
     );
 
     return res.status(201).json({
-      review: newReview,
+      review: ReviewSerializer.serializeOne(newReview),
       status,
       message: status.bothReviewed
         ? "Both reviews submitted! Reviews are now visible."
@@ -301,6 +313,18 @@ reviewsRouter.post("/submit-legacy", verifyToken, async (req, res) => {
   // SECURITY: Always use authenticated user as reviewer, ignore any client-provided reviewerId
   const reviewerId = req.userId;
   try {
+    // Check if user account is frozen
+    const reviewer = await User.findByPk(reviewerId, {
+      attributes: ["id", "accountFrozen", "accountFrozenReason"],
+    });
+    if (reviewer && reviewer.accountFrozen) {
+      return res.status(403).json({
+        error: "Your account has been suspended. You cannot submit reviews.",
+        reason: reviewer.accountFrozenReason || "Please contact support for more information",
+        accountSuspended: true,
+      });
+    }
+
     const newReview = await ReviewsClass.addReviewToDB({
       userId,
       reviewerId,
@@ -309,7 +333,7 @@ reviewsRouter.post("/submit-legacy", verifyToken, async (req, res) => {
       comment,
     });
 
-    return res.status(200).json({ newReview });
+    return res.status(200).json({ newReview: ReviewSerializer.serializeOne(newReview) });
   } catch (error) {
     console.error("Error submitting legacy review:", error);
     return res.status(500).json({ error: "Failed to submit review" });
@@ -320,7 +344,7 @@ reviewsRouter.post("/submit-legacy", verifyToken, async (req, res) => {
 reviewsRouter.get("/written", verifyToken, async (req, res) => {
   try {
     const reviews = await ReviewsClass.getReviewsWrittenByUser(req.userId);
-    return res.status(200).json({ reviews });
+    return res.status(200).json({ reviews: ReviewSerializer.serializeArray(reviews) });
   } catch (error) {
     console.error("Error fetching written reviews:", error);
     return res.status(500).json({ error: "Failed to fetch reviews" });

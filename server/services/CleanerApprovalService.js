@@ -137,8 +137,8 @@ class CleanerApprovalService {
    * @param {number} homeownerId - Homeowner user ID
    * @returns {Promise<Object>} Result
    */
-  static async approveRequest(joinRequestId, homeownerId) {
-    const { CleanerJoinRequest, User, MultiCleanerJob } = require("../models");
+  static async approveRequest(joinRequestId, homeownerId, io = null) {
+    const { CleanerJoinRequest, User, MultiCleanerJob, Notification } = require("../models");
     const MultiCleanerService = require("./MultiCleanerService");
     const NotificationService = require("./NotificationService");
     const EncryptionService = require("./EncryptionService");
@@ -159,10 +159,19 @@ class CleanerApprovalService {
       throw new Error(`Request is no longer pending (status: ${request.status})`);
     }
 
-    // Check if job is still open
-    if (request.multiCleanerJob && request.multiCleanerJob.isFilled()) {
-      await request.cancel();
-      throw new Error("This job has already been filled");
+    // Check if job is still open and not paused/cancelled
+    if (request.multiCleanerJob) {
+      if (request.multiCleanerJob.status === "paused") {
+        throw new Error("This job is currently paused");
+      }
+      if (request.multiCleanerJob.status === "cancelled") {
+        await request.cancel();
+        throw new Error("This job has been cancelled");
+      }
+      if (request.multiCleanerJob.isFilled()) {
+        await request.cancel();
+        throw new Error("This job has already been filled");
+      }
     }
 
     // Fill the slot
@@ -206,6 +215,30 @@ class CleanerApprovalService {
       await this.cancelPendingRequestsForJob(request.multiCleanerJobId);
     }
 
+    // Clear the action-required flag on the original notification
+    await Notification.update(
+      { actionRequired: false, isRead: true },
+      {
+        where: {
+          userId: homeownerId,
+          type: "cleaner_join_request",
+          "data.joinRequestId": joinRequestId,
+        },
+      }
+    );
+
+    // Emit socket event to update badge count in real-time
+    if (io) {
+      const [unreadCount, actionRequiredCount] = await Promise.all([
+        Notification.getUnreadCount(homeownerId),
+        Notification.getActionRequiredCount(homeownerId),
+      ]);
+      io.to(`user_${homeownerId}`).emit("notification_count_update", {
+        unreadCount,
+        actionRequiredCount,
+      });
+    }
+
     return {
       success: true,
       message: "Cleaner has been approved and assigned to the job.",
@@ -217,10 +250,11 @@ class CleanerApprovalService {
    * @param {number} joinRequestId - Join request ID
    * @param {number} homeownerId - Homeowner user ID
    * @param {string} reason - Optional decline reason
+   * @param {Object} io - Socket.io instance (optional)
    * @returns {Promise<Object>} Result
    */
-  static async declineRequest(joinRequestId, homeownerId, reason = null) {
-    const { CleanerJoinRequest, User } = require("../models");
+  static async declineRequest(joinRequestId, homeownerId, reason = null, io = null) {
+    const { CleanerJoinRequest, User, Notification } = require("../models");
     const NotificationService = require("./NotificationService");
 
     const request = await CleanerJoinRequest.findByPk(joinRequestId);
@@ -256,6 +290,30 @@ class CleanerApprovalService {
       relatedAppointmentId: request.appointmentId,
     });
 
+    // Clear the action-required flag on the original notification
+    await Notification.update(
+      { actionRequired: false, isRead: true },
+      {
+        where: {
+          userId: homeownerId,
+          type: "cleaner_join_request",
+          "data.joinRequestId": joinRequestId,
+        },
+      }
+    );
+
+    // Emit socket event to update badge count in real-time
+    if (io) {
+      const [unreadCount, actionRequiredCount] = await Promise.all([
+        Notification.getUnreadCount(homeownerId),
+        Notification.getActionRequiredCount(homeownerId),
+      ]);
+      io.to(`user_${homeownerId}`).emit("notification_count_update", {
+        unreadCount,
+        actionRequiredCount,
+      });
+    }
+
     return {
       success: true,
       message: "Request has been declined.",
@@ -267,7 +325,7 @@ class CleanerApprovalService {
    * @returns {Promise<Object>} Result with counts
    */
   static async autoApproveExpiredRequests() {
-    const { CleanerJoinRequest, MultiCleanerJob, User } = require("../models");
+    const { CleanerJoinRequest, MultiCleanerJob, User, Notification } = require("../models");
     const MultiCleanerService = require("./MultiCleanerService");
     const NotificationService = require("./NotificationService");
     const EncryptionService = require("./EncryptionService");
@@ -283,8 +341,8 @@ class CleanerApprovalService {
         // Check if job is still open
         const job = await MultiCleanerJob.findByPk(request.multiCleanerJobId);
 
-        if (!job || job.isFilled()) {
-          // Job is filled or gone, cancel this request
+        if (!job || job.isFilled() || job.status === "paused" || job.status === "cancelled") {
+          // Job is filled, paused, cancelled, or gone - cancel this request
           await request.cancel();
           cancelled++;
           continue;
@@ -333,6 +391,18 @@ class CleanerApprovalService {
           const cancelledCount = await this.cancelPendingRequestsForJob(request.multiCleanerJobId);
           cancelled += cancelledCount;
         }
+
+        // Clear the action-required flag on the original notification
+        await Notification.update(
+          { actionRequired: false, isRead: true },
+          {
+            where: {
+              userId: request.homeownerId,
+              type: "cleaner_join_request",
+              "data.joinRequestId": request.id,
+            },
+          }
+        );
 
         approved++;
       } catch (error) {

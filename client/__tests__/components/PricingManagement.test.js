@@ -4,6 +4,7 @@ import { render, fireEvent, waitFor } from "@testing-library/react-native";
 // Mock dependencies
 jest.mock("react-router-native", () => ({
   useNavigate: () => jest.fn(),
+  useLocation: () => ({ key: "default", pathname: "/", search: "", hash: "", state: null }),
 }));
 
 jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
@@ -72,23 +73,28 @@ describe("PricingManagement", () => {
   const mockPricingConfig = {
     source: "database",
     config: {
-      basePrice: 150,
-      extraBedBathFee: 50,
-      halfBathFee: 25,
-      sheetFeePerBed: 30,
-      towelFee: 5,
-      faceClothFee: 2,
+      basePrice: 15000,
+      extraBedBathFee: 5000,
+      halfBathFee: 2500,
+      sheetFeePerBed: 3000,
+      towelFee: 500,
+      faceClothFee: 200,
       timeWindowAnytime: 0,
-      timeWindow10To3: 25,
-      timeWindow11To4: 25,
-      timeWindow12To2: 30,
-      cancellationFee: 25,
+      timeWindow10To3: 2500,
+      timeWindow11To4: 2500,
+      timeWindow12To2: 3000,
+      cancellationFee: 2500,
       cancellationWindowDays: 7,
       homeownerPenaltyDays: 3,
       cleanerPenaltyDays: 4,
       refundPercentage: 0.5,
       platformFeePercent: 0.1,
-      highVolumeFee: 50,
+      highVolumeFee: 5000,
+      lastMinuteFee: 5000,
+      lastMinuteThresholdHours: 48,
+      lastMinuteNotificationRadiusMiles: 25,
+      incentiveRefundPercent: 0.1,
+      incentiveCleanerPercent: 0.4,
     },
   };
 
@@ -96,23 +102,28 @@ describe("PricingManagement", () => {
     source: "config",
     config: null,
     staticDefaults: {
-      basePrice: 150,
-      extraBedBathFee: 50,
-      halfBathFee: 25,
-      sheetFeePerBed: 30,
-      towelFee: 5,
-      faceClothFee: 2,
+      basePrice: 15000,
+      extraBedBathFee: 5000,
+      halfBathFee: 2500,
+      sheetFeePerBed: 3000,
+      towelFee: 500,
+      faceClothFee: 200,
       timeWindowAnytime: 0,
-      timeWindow10To3: 25,
-      timeWindow11To4: 25,
-      timeWindow12To2: 30,
-      cancellationFee: 25,
+      timeWindow10To3: 2500,
+      timeWindow11To4: 2500,
+      timeWindow12To2: 3000,
+      cancellationFee: 2500,
       cancellationWindowDays: 7,
       homeownerPenaltyDays: 3,
       cleanerPenaltyDays: 4,
       refundPercentage: 0.5,
       platformFeePercent: 0.1,
-      highVolumeFee: 50,
+      highVolumeFee: 5000,
+      lastMinuteFee: 5000,
+      lastMinuteThresholdHours: 48,
+      lastMinuteNotificationRadiusMiles: 25,
+      incentiveRefundPercent: 0.1,
+      incentiveCleanerPercent: 0.4,
     },
   };
 
@@ -205,9 +216,10 @@ describe("PricingManagement", () => {
       );
 
       await waitFor(() => {
-        expect(getByDisplayValue("150")).toBeTruthy(); // basePrice
-        expect(getAllByDisplayValue("50").length).toBeGreaterThan(0); // extraBedBathFee and others
-        expect(getAllByDisplayValue("30").length).toBeGreaterThan(0); // sheetFeePerBed
+        // Form displays values in dollars (cents / 100)
+        expect(getByDisplayValue("150")).toBeTruthy(); // basePrice: 15000 cents = $150
+        expect(getAllByDisplayValue("50").length).toBeGreaterThan(0); // extraBedBathFee: 5000 cents = $50
+        expect(getAllByDisplayValue("30").length).toBeGreaterThan(0); // sheetFeePerBed: 3000 cents = $30
       });
     });
 
@@ -219,7 +231,7 @@ describe("PricingManagement", () => {
       );
 
       await waitFor(() => {
-        expect(getByDisplayValue("150")).toBeTruthy();
+        expect(getByDisplayValue("150")).toBeTruthy(); // 15000 cents = $150
       });
     });
   });
@@ -330,7 +342,7 @@ describe("PricingManagement", () => {
       fireEvent.changeText(basePriceInput, "175");
       fireEvent.press(getByText("Save Changes"));
 
-      // Confirm on modal
+      // Confirm on modal (mock doesn't require checkbox)
       fireEvent.press(getByTestId("modal-confirm"));
 
       await waitFor(() => {

@@ -4,6 +4,7 @@ const {
   UserHomes,
   User,
   PricingConfig,
+  Notification,
 } = require("../models");
 const { Op } = require("sequelize");
 const NotificationService = require("./NotificationService");
@@ -70,9 +71,9 @@ class NewHomeRequestService {
   static async calculateHomePrice(numBeds, numBaths) {
     const config = await PricingConfig.getActive();
     if (!config) {
-      // Fallback to defaults if no config
-      const basePrice = 150;
-      const extraBedBathFee = 50;
+      // Fallback to defaults if no config (all values in cents)
+      const basePrice = 15000; // $150.00 in cents
+      const extraBedBathFee = 5000; // $50.00 in cents
       const extraBeds = Math.max(0, numBeds - 1);
       const extraBaths = Math.max(0, numBaths - 1);
       return basePrice + (extraBeds * extraBedBathFee) + (extraBaths * extraBedBathFee);
@@ -82,11 +83,12 @@ class NewHomeRequestService {
     const extraBaths = Math.max(0, Math.floor(numBaths) - 1);
     const halfBaths = numBaths % 1 >= 0.5 ? 1 : 0;
 
+    // All config values are in cents
     return (
       config.basePrice +
       extraBeds * config.extraBedBathFee +
       extraBaths * config.extraBedBathFee +
-      halfBaths * (config.halfBathFee || 25)
+      halfBaths * (config.halfBathFee || 2500) // $25.00 default in cents
     );
   }
 
@@ -127,7 +129,7 @@ class NewHomeRequestService {
     }
 
     // Calculate price
-    const numBeds = parseInt(home.numBeds) || 1;
+    const numBeds = parseInt(home.numBeds, 10) || 1;
     const numBaths = parseFloat(home.numBaths) || 1;
     const calculatedPrice = await this.calculateHomePrice(numBeds, numBaths);
 
@@ -283,6 +285,30 @@ class NewHomeRequestService {
         io,
       });
 
+      // Clear the action-required flag on the original notification
+      await Notification.update(
+        { actionRequired: false, isRead: true },
+        {
+          where: {
+            userId: businessOwnerId,
+            type: "new_home_request",
+            "data.requestId": requestId,
+          },
+        }
+      );
+
+      // Emit socket event to update badge count in real-time
+      if (io) {
+        const [unreadCount, actionRequiredCount] = await Promise.all([
+          Notification.getUnreadCount(businessOwnerId),
+          Notification.getActionRequiredCount(businessOwnerId),
+        ]);
+        io.to(`user_${businessOwnerId}`).emit("notification_count_update", {
+          unreadCount,
+          actionRequiredCount,
+        });
+      }
+
       return { request, cleanerClient: existingCleanerClient };
     }
 
@@ -329,6 +355,30 @@ class NewHomeRequestService {
       price: request.calculatedPrice,
       io,
     });
+
+    // Clear the action-required flag on the original notification
+    await Notification.update(
+      { actionRequired: false, isRead: true },
+      {
+        where: {
+          userId: businessOwnerId,
+          type: "new_home_request",
+          "data.requestId": requestId,
+        },
+      }
+    );
+
+    // Emit socket event to update badge count in real-time
+    if (io) {
+      const [unreadCount, actionRequiredCount] = await Promise.all([
+        Notification.getUnreadCount(businessOwnerId),
+        Notification.getActionRequiredCount(businessOwnerId),
+      ]);
+      io.to(`user_${businessOwnerId}`).emit("notification_count_update", {
+        unreadCount,
+        actionRequiredCount,
+      });
+    }
 
     return { request, cleanerClient };
   }
@@ -388,6 +438,30 @@ class NewHomeRequestService {
       reason,
       io,
     });
+
+    // Clear the action-required flag on the original notification
+    await Notification.update(
+      { actionRequired: false, isRead: true },
+      {
+        where: {
+          userId: businessOwnerId,
+          type: "new_home_request",
+          "data.requestId": requestId,
+        },
+      }
+    );
+
+    // Emit socket event to update badge count in real-time
+    if (io) {
+      const [unreadCount, actionRequiredCount] = await Promise.all([
+        Notification.getUnreadCount(businessOwnerId),
+        Notification.getActionRequiredCount(businessOwnerId),
+      ]);
+      io.to(`user_${businessOwnerId}`).emit("notification_count_update", {
+        unreadCount,
+        actionRequiredCount,
+      });
+    }
 
     return request;
   }

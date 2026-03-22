@@ -53,8 +53,9 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     calculatedPrice: {
-      type: DataTypes.DECIMAL(10, 2),
+      type: DataTypes.INTEGER,
       allowNull: true,
+      comment: "Calculated price in cents (e.g., 15000 = $150.00)",
     },
     numBeds: {
       type: DataTypes.INTEGER,
@@ -65,8 +66,9 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     hourlyRate: {
-      type: DataTypes.DECIMAL(10, 2),
+      type: DataTypes.INTEGER,
       allowNull: true,
+      comment: "Hourly rate in cents (e.g., 5000 = $50.00)",
     },
     lastRequestedAt: {
       type: DataTypes.DATE,

@@ -6,6 +6,8 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const rateLimit = require("express-rate-limit");
+const { Op } = require("sequelize");
 const models = require("../../../models");
 const {
   User,
@@ -16,6 +18,7 @@ const {
   UserCleanerAppointments,
   UserBills,
   Payout,
+  EmployeeJobAssignment,
 } = models;
 const InvitationService = require("../../../services/InvitationService");
 const calculatePrice = require("../../../services/CalculatePrice");
@@ -27,10 +30,43 @@ const EncryptionService = require("../../../services/EncryptionService");
 const NotificationService = require("../../../services/NotificationService");
 const CleanerClientSerializer = require("../../../serializers/CleanerClientSerializer");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
+const TimezoneService = require("../../../services/TimezoneService");
+const { checkBookingDistance, MAX_BOOKING_DISTANCE_MILES } = require("../../../utils/geoUtils");
+
+// Safe decrypt helper - returns fallback value on decryption failure
+const safeDecrypt = (value, fallback = "") => {
+  if (!value) return fallback;
+  try {
+    const decrypted = EncryptionService.decrypt(value);
+    return decrypted || fallback;
+  } catch (error) {
+    console.error("Decryption error (using fallback):", error.message);
+    return fallback;
+  }
+};
 
 const cleanerClientsRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 const saltRounds = 10;
+
+// Rate limiter for public invitation endpoints - prevent brute force attacks
+const invitationRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // Max 20 requests per 15 minutes per IP
+  message: { error: "Too many requests, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Stricter rate limiter for invitation acceptance - prevent account creation spam and brute force
+const invitationAcceptLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === "test" ? 100 : 3, // Higher limit in test mode to avoid test interference
+  message: { error: "Too many account creation attempts, please try again later" },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipFailedRequests: process.env.NODE_ENV === "test", // In production, count failed requests to prevent enumeration
+});
 
 // Hash password helper
 const hashPassword = async (password) => {
@@ -89,14 +125,61 @@ cleanerClientsRouter.post("/invite", verifyCleaner, async (req, res) => {
     if (!name || !name.trim()) {
       return res.status(400).json({ error: "Client name is required" });
     }
+    if (name.trim().length > 100) {
+      return res.status(400).json({ error: "Client name must not exceed 100 characters" });
+    }
     if (!email || !email.trim()) {
       return res.status(400).json({ error: "Client email is required" });
+    }
+    if (email.trim().length > 254) {
+      return res.status(400).json({ error: "Email address is too long" });
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ error: "Invalid email format" });
+    }
+
+    // Validate optional field lengths
+    if (phone && phone.trim().length > 20) {
+      return res.status(400).json({ error: "Phone number must not exceed 20 characters" });
+    }
+    if (notes && notes.length > 2000) {
+      return res.status(400).json({ error: "Notes must not exceed 2000 characters" });
+    }
+
+    // Validate address fields if provided
+    if (address) {
+      if (typeof address !== "object") {
+        return res.status(400).json({ error: "Address must be an object" });
+      }
+      if (address.address && address.address.length > 200) {
+        return res.status(400).json({ error: "Street address must not exceed 200 characters" });
+      }
+      if (address.city && address.city.length > 100) {
+        return res.status(400).json({ error: "City must not exceed 100 characters" });
+      }
+      if (address.state && address.state.length > 50) {
+        return res.status(400).json({ error: "State must not exceed 50 characters" });
+      }
+      if (address.zipcode && address.zipcode.length > 20) {
+        return res.status(400).json({ error: "Zipcode must not exceed 20 characters" });
+      }
+    }
+
+    // Validate beds/baths if provided
+    if (beds !== undefined && beds !== null) {
+      const parsedBeds = parseInt(beds, 10);
+      if (isNaN(parsedBeds) || parsedBeds < 0 || parsedBeds > 50) {
+        return res.status(400).json({ error: "Beds must be a number between 0 and 50" });
+      }
+    }
+    if (baths !== undefined && baths !== null) {
+      const parsedBaths = parseFloat(baths);
+      if (isNaN(parsedBaths) || parsedBaths < 0 || parsedBaths > 50) {
+        return res.status(400).json({ error: "Baths must be a number between 0 and 50" });
+      }
     }
 
     // Create the invitation
@@ -120,7 +203,7 @@ cleanerClientsRouter.post("/invite", verifyCleaner, async (req, res) => {
 
     // Send invitation email (non-blocking - don't fail if email fails)
     // Use original values from request since cleanerClient fields are now encrypted
-    const cleanerName = `${EncryptionService.decrypt(req.user.firstName)} ${EncryptionService.decrypt(req.user.lastName)}`;
+    const cleanerName = `${safeDecrypt(req.user.firstName, "Your")} ${safeDecrypt(req.user.lastName, "Cleaner")}`;
     const clientEmail = email.trim().toLowerCase();
     const clientName = name.trim();
     const addressStr = address
@@ -145,7 +228,7 @@ cleanerClientsRouter.post("/invite", verifyCleaner, async (req, res) => {
       message: "Invitation sent successfully",
       cleanerClient: {
         id: cleanerClient.id,
-        inviteToken: cleanerClient.inviteToken,
+        // inviteToken intentionally omitted - only sent via email for security
         invitedName: clientName,
         invitedEmail: clientEmail,
         status: cleanerClient.status,
@@ -241,7 +324,7 @@ cleanerClientsRouter.get("/", verifyCleaner, async (req, res) => {
  * Validate an invitation token and return pre-filled data
  * Public endpoint
  */
-cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
+cleanerClientsRouter.get("/invitations/:token", invitationRateLimiter, async (req, res) => {
   try {
     const { token } = req.params;
 
@@ -261,7 +344,7 @@ cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
       return res.status(400).json({
         valid: false,
         alreadyAccepted: true,
-        email: cleanerClient.email || decryptedEmail,
+        email: decryptedEmail,
         error: "This invitation has already been accepted. Please log in.",
       });
     }
@@ -297,14 +380,22 @@ cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
         cleanerName: isCancelled
           ? null
           : cleanerClient.cleaner
-            ? `${EncryptionService.decrypt(cleanerClient.cleaner.firstName)} ${EncryptionService.decrypt(cleanerClient.cleaner.lastName)}`
+            ? `${safeDecrypt(cleanerClient.cleaner.firstName, "Your")} ${safeDecrypt(cleanerClient.cleaner.lastName, "Cleaner")}`
             : "Your Cleaner",
+        // Include business info for display
+        cleaner: isCancelled ? null : cleanerClient.cleaner ? {
+          businessName: cleanerClient.cleaner.businessName,
+          businessLogo: cleanerClient.cleaner.businessLogo,
+          isBusinessOwner: cleanerClient.cleaner.isBusinessOwner,
+        } : null,
         name: cleanerClient.invitedName ? EncryptionService.decrypt(cleanerClient.invitedName) : null,
         email: cleanerClient.invitedEmail ? EncryptionService.decrypt(cleanerClient.invitedEmail) : null,
         phone: cleanerClient.invitedPhone ? EncryptionService.decrypt(cleanerClient.invitedPhone) : null,
         address: decryptedInvitedAddress,
         beds: cleanerClient.invitedBeds,
         baths: cleanerClient.invitedBaths,
+        notes: cleanerClient.invitedNotes ? EncryptionService.decrypt(cleanerClient.invitedNotes) : null,
+        expiresAt: cleanerClient.inviteExpiresAt,
       },
     });
   } catch (err) {
@@ -318,10 +409,10 @@ cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
  * Accept an invitation and create user account
  * Public endpoint
  */
-cleanerClientsRouter.post("/invitations/:token/accept", async (req, res) => {
+cleanerClientsRouter.post("/invitations/:token/accept", invitationAcceptLimiter, async (req, res) => {
   try {
     const { token } = req.params;
-    const { password, phone, addressCorrections } = req.body;
+    const { password, phone, addressCorrections, termsId, privacyPolicyId, paymentTermsId, damageProtectionId } = req.body;
 
     // Validate required fields
     if (!password || password.length < 8) {
@@ -329,10 +420,20 @@ cleanerClientsRouter.post("/invitations/:token/accept", async (req, res) => {
         error: "Password must be at least 8 characters",
       });
     }
+    // Enforce password complexity: uppercase, lowercase, number, special character
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    if (!hasUppercase || !hasLowercase || !hasNumber || !hasSpecialChar) {
+      return res.status(400).json({
+        error: "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+      });
+    }
 
     const result = await InvitationService.acceptInvitation(
       token,
-      { password, phone, addressCorrections },
+      { password, phone, addressCorrections, termsId, privacyPolicyId, paymentTermsId, damageProtectionId },
       models,
       hashPassword
     );
@@ -405,7 +506,7 @@ cleanerClientsRouter.post("/invitations/:token/accept", async (req, res) => {
  * Decline an invitation
  * Public endpoint
  */
-cleanerClientsRouter.post("/invitations/:token/decline", async (req, res) => {
+cleanerClientsRouter.post("/invitations/:token/decline", invitationRateLimiter, async (req, res) => {
   try {
     const { token } = req.params;
 
@@ -438,8 +539,10 @@ const verifyHomeowner = async (req, res, next) => {
     const decoded = jwt.verify(token, secretKey);
     const user = await User.findByPk(decoded.userId);
 
-    // In this codebase, homeowners have type: null
-    if (!user || user.type !== null) {
+    // Homeowners must have type: "homeowner" or null (legacy accounts)
+    // Use explicit whitelist instead of blacklist for security
+    const allowedTypes = ["homeowner", null, undefined];
+    if (!user || !allowedTypes.includes(user.type)) {
       return res.status(403).json({ error: "Homeowner access required" });
     }
 
@@ -519,13 +622,15 @@ cleanerClientsRouter.get("/pending-client-responses", verifyCleaner, async (req,
   try {
     const cleanerId = req.user.id;
     const { Op } = require("sequelize");
-    const today = new Date().toISOString().split("T")[0];
+    const today = TimezoneService.getTodayInTimezone();
 
     // Get appointments booked by this cleaner that need client response
     const appointments = await UserAppointments.findAll({
       where: {
         bookedByCleanerId: cleanerId,
         date: { [Op.gte]: today },
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
+        wasCancelled: { [Op.ne]: true }, // Skip cancelled appointments
         // Include pending, declined, and expired (but not accepted)
         [Op.or]: [
           { clientResponse: null }, // Pending response
@@ -605,6 +710,63 @@ cleanerClientsRouter.get("/pending-client-responses", verifyCleaner, async (req,
   }
 });
 
+/**
+ * DELETE /pending-client-responses/:appointmentId
+ * Cancel a pending booking request that was sent to a client
+ * This allows cleaners to cancel bookings before the client responds
+ * MUST be defined before /:id routes
+ */
+cleanerClientsRouter.delete("/pending-client-responses/:appointmentId", verifyCleaner, async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const cleanerId = req.user.id;
+
+    // Find the appointment
+    const appointment = await UserAppointments.findOne({
+      where: {
+        id: appointmentId,
+        bookedByCleanerId: cleanerId,
+        // Only allow cancellation of pending/declined/expired requests
+        [Op.or]: [
+          { clientResponse: null },
+          { clientResponse: "declined" },
+          { clientResponse: "expired" },
+        ],
+      },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Booking request not found or already processed" });
+    }
+
+    // Delete related records
+    await UserCleanerAppointments.destroy({
+      where: { appointmentId: appointment.id },
+    });
+
+    await EmployeeJobAssignment.destroy({
+      where: { appointmentId: appointment.id },
+    });
+
+    await Payout.destroy({
+      where: { appointmentId: appointment.id },
+    });
+
+    // Delete the appointment
+    await appointment.destroy();
+
+    console.log(`[CancelBookingRequest] Cleaner ${cleanerId} cancelled booking request ${appointmentId}`);
+
+    res.json({
+      success: true,
+      message: "Booking request cancelled successfully",
+    });
+  } catch (err) {
+    console.error("Error cancelling booking request:", err);
+    res.status(500).json({ error: "Failed to cancel booking request" });
+  }
+});
+
 // =====================
 // PARAMETERIZED ID ROUTES
 // These must come AFTER all specific string routes like /invitations, /my-cleaner, /pending-client-responses
@@ -665,7 +827,7 @@ cleanerClientsRouter.get("/:id", verifyCleaner, async (req, res) => {
 cleanerClientsRouter.get("/:id/full", verifyCleaner, async (req, res) => {
   try {
     const { id } = req.params;
-    const today = new Date().toISOString().split("T")[0];
+    const today = TimezoneService.getTodayInTimezone();
 
     const cleanerClient = await CleanerClient.findOne({
       where: {
@@ -768,7 +930,10 @@ cleanerClientsRouter.get("/:id/full", verifyCleaner, async (req, res) => {
     if (allHomes.length > 0) {
       const homeIds = allHomes.map(h => h.id);
       const allAppointments = await UserAppointments.findAll({
-        where: { homeId: homeIds },
+        where: {
+          homeId: homeIds,
+          isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
+        },
         include: [
           {
             model: UserHomes,
@@ -838,7 +1003,7 @@ cleanerClientsRouter.get("/:id/full", verifyCleaner, async (req, res) => {
         invitedAddress: decryptedInvitedAddress,
         invitedBeds: cleanerClient.invitedBeds,
         invitedBaths: cleanerClient.invitedBaths,
-        invitedNotes: cleanerClient.invitedNotes,
+        invitedNotes: cleanerClient.invitedNotes ? EncryptionService.decrypt(cleanerClient.invitedNotes) : null,
         invitedAt: cleanerClient.invitedAt,
         acceptedAt: cleanerClient.acceptedAt,
         defaultFrequency: cleanerClient.defaultFrequency,
@@ -1019,6 +1184,92 @@ cleanerClientsRouter.delete("/:id", verifyCleaner, async (req, res) => {
         message: "Invitation cancelled",
       });
     } else {
+      // Find all recurring schedules for this client
+      const schedules = await RecurringSchedule.findAll({
+        where: { cleanerClientId: id },
+        attributes: ["id"],
+      });
+
+      // Delete future appointments for all schedules
+      // Note: Paid appointments are skipped and require manual cancellation
+      let totalCancelledAppointments = 0;
+      let totalSkippedPaid = 0;
+      const today = TimezoneService.getTodayInTimezone();
+
+      for (const schedule of schedules) {
+        // Find future uncompleted unpaid appointments for this schedule
+        const appointmentsToDelete = await UserAppointments.findAll({
+          where: {
+            recurringScheduleId: schedule.id,
+            date: { [Op.gt]: today },
+            completed: false,
+            wasCancelled: { [Op.ne]: true },
+            paid: { [Op.ne]: true },
+          },
+          attributes: ["id", "userId", "price"],
+        });
+
+        // Count paid appointments that couldn't be deleted
+        const paidAppointments = await UserAppointments.findAll({
+          where: {
+            recurringScheduleId: schedule.id,
+            date: { [Op.gt]: today },
+            completed: false,
+            wasCancelled: { [Op.ne]: true },
+            paid: true,
+          },
+          attributes: ["id"],
+        });
+        totalSkippedPaid += paidAppointments.length;
+
+        if (appointmentsToDelete.length > 0) {
+          const appointmentIds = appointmentsToDelete.map(a => a.id);
+
+          // Group by userId for UserBills adjustments (prices in cents)
+          const userBillAdjustments = {};
+          for (const appt of appointmentsToDelete) {
+            const priceCents = appt.price || 0;
+            if (!userBillAdjustments[appt.userId]) {
+              userBillAdjustments[appt.userId] = 0;
+            }
+            userBillAdjustments[appt.userId] += priceCents;
+          }
+
+          // Delete related records
+          await UserCleanerAppointments.destroy({
+            where: { appointmentId: { [Op.in]: appointmentIds } },
+          });
+
+          await EmployeeJobAssignment.destroy({
+            where: { appointmentId: { [Op.in]: appointmentIds } },
+          });
+
+          await Payout.destroy({
+            where: { appointmentId: { [Op.in]: appointmentIds } },
+          });
+
+          // Adjust UserBills
+          for (const [userId, totalToSubtract] of Object.entries(userBillAdjustments)) {
+            const userBill = await UserBills.findOne({ where: { userId } });
+            if (userBill && totalToSubtract > 0) {
+              const newAppointmentDue = Math.max(0, parseFloat(userBill.appointmentDue || 0) - totalToSubtract);
+              const newTotalDue = Math.max(0, parseFloat(userBill.totalDue || 0) - totalToSubtract);
+              await userBill.update({
+                appointmentDue: newAppointmentDue,
+                totalDue: newTotalDue,
+              });
+            }
+          }
+
+          // Delete appointments
+          await UserAppointments.destroy({
+            where: { id: { [Op.in]: appointmentIds } },
+          });
+
+          totalCancelledAppointments += appointmentIds.length;
+        }
+      }
+
       // Deactivate active client relationship
       await cleanerClient.update({ status: "inactive" });
 
@@ -1030,7 +1281,11 @@ cleanerClientsRouter.delete("/:id", verifyCleaner, async (req, res) => {
 
       res.json({
         success: true,
-        message: "Client relationship deactivated",
+        message: totalSkippedPaid > 0
+          ? `Client relationship deactivated. ${totalSkippedPaid} paid appointment(s) were not deleted and require manual cancellation.`
+          : "Client relationship deactivated",
+        cancelledAppointments: totalCancelledAppointments,
+        skippedPaidAppointments: totalSkippedPaid,
       });
     }
   } catch (err) {
@@ -1055,10 +1310,10 @@ cleanerClientsRouter.post("/:id/resend-invite", verifyCleaner, async (req, res) 
     );
 
     // Send invitation reminder email (non-blocking)
-    // Decrypt fields in case they're still encrypted after update
-    const cleanerName = `${EncryptionService.decrypt(req.user.firstName)} ${EncryptionService.decrypt(req.user.lastName)}`;
-    const clientEmail = EncryptionService.decrypt(cleanerClient.invitedEmail) || cleanerClient.invitedEmail;
-    const clientName = EncryptionService.decrypt(cleanerClient.invitedName) || cleanerClient.invitedName;
+    // Use safeDecrypt with fallbacks in case they're still encrypted after update
+    const cleanerName = `${safeDecrypt(req.user.firstName, "Your")} ${safeDecrypt(req.user.lastName, "Cleaner")}`;
+    const clientEmail = safeDecrypt(cleanerClient.invitedEmail, cleanerClient.invitedEmail);
+    const clientName = safeDecrypt(cleanerClient.invitedName, "Client");
 
     try {
       await Email.sendInvitationReminder(
@@ -1096,6 +1351,17 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       return res.status(400).json({ error: "Date is required" });
     }
 
+    // Validate date is not in the past
+    const bookingDate = new Date(date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+    if (isNaN(bookingDate.getTime())) {
+      return res.status(400).json({ error: "Invalid date format" });
+    }
+    if (bookingDate < today) {
+      return res.status(400).json({ error: "Cannot book appointments for past dates" });
+    }
+
     // Verify the cleaner-client relationship
     const cleanerClient = await CleanerClient.findOne({
       where: {
@@ -1107,7 +1373,7 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
         {
           model: User,
           as: "client",
-          attributes: ["id", "firstName", "lastName", "email", "phone", "paymentMethod"],
+          attributes: ["id", "firstName", "lastName", "email", "phone", "hasPaymentMethod", "accountFrozen", "expoPushToken", "notifications"],
         },
         {
           model: UserHomes,
@@ -1125,6 +1391,14 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
     if (!cleanerClient.client) {
       return res.status(400).json({
         error: "Client must have an account set up before booking",
+      });
+    }
+
+    // Check if the client's account is frozen
+    if (cleanerClient.client.accountFrozen) {
+      return res.status(403).json({
+        error: "This client's account has been suspended. You cannot book appointments for them.",
+        accountSuspended: true,
       });
     }
 
@@ -1151,8 +1425,27 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       }
     }
 
+    // Check distance from cleaner's service area to home (max 30 miles)
+    const cleanerLat = req.user.serviceAreaLatitude ? parseFloat(req.user.serviceAreaLatitude) : null;
+    const cleanerLon = req.user.serviceAreaLongitude ? parseFloat(req.user.serviceAreaLongitude) : null;
+    const homeLat = home.latitude ? parseFloat(EncryptionService.decrypt(home.latitude)) : null;
+    const homeLon = home.longitude ? parseFloat(EncryptionService.decrypt(home.longitude)) : null;
+
+    if (cleanerLat && cleanerLon && homeLat && homeLon) {
+      const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+      if (distanceCheck.canBook === false) {
+        return res.status(400).json({
+          error: "Home too far from service area",
+          message: `This home is ${distanceCheck.distanceMiles} miles from your service area center. The maximum booking distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+          code: "EXCEEDS_MAX_DISTANCE",
+          distanceMiles: distanceCheck.distanceMiles,
+          maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+        });
+      }
+    }
+
     // Check if client has payment method
-    if (!client.paymentMethod) {
+    if (!client.hasPaymentMethod) {
       return res.status(400).json({
         error: "Client does not have a payment method set up",
       });
@@ -1172,38 +1465,60 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       });
     }
 
-    // Calculate or use provided price
-    let appointmentPrice;
+    // Calculate or use provided price (store in cents)
+    let appointmentPriceCents;
     if (price) {
-      appointmentPrice = parseFloat(price);
+      // Validate price
+      const parsedPrice = parseFloat(price);
+      if (isNaN(parsedPrice) || !isFinite(parsedPrice)) {
+        return res.status(400).json({ error: "Invalid price format" });
+      }
+      if (parsedPrice < 0) {
+        return res.status(400).json({ error: "Price cannot be negative" });
+      }
+      if (parsedPrice > 100000) {
+        return res.status(400).json({ error: "Price exceeds maximum allowed value" });
+      }
+      // User input is in dollars, convert to cents
+      appointmentPriceCents = Math.round(parsedPrice * 100);
     } else if (cleanerClient.defaultPrice) {
-      appointmentPrice = parseFloat(cleanerClient.defaultPrice);
+      // defaultPrice is stored in cents (INTEGER)
+      appointmentPriceCents = cleanerClient.defaultPrice;
     } else {
-      // Calculate based on home details
-      appointmentPrice = await calculatePrice(
-        home.bringSheets || "no",
-        home.bringTowels || "no",
+      // calculatePrice returns cents
+      // sheetsProvided/towelsProvided indicate if client provides them
+      // bringSheets/bringTowels for appointment indicate if cleaner should bring them
+      // If client provides (true/"yes"), cleaner doesn't need to bring ("no")
+      const bringSheets = home.sheetsProvided === true || home.sheetsProvided === "yes" ? "no" : "yes";
+      const bringTowels = home.towelsProvided === true || home.towelsProvided === "yes" ? "no" : "yes";
+      appointmentPriceCents = await calculatePrice(
+        bringSheets,
+        bringTowels,
         home.numBeds,
         home.numBaths,
         timeWindow || home.timeToBeCompleted || "anytime"
       );
     }
 
-    // Create the appointment
+    // Create the appointment (price stored as INTEGER cents)
+    // sheetsProvided/towelsProvided indicate if client provides them
+    // bringSheets/bringTowels for appointment indicate if cleaner should bring them
+    const appointmentBringSheets = home.sheetsProvided === true || home.sheetsProvided === "yes" ? "no" : "yes";
+    const appointmentBringTowels = home.towelsProvided === true || home.towelsProvided === "yes" ? "no" : "yes";
     const appointment = await UserAppointments.create({
       userId: client.id,
       homeId: home.id,
       date: date,
-      price: appointmentPrice.toString(),
-      originalPrice: appointmentPrice.toString(),
+      price: appointmentPriceCents,
+      originalPrice: appointmentPriceCents,
       completed: false,
       paid: false,
       hasBeenAssigned: true,
       employeesAssigned: [req.user.id.toString()],
-      empoyeesNeeded: home.cleanersNeeded || 1,
+      employeesNeeded: home.cleanersNeeded || 1,
       timeToBeCompleted: timeWindow || home.timeToBeCompleted || "anytime",
-      bringSheets: home.bringSheets || "no",
-      bringTowels: home.bringTowels || "no",
+      bringSheets: appointmentBringSheets,
+      bringTowels: appointmentBringTowels,
       keyPadCode: home.keyPadCode || null,
       keyLocation: home.keyLocation || null,
       bookedByCleanerId: req.user.id,
@@ -1217,7 +1532,7 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       employeeId: req.user.id,
     });
 
-    // Update or create user bill
+    // Update or create user bill (all values in cents)
     let userBill = await UserBills.findOne({
       where: { userId: client.id },
     });
@@ -1225,28 +1540,24 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
     if (!userBill) {
       userBill = await UserBills.create({
         userId: client.id,
-        appointmentDue: appointmentPrice,
-        cancellationDue: 0,
-        totalDue: appointmentPrice,
-        appointmentPaid: 0,
-        cancellationPaid: 0,
-        totalPaid: 0,
+        appointmentDue: appointmentPriceCents,
+        cancellationFee: 0,
+        totalDue: appointmentPriceCents,
       });
     } else {
       await userBill.update({
-        appointmentDue: parseFloat(userBill.appointmentDue || 0) + appointmentPrice,
-        totalDue: parseFloat(userBill.totalDue || 0) + appointmentPrice,
+        appointmentDue: (userBill.appointmentDue || 0) + appointmentPriceCents,
+        totalDue: (userBill.totalDue || 0) + appointmentPriceCents,
       });
     }
 
     // Calculate cleaner payout (platform takes fee) - get fee from database config
     const pricingConfig = await getPricingConfig();
     const standardFeePercent = pricingConfig?.platform?.feePercent || 0.10;
-    const appointmentPriceInCents = Math.round(appointmentPrice * 100);
 
     const feeResult = await IncentiveService.calculateCleanerFee(
       req.user.id,
-      appointmentPriceInCents,
+      appointmentPriceCents, // Already in cents
       standardFeePercent
     );
 
@@ -1254,7 +1565,7 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
     await Payout.create({
       cleanerId: req.user.id,
       appointmentId: appointment.id,
-      grossAmount: appointmentPriceInCents,
+      grossAmount: appointmentPriceCents,
       platformFee: feeResult.platformFee,
       netAmount: feeResult.netAmount,
       status: "pending",
@@ -1262,8 +1573,45 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       originalPlatformFee: feeResult.originalPlatformFee,
     });
 
-    // TODO: Send notification to client about the booking
-    // await sendBookingNotification(client, appointment, req.user);
+    // Send notification to client about the booking
+    const cleanerName = `${EncryptionService.decrypt(req.user.firstName)} ${EncryptionService.decrypt(req.user.lastName)}`;
+    const clientName = `${EncryptionService.decrypt(client.firstName)} ${EncryptionService.decrypt(client.lastName)}`;
+    const homeAddress = `${EncryptionService.decrypt(home.address)}, ${EncryptionService.decrypt(home.city)}`;
+
+    // Check if client has notifications enabled
+    if (client.notifications !== false) {
+      // Send push notification
+      if (client.expoPushToken) {
+        try {
+          await PushNotification.sendPushCleanerBookedAppointment(
+            client.expoPushToken,
+            clientName,
+            cleanerName,
+            appointment.date,
+            homeAddress
+          );
+        } catch (pushErr) {
+          console.error("Failed to send push notification for cleaner booking:", pushErr);
+        }
+      }
+
+      // Send email notification
+      const decryptedEmail = EncryptionService.decrypt(client.email);
+      if (decryptedEmail) {
+        try {
+          await Email.sendNewClientAppointmentEmail(
+            decryptedEmail,
+            clientName,
+            cleanerName,
+            appointment.date,
+            homeAddress,
+            appointmentPriceCents
+          );
+        } catch (emailErr) {
+          console.error("Failed to send email notification for cleaner booking:", emailErr);
+        }
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -1303,6 +1651,17 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
       return res.status(400).json({ error: "Date is required" });
     }
 
+    // Validate date is not in the past
+    const bookingDate = new Date(date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+    if (isNaN(bookingDate.getTime())) {
+      return res.status(400).json({ error: "Invalid date format" });
+    }
+    if (bookingDate < today) {
+      return res.status(400).json({ error: "Cannot book appointments for past dates" });
+    }
+
     // Find the cleaner-client relationship
     const cleanerClient = await CleanerClient.findOne({
       where: {
@@ -1314,12 +1673,12 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
         {
           model: User,
           as: "client",
-          attributes: ["id", "firstName", "lastName", "email", "expoPushToken", "notifications"],
+          attributes: ["id", "firstName", "lastName", "email", "expoPushToken", "notifications", "accountFrozen"],
         },
         {
           model: UserHomes,
           as: "home",
-          attributes: ["id", "numBeds", "numBaths", "sheetsProvided", "towelsProvided", "keyPadCode", "keyLocation", "cleanersNeeded", "timeToBeCompleted", "isSetupComplete"],
+          attributes: ["id", "numBeds", "numBaths", "sheetsProvided", "towelsProvided", "keyPadCode", "keyLocation", "cleanersNeeded", "timeToBeCompleted", "isSetupComplete", "latitude", "longitude"],
         },
       ],
     });
@@ -1334,6 +1693,33 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
 
     if (!cleanerClient.home.isSetupComplete) {
       return res.status(400).json({ error: "Client has not completed home setup" });
+    }
+
+    // Check if the client's account is frozen
+    if (cleanerClient.client && cleanerClient.client.accountFrozen) {
+      return res.status(403).json({
+        error: "This client's account has been suspended. You cannot book appointments for them.",
+        accountSuspended: true,
+      });
+    }
+
+    // Check distance from cleaner's service area to home (max 30 miles)
+    const cleanerLat = req.user.serviceAreaLatitude ? parseFloat(req.user.serviceAreaLatitude) : null;
+    const cleanerLon = req.user.serviceAreaLongitude ? parseFloat(req.user.serviceAreaLongitude) : null;
+    const homeLat = cleanerClient.home.latitude ? parseFloat(EncryptionService.decrypt(cleanerClient.home.latitude)) : null;
+    const homeLon = cleanerClient.home.longitude ? parseFloat(EncryptionService.decrypt(cleanerClient.home.longitude)) : null;
+
+    if (cleanerLat && cleanerLon && homeLat && homeLon) {
+      const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+      if (distanceCheck.canBook === false) {
+        return res.status(400).json({
+          error: "Home too far from service area",
+          message: `This home is ${distanceCheck.distanceMiles} miles from your service area center. The maximum booking distance is ${MAX_BOOKING_DISTANCE_MILES} miles.`,
+          code: "EXCEEDS_MAX_DISTANCE",
+          distanceMiles: distanceCheck.distanceMiles,
+          maxDistanceMiles: MAX_BOOKING_DISTANCE_MILES,
+        });
+      }
     }
 
     // Check if there's already a pending booking for this date
@@ -1363,8 +1749,28 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
       return res.status(400).json({ error: "An appointment already exists for this date" });
     }
 
-    // Calculate price if not provided
-    const appointmentPrice = price || cleanerClient.defaultPrice || 150;
+    // Calculate price in cents
+    // price from request is in dollars, defaultPrice is INTEGER (cents), fallback is cents
+    let appointmentPriceCents;
+    if (price) {
+      // Validate price
+      const parsedPrice = parseFloat(price);
+      if (isNaN(parsedPrice) || !isFinite(parsedPrice)) {
+        return res.status(400).json({ error: "Invalid price format" });
+      }
+      if (parsedPrice < 0) {
+        return res.status(400).json({ error: "Price cannot be negative" });
+      }
+      if (parsedPrice > 100000) {
+        return res.status(400).json({ error: "Price exceeds maximum allowed value" });
+      }
+      appointmentPriceCents = Math.round(parsedPrice * 100);
+    } else if (cleanerClient.defaultPrice) {
+      // defaultPrice is stored in cents (INTEGER)
+      appointmentPriceCents = cleanerClient.defaultPrice;
+    } else {
+      appointmentPriceCents = 15000; // Default $150.00 in cents
+    }
 
     // Calculate expiration (48 hours from now)
     const expiresAt = new Date();
@@ -1379,12 +1785,12 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
       userId: cleanerClient.clientId,
       homeId: cleanerClient.homeId,
       date,
-      price: String(appointmentPrice),
+      price: appointmentPriceCents,
       paid: false,
       completed: false,
       hasBeenAssigned: true, // Pre-assigned to the business owner
       employeesAssigned: [String(cleanerId)],
-      empoyeesNeeded: cleanerClient.home.cleanersNeeded || 1,
+      employeesNeeded: cleanerClient.home.cleanersNeeded || 1,
       timeToBeCompleted: timeWindow || cleanerClient.home.timeToBeCompleted || "anytime",
       bringTowels: cleanerClient.home.towelsProvided ? "no" : "yes",
       bringSheets: cleanerClient.home.sheetsProvided ? "no" : "yes",
@@ -1394,7 +1800,7 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
       clientResponsePending: true,
       expiresAt,
       autoPayEnabled: cleanerClient.autoPayEnabled,
-      businessOwnerPrice: appointmentPrice,
+      businessOwnerPrice: appointmentPriceCents,
     });
 
     // Create cleaner-appointment link
@@ -1414,7 +1820,7 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
         cleanerId,
         appointmentId: appointment.id,
         appointmentDate: date,
-        price: appointmentPrice,
+        price: appointmentPriceCents,
         cleanerName,
         io,
       });
@@ -1431,7 +1837,7 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
       appointment: {
         id: appointment.id,
         date,
-        price: appointmentPrice,
+        price: appointmentPriceCents,
         status: "pending_approval",
         expiresAt,
       },
@@ -1464,6 +1870,7 @@ cleanerClientsRouter.get("/:id/pending-bookings", verifyCleaner, async (req, res
         homeId: cleanerClient.homeId,
         bookedByCleanerId: cleanerId,
         clientResponsePending: true,
+        isPaused: { [Op.ne]: true }, // Skip paused appointments (homeowner frozen)
       },
       order: [["date", "ASC"]],
     });
@@ -1543,13 +1950,13 @@ cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res)
     const { price } = req.body;
     const cleanerId = req.user.id;
 
-    // Validate price
+    // Validate price (client sends price in cents)
     if (price === undefined || price === null) {
       return res.status(400).json({ error: "Price is required" });
     }
 
-    const numericPrice = parseFloat(price);
-    if (isNaN(numericPrice) || numericPrice < 0) {
+    const priceCents = Math.round(parseFloat(price));
+    if (isNaN(priceCents) || priceCents < 0) {
       return res.status(400).json({ error: "Price must be a positive number" });
     }
 
@@ -1563,25 +1970,25 @@ cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res)
       return res.status(404).json({ error: "Client not found" });
     }
 
-    // Store old price before update
-    const oldPrice = cleanerClient.defaultPrice;
-    const priceChanged = oldPrice !== numericPrice;
+    // Store old price before update (in cents)
+    const oldPriceCents = cleanerClient.defaultPrice;
+    const priceChanged = oldPriceCents !== priceCents;
 
-    // Update the default price
-    await cleanerClient.update({ defaultPrice: numericPrice });
+    // Update the default price (stored in cents)
+    await cleanerClient.update({ defaultPrice: priceCents });
 
     // Send notifications if active client (has clientId) and price changed
     if (cleanerClient.clientId && priceChanged) {
       const cleaner = await User.findByPk(cleanerId);
-      const homeAddress = cleanerClient.home?.streetAddress || null;
+      const homeAddress = cleanerClient.home?.address ? EncryptionService.decrypt(cleanerClient.home.address) : null;
 
       await NotificationService.notifyPriceChange({
         clientId: cleanerClient.clientId,
         cleanerId,
-        cleanerName: `${cleaner.firstName} ${cleaner.lastName}`,
+        cleanerName: `${EncryptionService.decrypt(cleaner.firstName)} ${EncryptionService.decrypt(cleaner.lastName)}`,
         businessName: cleaner.businessName,
-        oldPrice,
-        newPrice: numericPrice,
+        oldPrice: oldPriceCents, // In cents - NotificationService will convert to dollars
+        newPrice: priceCents, // In cents - NotificationService will convert to dollars
         homeAddress,
         io: req.app.get("io"),
       });
@@ -1591,7 +1998,7 @@ cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res)
       success: true,
       cleanerClient: {
         id: cleanerClient.id,
-        defaultPrice: numericPrice,
+        defaultPrice: priceCents, // Return cents, frontend handles conversion
       },
     });
   } catch (err) {

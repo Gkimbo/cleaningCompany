@@ -114,6 +114,9 @@ const SignInForm = ({ state, dispatch }) => {
 				if (response.user.type === "humanResources") {
 					dispatch({ type: "USER_ACCOUNT", payload: response.user.type });
 				}
+				if (response.user.type === "it") {
+					dispatch({ type: "USER_ACCOUNT", payload: response.user.type });
+				}
 				// Set business owner info for cleaners who own a business
 				if (response.user.isBusinessOwner) {
 					dispatch({
@@ -135,6 +138,17 @@ const SignInForm = ({ state, dispatch }) => {
 				// Store linked accounts for account switching
 				if (response.linkedAccounts && response.linkedAccounts.length > 0) {
 					dispatch({ type: "SET_LINKED_ACCOUNTS", payload: response.linkedAccounts });
+				}
+				// Set frozen account state if applicable
+				if (response.user.accountFrozen) {
+					dispatch({
+						type: "SET_ACCOUNT_FROZEN",
+						payload: {
+							isFrozen: true,
+							reason: response.user.accountFrozenReason,
+							frozenAt: response.user.accountFrozenAt,
+						},
+					});
 				}
 				login(response.token);
 
@@ -177,6 +191,8 @@ const SignInForm = ({ state, dispatch }) => {
 				return "👔";
 			case "hr":
 				return "📋";
+			case "it":
+				return "💻";
 			case "homeowner":
 				return "🏠";
 			default:

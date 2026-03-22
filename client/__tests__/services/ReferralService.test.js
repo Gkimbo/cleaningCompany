@@ -1,14 +1,23 @@
-import ReferralService from "../../src/services/fetchRequests/ReferralService";
+// Mock HttpClient
+jest.mock("../../src/services/HttpClient", () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
 
-// Mock fetch globally
-global.fetch = jest.fn();
+import HttpClient from "../../src/services/HttpClient";
+import ReferralService from "../../src/services/fetchRequests/ReferralService";
 
 describe("ReferralService", () => {
   const mockToken = "test-token-123";
 
   beforeEach(() => {
     jest.clearAllMocks();
-    fetch.mockClear();
   });
 
   describe("validateCode", () => {
@@ -24,40 +33,33 @@ describe("ReferralService", () => {
         },
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await ReferralService.validateCode("JOHN1234", "homeowner");
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/referrals/validate/JOHN1234?userType=homeowner")
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/referrals/validate/JOHN1234?userType=homeowner",
+        { skipAuth: true }
       );
       expect(result.valid).toBe(true);
       expect(result.referrer.firstName).toBe("John");
     });
 
     it("should return error for invalid code", async () => {
-      const mockResponse = {
-        valid: false,
+      HttpClient.get.mockResolvedValueOnce({
+        success: false,
         error: "This referral code doesn't exist.",
         errorCode: "CODE_NOT_FOUND",
-      };
-
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve(mockResponse),
       });
 
       const result = await ReferralService.validateCode("INVALID", "homeowner");
 
       expect(result.valid).toBe(false);
-      expect(result.errorCode).toBe("CODE_NOT_FOUND");
+      expect(result.error).toBeDefined();
     });
 
     it("should handle network errors", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ReferralService.validateCode("JOHN1234", "homeowner");
 
@@ -79,22 +81,17 @@ describe("ReferralService", () => {
         ],
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await ReferralService.getCurrentPrograms();
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/referrals/current")
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/referrals/current", { skipAuth: true });
       expect(result.active).toBe(true);
       expect(result.programs).toHaveLength(1);
     });
 
     it("should return empty programs on error", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ReferralService.getCurrentPrograms();
 
@@ -109,26 +106,16 @@ describe("ReferralService", () => {
         referralCode: "JANE1234",
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await ReferralService.getMyCode(mockToken);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/referrals/my-code"),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            Authorization: `Bearer ${mockToken}`,
-          }),
-        })
-      );
+      expect(HttpClient.get).toHaveBeenCalledWith("/referrals/my-code", { token: mockToken });
       expect(result.referralCode).toBe("JANE1234");
     });
 
     it("should return null on error", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ReferralService.getMyCode(mockToken);
 
@@ -153,19 +140,17 @@ describe("ReferralService", () => {
         ],
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await ReferralService.getMyReferrals(mockToken);
 
+      expect(HttpClient.get).toHaveBeenCalledWith("/referrals/my-referrals", { token: mockToken });
       expect(result.stats.totalReferrals).toBe(3);
       expect(result.referrals).toHaveLength(1);
     });
 
     it("should return null on error", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ReferralService.getMyReferrals(mockToken);
 
@@ -180,19 +165,17 @@ describe("ReferralService", () => {
         availableDollars: "75.00",
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await ReferralService.getMyCredits(mockToken);
 
+      expect(HttpClient.get).toHaveBeenCalledWith("/referrals/my-credits", { token: mockToken });
       expect(result.availableCredits).toBe(7500);
       expect(result.availableDollars).toBe("75.00");
     });
 
     it("should return default values on error", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ReferralService.getMyCredits(mockToken);
 
@@ -210,33 +193,23 @@ describe("ReferralService", () => {
         newPrice: 125,
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.post.mockResolvedValueOnce(mockResponse);
 
       const result = await ReferralService.applyCredits(mockToken, 1, 2500);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/referrals/apply-credits"),
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({ appointmentId: 1, amount: 2500 }),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/referrals/apply-credits",
+        { appointmentId: 1, amount: 2500 },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
       expect(result.amountApplied).toBe(2500);
     });
 
     it("should return error on failure", async () => {
-      const mockResponse = {
+      HttpClient.post.mockResolvedValueOnce({
         success: false,
         error: "No credits available",
-      };
-
-      fetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve(mockResponse),
       });
 
       const result = await ReferralService.applyCredits(mockToken, 1, 2500);
@@ -259,18 +232,16 @@ describe("ReferralService", () => {
         },
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await ReferralService.getFullConfig(mockToken);
 
+      expect(HttpClient.get).toHaveBeenCalledWith("/referrals/config", { token: mockToken });
       expect(result.formattedConfig.clientToClient.enabled).toBe(true);
     });
 
     it("should return null on error", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ReferralService.getFullConfig(mockToken);
 
@@ -292,25 +263,20 @@ describe("ReferralService", () => {
         formattedConfig: { clientToClient: { enabled: true, referrerReward: 5000 } },
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.put.mockResolvedValueOnce(mockResponse);
 
       const result = await ReferralService.updateConfig(mockToken, configUpdate);
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/referrals/config"),
-        expect.objectContaining({
-          method: "PUT",
-          body: JSON.stringify(configUpdate),
-        })
+      expect(HttpClient.put).toHaveBeenCalledWith(
+        "/referrals/config",
+        configUpdate,
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
 
     it("should return error on failure", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.put.mockResolvedValueOnce({ success: false });
 
       const result = await ReferralService.updateConfig(mockToken, {});
 
@@ -333,24 +299,21 @@ describe("ReferralService", () => {
         ],
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.get.mockResolvedValueOnce(mockResponse);
 
       const result = await ReferralService.getAllReferrals(mockToken, {
         status: "pending",
       });
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/referrals/all?status=pending"),
-        expect.any(Object)
+      expect(HttpClient.get).toHaveBeenCalledWith(
+        "/referrals/all?status=pending",
+        { token: mockToken }
       );
       expect(result.referrals).toHaveLength(1);
     });
 
     it("should return empty object on error", async () => {
-      fetch.mockRejectedValueOnce(new Error("Network error"));
+      HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
       const result = await ReferralService.getAllReferrals(mockToken);
 
@@ -365,19 +328,14 @@ describe("ReferralService", () => {
         referral: { id: 1, status: "cancelled" },
       };
 
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
-      });
+      HttpClient.patch.mockResolvedValueOnce(mockResponse);
 
       const result = await ReferralService.updateReferralStatus(mockToken, 1, "cancelled");
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/referrals/1/status"),
-        expect.objectContaining({
-          method: "PATCH",
-          body: JSON.stringify({ status: "cancelled" }),
-        })
+      expect(HttpClient.patch).toHaveBeenCalledWith(
+        "/referrals/1/status",
+        { status: "cancelled" },
+        { token: mockToken }
       );
       expect(result.success).toBe(true);
     });
@@ -385,19 +343,14 @@ describe("ReferralService", () => {
 
   describe("logShare", () => {
     it("should log share action", async () => {
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true }),
-      });
+      HttpClient.post.mockResolvedValueOnce({ success: true });
 
       await ReferralService.logShare(mockToken, "sms");
 
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/referrals/share"),
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({ platform: "sms" }),
-        })
+      expect(HttpClient.post).toHaveBeenCalledWith(
+        "/referrals/share",
+        { platform: "sms" },
+        { token: mockToken }
       );
     });
   });

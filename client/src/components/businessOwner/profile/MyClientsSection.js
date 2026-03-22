@@ -39,7 +39,8 @@ const ClientCard = ({ client }) => {
   // Format appointment date
   const formatDate = (dateStr) => {
     if (!dateStr) return null;
-    const date = new Date(dateStr);
+    // Use noon to avoid timezone edge cases when parsing YYYY-MM-DD strings
+    const date = new Date(dateStr + "T12:00:00");
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -194,7 +195,7 @@ const MyClientsSection = ({ state, refreshTrigger }) => {
           }
           // Keep the most recent nextAppointment
           if (record.nextAppointment && (!existing.nextAppointment ||
-              new Date(record.nextAppointment.date) < new Date(existing.nextAppointment.date))) {
+              new Date(record.nextAppointment.date + "T12:00:00") < new Date(existing.nextAppointment.date + "T12:00:00"))) {
             existing.nextAppointment = record.nextAppointment;
           }
         } else {
