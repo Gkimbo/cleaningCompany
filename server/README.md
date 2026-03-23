@@ -1041,7 +1041,7 @@ Handle situations when guests haven't left by checkout time:
 
 ## Database
 
-### Models (68 Total)
+### Models (77 Total)
 
 #### Core Models
 

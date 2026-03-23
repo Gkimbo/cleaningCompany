@@ -3,7 +3,7 @@
 # Kleanr
 
 ![Node](https://img.shields.io/badge/Node.js-18.x-339933?style=for-the-badge&logo=node.js&logoColor=white)
-![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
+![React Native](https://img.shields.io/badge/React_Native-0.81-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-11406_Passing-brightgreen?style=for-the-badge)
@@ -276,7 +276,7 @@ React Native + Expo SDK 52
 
 ```
 Node.js + Express.js
-├── PostgreSQL + Sequelize  # Database & ORM (68 models)
+├── PostgreSQL + Sequelize  # Database & ORM (77 models)
 ├── Socket.io               # WebSocket server
 ├── Passport.js + JWT       # Authentication
 ├── Stripe API              # Payment processing
@@ -472,7 +472,7 @@ kleanr/
 │   │   ├── itDisputeRouter.js       # IT dispute tickets
 │   │   ├── itSupportToolsRouter.js  # IT support tools
 │   │   └── serviceAreaRouter.js     # Service area config
-│   ├── services/                    # 43 business logic services
+│   ├── services/                    # 49 business logic services
 │   │   ├── BusinessEmployeeService.js # Employee management
 │   │   ├── CalculatePrice.js        # Dynamic pricing logic
 │   │   ├── calendarSyncService.js   # iCal parsing & sync
@@ -494,8 +494,8 @@ kleanr/
 │   │   ├── AnalyticsService.js      # Event tracking & aggregation
 │   │   ├── cron/                    # Scheduled background jobs
 │   │   └── sendNotifications/       # Email & push services
-│   ├── models/                      # 60 Sequelize models
-│   ├── serializers/                 # 37 API serializers
+│   ├── models/                      # 77 Sequelize models
+│   ├── serializers/                 # 34 API serializers
 │   ├── migrations/                  # Database migrations
 │   ├── __tests__/                   # 5364 server tests
 │   └── package.json
@@ -693,7 +693,7 @@ Real-time communication via Socket.io:
 
 ---
 
-## Database Models (68 Total)
+## Database Models (77 Total)
 
 ### Core Models
 - User, UserHomes, UserAppointments, UserBills

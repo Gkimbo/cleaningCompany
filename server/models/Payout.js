@@ -189,5 +189,19 @@ module.exports = (sequelize, DataTypes) => {
     return { platformFee, netAmount };
   };
 
+  // Defensive toJSON method to exclude sensitive Stripe IDs
+  // This is a safety net - always use PayoutSerializer for API responses
+  if (Payout.prototype) {
+    Payout.prototype.toJSON = function () {
+      const values = { ...this.get() };
+
+      // Exclude sensitive Stripe IDs from direct serialization
+      delete values.stripeTransferId;
+      delete values.reversalId;
+
+      return values;
+    };
+  }
+
   return Payout;
 };

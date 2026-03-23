@@ -2,8 +2,8 @@
 
 # Kleanr Mobile App
 
-![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
-![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
+![React Native](https://img.shields.io/badge/React_Native-0.81-61DAFB?style=for-the-badge&logo=react&logoColor=white)
+![Expo](https://img.shields.io/badge/Expo-SDK_54-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
 ![Tests](https://img.shields.io/badge/Tests-5961_Passing-brightgreen?style=for-the-badge)
 
@@ -926,8 +926,8 @@ npm test -- CleaningChecklist.test.js
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `expo` | ~52.0.0 | Development platform |
-| `react-native` | 0.76.x | Mobile framework |
+| `expo` | ~54.0.0 | Development platform |
+| `react-native` | 0.81.x | Mobile framework |
 | `react-router-native` | ^6.x | Navigation |
 | `@stripe/stripe-react-native` | ^0.38.x | Payment UI |
 | `socket.io-client` | ^4.x | Real-time messaging |

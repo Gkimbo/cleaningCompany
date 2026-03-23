@@ -50,5 +50,18 @@ module.exports = (sequelize, DataTypes) => {
     });
   };
 
+  // Defensive toJSON method to exclude sensitive Stripe IDs
+  // This is a safety net - always use StripeConnectAccountSerializer for API responses
+  if (StripeConnectAccount.prototype) {
+    StripeConnectAccount.prototype.toJSON = function () {
+      const values = { ...this.get() };
+
+      // Exclude the actual Stripe account ID - only expose status flags
+      delete values.stripeAccountId;
+
+      return values;
+    };
+  }
+
   return StripeConnectAccount;
 };

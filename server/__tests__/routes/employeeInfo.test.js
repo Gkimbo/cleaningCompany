@@ -19,7 +19,9 @@ jest.mock("../../models", () => ({
     findAll: jest.fn(),
     count: jest.fn(),
   },
-  UserCleanerAppointments: {},
+  UserCleanerAppointments: {
+    findOne: jest.fn().mockResolvedValue(null),
+  },
   UserBills: {},
   UserReviews: {
     findAll: jest.fn().mockResolvedValue([]),
@@ -60,6 +62,7 @@ app.use("/api/v1/employee", employeeInfoRouter);
 describe("Employee Info Router", () => {
   const secretKey = process.env.SESSION_SECRET || "test_secret";
   const cleanerToken = jwt.sign({ userId: 2 }, secretKey);
+  const ownerToken = jwt.sign({ userId: 1 }, secretKey);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -538,7 +541,9 @@ describe("Employee Info Router", () => {
         };
         UserHomes.findOne.mockResolvedValue(mockHome);
 
-        const response = await request(app).get("/api/v1/employee/home/1");
+        const response = await request(app)
+          .get("/api/v1/employee/home/1")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.home).toBeDefined();
@@ -567,7 +572,9 @@ describe("Employee Info Router", () => {
         };
         UserHomes.findOne.mockResolvedValue(plainHome);
 
-        const response = await request(app).get("/api/v1/employee/home/2");
+        const response = await request(app)
+          .get("/api/v1/employee/home/2")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.home.id).toBe(2);
@@ -612,8 +619,11 @@ describe("Employee Info Router", () => {
           },
         ];
         User.findAll.mockResolvedValue(mockEmployees);
+        User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
-        const response = await request(app).get("/api/v1/employee/employeeSchedule");
+        const response = await request(app)
+          .get("/api/v1/employee/employeeSchedule")
+          .set("Authorization", `Bearer ${ownerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.employees).toHaveLength(2);
@@ -632,8 +642,11 @@ describe("Employee Info Router", () => {
           { id: 4, username: "plain_cleaner", type: "cleaner" },
         ];
         User.findAll.mockResolvedValue(plainEmployees);
+        User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
-        const response = await request(app).get("/api/v1/employee/employeeSchedule");
+        const response = await request(app)
+          .get("/api/v1/employee/employeeSchedule")
+          .set("Authorization", `Bearer ${ownerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.employees[0].id).toBe(4);
@@ -665,7 +678,9 @@ describe("Employee Info Router", () => {
         });
         UserAppointments.count.mockResolvedValue(10);
 
-        const response = await request(app).get("/api/v1/employee/cleaner/2");
+        const response = await request(app)
+          .get("/api/v1/employee/cleaner/2")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.cleaner.id).toBe(2);
@@ -691,7 +706,9 @@ describe("Employee Info Router", () => {
         });
         UserAppointments.count.mockResolvedValue(5);
 
-        const response = await request(app).get("/api/v1/employee/cleaner/3");
+        const response = await request(app)
+          .get("/api/v1/employee/cleaner/3")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.cleaner.reviews).toHaveLength(2);

@@ -545,7 +545,27 @@ module.exports = (sequelize, DataTypes) => {
 		  as: "businessEmployeeRecord",
 		});
 	  };
-	  
+
+	// Defensive toJSON method to exclude sensitive fields
+	// This is a safety net - always use UserSerializer for API responses
+	if (User.prototype) {
+		User.prototype.toJSON = function () {
+			const values = { ...this.get() };
+
+			// Always exclude these sensitive fields
+			delete values.password;
+			delete values.emailHash;
+			delete values.failedLoginAttempts;
+			delete values.lockedUntil;
+			delete values.ownerPrivateNotes;
+			delete values.expoPushToken;
+			delete values.stripeCustomerId;
+			delete values.currentPreviewOwnerId;
+
+			return values;
+		};
+	}
+
 
 	return User;
 };
