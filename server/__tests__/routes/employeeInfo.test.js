@@ -429,7 +429,9 @@ describe("Employee Info Router", () => {
     it("should handle server error", async () => {
       User.findByPk.mockRejectedValue(new Error("Database error"));
 
-      const response = await request(app).get("/api/v1/employee/cleaner/2");
+      const response = await request(app)
+        .get("/api/v1/employee/cleaner/2")
+        .set("Authorization", `Bearer ${cleanerToken}`);
 
       expect(response.status).toBe(500);
       expect(response.body.error).toBe("Server error");
@@ -509,6 +511,7 @@ describe("Employee Info Router", () => {
       it("should return serialized home data without Sequelize metadata", async () => {
         const mockHome = {
           id: 1,
+          userId: 2, // Match cleanerToken userId
           nickName: "Beach House",
           address: "encrypted_address",
           city: "encrypted_city",
@@ -520,6 +523,7 @@ describe("Employee Info Router", () => {
           towelsProvided: false,
           dataValues: {
             id: 1,
+            userId: 2,
             nickName: "Beach House",
             address: "encrypted_address",
             city: "encrypted_city",
@@ -566,6 +570,7 @@ describe("Employee Info Router", () => {
       it("should handle home without dataValues (plain object)", async () => {
         const plainHome = {
           id: 2,
+          userId: 2, // Match cleanerToken userId
           nickName: "City Apartment",
           numBeds: 2,
           numBaths: 1,
