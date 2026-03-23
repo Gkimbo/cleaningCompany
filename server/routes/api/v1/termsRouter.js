@@ -81,7 +81,7 @@ const getNextVersion = async (type) => {
 };
 
 // Valid document types
-const VALID_TYPES = ["homeowner", "cleaner", "privacy_policy", "payment_terms", "damage_protection"];
+const VALID_TYPES = ["homeowner", "cleaner", "privacy_policy", "payment_terms", "damage_protection", "cleaner_agreement"];
 
 /**
  * Get current T&C for a type (public - no auth required)
@@ -267,7 +267,38 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       }
     }
 
-    const requiresAcceptance = requiresTermsAcceptance || requiresPrivacyAcceptance || requiresPaymentTermsAcceptance || requiresDamageProtectionAcceptance;
+    // Get current cleaner agreement (applies to cleaners/employees only)
+    const currentCleanerAgreement = await TermsAndConditions.findOne({
+      where: { type: "cleaner_agreement" },
+      order: [["version", "DESC"]],
+    });
+
+    // Check if user needs to accept cleaner agreement (cleaners only)
+    let requiresCleanerAgreementAcceptance = false;
+    let cleanerAgreementData = null;
+    if (currentCleanerAgreement && user.type === "employee") {
+      const userCleanerAgreementVersion = user.cleanerAgreementAcceptedVersion;
+      requiresCleanerAgreementAcceptance = !userCleanerAgreementVersion || userCleanerAgreementVersion < currentCleanerAgreement.version;
+
+      if (requiresCleanerAgreementAcceptance) {
+        cleanerAgreementData = {
+          id: currentCleanerAgreement.id,
+          type: currentCleanerAgreement.type,
+          version: currentCleanerAgreement.version,
+          title: currentCleanerAgreement.title,
+          contentType: currentCleanerAgreement.contentType,
+          effectiveDate: currentCleanerAgreement.effectiveDate,
+        };
+        if (currentCleanerAgreement.contentType === "text") {
+          cleanerAgreementData.content = currentCleanerAgreement.content;
+        } else {
+          cleanerAgreementData.pdfFileName = currentCleanerAgreement.pdfFileName;
+          cleanerAgreementData.pdfUrl = `/api/v1/terms/pdf/${currentCleanerAgreement.id}`;
+        }
+      }
+    }
+
+    const requiresAcceptance = requiresTermsAcceptance || requiresPrivacyAcceptance || requiresPaymentTermsAcceptance || requiresDamageProtectionAcceptance || requiresCleanerAgreementAcceptance;
 
     const response = {
       requiresAcceptance,
@@ -275,6 +306,7 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       privacyPolicyAcceptedVersion: user.privacyPolicyAcceptedVersion,
       paymentTermsAcceptedVersion: user.paymentTermsAcceptedVersion,
       damageProtectionAcceptedVersion: user.damageProtectionAcceptedVersion,
+      cleanerAgreementAcceptedVersion: user.cleanerAgreementAcceptedVersion,
     };
 
     if (requiresTermsAcceptance) {
@@ -297,8 +329,13 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       response.currentDamageProtectionVersion = currentDamageProtection?.version;
     }
 
+    if (requiresCleanerAgreementAcceptance) {
+      response.cleanerAgreement = cleanerAgreementData;
+      response.currentCleanerAgreementVersion = currentCleanerAgreement?.version;
+    }
+
     // For backwards compatibility, also include the old format if only terms need acceptance
-    if (requiresTermsAcceptance && !requiresPrivacyAcceptance && !requiresPaymentTermsAcceptance && !requiresDamageProtectionAcceptance) {
+    if (requiresTermsAcceptance && !requiresPrivacyAcceptance && !requiresPaymentTermsAcceptance && !requiresDamageProtectionAcceptance && !requiresCleanerAgreementAcceptance) {
       response.currentVersion = currentTerms?.version;
       response.acceptedVersion = user.termsAcceptedVersion;
     }
@@ -382,6 +419,8 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
       await user.update({ paymentTermsAcceptedVersion: terms.version });
     } else if (terms.type === "damage_protection") {
       await user.update({ damageProtectionAcceptedVersion: terms.version });
+    } else if (terms.type === "cleaner_agreement") {
+      await user.update({ cleanerAgreementAcceptedVersion: terms.version });
     } else {
       await user.update({ termsAcceptedVersion: terms.version });
     }
@@ -394,6 +433,8 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
       message = "Payment Terms accepted successfully";
     } else if (terms.type === "damage_protection") {
       message = "Damage Protection Policy accepted successfully";
+    } else if (terms.type === "cleaner_agreement") {
+      message = "Cleaner Service Agreement accepted successfully";
     }
 
     return res.json({

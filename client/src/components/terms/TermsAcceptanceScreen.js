@@ -38,6 +38,7 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
   const [privacyToAccept, setPrivacyToAccept] = useState(null);
   const [paymentTermsToAccept, setPaymentTermsToAccept] = useState(null);
   const [damageProtectionToAccept, setDamageProtectionToAccept] = useState(null);
+  const [cleanerAgreementToAccept, setCleanerAgreementToAccept] = useState(null);
 
   // Track original total for progress calculation (doesn't change as docs are accepted)
   const [originalTotalDocs, setOriginalTotalDocs] = useState(0);
@@ -86,12 +87,15 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
       if (data.damageProtection) {
         setDamageProtectionToAccept(data.damageProtection);
       }
+      if (data.cleanerAgreement) {
+        setCleanerAgreementToAccept(data.cleanerAgreement);
+      }
 
       // Calculate and store original total for progress tracking
-      const total = (data.terms ? 1 : 0) + (data.privacyPolicy ? 1 : 0) + (data.paymentTerms ? 1 : 0) + (data.damageProtection ? 1 : 0);
+      const total = (data.terms ? 1 : 0) + (data.privacyPolicy ? 1 : 0) + (data.paymentTerms ? 1 : 0) + (data.damageProtection ? 1 : 0) + (data.cleanerAgreement ? 1 : 0);
       setOriginalTotalDocs(total);
 
-      // Start with terms if available, then privacy policy, then payment terms, then damage protection
+      // Start with terms if available, then privacy policy, then payment terms, then damage protection, then cleaner agreement
       if (data.terms) {
         setCurrentDocument("terms");
       } else if (data.privacyPolicy) {
@@ -100,6 +104,8 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
         setCurrentDocument("paymentTerms");
       } else if (data.damageProtection) {
         setCurrentDocument("damageProtection");
+      } else if (data.cleanerAgreement) {
+        setCurrentDocument("cleanerAgreement");
       }
     } catch (err) {
       setError("Failed to check acceptance status");
@@ -127,7 +133,9 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
         ? privacyToAccept
         : currentDocument === "paymentTerms"
           ? paymentTermsToAccept
-          : damageProtectionToAccept;
+          : currentDocument === "damageProtection"
+            ? damageProtectionToAccept
+            : cleanerAgreementToAccept;
     if (!currentDoc) return;
 
     setAccepting(true);
@@ -199,6 +207,20 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
           }
         } else if (currentDocument === "damageProtection") {
           setDamageProtectionToAccept(null); // Mark as accepted
+          setHasScrolledToBottom(false); // Reset scroll state
+          if (cleanerAgreementToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("cleanerAgreement");
+          } else {
+            // All done
+            if (onAccepted) {
+              onAccepted();
+            } else {
+              navigate("/");
+            }
+          }
+        } else if (currentDocument === "cleanerAgreement") {
+          setCleanerAgreementToAccept(null); // Mark as accepted
           // All done
           if (onAccepted) {
             onAccepted();
@@ -232,7 +254,7 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
     );
   }
 
-  if (error && !termsToAccept && !privacyToAccept && !paymentTermsToAccept && !damageProtectionToAccept) {
+  if (error && !termsToAccept && !privacyToAccept && !paymentTermsToAccept && !damageProtectionToAccept && !cleanerAgreementToAccept) {
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.errorText}>{error}</Text>
@@ -253,14 +275,18 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
       ? privacyToAccept
       : currentDocument === "paymentTerms"
         ? paymentTermsToAccept
-        : damageProtectionToAccept;
+        : currentDocument === "damageProtection"
+          ? damageProtectionToAccept
+          : cleanerAgreementToAccept;
   const currentTitle = currentDocument === "terms"
     ? "Terms and Conditions"
     : currentDocument === "privacy"
       ? "Privacy Policy"
       : currentDocument === "paymentTerms"
         ? "Payment Terms"
-        : "Damage Protection";
+        : currentDocument === "damageProtection"
+          ? "Damage Protection"
+          : "Cleaner Service Agreement";
 
   // Calculate progress - use originalTotalDocs for consistent progress display
   const totalDocs = originalTotalDocs;
@@ -330,7 +356,9 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
               ? "Our privacy policy has been updated. Please review and accept to continue using the app."
               : currentDocument === "paymentTerms"
                 ? "Our payment terms have been updated. Please review and accept to continue using the app."
-                : "Our damage protection policy has been updated. Please review and accept to continue using the app."}
+                : currentDocument === "damageProtection"
+                  ? "Our damage protection policy has been updated. Please review and accept to continue using the app."
+                  : "Please review and accept the Cleaner Service Agreement to continue using the app."}
         </Text>
         {totalDocs > 1 && (
           <View style={styles.progressContainer}>
@@ -347,14 +375,22 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
                 ? "Terms and Conditions"
                 : currentDocument === "privacy"
                   ? "Privacy Policy"
-                  : "Payment Terms"}
+                  : currentDocument === "paymentTerms"
+                    ? "Payment Terms"
+                    : currentDocument === "damageProtection"
+                      ? "Damage Protection"
+                      : "Cleaner Service Agreement"}
               {currentDocument === "terms" && privacyToAccept
                 ? " → Privacy Policy next"
                 : currentDocument === "terms" && paymentTermsToAccept
                   ? " → Payment Terms next"
                   : currentDocument === "privacy" && paymentTermsToAccept
                     ? " → Payment Terms next"
-                    : ""}
+                    : currentDocument === "paymentTerms" && (damageProtectionToAccept || cleanerAgreementToAccept)
+                      ? damageProtectionToAccept ? " → Damage Protection next" : " → Cleaner Agreement next"
+                      : currentDocument === "damageProtection" && cleanerAgreementToAccept
+                        ? " → Cleaner Agreement next"
+                        : ""}
             </Text>
           </View>
         )}

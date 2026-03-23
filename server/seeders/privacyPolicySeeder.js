@@ -132,6 +132,25 @@ When you communicate with us or other users, we collect:
 - Written feedback and photos uploaded to the Platform
 - Responses to reviews and community contributions
 
+*2.1.5 Service Documentation Photos*
+
+When Cleaners perform services, they may be required to capture before and after photographs of cleaned areas ("Service Photos").
+
+| Aspect | Details |
+|--------|---------|
+| **Purpose** | Documenting property condition before and after cleaning for quality assurance and dispute resolution |
+| **Collection** | Captured by Cleaners using the Kleanr app during service appointments |
+| **Sharing** | Service Photos are shared with the Homeowner after service completion and may be accessed by Kleanr support staff |
+| **Storage** | Stored securely on encrypted cloud servers for the duration of your account plus one (1) year |
+| **Use** | Quality assurance, dispute resolution, service verification, platform improvement, and training |
+| **Restrictions** | Service Photos should NOT include identifiable persons (without consent), personal documents, sensitive materials, or areas not being cleaned |
+
+By using our services:
+- **Homeowners** consent to Cleaners photographing areas of their property for service documentation purposes
+- **Cleaners** consent to Kleanr storing, processing, and sharing Service Photos as described above
+
+> **Note:** You may request deletion of Service Photos by contacting privacy@kleanr.com, subject to any retention requirements for ongoing disputes or legal obligations.
+
 **2.2 Information Collected Automatically**
 
 When you access or use our Platform, we automatically collect certain information:

@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import { colors, spacing, radius, shadows } from "../../services/styles/theme";
+import { useOffline } from "../../services/offline/OfflineContext";
 import Application from "../../services/fetchRequests/ApplicationClass";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
 import ReferralService from "../../services/fetchRequests/ReferralService";
@@ -69,6 +70,7 @@ const getCurrentAccountDisplayName = (account) => {
 };
 
 const TopBar = ({ dispatch, state }) => {
+  const { isOffline } = useOffline();
   const [modalVisible, setModalVisible] = useState(false);
   const [signInRedirect, setSignInRedirect] = useState(false);
   const [signUpRedirect, setSignUpRedirect] = useState(false);
@@ -459,7 +461,7 @@ const TopBar = ({ dispatch, state }) => {
                                 activeRole={state.activeRole || "cleaner"}
                                 dispatch={dispatch}
                                 closeModal={closeModal}
-                                isOffline={state.offlineMode || state.isOnline === false}
+                                isOffline={isOffline}
                               />
                             )}
 

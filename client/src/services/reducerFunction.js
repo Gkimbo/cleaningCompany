@@ -267,24 +267,6 @@ const reducer = (state, action) => {
         ...state,
         linkedAccounts: action.payload,
       };
-    // Offline mode actions
-    case "SET_OFFLINE_MODE":
-      return {
-        ...state,
-        offlineMode: action.payload,
-      };
-    case "SET_NETWORK_STATUS":
-      return {
-        ...state,
-        networkStatus: action.payload.status,
-        isOnline: action.payload.isOnline,
-      };
-    case "SET_SYNC_STATUS":
-      return {
-        ...state,
-        syncStatus: action.payload.status,
-        pendingSyncCount: action.payload.pendingCount ?? state.pendingSyncCount,
-      };
     // Preview mode actions for owner "Preview as Role" feature
     case "PREVIEW_ENTER":
       return {

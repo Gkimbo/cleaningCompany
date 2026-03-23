@@ -207,6 +207,20 @@ If the actual condition of your property differs materially from what was descri
 - Disputes submitted after 7 days may not be considered
 - Chargebacks initiated without first contacting Kleanr may result in account termination
 
+**4.8 Payment Processor Disclosure**
+
+> **YOU ACKNOWLEDGE AND AGREE THAT:**
+>
+> - Kleanr is **NOT** a bank, money transmitter, or financial institution
+> - Kleanr does **NOT** hold, store, or transmit funds on your behalf
+> - All payment processing is performed by Stripe, Inc. ("Stripe"), a licensed third-party payment processor
+> - Your use of payment services is subject to [Stripe's Terms of Service](https://stripe.com/legal) and [Stripe's Privacy Policy](https://stripe.com/privacy)
+> - Kleanr is not responsible for Stripe's actions, errors, omissions, or service interruptions
+> - Payment card information is transmitted directly to Stripe and stored on Stripe's secure, PCI-compliant servers
+> - Kleanr retains only tokenized references to your payment methods and does **NOT** store full credit card numbers
+> - Kleanr acts solely as a commercial agent facilitating payments between Homeowners and Cleaners
+> - Disputes regarding payment processing functionality should be directed to Stripe
+
 ---
 
 # SECTION 5
@@ -482,11 +496,13 @@ You agree not to discriminate against Cleaners based on:
 > - Make unwanted sexual advances toward Cleaners
 > - Consume alcohol or controlled substances during cleaning appointments
 
-**9.6 Circumvention**
+**9.6 Circumvention and Liquidated Damages**
 
 If you hire a Cleaner directly or through another platform within **12 months** of your last booking with that Cleaner through Kleanr:
 
-- You agree to pay Kleanr a referral fee equal to **25%** of the first year's expected service value
+- You agree to pay Kleanr liquidated damages equal to **25%** of the first year's expected service value (calculated based on your average booking frequency and value over the preceding 12 months, or $500 minimum if insufficient history)
+- You acknowledge that Kleanr's actual damages from circumvention are difficult to calculate and that this amount represents a reasonable estimate of Kleanr's losses, including lost platform fees, customer acquisition costs, Cleaner vetting and onboarding expenses, and administrative costs
+- This liquidated damages provision is not a penalty and represents the parties' good faith effort to estimate actual damages
 - This provision survives termination of your account
 
 ---
@@ -854,7 +870,7 @@ Termination does not entitle you to any refund of fees paid.
 
 **21.1 Governing Law**
 
-These Terms shall be governed by and construed in accordance with the laws of the State of Delaware, without regard to conflict of law principles.
+These Terms shall be governed by and construed in accordance with the laws of the Commonwealth of Massachusetts, without regard to conflict of law principles.
 
 **21.2 Entire Agreement**
 
@@ -1224,6 +1240,20 @@ As an independent contractor, you may be eligible to deduct business expenses in
 - Professional development
 
 Consult a tax professional for advice specific to your situation.
+
+**5.8 Payment Processor Disclosure**
+
+> **YOU ACKNOWLEDGE AND AGREE THAT:**
+>
+> - Kleanr is **NOT** a bank, money transmitter, or financial institution
+> - Kleanr does **NOT** hold, store, or transmit funds on your behalf beyond the normal payment processing cycle
+> - All payment processing, including payouts to your bank account, is performed by Stripe, Inc. ("Stripe"), a licensed third-party payment processor
+> - Your use of payment services is subject to [Stripe's Terms of Service](https://stripe.com/legal) and [Stripe's Privacy Policy](https://stripe.com/privacy), including [Stripe Connect Account Agreement](https://stripe.com/connect-account/legal)
+> - Kleanr is not responsible for Stripe's actions, errors, omissions, or service interruptions
+> - Bank account information for direct deposit is transmitted directly to Stripe and stored on Stripe's secure servers
+> - Kleanr acts solely as a commercial agent facilitating payments between Homeowners and Cleaners
+> - Payout delays or failures caused by Stripe, your bank, or incorrect banking information are not the responsibility of Kleanr
+> - Disputes regarding payment processing functionality should be directed to Stripe
 
 ---
 
@@ -1638,13 +1668,15 @@ You agree NOT to:
 - Arrange future services with Clients outside of Kleanr
 - Use Kleanr to find Clients and then move them off-platform
 
-**13.3 Consequences of Circumvention**
+**13.3 Consequences of Circumvention and Liquidated Damages**
 
 If you circumvent Kleanr:
 
 - Your account will be terminated immediately
-- You may owe Kleanr a referral fee of **25%** of one year's expected revenue
-- Kleanr may pursue legal action
+- You agree to pay Kleanr liquidated damages equal to **25%** of one year's expected revenue from the circumvented Client relationship (calculated based on your average earnings per Client over the preceding 12 months, or $500 minimum if insufficient history)
+- You acknowledge that Kleanr's actual damages from circumvention are difficult to calculate and that this amount represents a reasonable estimate of Kleanr's losses, including lost platform fees, Client acquisition costs, marketing expenses, background check costs, and administrative costs
+- This liquidated damages provision is not a penalty and represents the parties' good faith effort to estimate actual damages
+- Kleanr may pursue legal action for collection
 - You may be banned from the platform permanently
 
 **13.4 Exception**
@@ -1964,7 +1996,7 @@ The following sections survive termination: Sections 2, 9, 10, 12, 13, 15, 16, 1
 
 **22.1 Governing Law**
 
-This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware, without regard to conflict of law principles.
+This Agreement shall be governed by and construed in accordance with the laws of the Commonwealth of Massachusetts, without regard to conflict of law principles.
 
 **22.2 Entire Agreement**
 
