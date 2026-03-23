@@ -158,10 +158,12 @@ class CustomJobFlowService {
       );
     }
 
-    // Delete related records first
-    await ClientJobFlowAssignment.destroy({ where: { customJobFlowId: flowId } });
-    await CustomJobFlowChecklist.destroy({ where: { customJobFlowId: flowId } });
-    await flow.destroy();
+    // Delete related records in a transaction for data consistency
+    await sequelize.transaction(async (t) => {
+      await ClientJobFlowAssignment.destroy({ where: { customJobFlowId: flowId }, transaction: t });
+      await CustomJobFlowChecklist.destroy({ where: { customJobFlowId: flowId }, transaction: t });
+      await flow.destroy({ transaction: t });
+    });
   }
 
   /**
@@ -171,19 +173,21 @@ class CustomJobFlowService {
    * @returns {Object} Updated flow
    */
   static async setDefaultFlow(businessOwnerId, flowId) {
-    // Unset any existing default
-    await CustomJobFlow.update(
-      { isDefault: false },
-      { where: { businessOwnerId, isDefault: true } }
-    );
+    return sequelize.transaction(async (t) => {
+      // Unset any existing default
+      await CustomJobFlow.update(
+        { isDefault: false },
+        { where: { businessOwnerId, isDefault: true }, transaction: t }
+      );
 
-    if (flowId) {
-      const flow = await this.getFlowById(flowId, businessOwnerId);
-      await flow.update({ isDefault: true });
-      return flow;
-    }
+      if (flowId) {
+        const flow = await this.getFlowById(flowId, businessOwnerId);
+        await flow.update({ isDefault: true }, { transaction: t });
+        return flow;
+      }
 
-    return null;
+      return null;
+    });
   }
 
   /**
@@ -232,16 +236,36 @@ class CustomJobFlowService {
    * @param {number} flowId - The flow ID
    * @param {number} businessOwnerId - The business owner's user ID
    * @param {number} versionId - Optional specific version ID (defaults to latest)
-   * @returns {Object} Created checklist
+   * @param {boolean} confirmOverwrite - Must be true to overwrite an existing checklist
+   * @returns {Object} Created checklist or error object requiring confirmation
    */
-  static async forkPlatformChecklist(flowId, businessOwnerId, versionId = null) {
+  static async forkPlatformChecklist(flowId, businessOwnerId, versionId = null, confirmOverwrite = false) {
     await this.getFlowById(flowId, businessOwnerId); // Authorization check
 
-    // Delete existing checklist if any (allows re-importing)
+    // Check for existing checklist
     const existing = await CustomJobFlowChecklist.findOne({
       where: { customJobFlowId: flowId },
     });
 
+    if (existing && !confirmOverwrite) {
+      // Return information about existing checklist for confirmation
+      const itemCount = existing.snapshotData?.sections?.reduce(
+        (count, section) => count + (section.items?.length || 0),
+        0
+      ) || 0;
+
+      const error = new Error("Existing checklist found - confirmation required");
+      error.requiresConfirmation = true;
+      error.existingChecklist = {
+        itemCount,
+        forkedFromVersion: existing.forkedFromPlatformVersion,
+        createdAt: existing.createdAt,
+        updatedAt: existing.updatedAt,
+      };
+      throw error;
+    }
+
+    // Delete existing checklist if confirmed
     if (existing) {
       await existing.destroy();
     }

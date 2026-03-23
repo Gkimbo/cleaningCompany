@@ -11,6 +11,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
 import { StyleSheet } from "react-native";
 import ChecklistService from "../../../services/fetchRequests/ChecklistService";
+import { API_BASE } from "../../../services/config";
 
 // Fallback hardcoded checklist in case API fails
 const FALLBACK_CHECKLIST = {
@@ -156,7 +157,7 @@ export const clearChecklistProgress = async (appointmentId) => {
   }
 };
 
-const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, onProgressUpdate, customChecklist }) => {
+const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, onProgressUpdate, customChecklist, serverProgress }) => {
   const [checkedItems, setCheckedItems] = useState({});
   const [checklistData, setChecklistData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -188,6 +189,31 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
 
   const loadSavedProgress = async () => {
     try {
+      // First, try to use server progress if available
+      if (serverProgress && typeof serverProgress === "object") {
+        const serverItems = {};
+        for (const [sectionId, sectionData] of Object.entries(serverProgress)) {
+          if (sectionData.completed) {
+            for (const itemId of sectionData.completed) {
+              serverItems[itemId] = "completed";
+            }
+          }
+          if (sectionData.na) {
+            for (const itemId of sectionData.na) {
+              serverItems[itemId] = "na";
+            }
+          }
+        }
+        if (Object.keys(serverItems).length > 0) {
+          setCheckedItems(serverItems);
+          // Also save to local storage for offline access
+          await AsyncStorage.setItem(getProgressKey(appointmentId), JSON.stringify(serverItems));
+          setProgressLoaded(true);
+          return;
+        }
+      }
+
+      // Fall back to local storage
       const saved = await AsyncStorage.getItem(getProgressKey(appointmentId));
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -221,6 +247,24 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
       await AsyncStorage.setItem(getProgressKey(appointmentId), JSON.stringify(items));
     } catch (error) {
       console.warn("Error saving checklist progress:", error);
+    }
+  };
+
+  // Sync a single item's progress to the backend
+  const syncProgressToBackend = async (sectionId, itemId, status) => {
+    if (!appointmentId || !token) return;
+    try {
+      await fetch(`${API_BASE}/job-photos/${appointmentId}/checklist-progress`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ sectionId, itemId, status }),
+      });
+      // Fire and forget - don't block UI for sync
+    } catch (error) {
+      console.warn("Error syncing checklist progress:", error);
     }
   };
 
@@ -316,7 +360,7 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
 
   // Set item status: "completed", "na", or null (unchecked)
   // Clicking the same status again will toggle it off
-  const setItemStatus = (itemId, newStatus) => {
+  const setItemStatus = (sectionKey, itemId, newStatus) => {
     setCheckedItems((prev) => {
       const currentStatus = prev[itemId];
       // Toggle off if clicking same status
@@ -324,6 +368,8 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
       const newItems = { ...prev, [itemId]: status };
       // Save immediately when item is toggled
       saveProgress(newItems);
+      // Sync to backend (fire and forget)
+      syncProgressToBackend(sectionKey, itemId, status);
       return newItems;
     });
   };
@@ -365,7 +411,7 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
     </View>
   );
 
-  const renderChecklistItem = (item) => {
+  const renderChecklistItem = (item, sectionKey) => {
     const status = checkedItems[item.id];
     const isCompleted = status === "completed";
     const isNA = status === "na";
@@ -381,7 +427,7 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
         {/* Checkbox for complete */}
         <TouchableOpacity
           testID={`checkbox-${item.id}`}
-          onPress={() => setItemStatus(item.id, "completed")}
+          onPress={() => setItemStatus(sectionKey, item.id, "completed")}
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
@@ -403,7 +449,7 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
 
         {/* N/A button */}
         <TouchableOpacity
-          onPress={() => setItemStatus(item.id, "na")}
+          onPress={() => setItemStatus(sectionKey, item.id, "na")}
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
@@ -461,7 +507,7 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
 
         {isExpanded && (
           <View style={styles.sectionContent}>
-            {section.tasks.map((item) => renderChecklistItem(item))}
+            {section.tasks.map((item) => renderChecklistItem(item, sectionKey))}
           </View>
         )}
       </View>
@@ -574,26 +620,13 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
           </Text>
         </TouchableOpacity>
 
-        {/* Skip option for edge cases */}
+        {/* Hint for N/A option when not complete */}
         {!isAllComplete && (
-          <TouchableOpacity
-            style={styles.skipButton}
-            onPress={() => {
-              if (progressPercent >= 90) {
-                onChecklistComplete && onChecklistComplete();
-              } else {
-                alert(
-                  "Please complete at least 90% of the checklist before proceeding. Use the N/A button for tasks that don't apply to this home."
-                );
-              }
-            }}
-          >
+          <View style={styles.skipButton}>
             <Text style={styles.skipButtonText}>
-              {progressPercent >= 90
-                ? "Proceed Anyway"
-                : "Some tasks may not apply?"}
+              Use the N/A button for tasks that do not apply to this home.
             </Text>
-          </TouchableOpacity>
+          </View>
         )}
       </ScrollView>
     </View>

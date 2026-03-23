@@ -95,11 +95,13 @@ module.exports = (sequelize, DataTypes) => {
 
   AppointmentJobFlow.prototype.getCompletedItemCount = function () {
     if (!this.checklistProgress) return 0;
-    let completed = 0;
+    let done = 0;
     for (const sectionId in this.checklistProgress) {
-      completed += this.checklistProgress[sectionId]?.completed?.length || 0;
+      // Count both completed AND N/A items toward completion
+      done += this.checklistProgress[sectionId]?.completed?.length || 0;
+      done += this.checklistProgress[sectionId]?.na?.length || 0;
     }
-    return completed;
+    return done;
   };
 
   AppointmentJobFlow.prototype.getChecklistCompletionPercentage = function () {

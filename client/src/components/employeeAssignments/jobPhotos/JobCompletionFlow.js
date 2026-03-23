@@ -406,6 +406,7 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
         onChecklistComplete={handleChecklistComplete}
         onProgressUpdate={handleChecklistProgress}
         customChecklist={flowSettings?.checklist}
+        serverProgress={flowSettings?.checklistProgress}
       />
       {(isBusinessOwner || canSkipPhotos) && (
         <TouchableOpacity

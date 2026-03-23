@@ -1,6 +1,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const { JobPhoto, UserAppointments, User, CleanerJobCompletion } = require("../../../models");
+const AppointmentJobFlowService = require("../../../services/AppointmentJobFlowService");
 
 const jobPhotosRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -97,6 +98,19 @@ jobPhotosRouter.post("/upload", authenticateToken, async (req, res) => {
       }
     }
 
+    // Validate N/A is allowed based on photo requirement
+    if (isNotApplicable && (photoType === "before" || photoType === "after")) {
+      const jobFlow = await AppointmentJobFlowService.getJobFlowByAppointmentId(appointmentId);
+      const photoRequirement = jobFlow?.photoRequirement || "required";
+      // N/A not allowed for required or platform_required photos
+      if (photoRequirement === "required" || photoRequirement === "platform_required") {
+        return res.status(400).json({
+          error: "Photos are required for this job and cannot be marked as N/A",
+          photoRequirement,
+        });
+      }
+    }
+
     // If uploading 'after' photos, verify 'before' photos exist
     if (photoType === "after") {
       const beforePhotos = await JobPhoto.count({
@@ -146,6 +160,17 @@ jobPhotosRouter.post("/upload", authenticateToken, async (req, res) => {
         }
         console.log(`[JobPhotos] Set jobStartedAt for appointment ${appointmentId}, cleaner ${cleanerId}`);
       }
+    }
+
+    // Update photo counts in AppointmentJobFlow if it exists
+    try {
+      const jobFlow = await AppointmentJobFlowService.getJobFlowByAppointmentId(appointmentId);
+      if (jobFlow) {
+        await AppointmentJobFlowService.updatePhotoCounts(jobFlow.id, cleanerId);
+      }
+    } catch (photoCountError) {
+      // Non-fatal: log but don't fail the upload
+      console.warn(`[JobPhotos] Failed to update photo counts for appointment ${appointmentId}:`, photoCountError.message);
     }
 
     return res.status(201).json({
@@ -262,6 +287,26 @@ jobPhotosRouter.get("/:appointmentId/status", authenticateToken, async (req, res
     const afterCount = await JobPhoto.count({ where: afterWhereClause });
     const passesCount = await JobPhoto.count({ where: passesWhereClause });
 
+    // Get flow requirements to properly calculate canComplete
+    const jobFlow = await AppointmentJobFlowService.getJobFlowByAppointmentId(appointmentId);
+    const photoRequirement = jobFlow?.photoRequirement || "required";
+    const photosHidden = photoRequirement === "hidden";
+    const photosOptional = photoRequirement === "optional";
+    const hasChecklist = jobFlow?.hasChecklist() || false;
+
+    // Calculate canComplete based on actual flow requirements
+    let canComplete;
+    if (photosHidden) {
+      // If photos are hidden, only checklist matters (if present)
+      canComplete = !hasChecklist || (jobFlow?.checklistCompleted || false);
+    } else if (photosOptional) {
+      // If photos are optional, having any photos is fine, or none at all
+      canComplete = true;
+    } else {
+      // Photos required - need before, after, and passes
+      canComplete = beforeCount > 0 && afterCount > 0 && passesCount > 0;
+    }
+
     return res.json({
       appointmentId: parseInt(appointmentId),
       beforePhotosCount: beforeCount,
@@ -270,7 +315,12 @@ jobPhotosRouter.get("/:appointmentId/status", authenticateToken, async (req, res
       hasBeforePhotos: beforeCount > 0,
       hasAfterPhotos: afterCount > 0,
       hasPassesPhotos: passesCount > 0,
-      canComplete: beforeCount > 0 && afterCount > 0 && passesCount > 0,
+      canComplete,
+      // Include flow requirements for frontend to adjust UI
+      photoRequirement,
+      photosHidden,
+      photosOptional,
+      hasChecklist,
     });
   } catch (error) {
     console.error("Error fetching photo status:", error);
@@ -306,7 +356,18 @@ jobPhotosRouter.delete("/:photoId", authenticateToken, async (req, res) => {
       });
     }
 
+    const appointmentId = photo.appointmentId;
     await photo.destroy();
+
+    // Update photo counts in AppointmentJobFlow if it exists
+    try {
+      const jobFlow = await AppointmentJobFlowService.getJobFlowByAppointmentId(appointmentId);
+      if (jobFlow) {
+        await AppointmentJobFlowService.updatePhotoCounts(jobFlow.id, cleanerId);
+      }
+    } catch (photoCountError) {
+      console.warn(`[JobPhotos] Failed to update photo counts after delete:`, photoCountError.message);
+    }
 
     return res.json({ success: true, message: "Photo deleted" });
   } catch (error) {
@@ -353,9 +414,11 @@ jobPhotosRouter.get("/:appointmentId/flow-settings", authenticateToken, async (r
 
     if (flowDetails) {
       return res.json({
+        appointmentJobFlowId: flowDetails.appointmentJobFlowId || null,
         photoRequirement: flowDetails.photoRequirement || "required",
         hasChecklist: flowDetails.hasChecklist || false,
         checklist: flowDetails.checklist || null,
+        checklistProgress: flowDetails.checklistProgress || null,
         jobNotes: flowDetails.jobNotes || null,
       });
     }
@@ -363,14 +426,70 @@ jobPhotosRouter.get("/:appointmentId/flow-settings", authenticateToken, async (r
     // No custom flow, return defaults
     const isBusinessOwner = appointment.home?.preferredCleanerId === cleanerId;
     return res.json({
+      appointmentJobFlowId: null,
       photoRequirement: isBusinessOwner ? "optional" : "required",
       hasChecklist: false,
       checklist: null,
+      checklistProgress: null,
       jobNotes: null,
     });
   } catch (error) {
     console.error("Error fetching flow settings:", error);
     return res.status(500).json({ error: "Failed to fetch flow settings" });
+  }
+});
+
+/**
+ * Update checklist progress for an appointment
+ * PUT /api/v1/job-photos/:appointmentId/checklist-progress
+ */
+jobPhotosRouter.put("/:appointmentId/checklist-progress", authenticateToken, async (req, res) => {
+  const { appointmentId } = req.params;
+  const { sectionId, itemId, status } = req.body;
+  const cleanerId = req.user.userId;
+
+  try {
+    const appointment = await UserAppointments.findByPk(appointmentId);
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify cleaner is assigned
+    const cleanerIdStr = cleanerId.toString();
+    if (!appointment.employeesAssigned?.includes(cleanerIdStr)) {
+      return res.status(403).json({ error: "You are not assigned to this appointment" });
+    }
+
+    // Check if there's a job flow for this appointment
+    const AppointmentJobFlowService = require("../../../services/AppointmentJobFlowService");
+    const jobFlow = await AppointmentJobFlowService.getJobFlowByAppointmentId(appointmentId);
+
+    if (!jobFlow) {
+      // No job flow exists - progress is only stored locally
+      return res.json({
+        synced: false,
+        message: "No job flow for this appointment - progress saved locally only"
+      });
+    }
+
+    // Update the checklist progress
+    const result = await AppointmentJobFlowService.updateChecklistProgress(
+      jobFlow.id,
+      sectionId,
+      itemId,
+      status
+    );
+
+    return res.json({
+      synced: true,
+      checklistProgress: result.checklistProgress,
+      checklistCompleted: result.checklistCompleted,
+      completionPercentage: result.completionPercentage,
+    });
+  } catch (error) {
+    console.error("Error updating checklist progress:", error);
+    return res.status(500).json({ error: "Failed to update checklist progress" });
   }
 });
 

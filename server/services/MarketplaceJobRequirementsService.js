@@ -120,6 +120,7 @@ class MarketplaceJobRequirementsService {
 
   /**
    * Check if a checklist progress object represents a completed checklist
+   * Items can be completed OR marked N/A to count toward completion
    * @param {Object} progress - The checklist progress object
    * @returns {boolean}
    */
@@ -128,14 +129,19 @@ class MarketplaceJobRequirementsService {
       return false;
     }
 
-    // Progress format: { sectionId: { total: [...], completed: [...] }, ... }
+    // Progress format: { sectionId: { total: [...], completed: [...], na: [...] }, ... }
     for (const sectionId of Object.keys(progress)) {
       const section = progress[sectionId];
-      if (!section.total || !section.completed) {
+      // Validate section structure - total and completed must be arrays
+      if (!Array.isArray(section?.total) || !Array.isArray(section?.completed)) {
         return false;
       }
-      // Check if all items are completed
-      if (section.completed.length < section.total.length) {
+      // Count both completed AND N/A items toward completion
+      const completedCount = section.completed.length;
+      const naCount = Array.isArray(section.na) ? section.na.length : 0;
+      const doneCount = completedCount + naCount;
+
+      if (doneCount < section.total.length) {
         return false;
       }
     }
@@ -244,6 +250,7 @@ class MarketplaceJobRequirementsService {
       progress[section.id] = {
         total: itemIds,
         completed: [],
+        na: [], // Include na array for consistency with AppointmentJobFlowService
       };
     }
 

@@ -19,12 +19,16 @@ class AppointmentJobFlowService {
    * Create a job flow for an appointment
    * @param {number} appointmentId - The appointment ID
    * @param {Object} flowResolution - Result from CustomJobFlowService.resolveFlowForAppointment
+   * @param {Object} transaction - Optional Sequelize transaction
    * @returns {Object} Created AppointmentJobFlow
    */
-  static async createJobFlowForAppointment(appointmentId, flowResolution) {
+  static async createJobFlowForAppointment(appointmentId, flowResolution, transaction = null) {
+    const queryOptions = transaction ? { transaction } : {};
+
     // Check if one already exists
     const existing = await AppointmentJobFlow.findOne({
       where: { appointmentId },
+      ...queryOptions,
     });
 
     if (existing) {
@@ -40,6 +44,7 @@ class AppointmentJobFlowService {
       const platformChecklist = await ChecklistVersion.findOne({
         where: { isActive: true },
         order: [["version", "DESC"]],
+        ...queryOptions,
       });
 
       if (platformChecklist) {
@@ -50,6 +55,7 @@ class AppointmentJobFlowService {
       // Custom flow - use the flow's checklist
       const flowChecklist = await CustomJobFlowChecklist.findOne({
         where: { customJobFlowId: flowResolution.customJobFlowId },
+        ...queryOptions,
       });
 
       if (flowChecklist) {
@@ -70,7 +76,7 @@ class AppointmentJobFlowService {
       afterPhotoCount: 0,
       photosCompleted: false,
       employeeNotes: null,
-    });
+    }, queryOptions);
 
     return jobFlow;
   }
@@ -187,6 +193,19 @@ class AppointmentJobFlowService {
       throw new Error("No checklist for this job flow");
     }
 
+    // Validate sectionId and itemId exist in the checklist snapshot
+    const snapshotData = jobFlow.checklistSnapshotData;
+    if (snapshotData?.sections) {
+      const validSection = snapshotData.sections.find((s) => s.id === sectionId);
+      if (!validSection) {
+        throw new Error(`Invalid section ID: ${sectionId}`);
+      }
+      const validItem = validSection.items?.find((i) => i.id === itemId);
+      if (!validItem) {
+        throw new Error(`Invalid item ID: ${itemId} in section ${sectionId}`);
+      }
+    }
+
     let progress = jobFlow.checklistProgress || {};
 
     // Initialize section if not exists
@@ -255,6 +274,29 @@ class AppointmentJobFlowService {
       throw new Error("No checklist for this job flow");
     }
 
+    // Build a map of valid sections and items from the snapshot
+    const snapshotData = jobFlow.checklistSnapshotData;
+    const validSections = new Map();
+    if (snapshotData?.sections) {
+      for (const section of snapshotData.sections) {
+        const validItems = new Set(section.items?.map((i) => i.id) || []);
+        validSections.set(section.id, validItems);
+      }
+    }
+
+    // Validate all section and item IDs before processing
+    for (const [sectionId, items] of Object.entries(updates)) {
+      if (!validSections.has(sectionId)) {
+        throw new Error(`Invalid section ID: ${sectionId}`);
+      }
+      const validItems = validSections.get(sectionId);
+      for (const item of items) {
+        if (!validItems.has(item.itemId)) {
+          throw new Error(`Invalid item ID: ${item.itemId} in section ${sectionId}`);
+        }
+      }
+    }
+
     let progress = jobFlow.checklistProgress || {};
 
     for (const [sectionId, items] of Object.entries(updates)) {
@@ -283,11 +325,15 @@ class AppointmentJobFlowService {
           (id) => id !== itemId
         );
 
-        // Add to appropriate array
+        // Add to appropriate array (with duplicate check)
         if (status === "completed") {
-          progress[sectionId].completed.push(itemId);
+          if (!progress[sectionId].completed.includes(itemId)) {
+            progress[sectionId].completed.push(itemId);
+          }
         } else if (status === "na") {
-          progress[sectionId].na.push(itemId);
+          if (!progress[sectionId].na.includes(itemId)) {
+            progress[sectionId].na.push(itemId);
+          }
         }
       }
     }
@@ -319,12 +365,13 @@ class AppointmentJobFlowService {
 
     for (const sectionId of Object.keys(progress)) {
       const section = progress[sectionId];
-      if (!section.total || !section.completed) {
+      // Validate section structure - total and completed must be arrays
+      if (!Array.isArray(section?.total) || !Array.isArray(section?.completed)) {
         return false;
       }
 
-      const completedCount = section.completed?.length || 0;
-      const naCount = section.na?.length || 0;
+      const completedCount = section.completed.length;
+      const naCount = Array.isArray(section.na) ? section.na.length : 0;
       const doneCount = completedCount + naCount;
 
       if (doneCount < section.total.length) {
@@ -352,7 +399,7 @@ class AppointmentJobFlowService {
       throw new Error("Job flow not found");
     }
 
-    // Count photos for this job
+    // Count all photos for this job (including N/A for display purposes)
     const beforeCount = await JobPhoto.count({
       where: {
         appointmentId: jobFlow.appointmentId,
@@ -369,7 +416,27 @@ class AppointmentJobFlowService {
       },
     });
 
-    const photosCompleted = beforeCount > 0 && afterCount > 0;
+    // Count real photos (excluding N/A) for determining completion
+    const realBeforeCount = await JobPhoto.count({
+      where: {
+        appointmentId: jobFlow.appointmentId,
+        cleanerId: employeeUserId,
+        photoType: "before",
+        isNotApplicable: false,
+      },
+    });
+
+    const realAfterCount = await JobPhoto.count({
+      where: {
+        appointmentId: jobFlow.appointmentId,
+        cleanerId: employeeUserId,
+        photoType: "after",
+        isNotApplicable: false,
+      },
+    });
+
+    // Photos are only considered "completed" if there are real photos (not N/A)
+    const photosCompleted = realBeforeCount > 0 && realAfterCount > 0;
 
     await jobFlow.update({
       beforePhotoCount: beforeCount,
@@ -380,6 +447,8 @@ class AppointmentJobFlowService {
     return {
       beforePhotoCount: beforeCount,
       afterPhotoCount: afterCount,
+      realBeforePhotoCount: realBeforeCount,
+      realAfterPhotoCount: realAfterCount,
       photosCompleted,
       photoRequirement: jobFlow.photoRequirement,
     };
@@ -424,21 +493,55 @@ class AppointmentJobFlowService {
   // ========== Completion ==========
 
   /**
-   * Validate completion requirements
+   * Validate completion requirements with fresh photo counts
    * @param {number} appointmentJobFlowId - The AppointmentJobFlow ID
+   * @param {number} cleanerId - Optional cleaner ID for photo count filtering
    * @throws {Error} If requirements are not met
    */
-  static async validateCompletionRequirements(appointmentJobFlowId) {
+  static async validateCompletionRequirements(appointmentJobFlowId, cleanerId = null) {
     const jobFlow = await AppointmentJobFlow.findByPk(appointmentJobFlowId);
 
     if (!jobFlow) {
       throw new Error("Job flow not found");
     }
 
-    const validation = jobFlow.validateCompletion();
+    const errors = [];
 
-    if (!validation.isValid) {
-      throw new Error(`Cannot complete job: ${validation.errors.join(", ")}`);
+    // Do fresh photo counts instead of relying on cached values
+    if (jobFlow.requiresPhotos()) {
+      const photoWhereBase = {
+        appointmentId: jobFlow.appointmentId,
+        isNotApplicable: false, // Only count real photos
+      };
+      if (cleanerId) {
+        photoWhereBase.cleanerId = cleanerId;
+      }
+
+      const realBeforeCount = await JobPhoto.count({
+        where: { ...photoWhereBase, photoType: "before" },
+      });
+      const realAfterCount = await JobPhoto.count({
+        where: { ...photoWhereBase, photoType: "after" },
+      });
+
+      if (realBeforeCount === 0) {
+        errors.push("Before photos are required");
+      }
+      if (realAfterCount === 0) {
+        errors.push("After photos are required");
+      }
+    }
+
+    // Check checklist completion
+    if (jobFlow.hasChecklist() && !jobFlow.checklistCompleted) {
+      const percentage = jobFlow.getChecklistCompletionPercentage();
+      if (percentage < 100) {
+        errors.push(`Checklist is ${percentage}% complete`);
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new Error(`Cannot complete job: ${errors.join(", ")}`);
     }
 
     return true;
@@ -589,14 +692,25 @@ class AppointmentJobFlowService {
           order: [["version", "DESC"]],
         });
 
+        // Preserve existing progress if possible
+        let newProgress;
+        if (platformChecklist?.snapshotData) {
+          const freshProgress = this.initializeProgress(platformChecklist.snapshotData);
+          // Migrate existing progress to new checklist structure
+          newProgress = this.migrateProgress(
+            jobFlow.checklistProgress,
+            freshProgress
+          );
+        } else {
+          newProgress = null;
+        }
+
         await jobFlow.update({
           usesPlatformFlow: true,
           customJobFlowId: null,
           photoRequirement: "platform_required",
           checklistSnapshotData: platformChecklist?.snapshotData || null,
-          checklistProgress: platformChecklist
-            ? this.initializeProgress(platformChecklist.snapshotData)
-            : null,
+          checklistProgress: newProgress,
         });
       }
     } else {
@@ -609,6 +723,49 @@ class AppointmentJobFlowService {
     }
 
     return jobFlow;
+  }
+
+  /**
+   * Migrate progress from one checklist structure to another
+   * Preserves completed/na status for items that exist in the new structure
+   * @param {Object} oldProgress - Existing progress object
+   * @param {Object} newProgress - Fresh progress object from new checklist
+   * @returns {Object} Merged progress
+   */
+  static migrateProgress(oldProgress, newProgress) {
+    if (!oldProgress || !newProgress) {
+      return newProgress || {};
+    }
+
+    const merged = JSON.parse(JSON.stringify(newProgress));
+
+    for (const [sectionId, sectionProgress] of Object.entries(oldProgress)) {
+      if (!merged[sectionId]) {
+        continue; // Section doesn't exist in new checklist
+      }
+
+      const validItems = new Set(merged[sectionId].total || []);
+
+      // Copy over completed items that exist in the new checklist
+      if (sectionProgress.completed) {
+        for (const itemId of sectionProgress.completed) {
+          if (validItems.has(itemId) && !merged[sectionId].completed.includes(itemId)) {
+            merged[sectionId].completed.push(itemId);
+          }
+        }
+      }
+
+      // Copy over N/A items that exist in the new checklist
+      if (sectionProgress.na) {
+        for (const itemId of sectionProgress.na) {
+          if (validItems.has(itemId) && !merged[sectionId].na.includes(itemId)) {
+            merged[sectionId].na.push(itemId);
+          }
+        }
+      }
+    }
+
+    return merged;
   }
 }
 

@@ -293,17 +293,17 @@ class EmployeeJobAssignmentService {
       throw new Error("You do not have permission to assign employees to this appointment");
     }
 
-    // Resolve the job flow for this appointment (safe to do outside transaction)
-    const flowResolution = await CustomJobFlowService.resolveFlowForAppointment(
-      appointment,
-      businessOwnerId,
-      assignmentData.jobFlowOverride // Optional job-level override
-    );
-
-    const isMarketplacePickup = flowResolution.usesPlatformFlow;
-
     // Create the assignment and job flow - all checks inside transaction with locks
     const assignment = await sequelize.transaction(async (t) => {
+      // Resolve the job flow inside transaction to prevent race conditions
+      // with default flow changes happening concurrently
+      const flowResolution = await CustomJobFlowService.resolveFlowForAppointment(
+        appointment,
+        businessOwnerId,
+        assignmentData.jobFlowOverride // Optional job-level override
+      );
+
+      const isMarketplacePickup = flowResolution.usesPlatformFlow;
       // CRITICAL: Lock the appointment row to prevent race conditions when multiple
       // employees are assigned simultaneously. This lock serializes concurrent assignment
       // requests for the same appointment, even when there are no existing assignments.
@@ -350,7 +350,8 @@ class EmployeeJobAssignmentService {
       if (!jobFlow) {
         jobFlow = await AppointmentJobFlowService.createJobFlowForAppointment(
           appointmentId,
-          flowResolution
+          flowResolution,
+          t
         );
       }
 
@@ -543,7 +544,8 @@ class EmployeeJobAssignmentService {
       if (!jobFlow) {
         jobFlow = await AppointmentJobFlowService.createJobFlowForAppointment(
           appointmentId,
-          flowResolution
+          flowResolution,
+          t
         );
       }
 
