@@ -1225,7 +1225,11 @@ If you dispute an earnings calculation:
 > - Obtaining any required business licenses or permits
 > - Complying with all tax laws and regulations
 
-Kleanr will issue a Form 1099-NEC if your earnings exceed IRS thresholds.
+> **IMPORTANT - TAX DOCUMENTS FROM STRIPE:**
+>
+> Your earnings are paid out through Stripe Connect. Tax documents, including Form 1099-NEC (if your earnings exceed IRS thresholds), are **issued by Stripe, not Kleanr**.
+>
+> You are responsible for accessing your tax documents through your Stripe Express Dashboard. Kleanr does not issue 1099 forms directly.
 
 > **IMPORTANT:** Kleanr does NOT withhold taxes from your earnings.
 

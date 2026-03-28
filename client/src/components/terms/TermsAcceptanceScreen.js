@@ -39,6 +39,7 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
   const [paymentTermsToAccept, setPaymentTermsToAccept] = useState(null);
   const [damageProtectionToAccept, setDamageProtectionToAccept] = useState(null);
   const [cleanerAgreementToAccept, setCleanerAgreementToAccept] = useState(null);
+  const [businessOwnerAgreementToAccept, setBusinessOwnerAgreementToAccept] = useState(null);
 
   // Track original total for progress calculation (doesn't change as docs are accepted)
   const [originalTotalDocs, setOriginalTotalDocs] = useState(0);

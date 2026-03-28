@@ -115,17 +115,13 @@ describe("ApplicationClass", () => {
         error: "Internal Server Error",
       });
 
-      const result = await Application.addApplicationToDb(validApplicationData);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(Application.addApplicationToDb(validApplicationData)).rejects.toThrow("Internal Server Error");
     });
 
-    it("should handle network errors", async () => {
+    it("should throw error on network errors", async () => {
       HttpClient.post.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const result = await Application.addApplicationToDb(validApplicationData);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(Application.addApplicationToDb(validApplicationData)).rejects.toThrow("Network request failed");
     });
   });
 
@@ -214,24 +210,20 @@ describe("ApplicationClass", () => {
       expect(result).toEqual(mockApplication);
     });
 
-    it("should return error on non-ok response", async () => {
+    it("should throw error on non-ok response", async () => {
       HttpClient.get.mockResolvedValueOnce({
         success: false,
         status: 404,
         error: "Not found",
       });
 
-      const result = await Application.getApplications(999);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(Application.getApplications(999)).rejects.toThrow("No data received");
     });
 
-    it("should handle network errors", async () => {
+    it("should throw error on network errors", async () => {
       HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const result = await Application.getApplications(1);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(Application.getApplications(1)).rejects.toThrow("No data received");
     });
   });
 

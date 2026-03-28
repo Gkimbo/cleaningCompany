@@ -127,7 +127,7 @@ describe("CustomJobFlowService - Checklist Forking", () => {
       };
       CustomJobFlowChecklist.create.mockResolvedValue(mockCreatedChecklist);
 
-      const result = await CustomJobFlowService.forkPlatformChecklist(1, 10);
+      const result = await CustomJobFlowService.forkPlatformChecklist(1, 10, null, true);
 
       // Should have deleted the existing checklist
       expect(existingChecklist.destroy).toHaveBeenCalled();

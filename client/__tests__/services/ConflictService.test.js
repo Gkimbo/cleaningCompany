@@ -40,7 +40,7 @@ describe("ConflictService", () => {
       const result = await ConflictService.getQueue(mockToken);
 
       expect(HttpClient.get).toHaveBeenCalledWith(
-        "/conflicts/queue",
+        "/api/v1/conflicts/queue",
         { token: mockToken, useBaseUrl: true }
       );
       expect(result.cases).toHaveLength(2);
@@ -56,7 +56,7 @@ describe("ConflictService", () => {
       });
 
       expect(HttpClient.get).toHaveBeenCalledWith(
-        "/conflicts/queue?caseType=appeal&status=submitted&priority=high",
+        "/api/v1/conflicts/queue?caseType=appeal&status=submitted&priority=high",
         { token: mockToken, useBaseUrl: true }
       );
     });
@@ -115,7 +115,7 @@ describe("ConflictService", () => {
       const result = await ConflictService.getCase(mockToken, "appeal", 1);
 
       expect(HttpClient.get).toHaveBeenCalledWith(
-        "/conflicts/appeal/1",
+        "/api/v1/conflicts/appeal/1",
         { token: mockToken, useBaseUrl: true }
       );
       expect(result.case.id).toBe(1);
@@ -136,7 +136,7 @@ describe("ConflictService", () => {
       const result = await ConflictService.getCase(mockToken, "adjustment", 1);
 
       expect(HttpClient.get).toHaveBeenCalledWith(
-        "/conflicts/adjustment/1",
+        "/api/v1/conflicts/adjustment/1",
         { token: mockToken, useBaseUrl: true }
       );
     });
@@ -254,7 +254,7 @@ describe("ConflictService", () => {
       );
 
       expect(HttpClient.post).toHaveBeenCalledWith(
-        "/conflicts/appeal/1/refund",
+        "/api/v1/conflicts/appeal/1/refund",
         { amount: 5000, reason: "customer_request" },
         { token: mockToken, useBaseUrl: true }
       );
@@ -297,7 +297,7 @@ describe("ConflictService", () => {
       );
 
       expect(HttpClient.post).toHaveBeenCalledWith(
-        "/conflicts/appeal/1/payout",
+        "/api/v1/conflicts/appeal/1/payout",
         { amount: 3000, reason: "Compensation" },
         { token: mockToken, useBaseUrl: true }
       );
@@ -331,7 +331,7 @@ describe("ConflictService", () => {
       );
 
       expect(HttpClient.post).toHaveBeenCalledWith(
-        "/conflicts/appeal/1/note",
+        "/api/v1/conflicts/appeal/1/note",
         { note: "Test note" },
         { token: mockToken, useBaseUrl: true }
       );
@@ -352,7 +352,7 @@ describe("ConflictService", () => {
       );
 
       expect(HttpClient.post).toHaveBeenCalledWith(
-        "/conflicts/appeal/1/resolve",
+        "/api/v1/conflicts/appeal/1/resolve",
         { decision: "approved", resolution: "Case approved", notes: undefined },
         { token: mockToken, useBaseUrl: true }
       );
@@ -419,7 +419,7 @@ describe("ConflictService", () => {
       const result = await ConflictService.createSupportTicket(mockToken, ticketData);
 
       expect(HttpClient.post).toHaveBeenCalledWith(
-        "/conflicts/support/create",
+        "/api/v1/conflicts/support/create",
         ticketData,
         { token: mockToken, useBaseUrl: true }
       );
@@ -433,7 +433,7 @@ describe("ConflictService", () => {
       await ConflictService.createSupportTicket(mockToken, ticketData);
 
       expect(HttpClient.post).toHaveBeenCalledWith(
-        "/conflicts/support/create",
+        "/api/v1/conflicts/support/create",
         ticketData,
         { token: mockToken, useBaseUrl: true }
       );
@@ -456,7 +456,7 @@ describe("ConflictService", () => {
         await ConflictService.createSupportTicket(mockToken, { ...ticketData, category });
 
         expect(HttpClient.post).toHaveBeenLastCalledWith(
-          "/conflicts/support/create",
+          "/api/v1/conflicts/support/create",
           expect.objectContaining({ category }),
           { token: mockToken, useBaseUrl: true }
         );
@@ -472,7 +472,7 @@ describe("ConflictService", () => {
         await ConflictService.createSupportTicket(mockToken, { ...ticketData, priority });
 
         expect(HttpClient.post).toHaveBeenLastCalledWith(
-          "/conflicts/support/create",
+          "/api/v1/conflicts/support/create",
           expect.objectContaining({ priority }),
           { token: mockToken, useBaseUrl: true }
         );
@@ -514,7 +514,7 @@ describe("ConflictService", () => {
       const result = await ConflictService.getLinkedConversation(mockToken, 1);
 
       expect(HttpClient.get).toHaveBeenCalledWith(
-        "/conflicts/support/1/conversation",
+        "/api/v1/conflicts/support/1/conversation",
         { token: mockToken, useBaseUrl: true }
       );
       expect(result.success).toBe(true);
@@ -567,7 +567,7 @@ describe("ConflictService", () => {
       await ConflictService.getQueue(mockToken, { caseType: "support" });
 
       expect(HttpClient.get).toHaveBeenCalledWith(
-        "/conflicts/queue?caseType=support",
+        "/api/v1/conflicts/queue?caseType=support",
         { token: mockToken, useBaseUrl: true }
       );
     });
@@ -589,7 +589,7 @@ describe("ConflictService", () => {
       const result = await ConflictService.getCase(mockToken, "support", 1);
 
       expect(HttpClient.get).toHaveBeenCalledWith(
-        "/conflicts/support/1",
+        "/api/v1/conflicts/support/1",
         { token: mockToken, useBaseUrl: true }
       );
       expect(result.success).toBe(true);

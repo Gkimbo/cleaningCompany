@@ -136,10 +136,15 @@ class PushNotificationService {
 
   /**
    * Remove the push token from the backend (on logout)
+   * Fails silently if auth token is expired - the backend token will be orphaned
+   * but cleaned up on next login or by server-side cleanup
    * @param {string} authToken - The user's auth token
    * @returns {Promise<boolean>} Success status
    */
   static async removeTokenFromBackend(authToken) {
+    // Always clean up local storage regardless of backend result
+    await SecureStorage.removeItem("expoPushToken");
+
     try {
       const response = await fetch(`${API_BASE}/push-notifications/remove-token`, {
         method: "DELETE",
@@ -151,14 +156,12 @@ class PushNotificationService {
 
       if (response.ok) {
         if (__DEV__) console.log("[Push] Token removed from backend");
-        await SecureStorage.removeItem("expoPushToken");
         return true;
-      } else {
-        if (__DEV__) console.error("[Push] Failed to remove token");
-        return false;
       }
-    } catch (error) {
-      if (__DEV__) console.error("[Push] Error removing token:", error);
+      // Fail silently - token may be expired during logout, which is expected
+      return false;
+    } catch {
+      // Fail silently - network errors during logout are not critical
       return false;
     }
   }

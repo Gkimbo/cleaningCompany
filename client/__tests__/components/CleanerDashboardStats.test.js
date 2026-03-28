@@ -9,18 +9,26 @@ describe("CleanerDashboard Statistics", () => {
       return new Date(dateString + "T00:00:00");
     };
 
+    // Helper to format date as local YYYY-MM-DD to avoid timezone issues
+    const formatLocalDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
     it("should count all upcoming appointments including today", () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const todayStr = today.toISOString().split("T")[0];
+      const todayStr = formatLocalDate(today);
       const tomorrowDate = new Date(today);
       tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-      const tomorrowStr = tomorrowDate.toISOString().split("T")[0];
+      const tomorrowStr = formatLocalDate(tomorrowDate);
 
       const futureDate = new Date(today);
       futureDate.setDate(futureDate.getDate() + 7);
-      const futureStr = futureDate.toISOString().split("T")[0];
+      const futureStr = formatLocalDate(futureDate);
 
       const appointments = [
         { id: 1, date: todayStr }, // Today
@@ -72,7 +80,7 @@ describe("CleanerDashboard Statistics", () => {
     it("should correctly separate today's and future appointments", () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split("T")[0];
+      const todayStr = formatLocalDate(today);
 
       const appointments = [
         { id: 1, date: todayStr },

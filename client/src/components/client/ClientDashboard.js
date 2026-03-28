@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import SecureStorage from "../../services/SecureStorage";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
 import CleanerApprovalService from "../../services/fetchRequests/CleanerApprovalService";
 import MessageService from "../../services/fetchRequests/MessageClass";
@@ -1094,6 +1096,35 @@ const ClientDashboard = ({ state, dispatch }) => {
         </View>
       )}
 
+      {/* Switch to Cleaner Profile Banner - for dual-role users */}
+      {state.account === "cleaner" && (
+        <Pressable
+          style={({ pressed }) => [
+            styles.switchToCleanerBanner,
+            pressed && styles.switchToCleanerBannerPressed,
+          ]}
+          onPress={async () => {
+            await SecureStorage.setItem("activeRole", "cleaner");
+            dispatch({ type: "SET_ACTIVE_ROLE", payload: "cleaner" });
+            navigate("/");
+          }}
+        >
+          <View style={styles.switchToCleanerIcon}>
+            <Ionicons name="briefcase" size={20} color={colors.primary[600]} />
+          </View>
+          <View style={styles.switchToCleanerContent}>
+            <Text style={styles.switchToCleanerTitle}>Switch to Cleaner View</Text>
+            <Text style={styles.switchToCleanerSubtitle}>
+              View your cleaning jobs and earnings
+            </Text>
+          </View>
+          <View style={styles.switchToCleanerAction}>
+            <Text style={styles.switchToCleanerActionText}>Switch</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.primary[600]} />
+          </View>
+        </Pressable>
+      )}
+
       {/* Tax Documents Section */}
       <TaxFormsSection state={state} />
 
@@ -1883,6 +1914,62 @@ const styles = StyleSheet.create({
     borderColor: colors.primary[200],
   },
   cleanerApprovalBannerActionText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+
+  // Switch to Cleaner Banner
+  switchToCleanerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    ...shadows.sm,
+  },
+  switchToCleanerBannerPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  switchToCleanerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  switchToCleanerContent: {
+    flex: 1,
+  },
+  switchToCleanerTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[800],
+    marginBottom: 2,
+  },
+  switchToCleanerSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    lineHeight: 18,
+  },
+  switchToCleanerAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  switchToCleanerActionText: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[600],

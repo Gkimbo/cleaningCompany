@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import SecureStorage from "../../services/SecureStorage";
 import { colors, spacing, radius, typography } from "../../services/styles/theme";
 import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
@@ -369,6 +370,9 @@ const AddHomeForm = ({ state, dispatch }) => {
 
   const handleSubmit = async () => {
     setIsLoading(true);
+    // Check if this is the cleaner's first home before submitting
+    const isFirstHomeForCleaner = state.account === "cleaner" && (!state.homes || state.homes.length === 0);
+
     try {
       // Get token from AsyncStorage to ensure we use the current token
       // (important for preview mode where AuthContext may have stale token)
@@ -428,12 +432,22 @@ const AddHomeForm = ({ state, dispatch }) => {
         if (dispatch) {
           dispatch({ type: "ADD_HOME", payload: response.home || homeData });
         }
+
+        // If this is the cleaner's first home, switch to homeowner profile
+        if (isFirstHomeForCleaner) {
+          await SecureStorage.setItem("activeRole", "homeowner");
+          if (dispatch) {
+            dispatch({ type: "SET_ACTIVE_ROLE", payload: "homeowner" });
+          }
+        }
+
         // Check if the home is outside service area and show warning
         if (response.outsideServiceArea) {
           setServiceAreaMessage(response.serviceAreaMessage);
           setShowServiceAreaWarning(true);
         } else {
-          navigate("/list-of-homes");
+          // Navigate to dashboard for first home (now in homeowner view), otherwise list of homes
+          navigate(isFirstHomeForCleaner ? "/" : "/list-of-homes");
         }
       }
     } catch (error) {
@@ -445,7 +459,10 @@ const AddHomeForm = ({ state, dispatch }) => {
 
   const handleDismissWarning = () => {
     setShowServiceAreaWarning(false);
-    navigate("/list-of-homes");
+    // If cleaner just added their first home, navigate to dashboard (now in homeowner view)
+    // state.homes will have 1 item after the ADD_HOME dispatch
+    const isCleanerWithFirstHome = state.account === "cleaner" && state.homes?.length === 1;
+    navigate(isCleanerWithFirstHome ? "/" : "/list-of-homes");
   };
 
   const renderStepIndicator = () => (

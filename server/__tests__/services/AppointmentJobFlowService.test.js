@@ -76,7 +76,8 @@ describe("AppointmentJobFlowService", () => {
           appointmentId: 100,
           usesPlatformFlow: true,
           photoRequirement: "platform_required",
-        })
+        }),
+        expect.any(Object) // Sequelize options
       );
     });
 
@@ -206,7 +207,7 @@ describe("AppointmentJobFlowService", () => {
         checklistProgress: {
           kitchen: { total: ["k1", "k2"], completed: [], na: [] },
         },
-        checklistSnapshotData: { sections: [] },
+        checklistSnapshotData: { sections: [{ id: "kitchen", items: [{ id: "k1" }, { id: "k2" }] }] },
         hasChecklist: () => true,
         getChecklistCompletionPercentage: () => 50,
         update: jest.fn(),
@@ -230,7 +231,7 @@ describe("AppointmentJobFlowService", () => {
         checklistProgress: {
           kitchen: { total: ["k1", "k2"], completed: [], na: [] },
         },
-        checklistSnapshotData: { sections: [] },
+        checklistSnapshotData: { sections: [{ id: "kitchen", items: [{ id: "k1" }, { id: "k2" }] }] },
         hasChecklist: () => true,
         getChecklistCompletionPercentage: () => 50,
         update: jest.fn(),
@@ -254,7 +255,7 @@ describe("AppointmentJobFlowService", () => {
         checklistProgress: {
           kitchen: { total: ["k1", "k2"], completed: ["k1"], na: [] },
         },
-        checklistSnapshotData: { sections: [] },
+        checklistSnapshotData: { sections: [{ id: "kitchen", items: [{ id: "k1" }, { id: "k2" }] }] },
         hasChecklist: () => true,
         getChecklistCompletionPercentage: () => 50,
         update: jest.fn(),
@@ -277,7 +278,7 @@ describe("AppointmentJobFlowService", () => {
         checklistProgress: {
           kitchen: { total: ["k1", "k2"], completed: [], na: [] },
         },
-        checklistSnapshotData: { sections: [] },
+        checklistSnapshotData: { sections: [{ id: "kitchen", items: [{ id: "k1" }, { id: "k2" }] }] },
         hasChecklist: () => true,
         getChecklistCompletionPercentage: () => 50,
         update: jest.fn(),
@@ -300,7 +301,7 @@ describe("AppointmentJobFlowService", () => {
         checklistProgress: {
           kitchen: { total: ["k1", "k2"], completed: ["k1", "k2"], na: [] },
         },
-        checklistSnapshotData: { sections: [] },
+        checklistSnapshotData: { sections: [{ id: "kitchen", items: [{ id: "k1" }, { id: "k2" }] }] },
         hasChecklist: () => true,
         getChecklistCompletionPercentage: () => 50,
         update: jest.fn(),
@@ -323,7 +324,7 @@ describe("AppointmentJobFlowService", () => {
         checklistProgress: {
           kitchen: { total: ["k1", "k2"], completed: ["k1"], na: [] },
         },
-        checklistSnapshotData: { sections: [] },
+        checklistSnapshotData: { sections: [{ id: "kitchen", items: [{ id: "k1" }, { id: "k2" }] }] },
         hasChecklist: () => true,
         getChecklistCompletionPercentage: () => 50,
         update: jest.fn(),
@@ -346,7 +347,7 @@ describe("AppointmentJobFlowService", () => {
         checklistProgress: {
           kitchen: { total: ["k1", "k2"], completed: [] }, // no na array
         },
-        checklistSnapshotData: { sections: [] },
+        checklistSnapshotData: { sections: [{ id: "kitchen", items: [{ id: "k1" }, { id: "k2" }] }] },
         hasChecklist: () => true,
         getChecklistCompletionPercentage: () => 50,
         update: jest.fn(),
@@ -440,8 +441,10 @@ describe("AppointmentJobFlowService", () => {
       };
       AppointmentJobFlow.findByPk.mockResolvedValue(mockJobFlow);
       JobPhoto.count
-        .mockResolvedValueOnce(2) // before photos
-        .mockResolvedValueOnce(3); // after photos
+        .mockResolvedValueOnce(2) // all before photos
+        .mockResolvedValueOnce(3) // all after photos
+        .mockResolvedValueOnce(2) // real before photos (not N/A)
+        .mockResolvedValueOnce(3); // real after photos (not N/A)
 
       const result = await AppointmentJobFlowService.updatePhotoCounts(1, 5);
 
@@ -463,8 +466,10 @@ describe("AppointmentJobFlowService", () => {
       };
       AppointmentJobFlow.findByPk.mockResolvedValue(mockJobFlow);
       JobPhoto.count
-        .mockResolvedValueOnce(2) // before photos
-        .mockResolvedValueOnce(0); // no after photos
+        .mockResolvedValueOnce(2) // all before photos
+        .mockResolvedValueOnce(0) // no after photos
+        .mockResolvedValueOnce(2) // real before photos
+        .mockResolvedValueOnce(0); // no real after photos
 
       const result = await AppointmentJobFlowService.updatePhotoCounts(1, 5);
 
@@ -522,9 +527,17 @@ describe("AppointmentJobFlowService", () => {
   describe("validateCompletionRequirements", () => {
     it("should pass when all requirements met", async () => {
       const mockJobFlow = {
-        validateCompletion: () => ({ isValid: true, errors: [] }),
+        appointmentId: 100,
+        checklistCompleted: true,
+        requiresPhotos: () => true,
+        hasChecklist: () => true,
+        getChecklistCompletionPercentage: () => 100,
       };
       AppointmentJobFlow.findByPk.mockResolvedValue(mockJobFlow);
+      // Mock photo counts - at least 1 before and 1 after
+      JobPhoto.count
+        .mockResolvedValueOnce(2) // before photos
+        .mockResolvedValueOnce(2); // after photos
 
       const result = await AppointmentJobFlowService.validateCompletionRequirements(1);
 
@@ -533,12 +546,17 @@ describe("AppointmentJobFlowService", () => {
 
     it("should throw error when requirements not met", async () => {
       const mockJobFlow = {
-        validateCompletion: () => ({
-          isValid: false,
-          errors: ["Before photos are required"],
-        }),
+        appointmentId: 100,
+        checklistCompleted: false,
+        requiresPhotos: () => true,
+        hasChecklist: () => false,
+        getChecklistCompletionPercentage: () => 0,
       };
       AppointmentJobFlow.findByPk.mockResolvedValue(mockJobFlow);
+      // Mock photo counts - no photos
+      JobPhoto.count
+        .mockResolvedValueOnce(0) // before photos
+        .mockResolvedValueOnce(0); // after photos
 
       await expect(
         AppointmentJobFlowService.validateCompletionRequirements(1)

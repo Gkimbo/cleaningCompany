@@ -1689,9 +1689,9 @@ describe("Late-Joining Cleaner Notifications", () => {
     });
 
     it("should handle late-joining even the day before cleaning", () => {
-      const cleaningDate = new Date();
-      cleaningDate.setDate(cleaningDate.getDate() + 1); // Tomorrow
-      const now = new Date();
+      // Use fixed dates to avoid timing issues
+      const now = new Date("2026-01-14T12:00:00Z");
+      const cleaningDate = new Date("2026-01-15T12:00:00Z"); // Tomorrow
 
       const daysUntilCleaning = Math.floor(
         (cleaningDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)

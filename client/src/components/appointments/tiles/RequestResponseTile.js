@@ -107,9 +107,13 @@ const RequestResponseTile = ({
   };
 
   useEffect(() => {
-    FetchData.getHome(homeId).then((response) => {
-      setHome(response.home);
-    });
+    FetchData.getHome(homeId)
+      .then((response) => {
+        setHome(response.home);
+      })
+      .catch(() => {
+        // Silently handle - home details are optional
+      });
   }, []);
 
   return (

@@ -429,8 +429,8 @@ const SelectNewJobList = ({ state }) => {
             if (response && !response.error) {
               details[homeId] = response.home || response;
             }
-          } catch (err) {
-            console.error("Error fetching home:", homeId, err);
+          } catch {
+            // Silently handle - home details are optional
           }
         })
       );

@@ -52,6 +52,7 @@ const apiLimiter = rateLimit({
 	message: { error: "Too many requests, please try again later" },
 	standardHeaders: true,
 	legacyHeaders: false,
+	validate: { xForwardedForHeader: false },
 });
 
 const authLimiter = rateLimit({
@@ -60,6 +61,7 @@ const authLimiter = rateLimit({
 	message: { error: "Too many login attempts, please try again later" },
 	standardHeaders: true,
 	legacyHeaders: false,
+	validate: { xForwardedForHeader: false },
 });
 
 // Stricter rate limiter for financial/sensitive endpoints (withdrawals, payouts, etc.)

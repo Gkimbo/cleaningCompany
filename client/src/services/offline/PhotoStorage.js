@@ -447,15 +447,17 @@ class PhotoStorage {
     await this.initialize();
 
     try {
-      // Delete all photo records
-      const photos = await offlinePhotosCollection.query().fetch();
-      await database.write(async () => {
-        for (const photo of photos) {
-          await photo.markAsDeleted();
-        }
-      });
+      // Delete all photo records from database (if available)
+      if (offlinePhotosCollection && database) {
+        const photos = await offlinePhotosCollection.query().fetch();
+        await database.write(async () => {
+          for (const photo of photos) {
+            await photo.markAsDeleted();
+          }
+        });
+      }
 
-      // Delete the directory
+      // Delete the directory (works even without database)
       const dirInfo = await FileSystem.getInfoAsync(this._baseDirectory);
       if (dirInfo.exists) {
         await FileSystem.deleteAsync(this._baseDirectory);

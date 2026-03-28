@@ -46,6 +46,7 @@ const financialLimiter = rateLimit({
   message: { error: "Too many financial requests, please try again later" },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 const ownerDashboardRouter = express.Router();

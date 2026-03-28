@@ -60,6 +60,7 @@ const paymentRateLimiter = rateLimit({
   message: { error: "Too many payment requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   keyGenerator: (req) => {
     // Rate limit by user ID from JWT if available, otherwise by IP
     try {
@@ -91,6 +92,7 @@ const strictPaymentLimiter = rateLimit({
   message: { error: "Too many sensitive payment operations. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   keyGenerator: (req) => {
     try {
       const authHeader = req.headers.authorization;
@@ -120,6 +122,7 @@ const payoutRateLimiter = rateLimit({
   message: { error: "Too many payout requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   keyGenerator: (req) => {
     try {
       const authHeader = req.headers.authorization;

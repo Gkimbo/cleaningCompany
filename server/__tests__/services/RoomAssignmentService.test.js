@@ -91,8 +91,12 @@ describe("RoomAssignmentService", () => {
 
       it("should return 20 minutes for unknown room types", () => {
         expect(RoomAssignmentService.calculateRoomEffort("garage")).toBe(20);
-        expect(RoomAssignmentService.calculateRoomEffort("basement")).toBe(20);
+        expect(RoomAssignmentService.calculateRoomEffort("attic")).toBe(20);
         expect(RoomAssignmentService.calculateRoomEffort("unknown")).toBe(20);
+      });
+
+      it("should return 30 minutes for basement", () => {
+        expect(RoomAssignmentService.calculateRoomEffort("basement")).toBe(30);
       });
     });
 

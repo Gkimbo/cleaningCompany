@@ -167,6 +167,9 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
   let app;
   const secretKey = process.env.SESSION_SECRET || "test-secret";
 
+  // Helper to create auth token
+  const createToken = (userId) => jwt.sign({ userId }, secretKey);
+
   beforeAll(() => {
     app = express();
     app.use(express.json());
@@ -185,6 +188,26 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
     const clientId = 200;
     const homeId = 300;
     const appointmentId = 400;
+    let token;
+
+    beforeEach(() => {
+      token = createToken(businessOwnerId);
+      // Mock the requesting user
+      User.findByPk.mockImplementation((id) => {
+        if (id === businessOwnerId) {
+          return Promise.resolve({
+            id: businessOwnerId,
+            type: "cleaner",
+            firstName: "Test",
+            email: "owner@test.com",
+            expoPushToken: null,
+            stripeAccountId: "acct_test",
+            stripeAccountStatus: "complete",
+          });
+        }
+        return Promise.resolve(null);
+      });
+    });
 
     const createMockAppointment = (overrides = {}) => ({
       id: appointmentId,
@@ -220,17 +243,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
       UserHomes.findByPk.mockResolvedValue(mockHome);
       JobPhoto.count.mockResolvedValue(0); // No photos
-      User.findByPk.mockResolvedValue({
-        id: businessOwnerId,
-        firstName: "Test",
-        email: "owner@test.com",
-        expoPushToken: null,
-        stripeAccountId: "acct_test",
-        stripeAccountStatus: "complete",
-      });
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId,
           cleanerId: businessOwnerId,
@@ -258,17 +274,9 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         .mockResolvedValueOnce(3) // before photos
         .mockResolvedValueOnce(3); // after photos
 
-      User.findByPk.mockResolvedValue({
-        id: businessOwnerId,
-        firstName: "Test",
-        email: "owner@test.com",
-        expoPushToken: null,
-        stripeAccountId: "acct_test",
-        stripeAccountStatus: "complete",
-      });
-
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId,
           cleanerId: businessOwnerId,
@@ -289,16 +297,9 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         .mockResolvedValueOnce(3) // before photos exist
         .mockResolvedValueOnce(0); // no after photos
 
-      User.findByPk.mockResolvedValue({
-        id: businessOwnerId,
-        firstName: "Test",
-        email: "owner@test.com",
-        stripeAccountId: "acct_test",
-        stripeAccountStatus: "complete",
-      });
-
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId,
           cleanerId: businessOwnerId,
@@ -319,16 +320,9 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         .mockResolvedValueOnce(0) // no before photos
         .mockResolvedValueOnce(3); // after photos exist
 
-      User.findByPk.mockResolvedValue({
-        id: businessOwnerId,
-        firstName: "Test",
-        email: "owner@test.com",
-        stripeAccountId: "acct_test",
-        stripeAccountStatus: "complete",
-      });
-
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId,
           cleanerId: businessOwnerId,
@@ -344,6 +338,25 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
     const clientId = 200;
     const homeId = 300;
     const appointmentId = 400;
+    let token;
+
+    beforeEach(() => {
+      token = createToken(regularCleanerId);
+      // Mock the requesting user
+      User.findByPk.mockImplementation((id) => {
+        if (id === regularCleanerId) {
+          return Promise.resolve({
+            id: regularCleanerId,
+            type: "cleaner",
+            firstName: "Test",
+            email: "cleaner@test.com",
+            stripeAccountId: "acct_test",
+            stripeAccountStatus: "complete",
+          });
+        }
+        return Promise.resolve(null);
+      });
+    });
 
     const createMockAppointment = (overrides = {}) => ({
       id: appointmentId,
@@ -378,6 +391,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId,
           cleanerId: regularCleanerId,
@@ -404,6 +418,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId,
           cleanerId: regularCleanerId,
@@ -430,6 +445,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId,
           cleanerId: regularCleanerId,
@@ -453,16 +469,9 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         .mockResolvedValueOnce(3) // before photos exist
         .mockResolvedValueOnce(3); // after photos exist
 
-      User.findByPk.mockResolvedValue({
-        id: regularCleanerId,
-        firstName: "Test",
-        email: "cleaner@test.com",
-        stripeAccountId: "acct_test",
-        stripeAccountStatus: "complete",
-      });
-
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId,
           cleanerId: regularCleanerId,
@@ -489,6 +498,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId,
           cleanerId: regularCleanerId, // Not the preferred cleaner
@@ -500,14 +510,32 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
   });
 
   describe("POST /complete-job - Edge Cases", () => {
+    let token;
+    const testCleanerId = 1;
+
+    beforeEach(() => {
+      token = createToken(testCleanerId);
+      User.findByPk.mockImplementation((id) => {
+        return Promise.resolve({
+          id: id,
+          type: "cleaner",
+          firstName: "Test",
+          email: "test@test.com",
+          stripeAccountId: "acct_test",
+          stripeAccountStatus: "complete",
+        });
+      });
+    });
+
     it("should return 404 if appointment not found", async () => {
       UserAppointments.findByPk.mockResolvedValue(null);
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId: 9999,
-          cleanerId: 1,
+          cleanerId: testCleanerId,
         });
 
       expect(res.status).toBe(404);
@@ -519,13 +547,15 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         id: 1,
         paid: false, // Not paid
         completed: false,
+        employeesAssigned: [testCleanerId.toString()],
       });
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId: 1,
-          cleanerId: 1,
+          cleanerId: testCleanerId,
         });
 
       expect(res.status).toBe(400);
@@ -541,14 +571,15 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         timeToBeCompleted: "anytime",
         isMultiCleanerJob: false,
         jobStartedAt: new Date(Date.now() - 60 * 60 * 1000),
-        employeesAssigned: ["1"],
+        employeesAssigned: [testCleanerId.toString()],
       });
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId: 1,
-          cleanerId: 1,
+          cleanerId: testCleanerId,
         });
 
       expect(res.status).toBe(400);
@@ -556,6 +587,21 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
     });
 
     it("should return 400 if no cleaner assigned", async () => {
+      // Use an owner token to bypass assigned cleaner check
+      const ownerId = 999;
+      const ownerToken = createToken(ownerId);
+      User.findByPk.mockImplementation((id) => {
+        if (id === ownerId) {
+          return Promise.resolve({
+            id: ownerId,
+            type: "owner", // Owner type to bypass assigned check
+            firstName: "Test Owner",
+            email: "owner@test.com",
+          });
+        }
+        return Promise.resolve(null);
+      });
+
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         paid: true,
@@ -569,6 +615,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({
           appointmentId: 1,
           // No cleanerId provided
@@ -580,6 +627,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
     it("should use first assigned employee if cleanerId not provided", async () => {
       const assignedCleanerId = 123;
+      const assignedToken = createToken(assignedCleanerId);
       const mockAppointment = {
         id: 1,
         userId: 200,
@@ -603,16 +651,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
       UserHomes.findByPk.mockResolvedValue(mockHome);
       JobPhoto.count.mockResolvedValue(0); // No photos - should be allowed
-      User.findByPk.mockResolvedValue({
-        id: assignedCleanerId,
-        firstName: "Test",
-        email: "cleaner@test.com",
-        stripeAccountId: "acct_test",
-        stripeAccountStatus: "complete",
-      });
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${assignedToken}`)
         .send({
           appointmentId: 1,
           // No cleanerId - should use employeesAssigned[0]
@@ -624,6 +666,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
     it("should handle preferredCleanerId as string comparison correctly", async () => {
       const businessOwnerId = 100;
+      const ownerToken = createToken(businessOwnerId);
       const mockAppointment = {
         id: 1,
         userId: 200,
@@ -647,16 +690,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
       UserHomes.findByPk.mockResolvedValue(mockHome);
       JobPhoto.count.mockResolvedValue(0);
-      User.findByPk.mockResolvedValue({
-        id: businessOwnerId,
-        firstName: "Test",
-        email: "owner@test.com",
-        stripeAccountId: "acct_test",
-        stripeAccountStatus: "complete",
-      });
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({
           appointmentId: 1,
           cleanerId: businessOwnerId.toString(), // String
@@ -668,6 +705,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
     it("should handle home without preferredCleanerId", async () => {
       const cleanerId = 100;
+      const cleanerToken = createToken(cleanerId);
       const mockAppointment = {
         id: 1,
         userId: 200,
@@ -696,6 +734,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${cleanerToken}`)
         .send({
           appointmentId: 1,
           cleanerId: cleanerId,
@@ -708,6 +747,23 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
   });
 
   describe("POST /complete-job - Locking Behavior", () => {
+    let token;
+    const testCleanerId = 1;
+
+    beforeEach(() => {
+      token = createToken(testCleanerId);
+      User.findByPk.mockImplementation((id) => {
+        return Promise.resolve({
+          id: id,
+          type: "cleaner",
+          firstName: "Test",
+          email: "test@test.com",
+          stripeAccountId: "acct_test",
+          stripeAccountStatus: "complete",
+        });
+      });
+    });
+
     it("should not allow completing an already completed job", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
@@ -717,14 +773,15 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         timeToBeCompleted: "anytime",
         isMultiCleanerJob: false,
         jobStartedAt: new Date(Date.now() - 60 * 60 * 1000),
-        employeesAssigned: ["1"],
+        employeesAssigned: [testCleanerId.toString()],
       });
 
       const res = await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${token}`)
         .send({
           appointmentId: 1,
-          cleanerId: 1,
+          cleanerId: testCleanerId,
         });
 
       expect(res.status).toBe(400);
@@ -733,6 +790,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
     it("should submit completion for approval after successful completion (2-step flow)", async () => {
       const businessOwnerId = 100;
+      const ownerToken = createToken(businessOwnerId);
       const mockAppointment = {
         id: 1,
         userId: 200,
@@ -760,16 +818,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
       UserHomes.findByPk.mockResolvedValue(mockHome);
       JobPhoto.count.mockResolvedValue(0);
-      User.findByPk.mockResolvedValue({
-        id: businessOwnerId,
-        firstName: "Test",
-        email: "owner@test.com",
-        stripeAccountId: "acct_test",
-        stripeAccountStatus: "complete",
-      });
 
       await request(app)
         .post("/api/v1/payments/complete-job")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({
           appointmentId: 1,
           cleanerId: businessOwnerId,

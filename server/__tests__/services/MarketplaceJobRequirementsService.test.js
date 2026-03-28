@@ -427,10 +427,12 @@ describe("MarketplaceJobRequirementsService", () => {
       expect(result.kitchen).toEqual({
         total: ["k1", "k2"],
         completed: [],
+        na: [],
       });
       expect(result.bathroom).toEqual({
         total: ["b1"],
         completed: [],
+        na: [],
       });
     });
 
@@ -457,6 +459,7 @@ describe("MarketplaceJobRequirementsService", () => {
       expect(result.empty).toEqual({
         total: [],
         completed: [],
+        na: [],
       });
     });
   });

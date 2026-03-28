@@ -97,7 +97,9 @@ const HomePage = ({ state, dispatch }) => {
             });
           }
         }
-      );
+      ).catch((err) => {
+        __DEV__ && console.log("Failed to fetch employee info:", err.message);
+      });
     } else {
       FetchData.get("/api/v1/user-info", state.currentUser.token).then(
         (response) => {
@@ -110,7 +112,9 @@ const HomePage = ({ state, dispatch }) => {
             dispatch({ type: "DB_BILL", payload: response.user.bill });
           }
         }
-      );
+      ).catch((err) => {
+        __DEV__ && console.log("Failed to fetch user info:", err.message);
+      });
       FetchData.get(
         "/api/v1/appointments/my-requests",
         state.currentUser.token
@@ -121,6 +125,8 @@ const HomePage = ({ state, dispatch }) => {
             payload: response.pendingRequestsEmployee,
           });
         }
+      }).catch(() => {
+        // No pending requests found - this is normal, not an error
       });
     }
   }, []);

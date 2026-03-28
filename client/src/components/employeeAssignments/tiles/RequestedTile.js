@@ -55,9 +55,13 @@ const RequestedTile = ({
   };
 
   useEffect(() => {
-    FetchData.getHome(homeId).then((response) => {
-      setHome(response.home);
-    });
+    FetchData.getHome(homeId)
+      .then((response) => {
+        setHome(response.home);
+      })
+      .catch(() => {
+        // Silently handle - home details are optional
+      });
   }, [homeId]);
 
   const miles = distance ? (distance * 0.621371).toFixed(1) : null;

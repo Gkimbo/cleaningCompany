@@ -480,13 +480,25 @@ If a payout fails due to incorrect banking information:
 
 **10.6 Tax Documentation**
 
-Kleanr will provide:
+> **IMPORTANT - TAX DOCUMENTS FROM STRIPE:**
+>
+> Your earnings are paid out through Stripe Connect. Tax documents, including Form 1099-NEC (if your earnings exceed IRS thresholds), are **issued by Stripe, not Kleanr**.
+>
+> **You are responsible for:**
+> - Accessing your tax documents through your Stripe Express Dashboard
+> - Downloading your 1099-NEC form when available (typically by January 31st for the prior tax year)
+> - Providing accurate tax information to Stripe
+> - Consulting a tax professional with questions about your tax obligations
+>
+> **Kleanr does not issue 1099 forms directly.** If you have questions about your 1099 or tax documents, please contact Stripe Support or consult a tax professional.
 
-- Form 1099-NEC if earnings exceed IRS thresholds
-- Year-end earnings summaries
-- Access to transaction history in the dashboard
+Kleanr provides:
 
-> **REMINDER:** You are solely responsible for paying all applicable taxes on your earnings.
+- Year-end earnings summaries in your dashboard
+- Access to complete transaction history
+- Links to your Stripe tax document portal
+
+> **REMINDER:** You are solely responsible for paying all applicable taxes on your earnings. Kleanr does NOT provide tax advice.
 
 ---
 

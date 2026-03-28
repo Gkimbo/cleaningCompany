@@ -92,9 +92,13 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
   const correctedAmount = ((totalPriceCents / numCleaners) * cleanerSharePercent) / 100;
 
   useEffect(() => {
-    FetchData.getHome(appointment.homeId).then((response) => {
-      setHome(response.home);
-    });
+    FetchData.getHome(appointment.homeId)
+      .then((response) => {
+        setHome(response.home);
+      })
+      .catch(() => {
+        // Silently handle - home details are optional
+      });
   }, [appointment.homeId]);
 
   // Sync hasReviewed state with appointment prop

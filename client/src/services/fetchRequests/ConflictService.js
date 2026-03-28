@@ -26,7 +26,7 @@ class ConflictService {
     if (filters.includeResolved) params.append("includeResolved", "true");
 
     const queryString = params.toString();
-    const url = `/conflicts/queue${queryString ? `?${queryString}` : ""}`;
+    const url = `/api/v1/conflicts/queue${queryString ? `?${queryString}` : ""}`;
 
     const result = await HttpClient.get(url, { token, useBaseUrl: true });
 
@@ -41,7 +41,7 @@ class ConflictService {
    * Get queue statistics
    */
   static async getStats(token) {
-    const result = await HttpClient.get("/conflicts/stats", { token, useBaseUrl: true });
+    const result = await HttpClient.get("/api/v1/conflicts/stats", { token, useBaseUrl: true });
 
     if (result.success === false) {
       __DEV__ && console.warn("[ConflictService] getStats failed:", result.error);
@@ -59,7 +59,7 @@ class ConflictService {
    */
   static async getCase(token, caseType, caseId) {
     const result = await HttpClient.get(
-      `/conflicts/${caseType}/${caseId}`,
+      `/api/v1/conflicts/${caseType}/${caseId}`,
       { token, useBaseUrl: true }
     );
 
@@ -75,7 +75,7 @@ class ConflictService {
    */
   static async getPhotos(token, caseType, caseId) {
     const result = await HttpClient.get(
-      `/conflicts/${caseType}/${caseId}/photos`,
+      `/api/v1/conflicts/${caseType}/${caseId}/photos`,
       { token, useBaseUrl: true }
     );
 
@@ -91,7 +91,7 @@ class ConflictService {
    */
   static async getChecklist(token, caseType, caseId) {
     const result = await HttpClient.get(
-      `/conflicts/${caseType}/${caseId}/checklist`,
+      `/api/v1/conflicts/${caseType}/${caseId}/checklist`,
       { token, useBaseUrl: true }
     );
 
@@ -107,7 +107,7 @@ class ConflictService {
    */
   static async getMessages(token, caseType, caseId) {
     const result = await HttpClient.get(
-      `/conflicts/${caseType}/${caseId}/messages`,
+      `/api/v1/conflicts/${caseType}/${caseId}/messages`,
       { token, useBaseUrl: true }
     );
 
@@ -123,7 +123,7 @@ class ConflictService {
    */
   static async getAuditTrail(token, caseType, caseId) {
     const result = await HttpClient.get(
-      `/conflicts/${caseType}/${caseId}/audit`,
+      `/api/v1/conflicts/${caseType}/${caseId}/audit`,
       { token, useBaseUrl: true }
     );
 
@@ -143,7 +143,7 @@ class ConflictService {
    */
   static async processRefund(token, caseType, caseId, amount, reason) {
     const result = await HttpClient.post(
-      `/conflicts/${caseType}/${caseId}/refund`,
+      `/api/v1/conflicts/${caseType}/${caseId}/refund`,
       { amount, reason },
       { token, useBaseUrl: true }
     );
@@ -160,7 +160,7 @@ class ConflictService {
    */
   static async processPayout(token, caseType, caseId, amount, reason) {
     const result = await HttpClient.post(
-      `/conflicts/${caseType}/${caseId}/payout`,
+      `/api/v1/conflicts/${caseType}/${caseId}/payout`,
       { amount, reason },
       { token, useBaseUrl: true }
     );
@@ -177,7 +177,7 @@ class ConflictService {
    */
   static async addNote(token, caseType, caseId, note) {
     const result = await HttpClient.post(
-      `/conflicts/${caseType}/${caseId}/note`,
+      `/api/v1/conflicts/${caseType}/${caseId}/note`,
       { note },
       { token, useBaseUrl: true }
     );
@@ -194,7 +194,7 @@ class ConflictService {
    */
   static async resolveCase(token, caseType, caseId, decision, resolution, notes) {
     const result = await HttpClient.post(
-      `/conflicts/${caseType}/${caseId}/resolve`,
+      `/api/v1/conflicts/${caseType}/${caseId}/resolve`,
       { decision, resolution, notes },
       { token, useBaseUrl: true }
     );
@@ -211,7 +211,7 @@ class ConflictService {
    */
   static async assignCase(token, caseType, caseId, assigneeId) {
     const result = await HttpClient.post(
-      `/conflicts/${caseType}/${caseId}/assign`,
+      `/api/v1/conflicts/${caseType}/${caseId}/assign`,
       { assigneeId },
       { token, useBaseUrl: true }
     );
@@ -232,7 +232,7 @@ class ConflictService {
    */
   static async createSupportTicket(token, ticketData) {
     const result = await HttpClient.post(
-      "/conflicts/support/create",
+      "/api/v1/conflicts/support/create",
       ticketData,
       { token, useBaseUrl: true }
     );
@@ -249,7 +249,7 @@ class ConflictService {
    */
   static async getLinkedConversation(token, ticketId) {
     const result = await HttpClient.get(
-      `/conflicts/support/${ticketId}/conversation`,
+      `/api/v1/conflicts/support/${ticketId}/conversation`,
       { token, useBaseUrl: true }
     );
 
@@ -269,7 +269,7 @@ class ConflictService {
    */
   static async getRefundInfo(token, caseType, caseId) {
     const result = await HttpClient.get(
-      `/conflicts/${caseType}/${caseId}/refund-info`,
+      `/api/v1/conflicts/${caseType}/${caseId}/refund-info`,
       { token, useBaseUrl: true }
     );
 
@@ -285,7 +285,7 @@ class ConflictService {
    */
   static async lookupByNumber(token, caseNumber) {
     const result = await HttpClient.get(
-      `/conflicts/lookup/${encodeURIComponent(caseNumber)}`,
+      `/api/v1/conflicts/lookup/${encodeURIComponent(caseNumber)}`,
       { token, useBaseUrl: true }
     );
 
@@ -304,7 +304,7 @@ class ConflictService {
     if (includeResolved) params.append("includeResolved", "true");
 
     const queryString = params.toString();
-    const url = `/conflicts/user/${userId}/cases${queryString ? `?${queryString}` : ""}`;
+    const url = `/api/v1/conflicts/user/${userId}/cases${queryString ? `?${queryString}` : ""}`;
 
     const result = await HttpClient.get(url, { token, useBaseUrl: true });
 
@@ -320,7 +320,7 @@ class ConflictService {
    */
   static async searchUserCases(token, query) {
     const result = await HttpClient.get(
-      `/conflicts/user/search?query=${encodeURIComponent(query)}`,
+      `/api/v1/conflicts/user/search?query=${encodeURIComponent(query)}`,
       { token, useBaseUrl: true }
     );
 

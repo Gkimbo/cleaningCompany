@@ -364,11 +364,11 @@ describe("CleaningChecklist Component", () => {
       expect(mockOnChecklistComplete).not.toHaveBeenCalled();
     });
 
-    it("should show skip option when not complete", async () => {
+    it("should show N/A instructions when not complete", async () => {
       const component = render(<CleaningChecklist {...defaultProps} />);
       await waitForLoad(component);
 
-      expect(component.getByText(/Some tasks may not apply/)).toBeTruthy();
+      expect(component.getByText(/N\/A button for tasks that do not apply/)).toBeTruthy();
     });
   });
 

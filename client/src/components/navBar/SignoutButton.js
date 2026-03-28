@@ -1,31 +1,38 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import React from "react";
+import React, { useContext } from "react";
 import { Pressable, Text } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useNavigate } from "react-router-native";
 import { API_BASE } from "../../services/config";
+import { AuthContext } from "../../services/AuthContext";
 import ButtonStyles from "../../services/styles/ButtonStyles";
 
 const SignOutButton = ({ dispatch, closeModal }) => {
   const navigate = useNavigate();
+  const { logout } = useContext(AuthContext);
 
   const signOut = async () => {
     try {
-      const response = await fetch(`${API_BASE}/user-sessions/logout`, {
+      // Call backend to clear server-side session
+      await fetch(`${API_BASE}/user-sessions/logout`, {
         method: "POST",
         credentials: "include",
       });
 
-      if (response.ok) {
-        await AsyncStorage.removeItem("token");
-        dispatch({ type: "LOGOUT" });
-        if (closeModal) closeModal();
-        navigate("/");
-      } else {
-        console.error("Failed to log out");
-      }
+      // Use AuthContext logout to properly clear SecureStorage token
+      await logout(true); // force logout without sync check
+
+      // Clear reducer state
+      dispatch({ type: "LOGOUT" });
+
+      if (closeModal) closeModal();
+      navigate("/");
     } catch (error) {
       console.error("An error occurred while logging out:", error);
+      // Still try to clear local state even if backend call fails
+      await logout(true);
+      dispatch({ type: "LOGOUT" });
+      if (closeModal) closeModal();
+      navigate("/");
     }
   };
 

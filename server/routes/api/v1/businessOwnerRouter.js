@@ -48,6 +48,7 @@ const employeeInviteLimiter = rateLimit({
   message: { error: "Too many employee invitations, please try again later" },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 // Helper function for date formatting (YYYY-MM-DD) - timezone-safe

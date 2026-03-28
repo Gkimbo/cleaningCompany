@@ -74,7 +74,9 @@ You are solely responsible for:
 - Maintaining accurate records of income and expenses
 - Filing all required tax returns
 
-Kleanr will provide you with a Form 1099-NEC if your earnings exceed the IRS reporting threshold.
+> **IMPORTANT - TAX DOCUMENTS FROM STRIPE:**
+>
+> Your earnings are paid out through Stripe Connect. Tax documents, including Form 1099-NEC (if your earnings exceed IRS thresholds), are **issued by Stripe, not Kleanr**. You are responsible for accessing your tax documents through your Stripe Express Dashboard. Kleanr does not issue 1099 forms directly.
 
 **1.4 Right to Control**
 

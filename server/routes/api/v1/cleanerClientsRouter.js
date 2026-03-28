@@ -56,6 +56,7 @@ const invitationRateLimiter = rateLimit({
   message: { error: "Too many requests, please try again later" },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 // Stricter rate limiter for invitation acceptance - prevent account creation spam and brute force
@@ -65,6 +66,7 @@ const invitationAcceptLimiter = rateLimit({
   message: { error: "Too many account creation attempts, please try again later" },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   skipFailedRequests: process.env.NODE_ENV === "test", // In production, count failed requests to prevent enumeration
 });
 

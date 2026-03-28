@@ -262,11 +262,11 @@ describe("Payment Router Cron - Push Notifications", () => {
 
   describe("Cron Job Date Logic", () => {
     it("should send warning 3 days before appointment", async () => {
-      const now = new Date();
-      const threeDaysFromNow = new Date(now);
-      threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+      // Use fixed dates to avoid DST/timezone issues
+      const now = new Date("2026-01-14T12:00:00Z");
+      const threeDaysFromNow = new Date("2026-01-17T12:00:00Z");
 
-      const diffInDays = Math.floor(
+      const diffInDays = Math.round(
         (threeDaysFromNow - now) / (1000 * 60 * 60 * 24)
       );
 
