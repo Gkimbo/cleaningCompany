@@ -14,6 +14,12 @@ jest.mock("../../services/EncryptionService", () => ({
   encrypt: jest.fn((value) => `encrypted_${value}`),
 }));
 
+// Mock transaction
+const mockTransaction = {
+  commit: jest.fn(),
+  rollback: jest.fn(),
+};
+
 // Mock models
 jest.mock("../../models", () => ({
   TermsAndConditions: {
@@ -30,6 +36,9 @@ jest.mock("../../models", () => ({
   },
   User: {
     findByPk: jest.fn(),
+  },
+  sequelize: {
+    transaction: jest.fn(() => Promise.resolve(mockTransaction)),
   },
 }));
 
@@ -72,6 +81,9 @@ const secretKey = process.env.SESSION_SECRET || "test_secret";
 describe("Terms Router", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Reset transaction mocks
+    mockTransaction.commit.mockReset();
+    mockTransaction.rollback.mockReset();
   });
 
   describe("GET /terms/current/:type", () => {
@@ -134,6 +146,26 @@ describe("Terms Router", () => {
       expect(response.status).toBe(200);
       expect(response.body.terms.type).toBe("privacy_policy");
       expect(response.body.terms.title).toBe("Privacy Policy");
+    });
+
+    it("should return current business owner agreement", async () => {
+      const mockBusinessOwnerAgreement = {
+        id: 4,
+        type: "business_owner",
+        version: 1,
+        title: "Business Owner Agreement",
+        content: "Business owner agreement content",
+        contentType: "text",
+        effectiveDate: new Date(),
+      };
+
+      TermsAndConditions.findOne.mockResolvedValue(mockBusinessOwnerAgreement);
+
+      const response = await request(app).get("/api/v1/terms/current/business_owner");
+
+      expect(response.status).toBe(200);
+      expect(response.body.terms.type).toBe("business_owner");
+      expect(response.body.terms.title).toBe("Business Owner Agreement");
     });
 
     it("should return PDF URL for PDF type terms", async () => {
@@ -324,6 +356,60 @@ describe("Terms Router", () => {
       );
     });
 
+    it("should check business owner agreement for business owner users", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      // Business owners have type="cleaner" with isBusinessOwner=true
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        type: "cleaner",
+        isBusinessOwner: true,
+        termsAcceptedVersion: 1,
+        privacyPolicyAcceptedVersion: 1,
+        businessOwnerAgreementAcceptedVersion: null,
+      });
+
+      // Mock the different term queries (in order: terms, privacy, payment, damage, cleaner_agreement, business_owner)
+      // Business owners have type="cleaner", so termsType is "cleaner" (not "homeowner")
+      TermsAndConditions.findOne
+        .mockResolvedValueOnce({
+          id: 1,
+          type: "cleaner", // Business owners get cleaner terms since user.type === "cleaner"
+          version: 1,
+          title: "Terms",
+          contentType: "text",
+          effectiveDate: new Date(),
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          type: "privacy_policy",
+          version: 1,
+          title: "Privacy",
+          contentType: "text",
+          effectiveDate: new Date(),
+        })
+        .mockResolvedValueOnce(null) // payment_terms
+        .mockResolvedValueOnce(null) // damage_protection
+        .mockResolvedValueOnce(null) // cleaner_agreement (not required for business owners, they're type="cleaner" not "employee")
+        .mockResolvedValueOnce({
+          id: 5,
+          type: "business_owner",
+          version: 1,
+          title: "Business Owner Agreement",
+          content: "Business owner agreement content",
+          contentType: "text",
+          effectiveDate: new Date(),
+        });
+
+      const response = await request(app)
+        .get("/api/v1/terms/check")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.requiresAcceptance).toBe(true);
+      expect(response.body.businessOwnerAgreement).toBeDefined();
+    });
+
     it("should require both terms and privacy policy acceptance", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
@@ -487,9 +573,13 @@ describe("Terms Router", () => {
           userId: 1,
           termsId: 1,
           termsContentSnapshot: "Terms content",
-        })
+        }),
+        expect.objectContaining({ transaction: expect.any(Object) })
       );
-      expect(mockUser.update).toHaveBeenCalledWith({ termsAcceptedVersion: 1 });
+      expect(mockUser.update).toHaveBeenCalledWith(
+        { termsAcceptedVersion: 1 },
+        expect.objectContaining({ transaction: expect.any(Object) })
+      );
     });
 
     it("should copy PDF for PDF terms", async () => {
@@ -575,7 +665,45 @@ describe("Terms Router", () => {
       expect(response.body.success).toBe(true);
       expect(response.body.type).toBe("privacy_policy");
       expect(response.body.message).toContain("Privacy Policy");
-      expect(mockUser.update).toHaveBeenCalledWith({ privacyPolicyAcceptedVersion: 1 });
+      expect(mockUser.update).toHaveBeenCalledWith(
+        { privacyPolicyAcceptedVersion: 1 },
+        expect.objectContaining({ transaction: expect.any(Object) })
+      );
+    });
+
+    it("should accept business owner agreement and update businessOwnerAgreementAcceptedVersion", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockBusinessOwnerAgreement = {
+        id: 5,
+        version: 1,
+        contentType: "text",
+        content: "Business owner agreement content",
+        type: "business_owner",
+      };
+
+      const mockUser = {
+        id: 1,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      TermsAndConditions.findByPk.mockResolvedValue(mockBusinessOwnerAgreement);
+      User.findByPk.mockResolvedValue(mockUser);
+      UserTermsAcceptance.create.mockResolvedValue({ id: 1 });
+
+      const response = await request(app)
+        .post("/api/v1/terms/accept")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ termsId: 5 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.type).toBe("business_owner");
+      expect(response.body.message).toContain("Business Owner Agreement");
+      expect(mockUser.update).toHaveBeenCalledWith(
+        { businessOwnerAgreementAcceptedVersion: 1 },
+        expect.objectContaining({ transaction: expect.any(Object) })
+      );
     });
   });
 
@@ -848,6 +976,34 @@ describe("Terms Router", () => {
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
       expect(response.body.terms.type).toBe("privacy_policy");
+    });
+
+    it("should create business owner agreement", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
+      TermsAndConditions.findOne.mockResolvedValue(null);
+      TermsAndConditions.create.mockResolvedValue({
+        id: 1,
+        type: "business_owner",
+        version: 1,
+        title: "Business Owner Agreement",
+        contentType: "text",
+        effectiveDate: new Date(),
+      });
+
+      const response = await request(app)
+        .post("/api/v1/terms")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          type: "business_owner",
+          title: "Business Owner Agreement",
+          content: "Business owner agreement content",
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(response.body.terms.type).toBe("business_owner");
     });
   });
 

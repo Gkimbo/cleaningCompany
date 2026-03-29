@@ -98,6 +98,7 @@ import CleanerDetailPage from "../src/components/owner/CleanerDetailPage";
 
 // Shared components
 import FrozenAccountWrapper from "../src/components/shared/FrozenAccountWrapper";
+import TermsAcceptanceWrapper from "../src/components/shared/TermsAcceptanceWrapper";
 import ErrorBoundary from "../src/components/shared/ErrorBoundary";
 import ProtectedRoute from "../src/components/shared/ProtectedRoute";
 
@@ -340,6 +341,7 @@ export default function App() {
               <ErrorBoundary>
               <ProtectedRoute state={state}>
               <FrozenAccountWrapper state={state}>
+              <TermsAcceptanceWrapper state={state} dispatch={dispatch}>
               <Routes>
               <Route
                 path="/"
@@ -858,6 +860,7 @@ export default function App() {
                 element={<EmployeeProfilePage state={state} />}
               />
             </Routes>
+              </TermsAcceptanceWrapper>
               </FrozenAccountWrapper>
               </ProtectedRoute>
               </ErrorBoundary>
