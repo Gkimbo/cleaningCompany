@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useContext } from "react";
 import { View, Text, Pressable, Modal, StyleSheet, Animated } from "react-native";
 import { Calendar } from "react-native-calendars";
 import Icon from "react-native-vector-icons/FontAwesome";
@@ -6,6 +6,7 @@ import FetchData from "../../services/fetchRequests/fetchData";
 import { useNavigate } from "react-router-native";
 import { usePricing, getTimeWindowSurcharge, getTimeWindowLabel, isLastMinuteBooking } from "../../context/PricingContext";
 import { formatCurrency, toLocalDateString, parseDateString, getTodayString } from "../../services/formatters";
+import { AuthContext } from "../../services/AuthContext";
 
 const CalendarComponent = ({
   onDatesSelected,
@@ -31,6 +32,7 @@ const CalendarComponent = ({
   const [lastMinuteModalVisible, setLastMinuteModalVisible] = useState(false);
   const [pendingLastMinuteDate, setPendingLastMinuteDate] = useState(null);
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
 
   // Get pricing from database
   const { pricing } = usePricing();
@@ -264,9 +266,17 @@ const CalendarComponent = ({
   };
 
   useEffect(() => {
-    FetchData.getEmployeesWorking().then((response) => {
-      console.log("response");
-    });
+    if (user?.token) {
+      FetchData.getEmployeesWorking(user.token)
+        .then((response) => {
+          // Employee schedule data available if needed
+          if (__DEV__) console.log("[CalendarComponent] Employee schedule loaded");
+        })
+        .catch((error) => {
+          // Non-critical - don't block calendar functionality
+          if (__DEV__) console.warn("[CalendarComponent] Failed to load employee schedule:", error.message);
+        });
+    }
 
     if (redirectToBill) {
       navigate("/bill");

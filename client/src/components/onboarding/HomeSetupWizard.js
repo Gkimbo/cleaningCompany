@@ -46,10 +46,10 @@ const HomeSetupWizard = ({ state, dispatch }) => {
   const { user } = useContext(AuthContext);
   const { pricing } = usePricing();
 
-  // Get linen prices from pricing context (fallbacks match database defaults)
-  const sheetFeePerBed = pricing?.linens?.sheetFeePerBed ?? 30;
-  const towelFee = pricing?.linens?.towelFee ?? 5;
-  const faceClothFee = pricing?.linens?.faceClothFee ?? 2;
+  // Get linen prices from pricing context (convert from cents to dollars)
+  const sheetFeePerBed = (pricing?.linens?.sheetFeePerBed ?? 3000) / 100;
+  const towelFee = (pricing?.linens?.towelFee ?? 500) / 100;
+  const faceClothFee = (pricing?.linens?.faceClothFee ?? 200) / 100;
 
   // Generate time options from pricing context using shared helper
   const TIME_OPTIONS = useMemo(() => getTimeWindowOptions(pricing), [pricing]);
@@ -113,7 +113,17 @@ const HomeSetupWizard = ({ state, dispatch }) => {
     specialNotes: "",
     bedConfigurations: [],
     bathroomConfigurations: [],
+    // Common rooms (for larger homes with 4+ bedrooms)
+    numKitchens: "",
+    numLivingRooms: "",
+    numDiningRooms: "",
+    numFamilyRooms: "",
+    numOffices: "",
+    numLaundryRooms: "",
+    numBonusRooms: "",
+    numBasements: "",
   });
+  const [showCommonRooms, setShowCommonRooms] = useState(false);
 
   const updateField = (field, value) => {
     setHomeData((prev) => ({ ...prev, [field]: value }));
@@ -278,6 +288,15 @@ const HomeSetupWizard = ({ state, dispatch }) => {
           // Always save configurations so they can be restored when toggled back on
           bedConfigurations: homeData.bedConfigurations,
           bathroomConfigurations: homeData.bathroomConfigurations,
+          // Common rooms (only include if set)
+          numKitchens: homeData.numKitchens ? parseInt(homeData.numKitchens) : null,
+          numLivingRooms: homeData.numLivingRooms ? parseInt(homeData.numLivingRooms) : null,
+          numDiningRooms: homeData.numDiningRooms ? parseInt(homeData.numDiningRooms) : null,
+          numFamilyRooms: homeData.numFamilyRooms ? parseInt(homeData.numFamilyRooms) : null,
+          numOffices: homeData.numOffices ? parseInt(homeData.numOffices) : null,
+          numLaundryRooms: homeData.numLaundryRooms ? parseInt(homeData.numLaundryRooms) : null,
+          numBonusRooms: homeData.numBonusRooms ? parseInt(homeData.numBonusRooms) : null,
+          numBasements: homeData.numBasements ? parseInt(homeData.numBasements) : null,
         },
       };
 
@@ -492,6 +511,158 @@ const HomeSetupWizard = ({ state, dispatch }) => {
           />
         </View>
       </View>
+
+      {/* Common Rooms Section - Shows for larger homes (4+ bedrooms) */}
+      {parseInt(homeData.numBeds) >= 4 && (
+        <>
+          <TouchableOpacity
+            style={[styles.toggleCard, showCommonRooms && styles.toggleCardActive]}
+            onPress={() => setShowCommonRooms(!showCommonRooms)}
+          >
+            <View style={styles.toggleCardContent}>
+              <Text style={styles.toggleCardTitle}>Additional Rooms</Text>
+              <Text style={styles.toggleCardDescription}>
+                Help us understand your home's layout for better cleaning coordination
+              </Text>
+            </View>
+            <View style={[styles.toggleSwitch, showCommonRooms && styles.toggleSwitchActive]}>
+              <View style={[styles.toggleKnob, showCommonRooms && styles.toggleKnobActive]} />
+            </View>
+          </TouchableOpacity>
+
+          {showCommonRooms && (
+            <View style={{ backgroundColor: "#f8fafc", borderRadius: 12, padding: 16, marginTop: 8 }}>
+              <View style={{
+                backgroundColor: "#fffbeb",
+                borderWidth: 1,
+                borderColor: "#fcd34d",
+                borderRadius: 8,
+                padding: 12,
+                marginBottom: 12,
+              }}>
+                <Text style={{ fontSize: 13, color: "#92400e", lineHeight: 18 }}>
+                  <Text style={{ fontWeight: "600" }}>Note:</Text> If a room has a bed where sheets need to be changed (including pullout sofas), please count it as a bedroom instead.
+                </Text>
+              </View>
+              <View style={styles.inputRow}>
+                <View style={[styles.inputGroup, styles.inputHalf]}>
+                  <Text style={styles.inputLabel}>Kitchens</Text>
+                  <TextInput
+                    style={[styles.input, focusedField === "numKitchens" && styles.inputFocused]}
+                    placeholder="1"
+                    placeholderTextColor="#94a3b8"
+                    value={homeData.numKitchens}
+                    onChangeText={(text) => updateField("numKitchens", text.replace(/\D/g, ""))}
+                    onFocus={() => setFocusedField("numKitchens")}
+                    onBlur={() => setFocusedField(null)}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={[styles.inputGroup, styles.inputHalf]}>
+                  <Text style={styles.inputLabel}>Living Rooms</Text>
+                  <TextInput
+                    style={[styles.input, focusedField === "numLivingRooms" && styles.inputFocused]}
+                    placeholder="1"
+                    placeholderTextColor="#94a3b8"
+                    value={homeData.numLivingRooms}
+                    onChangeText={(text) => updateField("numLivingRooms", text.replace(/\D/g, ""))}
+                    onFocus={() => setFocusedField("numLivingRooms")}
+                    onBlur={() => setFocusedField(null)}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputRow}>
+                <View style={[styles.inputGroup, styles.inputHalf]}>
+                  <Text style={styles.inputLabel}>Dining Rooms</Text>
+                  <TextInput
+                    style={[styles.input, focusedField === "numDiningRooms" && styles.inputFocused]}
+                    placeholder="1"
+                    placeholderTextColor="#94a3b8"
+                    value={homeData.numDiningRooms}
+                    onChangeText={(text) => updateField("numDiningRooms", text.replace(/\D/g, ""))}
+                    onFocus={() => setFocusedField("numDiningRooms")}
+                    onBlur={() => setFocusedField(null)}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={[styles.inputGroup, styles.inputHalf]}>
+                  <Text style={styles.inputLabel}>Family Rooms</Text>
+                  <TextInput
+                    style={[styles.input, focusedField === "numFamilyRooms" && styles.inputFocused]}
+                    placeholder="0"
+                    placeholderTextColor="#94a3b8"
+                    value={homeData.numFamilyRooms}
+                    onChangeText={(text) => updateField("numFamilyRooms", text.replace(/\D/g, ""))}
+                    onFocus={() => setFocusedField("numFamilyRooms")}
+                    onBlur={() => setFocusedField(null)}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputRow}>
+                <View style={[styles.inputGroup, styles.inputHalf]}>
+                  <Text style={styles.inputLabel}>Offices</Text>
+                  <TextInput
+                    style={[styles.input, focusedField === "numOffices" && styles.inputFocused]}
+                    placeholder="0"
+                    placeholderTextColor="#94a3b8"
+                    value={homeData.numOffices}
+                    onChangeText={(text) => updateField("numOffices", text.replace(/\D/g, ""))}
+                    onFocus={() => setFocusedField("numOffices")}
+                    onBlur={() => setFocusedField(null)}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={[styles.inputGroup, styles.inputHalf]}>
+                  <Text style={styles.inputLabel}>Laundry Rooms</Text>
+                  <TextInput
+                    style={[styles.input, focusedField === "numLaundryRooms" && styles.inputFocused]}
+                    placeholder="1"
+                    placeholderTextColor="#94a3b8"
+                    value={homeData.numLaundryRooms}
+                    onChangeText={(text) => updateField("numLaundryRooms", text.replace(/\D/g, ""))}
+                    onFocus={() => setFocusedField("numLaundryRooms")}
+                    onBlur={() => setFocusedField(null)}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputRow}>
+                <View style={[styles.inputGroup, styles.inputHalf]}>
+                  <Text style={styles.inputLabel}>Bonus Rooms</Text>
+                  <TextInput
+                    style={[styles.input, focusedField === "numBonusRooms" && styles.inputFocused]}
+                    placeholder="0"
+                    placeholderTextColor="#94a3b8"
+                    value={homeData.numBonusRooms}
+                    onChangeText={(text) => updateField("numBonusRooms", text.replace(/\D/g, ""))}
+                    onFocus={() => setFocusedField("numBonusRooms")}
+                    onBlur={() => setFocusedField(null)}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={[styles.inputGroup, styles.inputHalf]}>
+                  <Text style={styles.inputLabel}>Basements</Text>
+                  <TextInput
+                    style={[styles.input, focusedField === "numBasements" && styles.inputFocused]}
+                    placeholder="0"
+                    placeholderTextColor="#94a3b8"
+                    value={homeData.numBasements}
+                    onChangeText={(text) => updateField("numBasements", text.replace(/\D/g, ""))}
+                    onFocus={() => setFocusedField("numBasements")}
+                    onBlur={() => setFocusedField(null)}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+            </View>
+          )}
+        </>
+      )}
     </View>
   );
 
@@ -979,6 +1150,24 @@ const HomeSetupWizard = ({ state, dispatch }) => {
           {homeData.city}, {homeData.state} {homeData.zipcode}
           {"\n\n"}
           {homeData.numBeds} bed, {homeData.numBaths} bath
+          {/* Common Rooms Summary */}
+          {(homeData.numKitchens || homeData.numLivingRooms || homeData.numDiningRooms ||
+            homeData.numFamilyRooms || homeData.numOffices || homeData.numLaundryRooms ||
+            homeData.numBonusRooms || homeData.numBasements) && (
+            <>
+              {"\n"}
+              {[
+                homeData.numKitchens && `${homeData.numKitchens} kitchen${homeData.numKitchens > 1 ? "s" : ""}`,
+                homeData.numLivingRooms && `${homeData.numLivingRooms} living room${homeData.numLivingRooms > 1 ? "s" : ""}`,
+                homeData.numDiningRooms && `${homeData.numDiningRooms} dining room${homeData.numDiningRooms > 1 ? "s" : ""}`,
+                homeData.numFamilyRooms && `${homeData.numFamilyRooms} family room${homeData.numFamilyRooms > 1 ? "s" : ""}`,
+                homeData.numOffices && `${homeData.numOffices} office${homeData.numOffices > 1 ? "s" : ""}`,
+                homeData.numLaundryRooms && `${homeData.numLaundryRooms} laundry room${homeData.numLaundryRooms > 1 ? "s" : ""}`,
+                homeData.numBonusRooms && `${homeData.numBonusRooms} bonus room${homeData.numBonusRooms > 1 ? "s" : ""}`,
+                homeData.numBasements && `${homeData.numBasements} basement${homeData.numBasements > 1 ? "s" : ""}`,
+              ].filter(Boolean).join(", ")}
+            </>
+          )}
           {"\n\n"}
           <Text style={{ fontWeight: "bold" }}>Access: </Text>
           {homeData.accessType === "code"

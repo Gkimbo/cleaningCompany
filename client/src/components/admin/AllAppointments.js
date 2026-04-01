@@ -77,7 +77,7 @@ const AllAppointments = ({ state }) => {
     if (!selectedAppointment) return;
     setIsDeleting(true);
     try {
-      await Appointment.deleteAppointmentById(selectedAppointment.id);
+      await Appointment.deleteAppointmentById(selectedAppointment.id, state.currentUser?.token);
       await fetchAppointments();
     } catch (error) {
       console.error("Error deleting appointment:", error);

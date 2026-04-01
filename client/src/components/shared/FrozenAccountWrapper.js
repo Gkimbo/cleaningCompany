@@ -7,7 +7,6 @@ import FrozenAccountBanner from "./FrozenAccountBanner";
 const ALLOWED_FROZEN_ROUTES = [
   "/",
   "/sign-in",
-  "/sign-out",
   "/account-settings",
   "/messages",
   "/notifications",

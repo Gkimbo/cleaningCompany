@@ -169,7 +169,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   }, [fetchData]);
 
   const removeEmployee = async (employeeId, appointmentId) => {
-    await FetchData.removeEmployee(employeeId, appointmentId);
+    await FetchData.removeEmployee(employeeId, appointmentId, state.currentUser?.token);
     setAllAppointments((prev) => prev.filter((a) => a.id !== appointmentId));
   };
 

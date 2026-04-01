@@ -505,13 +505,27 @@ userInfoRouter.patch("/home", async (req, res) => {
       serviceAreaMessage: outsideServiceArea ? serviceAreaCheck.message : null,
     });
   } catch (error) {
-    console.error(error);
+    console.error("[userInfoRouter PATCH /home] Error:", error);
 
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({ error: "Token has expired" });
     }
 
-    return res.status(401).json({ error: "Invalid token" });
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    // Handle Sequelize validation errors
+    if (error.name === "SequelizeValidationError") {
+      return res.status(400).json({ error: error.errors?.[0]?.message || "Validation error" });
+    }
+
+    // Handle other database errors
+    if (error.name === "SequelizeDatabaseError") {
+      return res.status(500).json({ error: "Database error updating home" });
+    }
+
+    return res.status(500).json({ error: "Failed to update home" });
   }
 });
 

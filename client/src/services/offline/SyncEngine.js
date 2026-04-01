@@ -5,6 +5,7 @@
  * Detects and handles conflicts.
  */
 
+import * as FileSystem from "expo-file-system/legacy";
 import database, {
   syncQueueCollection,
   offlineJobsCollection,
@@ -1055,7 +1056,8 @@ class SyncEngine {
       case SYNC_OPERATION_TYPES.BEFORE_PHOTO:
       case SYNC_OPERATION_TYPES.AFTER_PHOTO:
       case SYNC_OPERATION_TYPES.PASSES_PHOTO:
-        if (!payload.photoId || !payload.photoType || !payload.room) {
+        // room is optional - read from photo object during sync
+        if (!payload.photoId || !payload.photoType) {
           return { valid: false, error: "Missing required fields for PHOTO" };
         }
         break;
@@ -1115,6 +1117,23 @@ class SyncEngine {
       }
 
       let result;
+
+      // Most operations require a valid job - check before processing
+      const operationsRequiringJob = [
+        SYNC_OPERATION_TYPES.START,
+        SYNC_OPERATION_TYPES.HOME_SIZE_MISMATCH,
+        SYNC_OPERATION_TYPES.ACCURACY,
+        SYNC_OPERATION_TYPES.BEFORE_PHOTO,
+        SYNC_OPERATION_TYPES.AFTER_PHOTO,
+        SYNC_OPERATION_TYPES.PASSES_PHOTO,
+        SYNC_OPERATION_TYPES.CHECKLIST,
+        SYNC_OPERATION_TYPES.COMPLETE,
+      ];
+
+      if (operationsRequiringJob.includes(operation.operationType) && !job) {
+        await operation.markFailed("Job not found - may have been deleted");
+        return { success: false, error: "Job not found", canContinue: true };
+      }
 
       switch (operation.operationType) {
         case SYNC_OPERATION_TYPES.START:
@@ -1313,15 +1332,19 @@ class SyncEngine {
       return { success: false, error: validation.error, canContinue: true };
     }
 
+    // Validate photos array exists and is not empty (server requires photos)
+    if (!payload.photos || !Array.isArray(payload.photos) || payload.photos.length === 0) {
+      return { success: false, error: "Photos are required for home size mismatch report", canContinue: true };
+    }
+
     try {
       // Build photos array with base64 data from local files
       const photosWithData = [];
-      for (const photoRef of payload.photos || []) {
+      for (const photoRef of payload.photos) {
         try {
           const photo = await offlinePhotosCollection.find(photoRef.id);
           if (photo && photo.localUri) {
             // Read the photo file as base64
-            const FileSystem = (await import("expo-file-system/legacy")).default;
             const base64Content = await FileSystem.readAsStringAsync(photo.localUri, {
               encoding: FileSystem.EncodingType.Base64,
             });
@@ -1334,6 +1357,11 @@ class SyncEngine {
         } catch (photoError) {
           console.warn(`[SyncEngine] Failed to read mismatch photo ${photoRef.id}:`, photoError);
         }
+      }
+
+      // Validate we successfully loaded at least one photo
+      if (photosWithData.length === 0) {
+        return { success: false, error: "Failed to load any photos for home size mismatch report", canContinue: true };
       }
 
       const response = await fetch(`${baseURL}/api/v1/homes/size-adjustment`, {
@@ -1376,19 +1404,40 @@ class SyncEngine {
   }
 
   // Sync accuracy confirmation
+  /**
+   * Sync accuracy confirmation operation.
+   *
+   * NOTE: This is intentionally a no-op. Accuracy confirmations (GPS location verification)
+   * are bundled with JOB_START operations, not synced separately. The ACCURACY operation
+   * type exists for backwards compatibility and to allow the sync queue to track that
+   * accuracy was confirmed, but the actual data is sent with the START operation payload
+   * (latitude, longitude fields).
+   *
+   * If standalone accuracy sync is needed in the future, implement the server endpoint
+   * and update this handler to call it.
+   */
   async _syncAccuracy(operation, job) {
-    // Accuracy is bundled with job start in most cases
-    return { success: true, canContinue: true };
+    // Accuracy data is included in JOB_START payload (latitude/longitude fields)
+    // This operation type exists for queue tracking but doesn't need separate sync
+    if (__DEV__) {
+      console.log(`[SyncEngine] ACCURACY operation ${operation.id} auto-completed (bundled with START)`);
+    }
+    return { success: true, canContinue: true, bundledWithStart: true };
   }
 
   // Sync a photo
   async _syncPhoto(operation, job) {
     const payload = operation.payload || {};
 
-    // Validate required payload fields
-    const validation = this._validatePayload(payload, ["photoId", "photoType", "room"], "PHOTO");
+    // Validate required payload fields (room is optional - read from photo object)
+    const validation = this._validatePayload(payload, ["photoId", "photoType"], "PHOTO");
     if (!validation.valid) {
       return { success: false, error: validation.error, canContinue: true };
+    }
+
+    // Validate job has appointmentId (required for server upload)
+    if (!job?.appointmentId) {
+      return { success: false, error: "Missing appointmentId for photo upload", canContinue: true };
     }
 
     const photoId = payload.photoId;
@@ -1630,15 +1679,30 @@ class SyncEngine {
   async _syncMessage(operation, job) {
     const payload = operation.payload || {};
 
+    // Validate payload has messageId
+    if (!payload.messageId) {
+      return { success: false, error: "Missing messageId for MESSAGE sync", canContinue: true };
+    }
+
     try {
       // Use cached lazy import to avoid repeated dynamic imports
       const OfflineMessagingService = await this._getOfflineMessagingService();
       OfflineMessagingService.setAuthToken(this._authToken);
 
       const result = await OfflineMessagingService.syncMessage(payload);
+
+      // Validate result structure
+      if (!result || typeof result !== "object") {
+        return { success: false, error: "Invalid response from message sync", canContinue: true };
+      }
+
       return result;
     } catch (error) {
-      return { success: false, error: error.message, canContinue: true };
+      if (error.name === "AbortError") {
+        return { success: false, error: "Request aborted - network lost", canContinue: true, networkError: true };
+      }
+      const isNetworkError = this._isNetworkError(error);
+      return { success: false, error: error.message, canContinue: true, networkError: isNetworkError };
     }
   }
 

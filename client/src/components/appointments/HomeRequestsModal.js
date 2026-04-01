@@ -45,7 +45,7 @@ const HomeRequestsModal = ({ visible, homeId, token, onClose, onRequestUpdate })
   const handleApprove = async (requestId, cleanerId, appointmentId) => {
     setProcessingRequest(requestId);
     try {
-      await FetchData.approveRequest(requestId, true);
+      await FetchData.approveRequest(requestId, true, token);
       // Remove the request from local state
       setRequests((prev) => prev.filter((r) => r.request.id !== requestId));
       if (onRequestUpdate) {
@@ -61,7 +61,7 @@ const HomeRequestsModal = ({ visible, homeId, token, onClose, onRequestUpdate })
   const handleDeny = async (cleanerId, appointmentId, requestId) => {
     setProcessingRequest(requestId);
     try {
-      await FetchData.denyRequest(cleanerId, appointmentId);
+      await FetchData.denyRequest(cleanerId, appointmentId, token);
       // Remove the request from local state
       setRequests((prev) => prev.filter((r) => r.request.id !== requestId));
       if (onRequestUpdate) {

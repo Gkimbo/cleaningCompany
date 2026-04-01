@@ -141,7 +141,7 @@ export function useOfflineChecklist(jobId, appointmentId) {
 
   // Mark item complete (one-way)
   const markComplete = useCallback(
-    async (itemId) => {
+    async (sectionId, itemId) => {
       if (!jobId) return;
 
       // Check if already completed
@@ -150,7 +150,7 @@ export function useOfflineChecklist(jobId, appointmentId) {
       }
 
       try {
-        await OfflineManager.updateChecklistItem(jobId, itemId, true);
+        await OfflineManager.updateChecklistItem(jobId, sectionId, itemId, true);
         setItems((prev) => ({
           ...prev,
           [itemId]: { completed: true, completedAt: new Date() },

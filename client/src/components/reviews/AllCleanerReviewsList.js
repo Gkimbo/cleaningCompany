@@ -171,7 +171,7 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
     if (!requestId) return;
     setIsProcessing(true);
     try {
-      const result = await FetchData.approveRequest(requestId, true);
+      const result = await FetchData.approveRequest(requestId, true, state.currentUser?.token);
 
       // Check if it's a conflict response
       if (result && result.conflict) {
@@ -201,7 +201,7 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
     // User wants to keep the current cleaner, so deny this request
     setIsProcessing(true);
     try {
-      await FetchData.denyRequest(cleanerId, appointmentId);
+      await FetchData.denyRequest(cleanerId, appointmentId, state.currentUser?.token);
       setShowConflictModal(false);
       setConflictData(null);
       setRequestHandled("denied");
@@ -250,7 +250,7 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
 
     setIsProcessing(true);
     try {
-      await FetchData.denyRequest(cleanerId, appointmentId);
+      await FetchData.denyRequest(cleanerId, appointmentId, state.currentUser?.token);
       setRequestHandled("denied");
       if (dispatch) {
         dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });

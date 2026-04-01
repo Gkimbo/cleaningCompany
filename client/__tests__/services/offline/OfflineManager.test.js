@@ -416,7 +416,7 @@ describe("OfflineManager", () => {
   describe("updateChecklistItem", () => {
     it("should throw if trying to uncheck", async () => {
       await expect(
-        OfflineManager.updateChecklistItem("job-1", "item-1", false)
+        OfflineManager.updateChecklistItem("job-1", "section-1", "item-1", false)
       ).rejects.toThrow("cannot be unchecked");
     });
 
@@ -426,7 +426,7 @@ describe("OfflineManager", () => {
       });
 
       await expect(
-        OfflineManager.updateChecklistItem(999, "item-1", true)
+        OfflineManager.updateChecklistItem(999, "section-1", "item-1", true)
       ).rejects.toThrow("Job not found");
     });
 
@@ -446,7 +446,7 @@ describe("OfflineManager", () => {
       });
 
       await expect(
-        OfflineManager.updateChecklistItem(100, "item-1", true)
+        OfflineManager.updateChecklistItem(100, "section-1", "item-1", true)
       ).rejects.toThrow("locked and cannot be modified");
     });
   });

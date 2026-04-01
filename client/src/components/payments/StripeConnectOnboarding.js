@@ -116,7 +116,12 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
     try {
       console.log("Fetching account status for user:", state.currentUser.id);
       const res = await fetch(
-        `${API_BASE}/stripe-connect/account-status/${state.currentUser.id}`
+        `${API_BASE}/stripe-connect/account-status/${state.currentUser.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${state.currentUser.token}`,
+          },
+        }
       );
       const data = await res.json();
       console.log("Account status response:", data);
@@ -206,7 +211,6 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
     setIsProcessing(true);
     try {
       const setupData = {
-        token: state.currentUser.token,
         personalInfo: {
           dob: `${formData.dobYear}-${formData.dobMonth.padStart(2, "0")}-${formData.dobDay.padStart(2, "0")}`,
           address: {
@@ -225,7 +229,10 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
 
       const res = await fetch(`${API_BASE}/stripe-connect/complete-setup`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.currentUser.token}`,
+        },
         body: JSON.stringify(setupData),
       });
       const data = await res.json();
@@ -322,9 +329,11 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
     try {
       const res = await fetch(`${API_BASE}/stripe-connect/update-bank-account`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.currentUser.token}`,
+        },
         body: JSON.stringify({
-          token: state.currentUser.token,
           bankAccount: {
             routingNumber: routingDigits,
             accountNumber: accountDigits,

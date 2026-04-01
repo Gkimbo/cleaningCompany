@@ -684,6 +684,7 @@ describe("Terms Router", () => {
 
       const mockUser = {
         id: 1,
+        isBusinessOwner: true,
         update: jest.fn().mockResolvedValue(true),
       };
 

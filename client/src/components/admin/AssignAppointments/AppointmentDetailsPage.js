@@ -42,7 +42,8 @@ const AppointmentDetailsPage = ({ state }) => {
     //remove employee from appointment
     const employeeRemoved = await FetchData.removeEmployee(
       employeeId,
-      appointmentId
+      appointmentId,
+      state.currentUser?.token
     );
     setRefresh(true)
   };

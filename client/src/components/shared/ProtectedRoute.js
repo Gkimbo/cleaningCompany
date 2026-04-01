@@ -30,7 +30,6 @@ const ROUTE_ACCESS = {
     "/messages/*",
     "/notifications",
     "/notifications/*",
-    "/terms-acceptance",
   ],
 
   // Owner-only routes

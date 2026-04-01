@@ -38,7 +38,10 @@ class OfflineManager {
     this._lastPreloadTime = null;
     this._preloadInProgress = false;
     this._preloadStartTime = null; // Track when preload started to detect stuck state
-    this._preloadGeneration = 0; // Generation counter to track preload ownership
+    // Generation counter to track preload ownership - reset at 1 million to prevent overflow
+    // (JavaScript's MAX_SAFE_INTEGER is 9007199254740991, but we reset early for safety)
+    this._preloadGeneration = 0;
+    this._maxPreloadGeneration = 1000000;
   }
 
   // Check if offline functionality is available
@@ -92,6 +95,10 @@ class OfflineManager {
 
     // Increment generation to track this preload instance
     // This ensures only THIS preload can clear the flag in finally
+    // Reset counter if it exceeds max to prevent overflow (very unlikely but safe)
+    if (this._preloadGeneration >= this._maxPreloadGeneration) {
+      this._preloadGeneration = 0;
+    }
     const currentGeneration = ++this._preloadGeneration;
 
     this._preloadInProgress = true;
@@ -614,7 +621,7 @@ class OfflineManager {
   }
 
   // Update checklist item (one-way, can only check, not uncheck)
-  async updateChecklistItem(jobId, itemId, completed = true) {
+  async updateChecklistItem(jobId, sectionId, itemId, completed = true) {
     if (!completed) {
       throw new Error("Checklist items cannot be unchecked");
     }
@@ -695,6 +702,7 @@ class OfflineManager {
           op.sequenceNumber = OPERATION_SEQUENCE[SYNC_OPERATION_TYPES.CHECKLIST];
           op._raw.payload = JSON.stringify({
             serverId: job.serverId,
+            sectionId,
             itemId,
             completed: true,
             completedAt: Date.now(),

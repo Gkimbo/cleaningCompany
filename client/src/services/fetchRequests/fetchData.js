@@ -50,8 +50,8 @@ class FetchData {
     return result;
   }
 
-  static async getEmployeesWorking() {
-    const result = await HttpClient.get("/employee-info/employeeSchedule", { skipAuth: true });
+  static async getEmployeesWorking(token) {
+    const result = await HttpClient.get("/employee-info/employeeSchedule", { token });
 
     if (result.success === false) {
       throw new Error("No data received");
@@ -130,6 +130,9 @@ class FetchData {
         username: data.userName,
         password: data.password,
         email: data.email,
+        termsId: data.termsId,
+        privacyPolicyId: data.privacyPolicyId,
+        referralCode: data.referralCode,
       },
       { skipAuth: true }
     );
@@ -230,14 +233,12 @@ class FetchData {
     return result;
   }
 
-  static async editHomeInfo(data) {
-    const result = await HttpClient.patch("/user-info/home", data, { skipAuth: true });
+  static async editHomeInfo(data, user) {
+    const result = await HttpClient.patch("/user-info/home", data, { token: user?.token });
 
     if (result.success === false) {
-      if (result.status === 400) {
-        return result;
-      }
-      throw new Error(`${result.status}(${result.statusText || "Error"})`);
+      // Return the result with error info so the caller can display the server's error message
+      return result;
     }
 
     return result;
@@ -253,8 +254,8 @@ class FetchData {
     return result;
   }
 
-  static async deleteHome(id) {
-    const result = await HttpClient.delete("/user-info/home", { skipAuth: true, body: { id } });
+  static async deleteHome(id, token) {
+    const result = await HttpClient.delete("/user-info/home", { token, body: { id } });
 
     if (result.success === false) {
       throw new Error("Failed to delete");
@@ -325,11 +326,11 @@ class FetchData {
     };
   }
 
-  static async removeEmployee(id, appointmentId) {
+  static async removeEmployee(id, appointmentId, token) {
     const result = await HttpClient.patch(
       "/appointments/remove-employee",
       { id, appointmentId },
-      { skipAuth: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -339,11 +340,11 @@ class FetchData {
     return true;
   }
 
-  static async removeRequest(id, appointmentId) {
+  static async removeRequest(id, appointmentId, token) {
     const result = await HttpClient.patch(
       "/appointments/remove-request",
       { id, appointmentId },
-      { skipAuth: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -353,11 +354,11 @@ class FetchData {
     return true;
   }
 
-  static async approveRequest(requestId, approve) {
+  static async approveRequest(requestId, approve, token) {
     const result = await HttpClient.patch(
       "/appointments/approve-request",
       { requestId, approve },
-      { skipAuth: true }
+      { token }
     );
 
     // Handle 409 Conflict - another cleaner already assigned
@@ -386,11 +387,11 @@ class FetchData {
     return result;
   }
 
-  static async denyRequest(id, appointmentId) {
+  static async denyRequest(id, appointmentId, token) {
     const result = await HttpClient.patch(
       "/appointments/deny-request",
       { id, appointmentId },
-      { skipAuth: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -400,11 +401,11 @@ class FetchData {
     return result;
   }
 
-  static async undoRequest(id, appointmentId) {
+  static async undoRequest(id, appointmentId, token) {
     const result = await HttpClient.patch(
       "/appointments/undo-request-choice",
       { id, appointmentId },
-      { skipAuth: true }
+      { token }
     );
 
     if (result.success === false) {

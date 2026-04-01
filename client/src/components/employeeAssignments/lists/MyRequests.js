@@ -744,7 +744,8 @@ const MyRequests = ({ state }) => {
                           try {
                             await FetchData.removeRequest(
                               employeeId,
-                              appointmentId
+                              appointmentId,
+                              state.currentUser?.token
                             );
                             setAllRequests((prev) =>
                               prev.filter((a) => a.id !== appointmentId)

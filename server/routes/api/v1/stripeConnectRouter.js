@@ -424,12 +424,18 @@ stripeConnectRouter.post("/create-account", authenticateToken, async (req, res) 
       });
     }
 
+    // Decrypt user fields for Stripe
+    const decryptedFirstName = user.firstName ? EncryptionService.decrypt(user.firstName) : undefined;
+    const decryptedLastName = user.lastName ? EncryptionService.decrypt(user.lastName) : undefined;
+    const decryptedEmail = user.email ? EncryptionService.decrypt(user.email) : undefined;
+    const decryptedPhone = user.phone ? EncryptionService.decrypt(user.phone) : undefined;
+
     // Build individual info from user data and personalInfo
     const individual = {
-      first_name: user.firstName || undefined,
-      last_name: user.lastName || undefined,
-      email: user.email || undefined,
-      phone: user.phone || undefined,
+      first_name: decryptedFirstName,
+      last_name: decryptedLastName,
+      email: decryptedEmail,
+      phone: decryptedPhone,
     };
 
     // Add DOB if provided
@@ -484,7 +490,7 @@ stripeConnectRouter.post("/create-account", authenticateToken, async (req, res) 
         },
       },
       // Account email for Stripe communications
-      email: user.email || undefined,
+      email: decryptedEmail,
       // Request transfer capability for receiving payments
       capabilities: {
         transfers: { requested: true },
@@ -667,12 +673,18 @@ stripeConnectRouter.post("/complete-setup", authenticateToken, async (req, res) 
 
     // Create new account if none exists
     if (!connectAccount) {
+      // Decrypt user fields for Stripe
+      const decryptedFirstName = user.firstName ? EncryptionService.decrypt(user.firstName) : undefined;
+      const decryptedLastName = user.lastName ? EncryptionService.decrypt(user.lastName) : undefined;
+      const decryptedEmail = user.email ? EncryptionService.decrypt(user.email) : undefined;
+      const decryptedPhone = user.phone ? EncryptionService.decrypt(user.phone) : undefined;
+
       // Build individual info for pre-filling
       const individual = {
-        first_name: user.firstName || undefined,
-        last_name: user.lastName || undefined,
-        email: user.email || undefined,
-        phone: user.phone || undefined,
+        first_name: decryptedFirstName,
+        last_name: decryptedLastName,
+        email: decryptedEmail,
+        phone: decryptedPhone,
       };
 
       // Add DOB if provided
@@ -712,7 +724,7 @@ stripeConnectRouter.post("/complete-setup", authenticateToken, async (req, res) 
             type: "express",
           },
         },
-        email: user.email || undefined,
+        email: decryptedEmail,
         capabilities: {
           transfers: { requested: true },
         },
@@ -985,8 +997,8 @@ stripeConnectRouter.post("/update-bank-account", authenticateToken, async (req, 
       const lastName = user.lastName ? EncryptionService.decrypt(user.lastName) : "";
       accountHolderName = `${firstName} ${lastName}`.trim() || EncryptionService.decrypt(user.email);
     } catch (decryptError) {
-      console.warn("[StripeConnect] Could not decrypt user name, using email");
-      accountHolderName = user.email || "Account Holder";
+      console.warn("[StripeConnect] Could not decrypt user name, using fallback");
+      accountHolderName = "Account Holder";
     }
 
     // Create new bank account token

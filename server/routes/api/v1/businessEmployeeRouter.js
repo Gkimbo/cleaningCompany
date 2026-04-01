@@ -453,7 +453,7 @@ router.get("/my-jobs/:assignmentId/flow", async (req, res) => {
  */
 router.post("/my-jobs/:assignmentId/start", async (req, res) => {
   try {
-    const { latitude, longitude, confirmAtProperty } = req.body;
+    const { latitude, longitude, confirmAtProperty, offlineStartedAt } = req.body;
 
     // Require manual confirmation that cleaner is at property
     if (!confirmAtProperty) {
@@ -466,7 +466,7 @@ router.post("/my-jobs/:assignmentId/start", async (req, res) => {
     const assignment = await EmployeeJobAssignmentService.startJob(
       parseInt(req.params.assignmentId, 10),
       req.user.id,
-      { latitude, longitude }
+      { latitude, longitude, offlineStartedAt }
     );
 
     res.json({
@@ -892,17 +892,18 @@ router.put("/my-jobs/:assignmentId/checklist", async (req, res) => {
     }
 
     // Verify employee is assigned to this job
+    // Allow checklist updates for completed jobs too (for offline sync catchup)
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
         id: assignmentId,
         businessEmployeeId: req.employeeRecord.id,
-        status: { [sequelize.Sequelize.Op.in]: ["assigned", "started"] },
+        status: { [sequelize.Sequelize.Op.in]: ["assigned", "started", "completed"] },
       },
       include: [{ model: AppointmentJobFlow, as: "jobFlow" }],
     });
 
     if (!assignment) {
-      return res.status(404).json({ error: "Assignment not found or job already completed" });
+      return res.status(404).json({ error: "Assignment not found" });
     }
 
     let result;
@@ -958,17 +959,18 @@ router.put("/my-jobs/:assignmentId/checklist/bulk", async (req, res) => {
     const { updates } = req.body;
 
     // Verify employee is assigned to this job
+    // Allow checklist updates for completed jobs too (for offline sync catchup)
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
         id: assignmentId,
         businessEmployeeId: req.employeeRecord.id,
-        status: { [sequelize.Sequelize.Op.in]: ["assigned", "started"] },
+        status: { [sequelize.Sequelize.Op.in]: ["assigned", "started", "completed"] },
       },
       include: [{ model: AppointmentJobFlow, as: "jobFlow" }],
     });
 
     if (!assignment) {
-      return res.status(404).json({ error: "Assignment not found or job already completed" });
+      return res.status(404).json({ error: "Assignment not found" });
     }
 
     let result;

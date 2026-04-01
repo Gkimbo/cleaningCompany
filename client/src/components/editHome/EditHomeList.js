@@ -68,7 +68,7 @@ const EditHomeList = ({ state, dispatch }) => {
 
     try {
       const appointments = await Appointment.getHomeAppointments(selectedHomeId);
-      const deleteHome = await FetchData.deleteHome(selectedHomeId);
+      const deleteHome = await FetchData.deleteHome(selectedHomeId, state.currentUser?.token);
 
       if (deleteHome) {
         let priceOfAppointments = 0;

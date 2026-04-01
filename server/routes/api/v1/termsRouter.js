@@ -147,7 +147,12 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
     }
 
     // Determine user type for terms
-    // Both "employee" (business employees) and "cleaner" (independent cleaners) get cleaner terms
+    // - "employee" (business employees) and "cleaner" (independent cleaners) get cleaner terms
+    // - "owner", "it", "humanResources" are internal staff - they don't need homeowner/cleaner terms
+    //   but still need privacy policy and payment terms
+    // - Everyone else (homeowner, client, null, undefined) gets homeowner terms
+    const INTERNAL_STAFF_TYPES = ["owner", "it", "humanResources"];
+    const isInternalStaff = INTERNAL_STAFF_TYPES.includes(user.type);
     const termsType = (user.type === "employee" || user.type === "cleaner") ? "cleaner" : "homeowner";
 
     // Get current terms for this user type
@@ -175,9 +180,10 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
     });
 
     // Check if user needs to accept terms
+    // Internal staff (owner, IT, HR) don't need homeowner/cleaner terms
     let requiresTermsAcceptance = false;
     let termsData = null;
-    if (currentTerms) {
+    if (currentTerms && !isInternalStaff) {
       const userTermsVersion = user.termsAcceptedVersion;
       requiresTermsAcceptance = !userTermsVersion || userTermsVersion < currentTerms.version;
 
@@ -249,12 +255,13 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       }
     }
 
-    // Check if user needs to accept damage protection (homeowners only)
+    // Check if user needs to accept damage protection (homeowners only, not internal staff)
     // Note: Homeowners can have type "homeowner", "client", null, or undefined
     // We use termsType === "homeowner" to match all homeowner cases consistently
+    // Internal staff don't need damage protection terms
     let requiresDamageProtectionAcceptance = false;
     let damageProtectionData = null;
-    if (currentDamageProtection && termsType === "homeowner") {
+    if (currentDamageProtection && termsType === "homeowner" && !isInternalStaff) {
       const userDamageProtectionVersion = user.damageProtectionAcceptedVersion;
       requiresDamageProtectionAcceptance = !userDamageProtectionVersion || userDamageProtectionVersion < currentDamageProtection.version;
 
@@ -421,6 +428,45 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
     if (!user) {
       await transaction.rollback();
       return res.status(404).json({ error: "User not found" });
+    }
+
+    // Validate that the user can accept this specific terms type
+    const INTERNAL_STAFF_TYPES = ["owner", "it", "humanResources"];
+    const isInternalStaff = INTERNAL_STAFF_TYPES.includes(user.type);
+    const isCleanerOrEmployee = user.type === "employee" || user.type === "cleaner";
+
+    // Define which terms types each user role can accept
+    const canAcceptTermsType = () => {
+      switch (terms.type) {
+        case "homeowner":
+        case "cleaner":
+          // Internal staff shouldn't accept homeowner/cleaner terms
+          return !isInternalStaff;
+        case "privacy_policy":
+        case "payment_terms":
+          // Everyone can accept these
+          return true;
+        case "damage_protection":
+          // Only homeowners (non-internal, non-cleaner)
+          return !isInternalStaff && !isCleanerOrEmployee;
+        case "cleaner_agreement":
+          // Only cleaners/employees who are NOT business owners
+          return isCleanerOrEmployee && !user.isBusinessOwner;
+        case "business_owner":
+          // Only business owners
+          return user.isBusinessOwner === true;
+        default:
+          return false;
+      }
+    };
+
+    if (!canAcceptTermsType()) {
+      await transaction.rollback();
+      return res.status(403).json({
+        error: "You are not authorized to accept this document type",
+        termsType: terms.type,
+        userType: user.type
+      });
     }
 
     // Check if user already accepted this exact terms version (idempotency)

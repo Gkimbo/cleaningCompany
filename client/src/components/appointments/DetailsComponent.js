@@ -261,7 +261,7 @@ const DetailsComponent = ({ state, dispatch }) => {
       return { text: "Not set", surcharge: null };
     }
 
-    const surcharge = windowConfig.surcharge > 0 ? `+$${windowConfig.surcharge}` : null;
+    const surcharge = windowConfig.surcharge > 0 ? `+$${(windowConfig.surcharge / 100).toFixed(2)}` : null;
     return { text: windowConfig.label, surcharge };
   };
 

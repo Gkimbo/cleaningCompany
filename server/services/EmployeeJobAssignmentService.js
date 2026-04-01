@@ -1215,7 +1215,7 @@ class EmployeeJobAssignmentService {
     }
 
     // Calculate distance from home if GPS data provided
-    const { latitude, longitude } = locationData;
+    const { latitude, longitude, offlineStartedAt } = locationData;
     let startDistanceFromHome = null;
     let startLocationVerified = null;
 
@@ -1235,9 +1235,12 @@ class EmployeeJobAssignmentService {
     // Clear any guest not left flag
     await GuestNotLeftService.clearGuestNotLeftFlag(assignmentId);
 
+    // Use offline start time if provided (for offline sync), otherwise current time
+    const startedAt = offlineStartedAt ? new Date(offlineStartedAt) : new Date();
+
     await assignment.update({
       status: "started",
-      startedAt: new Date(),
+      startedAt,
       startLatitude: latitude || null,
       startLongitude: longitude || null,
       startDistanceFromHome,

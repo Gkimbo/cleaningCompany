@@ -1341,7 +1341,8 @@ const SelectNewJobList = ({ state }) => {
                             try {
                               await FetchData.removeRequest(
                                 employeeId,
-                                appointmentId
+                                appointmentId,
+                                state.currentUser?.token
                               );
                               setAllRequests((prev) => {
                                 const removed = prev.find(
@@ -1794,7 +1795,8 @@ const SelectNewJobList = ({ state }) => {
                             try {
                               await FetchData.removeEmployee(
                                 employeeId,
-                                appointmentId
+                                appointmentId,
+                                state.currentUser?.token
                               );
                               setAllAppointments((prev) =>
                                 prev.map((a) =>

@@ -608,9 +608,14 @@ paymentRouter.get("/payment-method-status", async (req, res) => {
  * This allows the client to save a card for future payments
  */
 paymentRouter.post("/setup-intent", async (req, res) => {
-  const { token } = req.body;
+  // Get token from Authorization header
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
 
   try {
+    const token = authHeader.split(" ")[1];
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
 
@@ -653,9 +658,16 @@ paymentRouter.post("/setup-intent", async (req, res) => {
  * Uses Stripe's hosted checkout page for card collection
  */
 paymentRouter.post("/setup-checkout-session", async (req, res) => {
-  const { token, successUrl, cancelUrl } = req.body;
+  const { successUrl, cancelUrl } = req.body;
+
+  // Get token from Authorization header
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
 
   try {
+    const token = authHeader.split(" ")[1];
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
 
@@ -700,9 +712,16 @@ paymentRouter.post("/setup-checkout-session", async (req, res) => {
  * Called after the client returns from Stripe Checkout
  */
 paymentRouter.post("/confirm-checkout-session", async (req, res) => {
-  const { token, sessionId } = req.body;
+  const { sessionId } = req.body;
+
+  // Get token from Authorization header
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
 
   try {
+    const token = authHeader.split(" ")[1];
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
 
@@ -747,9 +766,16 @@ paymentRouter.post("/confirm-checkout-session", async (req, res) => {
  * Called after the client successfully completes the SetupIntent
  */
 paymentRouter.post("/confirm-payment-method", async (req, res) => {
-  const { token, setupIntentId } = req.body;
+  const { setupIntentId } = req.body;
+
+  // Get token from Authorization header
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
 
   try {
+    const token = authHeader.split(" ")[1];
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
 
@@ -1457,7 +1483,13 @@ paymentRouter.post("/cancel-all-and-remove", strictPaymentLimiter, async (req, r
  * ------------------------------------------------------
  */
 paymentRouter.post("/create-payment-intent", paymentRateLimiter, async (req, res) => {
-  const { token, homeId, amount, appointmentDate } = req.body;
+  const { homeId, amount, appointmentDate } = req.body;
+
+  // Get token from Authorization header
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
 
   // ============================================================================
   // INPUT VALIDATION - Amount
@@ -1485,6 +1517,7 @@ paymentRouter.post("/create-payment-intent", paymentRateLimiter, async (req, res
   }
 
   try {
+    const token = authHeader.split(" ")[1];
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
 
@@ -2958,7 +2991,7 @@ paymentRouter.post("/capture-payment", paymentRateLimiter, async (req, res) => {
  * ------------------------------------------------------
  */
 paymentRouter.post("/complete-job", async (req, res) => {
-  const { appointmentId, cleanerId, checklistData } = req.body;
+  const { appointmentId, cleanerId, checklistData, hoursWorked, offlineCompletedAt } = req.body;
   const { calculateAutoApprovalExpiration } = require("../../../services/cron/CompletionApprovalMonitor");
   const NotificationService = require("../../../services/NotificationService");
   const { PricingConfig } = require("../../../models");
@@ -3114,6 +3147,52 @@ paymentRouter.post("/complete-job", async (req, res) => {
       completionChecklistData: checklistData || null,
       autoApprovalExpiresAt,
     });
+
+    // Update EmployeeJobAssignment if exists (for offline sync support)
+    try {
+      const { EmployeeJobAssignment } = require("../../../models");
+      const EmployeeJobAssignmentService = require("../../../services/EmployeeJobAssignmentService");
+      const { Op } = require("sequelize");
+
+      // Find the employee assignment for this appointment
+      const assignment = await EmployeeJobAssignment.findOne({
+        where: {
+          appointmentId: appointment.id,
+          status: { [Op.in]: ["assigned", "started"] },
+        },
+      });
+
+      if (assignment) {
+        const completedAt = offlineCompletedAt ? new Date(offlineCompletedAt) : new Date();
+        const updateData = {
+          status: "completed",
+          completedAt,
+        };
+
+        // Calculate hours worked if not provided
+        if (hoursWorked && typeof hoursWorked === "number" && hoursWorked > 0) {
+          updateData.hoursWorked = hoursWorked;
+        } else if (assignment.startedAt) {
+          updateData.hoursWorked = EmployeeJobAssignmentService.calculateHoursWorked(
+            assignment.startedAt,
+            completedAt
+          );
+        }
+
+        // Calculate pay based on pay type
+        const payType = assignment.payType;
+        if (payType === "hourly" && updateData.hoursWorked) {
+          const hourlyRate = assignment.hourlyRateAtAssignment || 0;
+          updateData.payAmount = Math.round(hourlyRate * updateData.hoursWorked);
+        }
+
+        await assignment.update(updateData);
+        console.log(`[Complete Job] Updated EmployeeJobAssignment ${assignment.id} with hoursWorked: ${updateData.hoursWorked}`);
+      }
+    } catch (assignmentError) {
+      // Don't fail job completion if assignment update fails
+      console.error("[Complete Job] Error updating EmployeeJobAssignment:", assignmentError);
+    }
 
     // Send notifications to homeowner about pending approval
     try {

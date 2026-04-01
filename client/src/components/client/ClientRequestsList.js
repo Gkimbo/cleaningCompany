@@ -122,7 +122,7 @@ const ClientRequestsList = ({ state, dispatch }) => {
   const handleApprove = async (requestId, cleanerId, appointmentId, cleanerName) => {
     setProcessingRequest(requestId);
     try {
-      const result = await FetchData.approveRequest(requestId, true);
+      const result = await FetchData.approveRequest(requestId, true, state.currentUser?.token);
 
       // Check if it's a conflict response
       if (result && result.conflict) {
@@ -182,7 +182,7 @@ const ClientRequestsList = ({ state, dispatch }) => {
     if (!conflictContext) return;
     setProcessingRequest(conflictContext.requestId);
     try {
-      await FetchData.denyRequest(conflictContext.cleanerId, conflictContext.appointmentId);
+      await FetchData.denyRequest(conflictContext.cleanerId, conflictContext.appointmentId, state.currentUser?.token);
       setShowConflictModal(false);
       setConflictData(null);
 
@@ -270,7 +270,7 @@ const ClientRequestsList = ({ state, dispatch }) => {
   const handleDeny = async (cleanerId, appointmentId, requestId, cleanerName) => {
     setProcessingRequest(requestId);
     try {
-      await FetchData.denyRequest(cleanerId, appointmentId);
+      await FetchData.denyRequest(cleanerId, appointmentId, state.currentUser?.token);
       // Remove the request from local state
       setRequestsByHome((prev) =>
         prev

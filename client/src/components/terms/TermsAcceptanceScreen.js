@@ -362,7 +362,55 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
           <WebView
             source={{ uri: pdfUrl }}
             style={{ flex: 1 }}
-            onLoadEnd={() => setHasScrolledToBottom(true)}
+            onScroll={(event) => {
+              // Detect when user has scrolled near the bottom of the PDF
+              const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+              if (contentSize && layoutMeasurement) {
+                const paddingToBottom = 50;
+                const isCloseToBottom =
+                  layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+                if (isCloseToBottom && !hasScrolledToBottom) {
+                  setHasScrolledToBottom(true);
+                }
+              }
+            }}
+            // Inject JS to enable scroll events and add a fallback timer
+            injectedJavaScript={`
+              // Send scroll events to React Native
+              let lastScrollTop = 0;
+              window.addEventListener('scroll', function() {
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                const scrollHeight = document.documentElement.scrollHeight;
+                const clientHeight = document.documentElement.clientHeight;
+
+                if (scrollTop + clientHeight >= scrollHeight - 50) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrolledToBottom' }));
+                }
+                lastScrollTop = scrollTop;
+              });
+
+              // Also check after PDF loads (some PDFs may fit on screen)
+              setTimeout(function() {
+                const scrollHeight = document.documentElement.scrollHeight;
+                const clientHeight = document.documentElement.clientHeight;
+                // If content fits on screen without scrolling, enable accept
+                if (scrollHeight <= clientHeight + 10) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrolledToBottom' }));
+                }
+              }, 2000);
+
+              true;
+            `}
+            onMessage={(event) => {
+              try {
+                const data = JSON.parse(event.nativeEvent.data);
+                if (data.type === 'scrolledToBottom' && !hasScrolledToBottom) {
+                  setHasScrolledToBottom(true);
+                }
+              } catch (e) {
+                // Ignore parse errors
+              }
+            }}
           />
         </View>
       );

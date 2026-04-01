@@ -360,10 +360,6 @@ export default function App() {
                 element={<ForgotCredentials />}
               />
               <Route
-                path="/terms-acceptance"
-                element={<TermsAcceptanceScreen state={state} dispatch={dispatch} />}
-              />
-              <Route
                 path="/welcome"
                 element={<WelcomeScreen />}
               />

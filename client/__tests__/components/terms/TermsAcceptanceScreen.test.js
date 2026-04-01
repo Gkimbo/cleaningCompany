@@ -454,13 +454,9 @@ describe("TermsAcceptanceScreen", () => {
 
       fireEvent.press(getByText("Logout"));
 
+      // Should use proper LOGOUT action to clear all state
       expect(mockDispatch).toHaveBeenCalledWith({
-        type: "CURRENT_USER",
-        payload: null,
-      });
-      expect(mockDispatch).toHaveBeenCalledWith({
-        type: "SET_USER_ID",
-        payload: null,
+        type: "LOGOUT",
       });
       expect(mockNavigate).toHaveBeenCalledWith("/sign-in");
     });
