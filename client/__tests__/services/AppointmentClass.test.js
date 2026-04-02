@@ -168,7 +168,7 @@ describe("Appointment Service", () => {
 
       expect(HttpClient.delete).toHaveBeenCalledWith(
         "/appointments/id/5",
-        { skipAuth: true }
+        { token: undefined }
       );
       expect(result.message).toBe("Appointment Deleted");
     });
@@ -566,7 +566,7 @@ describe("Appointment Service", () => {
 
       expect(HttpClient.delete).toHaveBeenCalledWith(
         "/appointments/id/99",
-        { skipAuth: true }
+        { token: undefined }
       );
     });
 

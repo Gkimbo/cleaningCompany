@@ -1269,6 +1269,32 @@ appointmentRouter.post("/", async (req, res) => {
           estimatedHours: (estimatedMinutes / 60).toFixed(1),
           warning: `This is a large home (${home.dataValues.numBeds} beds, ${home.dataValues.numBaths} baths). We recommend ${recommendedCleaners} cleaners for optimal service.`,
         };
+
+        // Create MultiCleanerJob records for large homes that require multiple cleaners
+        const multiCleanerRequired = await MultiCleanerService.isMultiCleanerRequired(
+          home.dataValues.numBeds,
+          home.dataValues.numBaths
+        );
+        if (multiCleanerRequired) {
+          for (const apt of appointments) {
+            try {
+              const multiCleanerJob = await MultiCleanerService.createMultiCleanerJob(
+                apt.id,
+                recommendedCleaners,
+                null, // no primary cleaner yet
+                true  // auto-generated
+              );
+              // Update the appointment with the multi-cleaner job reference
+              await apt.update({
+                isMultiCleanerJob: true,
+                multiCleanerJobId: multiCleanerJob.id,
+              });
+              console.log(`[Appointment] Created MultiCleanerJob ${multiCleanerJob.id} for appointment ${apt.id}`);
+            } catch (mcErr) {
+              console.error(`[Appointment] Error creating MultiCleanerJob for appointment ${apt.id}:`, mcErr);
+            }
+          }
+        }
       }
     } catch (err) {
       console.error("Error checking large home:", err);

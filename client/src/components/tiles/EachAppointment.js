@@ -11,6 +11,7 @@ import { colors, spacing, radius, typography, shadows } from "../../services/sty
 import { API_BASE } from "../../services/config";
 import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
 import DiscountedPrice from "../pricing/DiscountedPrice";
+import LastMinutePriceBreakdown from "../pricing/LastMinutePriceBreakdown";
 import { formatCurrency } from "../../services/formatters";
 
 const BED_SIZE_OPTIONS = [
@@ -56,6 +57,9 @@ const EachAppointment = ({
   discountApplied,
   employeesAssigned,
   pendingRequestCount,
+  // Last minute booking fields
+  isLastMinuteBooking,
+  lastMinuteFeeApplied,
   // Multi-cleaner job fields
   cleanersNeeded,
   cleanersConfirmed,
@@ -535,7 +539,13 @@ const EachAppointment = ({
             </View>
           </View>
           <View style={styles.priceContainer}>
-            {discountApplied && originalPrice ? (
+            {isLastMinuteBooking && lastMinuteFeeApplied > 0 ? (
+              <LastMinutePriceBreakdown
+                lastMinuteFee={lastMinuteFeeApplied}
+                totalPrice={price}
+                size="sm"
+              />
+            ) : discountApplied && originalPrice ? (
               <DiscountedPrice originalPrice={originalPrice} discountedPrice={price} size="md" />
             ) : (
               <Text style={[styles.priceText, styles.priceWarning]}>{formatCurrency(price)}</Text>
@@ -573,7 +583,13 @@ const EachAppointment = ({
             </View>
           </View>
           <View style={styles.priceContainer}>
-            {discountApplied && originalPrice ? (
+            {isLastMinuteBooking && lastMinuteFeeApplied > 0 ? (
+              <LastMinutePriceBreakdown
+                lastMinuteFee={lastMinuteFeeApplied}
+                totalPrice={price}
+                size="sm"
+              />
+            ) : discountApplied && originalPrice ? (
               <DiscountedPrice originalPrice={originalPrice} discountedPrice={price} size="md" />
             ) : (
               <Text style={[styles.priceText, styles.priceComplete]}>{formatCurrency(price)}</Text>
@@ -716,11 +732,21 @@ const EachAppointment = ({
           </View>
         </View>
         <View style={styles.priceContainer}>
-          <Text style={styles.priceLabel}>Total</Text>
-          {discountApplied && originalPrice ? (
-            <DiscountedPrice originalPrice={originalPrice} discountedPrice={price} size="md" />
+          {isLastMinuteBooking && lastMinuteFeeApplied > 0 ? (
+            <LastMinutePriceBreakdown
+              lastMinuteFee={lastMinuteFeeApplied}
+              totalPrice={price}
+              size="md"
+            />
           ) : (
-            <Text style={styles.priceText}>{formatCurrency(price)}</Text>
+            <>
+              <Text style={styles.priceLabel}>Total</Text>
+              {discountApplied && originalPrice ? (
+                <DiscountedPrice originalPrice={originalPrice} discountedPrice={price} size="md" />
+              ) : (
+                <Text style={styles.priceText}>{formatCurrency(price)}</Text>
+              )}
+            </>
           )}
         </View>
       </View>

@@ -158,11 +158,8 @@ const DetailsComponent = ({ state, dispatch }) => {
     const diffMs = expires - now;
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    if (diffHours > 24) {
-      const days = Math.floor(diffHours / 24);
-      return `${days}d left`;
-    }
-    if (diffHours > 0) return `${diffHours}h ${diffMins}m left`;
+    // Always show hours for consistency (up to 72h approval window)
+    if (diffHours > 0) return `${diffHours}h left`;
     if (diffMins > 0) return `${diffMins}m left`;
     return "Expiring soon";
   };

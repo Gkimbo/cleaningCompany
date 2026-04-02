@@ -94,8 +94,8 @@ const CalendarComponent = ({
   // Check if a date is a last-minute booking and get fee info
   const getLastMinuteInfo = (dateString) => {
     if (!dateString) return { isLastMinute: false, fee: 0 };
-    // Create date at noon to avoid timezone issues
-    const appointmentDate = new Date(dateString + "T12:00:00");
+    // Create date at 9am to match server-side calculation (typical service start time)
+    const appointmentDate = new Date(dateString + "T09:00:00");
     return isLastMinuteBooking(appointmentDate, pricing);
   };
 
@@ -113,9 +113,9 @@ const CalendarComponent = ({
   const handleDateSelect = (date) => {
     const todayString = toLocalDateString(new Date());
 
-    // Check if date is in the past (compare YYYY-MM-DD strings)
-    if (date.dateString < todayString) {
-      setError("Cannot book appointments in the past.");
+    // Check if date is today or in the past (compare YYYY-MM-DD strings)
+    if (date.dateString <= todayString) {
+      setError("Cannot book appointments for today or in the past.");
       return;
     }
 
@@ -196,7 +196,7 @@ const CalendarComponent = ({
 
   const isDateDisabled = (date) => {
     const todayString = toLocalDateString(new Date());
-    return date.dateString < todayString;
+    return date.dateString <= todayString;
   };
 
   const isDateBooked = (date) => {

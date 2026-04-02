@@ -229,8 +229,8 @@ describe("Payment Routes", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/create-payment-intent")
+        .set("Authorization", `Bearer ${token}`)
         .send({
-          token,
           homeId: 1,
           amount: 15000,
           appointmentDate: "2025-01-15",
@@ -264,8 +264,8 @@ describe("Payment Routes", () => {
 
       const res = await request(app)
         .post("/api/v1/payments/create-payment-intent")
+        .set("Authorization", `Bearer ${token}`)
         .send({
-          token,
           homeId: 999,
           amount: 15000,
           appointmentDate: "2025-01-15",

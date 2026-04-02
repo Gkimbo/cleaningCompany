@@ -1250,7 +1250,10 @@ const SelectNewJobList = ({ state }) => {
           />
         }
       >
-        {filteredData.length === 0 ? (
+        {filteredData.length === 0 &&
+        multiCleanerOffers.length === 0 &&
+        availableMultiCleanerJobs.length === 0 &&
+        pendingMultiCleanerRequests.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
               <Icon

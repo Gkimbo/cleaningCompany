@@ -32,7 +32,7 @@ describe("FetchData - Employee Service Methods", () => {
       const result = await FetchData.getEmployeesWorking();
 
       expect(result).toEqual(mockEmployees);
-      expect(HttpClient.get).toHaveBeenCalledWith("/employee-info/employeeSchedule", { skipAuth: true });
+      expect(HttpClient.get).toHaveBeenCalledWith("/employee-info/employeeSchedule", { token: undefined });
     });
 
     it("should return empty array when no employees", async () => {
@@ -319,7 +319,7 @@ describe("FetchData - Employee Service Methods", () => {
 
       await FetchData.getEmployeesWorking();
 
-      expect(HttpClient.get).toHaveBeenCalledWith("/employee-info/employeeSchedule", { skipAuth: true });
+      expect(HttpClient.get).toHaveBeenCalledWith("/employee-info/employeeSchedule", { token: undefined });
     });
 
     it("should construct correct URL for makeNewEmployee", async () => {

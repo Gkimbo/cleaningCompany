@@ -31,6 +31,7 @@ import HomeownerAdjustmentNotification from "./HomeownerAdjustmentNotification";
 import { parseLocalDate, isFutureOrToday, isPast, compareDates } from "../../utils/dateUtils";
 import TodaysCleaningCard from "./TodaysCleaningCard";
 import DiscountedPrice from "../pricing/DiscountedPrice";
+import LastMinutePriceBreakdown from "../pricing/LastMinutePriceBreakdown";
 import MyCleanerCard from "./MyCleanerCard";
 import RecurringScheduleCard from "./RecurringScheduleCard";
 import DeclinedAppointmentsSection from "./DeclinedAppointmentsSection";
@@ -238,7 +239,13 @@ const AppointmentCard = ({ homes, appointment, onPress, navigate }) => {
           </View>
         )}
         <View style={styles.appointmentPriceContainer}>
-          {appointment.discountApplied && appointment.originalPrice ? (
+          {appointment.isLastMinuteBooking && appointment.lastMinuteFeeApplied > 0 ? (
+            <LastMinutePriceBreakdown
+              lastMinuteFee={Number(appointment.lastMinuteFeeApplied)}
+              totalPrice={Number(appointment.price)}
+              size="sm"
+            />
+          ) : appointment.discountApplied && appointment.originalPrice ? (
             <>
               <DiscountedPrice
                 originalPrice={Number(appointment.originalPrice)}
