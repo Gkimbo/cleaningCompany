@@ -730,13 +730,17 @@ const CleanerDashboard = ({ state, dispatch }) => {
   const expectedPayout = sortedAppointments
     .filter((apt) => !apt.completed && parseLocalDate(apt.date) >= today)
     .reduce((sum, apt) => {
-      // Check if this is a team/multi-cleaner job
       const isTeamJob = apt.jobType === "team" || apt.isMultiCleanerJob;
-      // For multi-cleaner/team jobs, divide by number of cleaners; for solo jobs, use 1
+
+      // For team jobs, prefer pre-calculated perCleanerEarnings from API
+      if (isTeamJob && apt.perCleanerEarnings) {
+        return sum + (apt.perCleanerEarnings / 100); // Convert cents to dollars
+      }
+
+      // Fallback calculation for solo jobs or if perCleanerEarnings not available
       const numCleaners = isTeamJob
         ? (apt.multiCleanerJob?.totalCleanersRequired || apt.totalCleanersRequired || apt.employeesAssigned?.length || 1)
         : 1;
-      // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
       const feePercent = isTeamJob
         ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
         : (pricing?.platform?.feePercent || 0.1);

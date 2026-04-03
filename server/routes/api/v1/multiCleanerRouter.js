@@ -103,6 +103,12 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
       const appointment = job.appointment;
       const home = appointment.home;
 
+      // Calculate per-cleaner earnings (price split by cleaners, minus platform fee)
+      const totalPrice = appointment.price || 0;
+      const numCleaners = job.totalCleanersRequired || 1;
+      const platformFeePercent = 0.13; // Multi-cleaner platform fee
+      const perCleanerEarnings = Math.round((totalPrice / numCleaners) * (1 - platformFeePercent));
+
       return {
         id: completion.id,
         completionId: completion.id,
@@ -110,6 +116,7 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
         appointmentId: appointment.id,
         date: appointment.date,
         price: appointment.price,  // Price in cents (consistent with AppointmentSerializer)
+        perCleanerEarnings,  // Pre-calculated per-cleaner share in cents
         isMultiCleanerJob: true,
         status: completion.status,
         completionStatus: completion.completionStatus,

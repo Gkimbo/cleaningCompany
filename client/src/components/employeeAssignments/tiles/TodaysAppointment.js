@@ -37,22 +37,23 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
   const [jobStarted, setJobStarted] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(appointment.hasCleanerReview || false);
+  // Initialize home state with inline data if available (team jobs have this data directly)
   const [home, setHome] = useState({
-    address: "",
-    city: "",
+    address: appointment.address || "",
+    city: appointment.city || "",
     compostLocation: "",
     contact: "",
-    keyLocation: "",
-    keyPadCode: "",
-    numBaths: "",
-    numBeds: "",
+    keyLocation: appointment.keyLocation || "",
+    keyPadCode: appointment.keyPadCode || "",
+    numBaths: appointment.numBaths || "",
+    numBeds: appointment.numBeds || "",
     recyclingLocation: "",
     sheetsProvided: "",
     specialNotes: "",
-    state: "",
+    state: appointment.state || "",
     towelsProvided: "",
     trashLocation: "",
-    zipcode: "",
+    zipcode: appointment.zipcode || "",
     cleanersNeeded: "",
     timeToBeCompleted: "",
     cleanSheetsLocation: "",
@@ -92,6 +93,14 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
   const correctedAmount = ((totalPriceCents / numCleaners) * cleanerSharePercent) / 100;
 
   useEffect(() => {
+    // Skip fetch if we already have home data from appointment (team jobs)
+    if (appointment.city && appointment.numBeds) {
+      return;
+    }
+    // Only fetch if we have a homeId
+    if (!appointment.homeId) {
+      return;
+    }
     FetchData.getHome(appointment.homeId)
       .then((response) => {
         setHome(response.home);
@@ -99,7 +108,7 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
       .catch(() => {
         // Silently handle - home details are optional
       });
-  }, [appointment.homeId]);
+  }, [appointment.homeId, appointment.city, appointment.numBeds]);
 
   // Sync hasReviewed state with appointment prop
   useEffect(() => {

@@ -319,12 +319,17 @@ const Earnings = ({ state, dispatch }) => {
   const calculatePotentialEarnings = () => {
     return getUpcomingAssignments()
       .reduce((total, appt) => {
-        // For multi-cleaner jobs, use totalCleanersRequired; for solo jobs, use 1
         const isTeamJob = appt.jobType === "team" || appt.isMultiCleanerJob;
+
+        // For team jobs, prefer pre-calculated perCleanerEarnings from API
+        if (isTeamJob && appt.perCleanerEarnings) {
+          return total + (appt.perCleanerEarnings / 100); // Convert cents to dollars
+        }
+
+        // Fallback calculation for solo jobs or if perCleanerEarnings not available
         const numCleaners = isTeamJob
           ? (appt.multiCleanerJob?.totalCleanersRequired || appt.totalCleanersRequired || appt.employeesAssigned?.length || 1)
           : 1;
-        // Calculate share with full precision (same as CleanerDashboard.js)
         const feePercent = isTeamJob ? multiCleanerFeePercent : regularFeePercent;
         const sharePercent = 1 - feePercent;
         const share = ((Number(appt.price) || 0) / numCleaners) * sharePercent / 100;

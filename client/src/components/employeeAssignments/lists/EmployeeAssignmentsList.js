@@ -201,14 +201,20 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const sortedAppointments = useMemo(() => {
     let sorted = assignedAppointments.map((appointment) => {
       let distance = null;
-      if (userLocation && appointmentLocations?.[appointment.homeId]) {
-        const loc = appointmentLocations[appointment.homeId];
-        distance = haversineDistance(
-          userLocation.latitude,
-          userLocation.longitude,
-          loc.latitude,
-          loc.longitude
-        );
+      if (userLocation) {
+        // Try appointmentLocations first, then fall back to inline lat/lng (team jobs)
+        const loc = appointmentLocations?.[appointment.homeId] ||
+          (appointment.latitude && appointment.longitude
+            ? { latitude: appointment.latitude, longitude: appointment.longitude }
+            : null);
+        if (loc) {
+          distance = haversineDistance(
+            userLocation.latitude,
+            userLocation.longitude,
+            loc.latitude,
+            loc.longitude
+          );
+        }
       }
       return { ...appointment, distance };
     });
@@ -238,10 +244,15 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
 
   // Calculate expected earnings from upcoming jobs only (matches Dashboard's Expected Payout)
   const totalEarnings = upcomingJobs.reduce((sum, a) => {
-    const price = Number(a.price) || 0;
-    // Check if this is a team/multi-cleaner job
     const isTeamJob = a.jobType === "team" || a.isMultiCleanerJob;
-    // For multi-cleaner jobs, split by number of cleaners and use multi-cleaner fee
+
+    // For team jobs, prefer pre-calculated perCleanerEarnings from API
+    if (isTeamJob && a.perCleanerEarnings) {
+      return sum + a.perCleanerEarnings; // Already in cents
+    }
+
+    // Fallback calculation for solo jobs or if perCleanerEarnings not available
+    const price = Number(a.price) || 0;
     const numCleaners = isTeamJob
       ? (a.multiCleanerJob?.totalCleanersRequired || a.totalCleanersRequired || a.employeesAssigned?.length || 1)
       : 1;
@@ -381,6 +392,13 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
                         towelConfigurations={appointment.towelConfigurations}
                         cleanerRoomAssignments={appointment.cleanerRoomAssignments}
                         jobType={appointment.jobType}
+                        // Pass home data directly for team jobs (avoids extra API call)
+                        homeCity={appointment.city}
+                        homeState={appointment.state}
+                        homeNumBeds={appointment.numBeds}
+                        homeNumBaths={appointment.numBaths}
+                        homeAddress={appointment.address}
+                        homeZipcode={appointment.zipcode}
                       />
                     </View>
                   );
