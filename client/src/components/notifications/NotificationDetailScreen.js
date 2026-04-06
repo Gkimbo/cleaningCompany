@@ -82,6 +82,12 @@ const NotificationDetailScreen = () => {
         return { name: "check-circle", color: colors.success[500], bg: colors.success[50] };
       case "new_home_declined":
         return { name: "x-circle", color: colors.warning[500], bg: colors.warning[50] };
+      case "solo_completion_offer":
+        return { name: "dollar-sign", color: colors.success[500], bg: colors.success[50] };
+      case "edge_case_decision_required":
+        return { name: "alert-triangle", color: colors.warning[500], bg: colors.warning[50] };
+      case "multi_cleaner_urgent":
+        return { name: "users", color: colors.warning[500], bg: colors.warning[50] };
       default:
         return { name: "bell", color: colors.primary[500], bg: colors.primary[50] };
     }
@@ -130,6 +136,12 @@ const NotificationDetailScreen = () => {
         return "Home Request Accepted";
       case "new_home_declined":
         return "Home Request Declined";
+      case "solo_completion_offer":
+        return "Solo Completion Offer";
+      case "edge_case_decision_required":
+        return "Decision Required";
+      case "multi_cleaner_urgent":
+        return "Multi-Cleaner Urgent";
       default:
         return "Notification";
     }
@@ -236,6 +248,80 @@ const NotificationDetailScreen = () => {
       setShowDeclineInput(false);
       setDeclineReason("");
     }
+  };
+
+  const handleAcceptSoloOffer = async () => {
+    if (!notification?.data?.appointmentId) return;
+
+    const earnings = notification.data?.fullEarnings || notification.data?.fullEarningsDollars;
+    Alert.alert(
+      "Accept Solo Completion",
+      `Accept to complete this job by yourself for full pay${earnings ? ` ($${typeof earnings === "number" ? (earnings / 100).toFixed(2) : earnings})` : ""}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Accept",
+          onPress: async () => {
+            setProcessing(true);
+            try {
+              const result = await NotificationsService.acceptSoloCompletionOffer(
+                state.currentUser.token,
+                notification.data.appointmentId
+              );
+              if (result.success) {
+                Alert.alert("Success", "You've accepted to complete this job solo!", [
+                  { text: "OK", onPress: () => navigate("/") },
+                ]);
+              } else {
+                Alert.alert("Error", result.error || "Failed to accept solo offer");
+              }
+            } catch (error) {
+              console.error("Error accepting solo offer:", error);
+              Alert.alert("Error", "Something went wrong. Please try again.");
+            } finally {
+              setProcessing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeclineSoloOffer = async () => {
+    if (!notification?.data?.appointmentId) return;
+
+    Alert.alert(
+      "Decline Solo Completion",
+      "Are you sure you want to decline? The homeowner will be notified and offered options.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Decline",
+          style: "destructive",
+          onPress: async () => {
+            setProcessing(true);
+            try {
+              const result = await NotificationsService.declineSoloCompletionOffer(
+                state.currentUser.token,
+                notification.data.appointmentId
+              );
+              if (result.success) {
+                Alert.alert("Declined", "The homeowner has been notified.", [
+                  { text: "OK", onPress: () => navigate("/notifications") },
+                ]);
+              } else {
+                Alert.alert("Error", result.error || "Failed to decline solo offer");
+              }
+            } catch (error) {
+              console.error("Error declining solo offer:", error);
+              Alert.alert("Error", "Something went wrong. Please try again.");
+            } finally {
+              setProcessing(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -469,8 +555,124 @@ const NotificationDetailScreen = () => {
           </View>
         )}
 
+        {/* Solo Completion Offer Accept/Decline Buttons */}
+        {notification.type === "solo_completion_offer" && notification.data?.appointmentId && (
+          <View style={styles.newHomeActionCard}>
+            <Text style={styles.newHomeActionTitle}>Solo Completion Offer</Text>
+            <Text style={styles.newHomeActionDescription}>
+              Another cleaner dropped from this job. Would you like to complete it by yourself for the full pay?
+            </Text>
+
+            {/* Job Details Section */}
+            <View style={styles.soloJobDetails}>
+              {/* Date & Time */}
+              {(notification.data?.formattedDate || notification.data?.date) && (
+                <View style={styles.soloDetailRow}>
+                  <Feather name="calendar" size={16} color={colors.primary[600]} />
+                  <Text style={styles.soloDetailText}>
+                    {notification.data?.formattedDate || (() => {
+                      // Parse YYYY-MM-DD as local time to avoid timezone shift
+                      const d = notification.data?.date;
+                      if (typeof d === "string" && d.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        const [year, month, day] = d.split("-");
+                        return new Date(year, month - 1, day).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                      }
+                      return new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                    })()}
+                    {notification.data?.timeToBeCompleted && ` • ${notification.data.timeToBeCompleted}`}
+                  </Text>
+                </View>
+              )}
+
+              {/* Home Size */}
+              {(notification.data?.numBeds || notification.data?.numBaths) && (
+                <View style={styles.soloDetailRow}>
+                  <Feather name="home" size={16} color={colors.primary[600]} />
+                  <Text style={styles.soloDetailText}>
+                    {notification.data?.numBeds || 0} bed, {notification.data?.numBaths || 0} bath
+                    {notification.data?.city && ` in ${notification.data.city}`}
+                  </Text>
+                </View>
+              )}
+
+              {/* Square Footage */}
+              {notification.data?.squareFootage && (
+                <View style={styles.soloDetailRow}>
+                  <Feather name="maximize" size={16} color={colors.primary[600]} />
+                  <Text style={styles.soloDetailText}>
+                    {notification.data.squareFootage.toLocaleString()} sq ft
+                  </Text>
+                </View>
+              )}
+
+              {/* Estimated Duration */}
+              {notification.data?.estimatedHours && (
+                <View style={styles.soloDetailRow}>
+                  <Feather name="clock" size={16} color={colors.primary[600]} />
+                  <Text style={styles.soloDetailText}>
+                    Est. {notification.data.estimatedHours} {notification.data.estimatedHours === 1 ? "hour" : "hours"}
+                  </Text>
+                </View>
+              )}
+
+              {/* Linen Requirements */}
+              {(notification.data?.bringSheets || notification.data?.bringTowels) && (
+                <View style={styles.soloDetailRow}>
+                  <Feather name="package" size={16} color={colors.warning[600]} />
+                  <Text style={styles.soloDetailText}>
+                    Bring: {[
+                      notification.data?.bringSheets && "sheets",
+                      notification.data?.bringTowels && "towels"
+                    ].filter(Boolean).join(" & ")}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Earnings Display */}
+            {(notification.data?.earningsOffered || notification.data?.fullEarnings || notification.data?.fullEarningsDollars) && (
+              <View style={styles.soloEarningsDisplay}>
+                <Text style={styles.soloEarningsLabel}>Your Earnings</Text>
+                <Text style={styles.soloEarningsValue}>
+                  ${notification.data?.fullEarningsDollars ||
+                    (typeof notification.data?.earningsOffered === "number"
+                      ? (notification.data.earningsOffered / 100).toFixed(2)
+                      : typeof notification.data?.fullEarnings === "number"
+                        ? (notification.data.fullEarnings / 100).toFixed(2)
+                        : notification.data?.fullEarnings || "0.00")}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.newHomeButtonRow}>
+              <Pressable
+                style={[styles.declineButton, processing && styles.buttonDisabled]}
+                onPress={handleDeclineSoloOffer}
+                disabled={processing}
+              >
+                <Feather name="x" size={18} color={colors.error[600]} />
+                <Text style={styles.declineButtonText}>Decline</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.acceptButton, processing && styles.buttonDisabled]}
+                onPress={handleAcceptSoloOffer}
+                disabled={processing}
+              >
+                {processing ? (
+                  <ActivityIndicator size="small" color={colors.neutral[0]} />
+                ) : (
+                  <>
+                    <Feather name="check" size={18} color={colors.neutral[0]} />
+                    <Text style={styles.acceptButtonText}>Accept</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         {/* Action Button */}
-        {notification.actionRequired && (
+        {notification.actionRequired && notification.type !== "solo_completion_offer" && notification.type !== "new_home_request" && (
           <Pressable style={styles.actionButton} onPress={handleActionPress}>
             <Text style={styles.actionButtonText}>Take Action</Text>
             <Feather name="arrow-right" size={18} color={colors.neutral[0]} />
@@ -705,6 +907,44 @@ const styles = StyleSheet.create({
   },
   priceValue: {
     fontSize: typography.fontSize.xxl,
+    fontWeight: "700",
+    color: colors.success[600],
+  },
+  // Solo job details styles
+  soloJobDetails: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  soloDetailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  soloDetailText: {
+    fontSize: typography.fontSize.base,
+    color: colors.neutral[700],
+    flex: 1,
+  },
+  soloEarningsDisplay: {
+    backgroundColor: colors.success[50],
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    marginBottom: spacing.lg,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  soloEarningsLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    marginBottom: spacing.xs,
+    fontWeight: "500",
+  },
+  soloEarningsValue: {
+    fontSize: typography.fontSize.xxxl || 32,
     fontWeight: "700",
     color: colors.success[600],
   },

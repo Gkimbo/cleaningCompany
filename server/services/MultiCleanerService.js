@@ -557,29 +557,83 @@ class MultiCleanerService {
    * @returns {Promise<Object>} Created notification/offer
    */
   static async offerSoloCompletion(multiCleanerJobId, remainingCleanerId) {
-    const { MultiCleanerJob, UserAppointments } = require("../models");
+    const { MultiCleanerJob, UserAppointments, UserHomes } = require("../models");
     const NotificationService = require("./NotificationService");
     const MultiCleanerPricingService = require("./MultiCleanerPricingService");
+    const EncryptionService = require("./EncryptionService");
 
     const job = await MultiCleanerJob.findByPk(multiCleanerJobId);
-    const appointment = await UserAppointments.findByPk(job.appointmentId);
+    const appointment = await UserAppointments.findByPk(job.appointmentId, {
+      include: [{ model: UserHomes, as: "home" }],
+    });
+    const home = appointment.home;
 
     // Calculate full earnings for solo completion
     const fullEarnings = await MultiCleanerPricingService.calculateSoloCompletionEarnings(
       job.appointmentId
     );
 
+    // Calculate estimated duration from beds/baths
+    const numBeds = parseInt(home?.numBeds) || 2;
+    const numBaths = parseInt(home?.numBaths) || 1;
+    const rawDuration = 1 + (numBeds * 0.25) + (numBaths * 0.5);
+    const estimatedHours = Math.ceil(rawDuration * 2) / 2; // Round UP to nearest 0.5
+
+    // Format date nicely (parse as local time to avoid timezone shift)
+    // appointment.date is typically "YYYY-MM-DD" which JS interprets as UTC
+    const dateParts = appointment.date.split("-");
+    const appointmentDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    const formattedDate = appointmentDate.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+
+    // Get city (decrypt if needed)
+    let city = "Unknown";
+    try {
+      city = home?.city ? EncryptionService.decrypt(home.city) : "Unknown";
+    } catch {
+      city = home?.city || "Unknown";
+    }
+
+    // Build detailed notification body
+    const bodyLines = [
+      `Complete this job solo for $${(fullEarnings / 100).toFixed(2)}`,
+      `📅 ${formattedDate} • ${appointment.timeToBeCompleted || "Flexible time"}`,
+      `🏠 ${numBeds} bed, ${numBaths} bath in ${city}`,
+      `⏱️ Est. ${estimatedHours} hours`,
+      `Respond within 12 hours.`,
+    ];
+
     await NotificationService.createNotification({
       userId: remainingCleanerId,
       type: "solo_completion_offer",
-      title: "Solo completion offer",
-      body: `You can complete this job solo for $${(fullEarnings / 100).toFixed(2)}. Accept within 12 hours.`,
+      title: "Solo Completion Offer",
+      body: bodyLines.join("\n"),
       data: {
         appointmentId: job.appointmentId,
         multiCleanerJobId,
         earningsOffered: fullEarnings,
+        // Job details for display
+        date: appointment.date,
+        formattedDate,
+        timeToBeCompleted: appointment.timeToBeCompleted,
+        // Home details
+        numBeds,
+        numBaths,
+        city,
+        squareFootage: home?.squareFootage || null,
+        homeNickname: home?.nickName || null,
+        // Estimated duration
+        estimatedHours,
+        estimatedMinutes: Math.round(estimatedHours * 60),
+        // Linen requirements
+        bringSheets: appointment.bringSheets,
+        bringTowels: appointment.bringTowels,
       },
       actionRequired: true,
+      relatedAppointmentId: job.appointmentId,
       expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000),
     });
 

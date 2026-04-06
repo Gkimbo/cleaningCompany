@@ -90,6 +90,17 @@ module.exports = (sequelize, DataTypes) => {
 			defaultValue: 0,
 			comment: "Number of warnings issued to this user",
 		},
+		noShowCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Number of no-shows recorded for this cleaner",
+		},
+		lastNoShowAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When the last no-show was recorded",
+		},
 		accountStatusUpdatedById: {
 			type: DataTypes.INTEGER,
 			allowNull: true,

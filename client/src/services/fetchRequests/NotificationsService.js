@@ -239,6 +239,36 @@ class NotificationsService {
 
     return result;
   }
+
+  // =====================================
+  // Solo Completion Offer Methods
+  // =====================================
+
+  /**
+   * Accept a solo completion offer (cleaner accepts to complete multi-cleaner job alone)
+   */
+  static async acceptSoloCompletionOffer(token, appointmentId) {
+    const result = await HttpClient.post(`/multi-cleaner/${appointmentId}/accept-solo`, {}, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to accept solo offer" };
+    }
+
+    return result;
+  }
+
+  /**
+   * Decline a solo completion offer (cleaner declines to complete job alone)
+   */
+  static async declineSoloCompletionOffer(token, appointmentId) {
+    const result = await HttpClient.post(`/multi-cleaner/${appointmentId}/decline-solo`, {}, { token });
+
+    if (result.success === false) {
+      return { success: false, error: result.error || "Failed to decline solo offer" };
+    }
+
+    return result;
+  }
 }
 
 export default NotificationsService;

@@ -1212,8 +1212,13 @@ stripeConnectRouter.get("/payouts/:userId", authenticateToken, async (req, res) 
   }
 
   try {
-    // Get current platform fee from config
-    const feePercent = await getPlatformFeePercent();
+    // Get current platform fee from config (default to 10% if fetch fails)
+    let feePercent = 0.1;
+    try {
+      feePercent = await getPlatformFeePercent();
+    } catch (feeError) {
+      console.warn("[StripeConnect] Could not fetch platform fee, using default:", feeError.message);
+    }
 
     // Fetch payouts with appointment details (including completion timestamps for timeline)
     const payouts = await Payout.findAll({
@@ -1235,6 +1240,23 @@ stripeConnectRouter.get("/payouts/:userId", authenticateToken, async (req, res) 
       ],
       order: [["createdAt", "DESC"]],
     });
+
+    // If no payouts, return empty array with zero totals
+    if (!payouts || payouts.length === 0) {
+      return res.json({
+        payouts: [],
+        totals: {
+          totalPaidCents: 0,
+          totalPaidDollars: "0.00",
+          pendingAmountCents: 0,
+          pendingAmountDollars: "0.00",
+          completedCount: 0,
+          pendingCount: 0,
+        },
+        platformFeePercent: feePercent * 100,
+        cleanerPercent: (1 - feePercent) * 100,
+      });
+    }
 
     // Calculate totals
     const totals = payouts.reduce(
@@ -1280,9 +1302,20 @@ stripeConnectRouter.get("/payouts/:userId", authenticateToken, async (req, res) 
   } catch (error) {
     console.error("[StripeConnect] Error fetching payouts:", error);
 
-    return res.status(500).json({
-      error: "Failed to fetch payout history",
-      code: "FETCH_FAILED",
+    // Return empty payouts instead of error - allows UI to still show potential earnings
+    return res.json({
+      payouts: [],
+      totals: {
+        totalPaidCents: 0,
+        totalPaidDollars: "0.00",
+        pendingAmountCents: 0,
+        pendingAmountDollars: "0.00",
+        completedCount: 0,
+        pendingCount: 0,
+      },
+      platformFeePercent: 10,
+      cleanerPercent: 90,
+      warning: "Could not fetch payout history",
     });
   }
 });

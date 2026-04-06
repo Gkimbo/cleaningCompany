@@ -80,6 +80,7 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
             {
               model: UserAppointments,
               as: "appointment",
+              required: true,
               where: {
                 completed: false,
                 isPaused: { [Op.ne]: true }, // Hide paused appointments (homeowner account frozen)
@@ -96,6 +97,8 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
       ],
       order: [[{ model: MultiCleanerJob, as: "multiCleanerJob" }, { model: UserAppointments, as: "appointment" }, "date", "ASC"]],
     });
+
+    console.log(`[my-confirmed-jobs] Cleaner ${cleanerId}: Found ${completions.length} upcoming multi-cleaner jobs`);
 
     // Transform to a format similar to regular appointments
     const confirmedJobs = completions.map((completion) => {
@@ -1089,6 +1092,15 @@ multiCleanerRouter.post("/:appointmentId/accept-solo", async (req, res) => {
       return res.status(404).json({ error: "Multi-cleaner job not found" });
     }
 
+    // Check if job is past due - cannot accept/decline solo offers for past jobs
+    const now = new Date();
+    if (appointment.scheduledEndTime && new Date(appointment.scheduledEndTime) < now) {
+      return res.status(400).json({
+        error: "This job is past due and can no longer be accepted",
+        code: "JOB_PAST_DUE",
+      });
+    }
+
     const job = appointment.multiCleanerJob;
 
     // Verify cleaner is assigned
@@ -1152,6 +1164,15 @@ multiCleanerRouter.post("/:appointmentId/decline-solo", async (req, res) => {
       return res.status(404).json({ error: "Multi-cleaner job not found" });
     }
 
+    // Check if job is past due - cannot accept/decline solo offers for past jobs
+    const now = new Date();
+    if (appointment.scheduledEndTime && new Date(appointment.scheduledEndTime) < now) {
+      return res.status(400).json({
+        error: "This job is past due and can no longer be declined",
+        code: "JOB_PAST_DUE",
+      });
+    }
+
     const job = appointment.multiCleanerJob;
 
     // Verify cleaner is assigned to this job
@@ -1203,6 +1224,15 @@ multiCleanerRouter.post("/:appointmentId/accept-extra-work", async (req, res) =>
       return res.status(404).json({ error: "Multi-cleaner job not found" });
     }
 
+    // Check if job is past due - cannot accept extra work for past jobs
+    const now = new Date();
+    if (appointment.scheduledEndTime && new Date(appointment.scheduledEndTime) < now) {
+      return res.status(400).json({
+        error: "This job is past due and can no longer be modified",
+        code: "JOB_PAST_DUE",
+      });
+    }
+
     const job = appointment.multiCleanerJob;
 
     // Verify cleaner is assigned to this job
@@ -1243,6 +1273,15 @@ multiCleanerRouter.post("/:appointmentId/decline-extra-work", async (req, res) =
 
     if (!appointment?.multiCleanerJob) {
       return res.status(404).json({ error: "Multi-cleaner job not found" });
+    }
+
+    // Check if job is past due - cannot decline extra work for past jobs
+    const now = new Date();
+    if (appointment.scheduledEndTime && new Date(appointment.scheduledEndTime) < now) {
+      return res.status(400).json({
+        error: "This job is past due and can no longer be modified",
+        code: "JOB_PAST_DUE",
+      });
     }
 
     const job = appointment.multiCleanerJob;

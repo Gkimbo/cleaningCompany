@@ -25,6 +25,30 @@ const PushNotification = require("../sendNotifications/PushNotificationClass");
 const TimezoneService = require("../TimezoneService");
 
 /**
+ * Check if an appointment is overdue by more than 24 hours (a full day)
+ * Uses TimezoneService for consistent timezone handling across the codebase.
+ * An appointment is considered overdue by a full day if its date is strictly
+ * before today (i.e., yesterday or earlier).
+ *
+ * @param {string} dateStr - Appointment date string (YYYY-MM-DD)
+ * @returns {boolean} True if overdue by 24+ hours (date is before today)
+ */
+function isOverdueByFullDay(dateStr) {
+  // Safety check for null/undefined/empty dates
+  if (!dateStr || typeof dateStr !== "string") {
+    console.warn("[MultiCleanerFillMonitor] isOverdueByFullDay called with invalid date:", dateStr);
+    return false; // Don't skip if we can't determine the date
+  }
+
+  // Use TimezoneService for consistent timezone handling (defaults to America/New_York)
+  const todayStr = TimezoneService.getTodayInTimezone();
+
+  // String comparison works for YYYY-MM-DD format (lexicographically ordered)
+  // If appointment date is before today (yesterday or earlier), it's overdue by a full day
+  return dateStr < todayStr;
+}
+
+/**
  * Process jobs that need urgent fill notifications (7 days out)
  * Sends notifications every 6 hours until the job is filled
  * @param {Object} io - Socket.io instance
@@ -72,6 +96,21 @@ async function processUrgentFillNotifications(io = null) {
   for (const job of jobs) {
     try {
       const { appointment } = job;
+
+      // Safety check - appointment should always exist due to required include
+      if (!appointment) {
+        console.warn(`[MultiCleanerFillMonitor] Skipping job ${job.id} - no appointment found`);
+        continue;
+      }
+
+      // Skip appointments that are overdue by a full day - no point sending fill notifications
+      if (isOverdueByFullDay(appointment.date)) {
+        console.log(
+          `[MultiCleanerFillMonitor] Skipping urgent fill for job ${job.id} - appointment ${appointment.date} is overdue by 24+ hours`
+        );
+        continue;
+      }
+
       const slotsRemaining = job.getRemainingSlots();
 
       // Skip if no slots remaining (shouldn't happen but safety check)
@@ -198,6 +237,21 @@ async function processFinalWarnings(io = null) {
   for (const job of jobs) {
     try {
       const { appointment } = job;
+
+      // Safety check - appointment should always exist due to required include
+      if (!appointment) {
+        console.warn(`[MultiCleanerFillMonitor] Skipping job ${job.id} - no appointment found`);
+        continue;
+      }
+
+      // Skip appointments that are overdue by a full day - no point sending warnings
+      if (isOverdueByFullDay(appointment.date)) {
+        console.log(
+          `[MultiCleanerFillMonitor] Skipping final warning for job ${job.id} - appointment ${appointment.date} is overdue by 24+ hours`
+        );
+        continue;
+      }
+
       const slotsRemaining = job.getRemainingSlots();
       const cleanersConfirmed = job.cleanersConfirmed;
 
@@ -281,6 +335,22 @@ async function processSoloCompletionOffers(io = null) {
 
   for (const job of jobs) {
     try {
+      const { appointment } = job;
+
+      // Safety check - appointment should always exist due to required include
+      if (!appointment) {
+        console.warn(`[MultiCleanerFillMonitor] Skipping job ${job.id} - no appointment found`);
+        continue;
+      }
+
+      // Skip appointments that are overdue by a full day - no point sending solo offers
+      if (isOverdueByFullDay(appointment.date)) {
+        console.log(
+          `[MultiCleanerFillMonitor] Skipping solo completion offer for job ${job.id} - appointment ${appointment.date} is overdue by 24+ hours`
+        );
+        continue;
+      }
+
       const remainingCleaner = job.completions[0];
       if (!remainingCleaner) continue;
 
@@ -515,6 +585,21 @@ async function processEdgeCaseDecisions(io = null) {
   for (const job of jobs) {
     try {
       const { appointment } = job;
+
+      // Safety check - appointment should always exist due to required include
+      if (!appointment) {
+        console.warn(`[MultiCleanerFillMonitor] Skipping job ${job.id} - no appointment found`);
+        continue;
+      }
+
+      // Skip appointments that are overdue by a full day - no point sending edge case decisions
+      if (isOverdueByFullDay(appointment.date)) {
+        console.log(
+          `[MultiCleanerFillMonitor] Skipping edge case decision for job ${job.id} - appointment ${appointment.date} is overdue by 24+ hours`
+        );
+        continue;
+      }
+
       const home = appointment.home;
       const homeowner = appointment.user;
 

@@ -57,6 +57,7 @@ module.exports = (sequelize, DataTypes) => {
             "multi_cleaner_offer",
             "multi_cleaner_slot_filled",
             "multi_cleaner_urgent",
+            "multi_cleaner_final_warning",
             "cleaner_dropout",
             "solo_completion_offer",
             "partial_completion",

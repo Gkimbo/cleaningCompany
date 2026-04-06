@@ -3,7 +3,7 @@ const { Op } = require("sequelize");
 const PushNotification = require("./sendNotifications/PushNotificationClass");
 const Email = require("./sendNotifications/EmailClass");
 
-// Helper function to format date
+// Helper function to format date (handles YYYY-MM-DD without timezone shift)
 const formatDate = (dateString) => {
   const options = {
     weekday: "long",
@@ -11,6 +11,11 @@ const formatDate = (dateString) => {
     day: "numeric",
     year: "numeric",
   };
+  // Parse as local time to avoid UTC interpretation shifting the date
+  if (typeof dateString === "string" && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateString.split("-");
+    return new Date(year, month - 1, day).toLocaleDateString(undefined, options);
+  }
   return new Date(dateString).toLocaleDateString(undefined, options);
 };
 
@@ -675,20 +680,64 @@ class NotificationService {
     multiCleanerJobId,
     bonusAmount,
     appointmentDate,
+    // Extended details
+    numBeds = null,
+    numBaths = null,
+    city = null,
+    timeToBeCompleted = null,
+    estimatedHours = null,
+    squareFootage = null,
+    homeNickname = null,
+    bringSheets = false,
+    bringTowels = false,
     io = null,
   }) {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 12);
 
+    // Build detailed body if we have home info
+    let body;
+    if (numBeds && numBaths) {
+      const bodyLines = [
+        `Complete this job solo for $${(bonusAmount / 100).toFixed(2)}`,
+        `📅 ${formatDate(appointmentDate)} • ${timeToBeCompleted || "Flexible time"}`,
+        `🏠 ${numBeds} bed, ${numBaths} bath${city ? ` in ${city}` : ""}`,
+      ];
+      if (estimatedHours) {
+        bodyLines.push(`⏱️ Est. ${estimatedHours} hours`);
+      }
+      bodyLines.push("Respond within 12 hours.");
+      body = bodyLines.join("\n");
+    } else {
+      body = `You can complete the ${formatDate(appointmentDate)} job solo for $${(bonusAmount / 100).toFixed(2)}. Respond within 12 hours.`;
+    }
+
     return this.notifyUser({
       userId: cleanerId,
       type: "solo_completion_offer",
-      title: "Complete job solo for full pay",
-      body: `You can complete the ${formatDate(appointmentDate)} job solo for $${(bonusAmount / 100).toFixed(2)}. Respond within 12 hours.`,
+      title: "Solo Completion Offer",
+      body,
       data: {
         appointmentId,
         multiCleanerJobId,
         bonusAmount,
+        earningsOffered: bonusAmount,
+        // Job details
+        date: appointmentDate,
+        formattedDate: formatDate(appointmentDate),
+        timeToBeCompleted,
+        // Home details
+        numBeds,
+        numBaths,
+        city,
+        squareFootage,
+        homeNickname,
+        // Duration
+        estimatedHours,
+        estimatedMinutes: estimatedHours ? Math.round(estimatedHours * 60) : null,
+        // Linen requirements
+        bringSheets,
+        bringTowels,
       },
       actionRequired: true,
       relatedAppointmentId: appointmentId,
