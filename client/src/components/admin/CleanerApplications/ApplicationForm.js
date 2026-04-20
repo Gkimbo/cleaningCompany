@@ -114,6 +114,7 @@ const CleanerApplicationForm = () => {
     return { weekly, monthly, yearly };
   };
 
+  const casualEarnings = calculateEarnings(1.5, 1); // 1-2 houses/week
   const partTimeEarnings = calculateEarnings(1.5); // 1-2 houses/day average
   const fullTimeEarnings = calculateEarnings(3);
   const hustleModeEarnings = calculateEarnings(4);
@@ -1179,11 +1180,20 @@ const CleanerApplicationForm = () => {
 
           <View
             style={{
-              flexDirection: width > 500 ? "row" : "column",
-              justifyContent: "space-around",
+              flexDirection: "row",
+              flexWrap: "wrap",
+              justifyContent: "center",
+              width: "100%",
             }}
           >
             {[
+              {
+                hours: "1-2 houses/week",
+                week: `$${casualEarnings.weekly.toLocaleString()}+`,
+                month: `$${casualEarnings.monthly.toLocaleString()}+`,
+                year: `$${casualEarnings.yearly.toLocaleString()}+`,
+                label: "Casual",
+              },
               {
                 hours: "1-2 houses/day",
                 week: `$${partTimeEarnings.weekly.toLocaleString()}+`,
@@ -1210,9 +1220,9 @@ const CleanerApplicationForm = () => {
                 key={index}
                 style={{
                   alignItems: "center",
-                  marginBottom: width > 500 ? 0 : spacing.xl,
-                  flex: width > 500 ? 1 : undefined,
-                  paddingHorizontal: spacing.sm,
+                  width: width > 500 ? "50%" : "100%",
+                  paddingHorizontal: spacing.md,
+                  marginBottom: spacing.xl,
                 }}
               >
                 <Text
@@ -1321,7 +1331,7 @@ const CleanerApplicationForm = () => {
             }}
           >
             *Earnings based on ${minCleanerPay}-${maxCleanerPay} per house. $
-            {minCleanerPay} per house is the absolute mininimum you'll earn
+            {minCleanerPay} per house is the absolute minimum you'll earn
             cleaning a 1 bed 1 bath home. It only goes up from there!
           </Text>
         </View>
