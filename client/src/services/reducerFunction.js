@@ -53,7 +53,8 @@ const reducer = (state, action) => {
         ...state,
         currentUser: {
           ...state.currentUser,
-          user: action.payload,
+          ...action.payload, // Spread user properties directly for easy access
+          user: action.payload, // Keep nested for backwards compatibility
         },
       };
     case "UPDATE_BILL":

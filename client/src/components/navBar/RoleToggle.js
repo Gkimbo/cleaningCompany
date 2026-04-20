@@ -9,7 +9,7 @@ import { colors, spacing, radius, typography } from "../../services/styles/theme
  * RoleToggle - Allows dual-role users (cleaner + homeowner) to switch views
  * Only shown for cleaners who also have homes registered
  */
-const RoleToggle = ({ activeRole, dispatch, closeModal, isOffline = false }) => {
+const RoleToggle = ({ activeRole, dispatch, closeModal, isOffline = false, hasPaymentMethod = false, stripeConnectComplete = false }) => {
   const navigate = useNavigate();
   const [isToggling, setIsToggling] = useState(false);
   const isHomeownerView = activeRole === "homeowner";
@@ -32,9 +32,18 @@ const RoleToggle = ({ activeRole, dispatch, closeModal, isOffline = false }) => 
       await SecureStorage.setItem("activeRole", newRole);
       // Update state with explicit role (ensures storage and state match)
       dispatch({ type: "SET_ACTIVE_ROLE", payload: newRole });
-      // Close modal and navigate home to refresh dashboard
+      // Close modal
       closeModal();
-      navigate("/");
+
+      // If switching to homeowner and no payment method, redirect to payment setup
+      if (newRole === "homeowner" && !hasPaymentMethod) {
+        navigate("/payment-setup");
+      } else if (newRole === "cleaner" && !stripeConnectComplete) {
+        // If switching to cleaner and Stripe Connect not complete, redirect to earnings/onboarding
+        navigate("/earnings");
+      } else {
+        navigate("/");
+      }
     } catch (err) {
       console.error("Failed to save role preference:", err);
       Alert.alert("Error", "Could not save your preference. Please try again.");

@@ -43,8 +43,8 @@ class Appointment {
     return result;
   }
 
-  static async getHomeInfo(homeId) {
-    const result = await HttpClient.get(`/appointments/home/${homeId}`, { skipAuth: true });
+  static async getHomeInfo(homeId, token) {
+    const result = await HttpClient.get(`/appointments/home/${homeId}`, { token });
 
     if (result.success === false) {
       throw new Error("No data received");

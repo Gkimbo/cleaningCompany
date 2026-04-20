@@ -31,6 +31,7 @@ const { startPaymentRetryMonitor } = require("./services/cron/PaymentRetryMonito
 const { startPausedAppointmentCancellationJob } = require("./services/cron/PausedAppointmentCancellationJob");
 const { startNoShowMonitor } = require("./services/cron/NoShowMonitor");
 const { startFillMonitorJob } = require("./services/cron/MultiCleanerFillMonitor");
+const { startExpiredMultiCleanerMonitor } = require("./services/cron/ExpiredMultiCleanerMonitor");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -250,5 +251,6 @@ server.listen(port, () => {
 		startPausedAppointmentCancellationJob(io, 24 * 60 * 60 * 1000); // Daily cancellation of paused appointments within 7 days
 		startNoShowMonitor(io, 5 * 60 * 1000); // No-show detection and warnings (every 5 min)
 		startFillMonitorJob(io, 60 * 60 * 1000); // Multi-cleaner fill monitoring and edge case handling (every hour)
+		startExpiredMultiCleanerMonitor(io, 6 * 60 * 60 * 1000); // Expired multi-cleaner cleanup (every 6 hours)
 	}
 });

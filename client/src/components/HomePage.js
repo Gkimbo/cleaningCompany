@@ -87,6 +87,10 @@ const HomePage = ({ state, dispatch }) => {
 
   useEffect(() => {
     if (!state.currentUser.token) return;
+    // Skip data fetching for owner, HR, IT, and employee accounts - they have their own dashboards
+    if (["owner", "humanResources", "it", "employee"].includes(state.account)) {
+      return;
+    }
     if (state.account === "cleaner") {
       FetchData.get("/api/v1/employee-info", state.currentUser.token).then(
         (response) => {
@@ -101,6 +105,7 @@ const HomePage = ({ state, dispatch }) => {
         __DEV__ && console.log("Failed to fetch employee info:", err.message);
       });
     } else {
+      // This branch is for homeowner accounts (including business owners viewing as homeowner)
       FetchData.get("/api/v1/user-info", state.currentUser.token).then(
         (response) => {
           if (response?.user) {

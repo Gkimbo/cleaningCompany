@@ -43,15 +43,24 @@ const TaxFormsSection = ({ state }) => {
 
   // Safely get user type with fallback
   // Employees are treated like cleaners for tax purposes (they receive 1099s)
-  const rawUserType = state?.account || null;
+  let rawUserType = state?.account || null;
+
+  // For dual-role users (cleaners with homes), respect the activeRole
+  // When viewing as homeowner, show homeowner tax info instead of cleaner tax info
+  if (rawUserType === "cleaner" && state?.activeRole === "homeowner") {
+    rawUserType = null; // null = homeowner in this component's logic
+  }
+
   const userType = rawUserType === "employee" ? "cleaner" : rawUserType;
 
   useEffect(() => {
     if (!state?.currentUser?.token) return;
 
-    // Reset errors when year changes
+    // Reset errors when year or role changes
     setError(null);
     setDashboardError(null);
+    setTaxData(null);
+    setTaxStatus(null);
 
     fetchTaxData();
 
@@ -59,7 +68,7 @@ const TaxFormsSection = ({ state }) => {
     if (userType === "cleaner") {
       fetchTaxStatus();
     }
-  }, [selectedYear, state?.currentUser?.token, userType]);
+  }, [selectedYear, state?.currentUser?.token, userType, state?.activeRole]);
 
   const fetchTaxStatus = async () => {
     setStatusError(null);

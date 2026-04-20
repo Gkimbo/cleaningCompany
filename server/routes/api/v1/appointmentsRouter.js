@@ -936,14 +936,23 @@ appointmentRouter.get("/home/:homeId", async (req, res) => {
     const decodedToken = jwt.verify(token, secretKey);
     const requestingUserId = decodedToken.userId;
 
+    // Fetch requesting user to check if they're a business owner
+    const requestingUser = await User.findByPk(requestingUserId);
+    if (!requestingUser) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
     const home = await UserHomes.findByPk(homeId);
 
     if (!home) {
       return res.status(404).json({ error: "Home not found" });
     }
 
+    // Business owners can view all homes
+    const isBusinessOwner = requestingUser.type === "owner";
+
     // Verify user owns this home or is assigned to clean it
-    const isOwner = home.userId === requestingUserId;
+    const isHomeOwner = home.userId === requestingUserId;
 
     // Check if user is a cleaner assigned to an appointment at this home
     const isAssignedCleaner = await UserAppointments.findOne({
@@ -953,7 +962,7 @@ appointmentRouter.get("/home/:homeId", async (req, res) => {
       },
     });
 
-    if (!isOwner && !isAssignedCleaner) {
+    if (!isBusinessOwner && !isHomeOwner && !isAssignedCleaner) {
       return res.status(403).json({ error: "You don't have permission to view this home" });
     }
 

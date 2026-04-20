@@ -467,6 +467,7 @@ class CleanerApprovalService {
     const { User } = require("../models");
     const NotificationService = require("./NotificationService");
     const EncryptionService = require("./EncryptionService");
+    const ReviewsClass = require("./ReviewsClass");
 
     const cleaner = await User.findByPk(cleanerId);
     const home = appointment.home;
@@ -490,6 +491,14 @@ class CleanerApprovalService {
       (new Date(joinRequest.expiresAt) - new Date()) / (1000 * 60 * 60)
     );
 
+    // Get cleaner profile summary (rating, reviews)
+    let cleanerProfile = null;
+    try {
+      cleanerProfile = await ReviewsClass.getCleanerProfileSummary(cleanerId);
+    } catch (error) {
+      console.error("[CleanerApprovalService] Error fetching cleaner profile:", error);
+    }
+
     // In-app notification
     await NotificationService.createNotification({
       userId: joinRequest.homeownerId,
@@ -502,6 +511,7 @@ class CleanerApprovalService {
         cleanerId,
         cleanerName,
         expiresAt: joinRequest.expiresAt,
+        cleanerProfile,
       },
       actionRequired: true,
       relatedAppointmentId: appointment.id,

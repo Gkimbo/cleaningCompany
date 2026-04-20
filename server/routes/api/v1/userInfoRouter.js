@@ -13,6 +13,7 @@ const {
   CleanerJoinRequest,
   CleanerJobCompletion,
   NewHomeRequest,
+  StripeConnectAccount,
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
@@ -175,10 +176,21 @@ userInfoRouter.get("/", async (req, res) => {
       };
     });
 
+    // Check Stripe Connect status for cleaners (dual-role users need this)
+    let stripeConnectComplete = false;
+    if (user.type === "cleaner") {
+      const stripeConnectAccount = await StripeConnectAccount.findOne({
+        where: { userId },
+        attributes: ["onboardingComplete", "payoutsEnabled"],
+      });
+      stripeConnectComplete = stripeConnectAccount?.onboardingComplete && stripeConnectAccount?.payoutsEnabled;
+    }
+
     // Replace appointments with enriched data
     const userData = {
       ...user.dataValues,
       appointments: appointmentsWithReviewStatus,
+      stripeConnectComplete,
     };
 
     let serializedUser = UserSerializer.serializeOne(userData);

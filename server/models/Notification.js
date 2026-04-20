@@ -61,6 +61,11 @@ module.exports = (sequelize, DataTypes) => {
             "cleaner_dropout",
             "solo_completion_offer",
             "partial_completion",
+            "edge_case_decision_required",
+            "edge_case_auto_proceeded",
+            "edge_case_cleaner_confirmed",
+            "edge_case_second_cleaner_joined",
+            "proceed_confirmed",
             // Business employee notifications
             "employee_job_assigned",
             "employee_job_reassigned",
@@ -85,6 +90,9 @@ module.exports = (sequelize, DataTypes) => {
             "it_dispute_resolved",
             // Unassigned appointment expiration
             "appointment_expired_unassigned",
+            // Expired appointments (never cleaned)
+            "multi_cleaner_expired_no_show",
+            "appointment_expired_no_show",
             // Payment failure notifications
             "payment_failed",
             "payment_retry_failed",

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Pressable,
   RefreshControl,
@@ -541,11 +542,27 @@ const ClientDashboard = ({ state, dispatch }) => {
     0
   );
 
-  // Get recent/past appointments
+  // Get recent/past appointments (only completed, non-cancelled)
   const recentAppointments = appointments
-    .filter((apt) => isPast(apt.date))
+    .filter((apt) => isPast(apt.date) && apt.completed && !apt.wasCancelled)
     .sort((a, b) => compareDates(b.date, a.date))
     .slice(0, 3);
+
+  // Helper to handle booking navigation with payment method check
+  const handleBookingNavigation = (path) => {
+    if (!state.currentUser?.hasPaymentMethod) {
+      Alert.alert(
+        "Payment Method Required",
+        "Please add a payment method before booking a cleaning.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Add Payment Method", onPress: () => navigate("/payment-setup") },
+        ]
+      );
+      return;
+    }
+    navigate(path);
+  };
 
   if (loading) {
     return (
@@ -597,6 +614,27 @@ const ClientDashboard = ({ state, dispatch }) => {
           onComplete={() => navigate(`/complete-home-setup/${incompleteHome.id}`)}
         />
       ))}
+
+      {/* Payment Method Setup Banner - for homeowners without payment method */}
+      {!state.currentUser?.hasPaymentMethod && (
+        <Pressable
+          style={styles.paymentSetupBanner}
+          onPress={() => navigate("/payment-setup")}
+        >
+          <View style={styles.paymentSetupBannerContent}>
+            <View style={styles.paymentSetupIconContainer}>
+              <Icon name="credit-card" size={20} color={colors.warning[600]} />
+            </View>
+            <View style={styles.paymentSetupTextContainer}>
+              <Text style={styles.paymentSetupTitle}>Payment Method Required</Text>
+              <Text style={styles.paymentSetupSubtitle}>
+                Add a payment method to book cleanings for your home
+              </Text>
+            </View>
+          </View>
+          <Icon name="chevron-right" size={16} color={colors.warning[600]} />
+        </Pressable>
+      )}
 
       {/* Tenant Present Alert - urgent action required */}
       {tenantPresentReports.map(report => (
@@ -725,7 +763,7 @@ const ClientDashboard = ({ state, dispatch }) => {
             iconColor="#fff"
             bgColor="#fff"
             accentColor="#6366f1"
-            onPress={() => navigate("/schedule-cleaning")}
+            onPress={() => handleBookingNavigation("/schedule-cleaning")}
           />
           <QuickActionButton
             title="My Homes"
@@ -914,7 +952,7 @@ const ClientDashboard = ({ state, dispatch }) => {
                       styles.quickBookItem,
                       pressed && styles.cardPressed,
                     ]}
-                    onPress={() => navigate(`/quick-book/${home.id}`)}
+                    onPress={() => handleBookingNavigation(`/quick-book/${home.id}`)}
                   >
                     <View style={styles.quickBookInfo}>
                       <Text style={styles.quickBookName} numberOfLines={1}>
@@ -1872,6 +1910,47 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
     color: colors.warning[700],
+  },
+
+  // Payment Setup Banner
+  paymentSetupBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    ...shadows.sm,
+  },
+  paymentSetupBannerContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  paymentSetupIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.warning[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  paymentSetupTextContainer: {
+    flex: 1,
+  },
+  paymentSetupTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[800],
+    marginBottom: 2,
+  },
+  paymentSetupSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[600],
+    lineHeight: 18,
   },
 
   // Cleaner Approval Banner

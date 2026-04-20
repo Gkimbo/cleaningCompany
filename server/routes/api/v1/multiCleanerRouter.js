@@ -17,6 +17,8 @@ const {
   CleanerJobCompletion,
   UserCleanerAppointments,
   Payout,
+  Notification,
+  sequelize,
 } = require("../../../models");
 
 const MultiCleanerService = require("../../../services/MultiCleanerService");
@@ -83,6 +85,7 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
               required: true,
               where: {
                 completed: false,
+                wasCancelled: { [Op.ne]: true }, // Hide cancelled appointments
                 isPaused: { [Op.ne]: true }, // Hide paused appointments (homeowner account frozen)
               },
               include: [
@@ -286,7 +289,8 @@ multiCleanerRouter.get("/offers", async (req, res) => {
           ],
         },
       ],
-      order: [["createdAt", "DESC"]],
+      // Sort by appointment date (soonest first) for better UX
+      order: [[{ model: UserAppointments, as: "appointment" }, "date", "ASC"]],
       limit: 20,
     });
 
@@ -365,12 +369,19 @@ multiCleanerRouter.get("/offers", async (req, res) => {
     const pendingRequestJobIds = await CleanerApprovalService.getPendingJobIdsForCleaner(cleanerId);
 
     // Filter out jobs that cleaner already has offers for, is assigned to, or has pending requests
-    const availableJobs = [...filteredOpenJobs, ...edgeLargeHomeJobs].filter(
-      (job) =>
-        !existingOfferJobIds.includes(job.id) &&
-        !assignedJobIds.includes(job.id) &&
-        !pendingRequestJobIds.includes(job.id)
-    );
+    const availableJobs = [...filteredOpenJobs, ...edgeLargeHomeJobs]
+      .filter(
+        (job) =>
+          !existingOfferJobIds.includes(job.id) &&
+          !assignedJobIds.includes(job.id) &&
+          !pendingRequestJobIds.includes(job.id)
+      )
+      // Sort by appointment date (soonest first)
+      .sort((a, b) => {
+        const dateA = a.appointment?.date || "";
+        const dateB = b.appointment?.date || "";
+        return dateA.localeCompare(dateB);
+      });
 
     // Serialize with decrypted home data
     const response = MultiCleanerJobSerializer.serializeOffersResponse(offers, availableJobs);
@@ -1451,6 +1462,22 @@ multiCleanerRouter.post("/:appointmentId/homeowner-response", async (req, res) =
           }
         }
 
+        // Mark the homeowner's notification as actioned
+        await Notification.update(
+          {
+            actionRequired: false,
+            data: sequelize.literal(`data || '{"decisionMade": "proceed", "decisionMadeAt": "${new Date().toISOString()}"}'::jsonb`),
+          },
+          {
+            where: {
+              userId: userId,
+              relatedAppointmentId: appointment.id,
+              type: { [Op.in]: ["edge_case_decision_required", "cleaner_dropout", "multi_cleaner_final_warning"] },
+              actionRequired: true,
+            },
+          }
+        );
+
         return res.status(200).json({
           success: true,
           message: "Appointment will proceed with available cleaner(s)",
@@ -1537,6 +1564,22 @@ multiCleanerRouter.post("/:appointmentId/homeowner-response", async (req, res) =
           }
         }
 
+        // Mark the homeowner's notification as actioned
+        await Notification.update(
+          {
+            actionRequired: false,
+            data: sequelize.literal(`data || '{"decisionMade": "proceed", "decisionMadeAt": "${new Date().toISOString()}"}'::jsonb`),
+          },
+          {
+            where: {
+              userId: userId,
+              relatedAppointmentId: appointment.id,
+              type: { [Op.in]: ["edge_case_decision_required", "cleaner_dropout", "multi_cleaner_final_warning"] },
+              actionRequired: true,
+            },
+          }
+        );
+
         return res.status(200).json({
           success: true,
           message: "You've chosen to proceed with 1 cleaner. Payment will be captured and normal cancellation fees apply.",
@@ -1562,6 +1605,22 @@ multiCleanerRouter.post("/:appointmentId/homeowner-response", async (req, res) =
         if (!cancelResult.success) {
           return res.status(500).json({ error: cancelResult.error || "Failed to cancel appointment" });
         }
+
+        // Mark the homeowner's notification as actioned
+        await Notification.update(
+          {
+            actionRequired: false,
+            data: sequelize.literal(`data || '{"decisionMade": "cancelled", "decisionMadeAt": "${new Date().toISOString()}"}'::jsonb`),
+          },
+          {
+            where: {
+              userId: userId,
+              relatedAppointmentId: appointment.id,
+              type: { [Op.in]: ["edge_case_decision_required", "cleaner_dropout", "multi_cleaner_final_warning"] },
+              actionRequired: true,
+            },
+          }
+        );
 
         return res.status(200).json({
           success: true,

@@ -42,12 +42,26 @@ const verifyOwner = async (req, res, next) => {
 
 /**
  * Get statistics about homes in/out of service area
+ * Excludes demo homes (homes owned by demo accounts)
  */
 async function getServiceAreaStats() {
+  const { Op } = require("sequelize");
   try {
-    const totalHomes = await UserHomes.count();
+    // Filter to exclude demo homes
+    const demoFilter = {
+      model: User,
+      as: "user",
+      where: { isDemoAccount: { [Op.ne]: true } },
+      required: true,
+      attributes: [],
+    };
+
+    const totalHomes = await UserHomes.count({
+      include: [demoFilter],
+    });
     const homesOutside = await UserHomes.count({
       where: { outsideServiceArea: true },
+      include: [demoFilter],
     });
     const homesInside = totalHomes - homesOutside;
 

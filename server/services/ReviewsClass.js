@@ -775,6 +775,54 @@ class ReviewsClass {
   }
 
   /**
+   * Get recent reviews received by a user (for cleaner profile display)
+   * Returns the most recent published reviews with reviewer name
+   */
+  static async getRecentReviewsForUser(userId, limit = 3) {
+    const reviews = await UserReviews.findAll({
+      where: {
+        userId,
+        isPublished: true,
+        reviewType: "homeowner_to_cleaner",
+      },
+      include: [
+        {
+          model: User,
+          as: "reviewer",
+          attributes: ["id", "firstName", "lastName"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+      limit,
+      attributes: ["id", "review", "reviewComment", "createdAt", "wouldRecommend"],
+    });
+
+    return reviews.map((r) => ({
+      id: r.id,
+      rating: r.review,
+      comment: r.reviewComment,
+      createdAt: r.createdAt,
+      wouldRecommend: r.wouldRecommend,
+      reviewerFirstName: r.reviewer?.firstName || "Anonymous",
+    }));
+  }
+
+  /**
+   * Get cleaner profile summary for notifications (rating, review count, recent reviews)
+   */
+  static async getCleanerProfileSummary(cleanerId) {
+    const stats = await this.getReviewStats(cleanerId);
+    const recentReviews = await this.getRecentReviewsForUser(cleanerId, 3);
+
+    return {
+      averageRating: stats.averageRating,
+      totalReviews: stats.totalReviews,
+      recommendationRate: stats.recommendationRate,
+      recentReviews,
+    };
+  }
+
+  /**
    * Get published business reviews for a business owner
    */
   static async getBusinessReviewsForOwner(businessOwnerId) {

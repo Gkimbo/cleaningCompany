@@ -482,6 +482,8 @@ const TopBar = ({ dispatch, state }) => {
                                   dispatch={dispatch}
                                   closeModal={closeModal}
                                   isOffline={isOffline}
+                                  hasPaymentMethod={state.currentUser?.hasPaymentMethod}
+                                  stripeConnectComplete={state.currentUser?.stripeConnectComplete}
                                 />
                               )}
 

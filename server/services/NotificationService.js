@@ -2,6 +2,7 @@ const { Notification, User } = require("../models");
 const { Op } = require("sequelize");
 const PushNotification = require("./sendNotifications/PushNotificationClass");
 const Email = require("./sendNotifications/EmailClass");
+const ReviewsClass = require("./ReviewsClass");
 
 // Helper function to format date (handles YYYY-MM-DD without timezone shift)
 const formatDate = (dateString) => {
@@ -163,6 +164,14 @@ class NotificationService {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 48); // 48 hours from now
 
+    // Get cleaner profile summary (rating, reviews)
+    let cleanerProfile = null;
+    try {
+      cleanerProfile = await ReviewsClass.getCleanerProfileSummary(cleanerId);
+    } catch (error) {
+      console.error("[NotificationService] Error fetching cleaner profile:", error);
+    }
+
     return this.notifyUser({
       userId: clientId,
       type: "pending_booking",
@@ -174,6 +183,7 @@ class NotificationService {
         price,
         cleanerId,
         cleanerName,
+        cleanerProfile,
       },
       actionRequired: true,
       relatedAppointmentId: appointmentId,
@@ -452,6 +462,14 @@ class NotificationService {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 48);
 
+    // Get cleaner profile summary (rating, reviews)
+    let cleanerProfile = null;
+    try {
+      cleanerProfile = await ReviewsClass.getCleanerProfileSummary(cleanerId);
+    } catch (error) {
+      console.error("[NotificationService] Error fetching cleaner profile:", error);
+    }
+
     return this.notifyUser({
       userId: clientId,
       type: "pending_booking",
@@ -464,6 +482,7 @@ class NotificationService {
         cleanerId,
         cleanerName,
         rebookingAttempt,
+        cleanerProfile,
       },
       actionRequired: true,
       relatedAppointmentId: appointmentId,

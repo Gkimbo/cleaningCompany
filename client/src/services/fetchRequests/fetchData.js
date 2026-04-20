@@ -31,20 +31,22 @@ class FetchData {
   }
 
   static async getHome(id) {
-    const result = await HttpClient.get(`/employee-info/home/${id}`, { skipAuth: true });
+    // Note: This endpoint requires authentication - don't use skipAuth
+    const result = await HttpClient.get(`/employee-info/home/${id}`);
 
     if (result.success === false) {
-      throw new Error("No data received");
+      throw new Error(result.error || "No data received");
     }
 
     return result;
   }
 
   static async getLatAndLong(id) {
-    const result = await HttpClient.get(`/employee-info/home/LL/${id}`, { skipAuth: true });
+    // Note: This endpoint requires authentication - don't use skipAuth
+    const result = await HttpClient.get(`/employee-info/home/LL/${id}`);
 
     if (result.success === false) {
-      throw new Error("No data received");
+      throw new Error(result.error || "No data received");
     }
 
     return result;

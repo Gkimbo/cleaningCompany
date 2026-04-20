@@ -25,10 +25,15 @@ const ConflictsStatsWidget = ({ onNavigateToConflicts }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchStats();
-  }, []);
+    if (user?.token) {
+      fetchStats();
+    } else {
+      setLoading(false);
+    }
+  }, [user?.token]);
 
   const fetchStats = async () => {
+    if (!user?.token) return;
     try {
       const result = await ConflictService.getStats(user.token);
       if (result.success) {

@@ -33,10 +33,11 @@ notificationsRouter.get("/", authenticateToken, async (req, res) => {
       ],
     });
 
-    // Filter out expired notifications for pending bookings
+    // Filter out all expired notifications (those with expiresAt in the past)
+    const now = new Date();
     const activeNotifications = notifications.filter((n) => {
-      if (n.type === "pending_booking" && n.expiresAt) {
-        return new Date(n.expiresAt) > new Date();
+      if (n.expiresAt) {
+        return new Date(n.expiresAt) > now;
       }
       return true;
     });

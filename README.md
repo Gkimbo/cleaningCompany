@@ -6,7 +6,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.81-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-11406_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-11470_Passing-brightgreen?style=for-the-badge)
 
 **A comprehensive cleaning service marketplace platform connecting homeowners with professional cleaners and cleaning businesses**
 
@@ -89,6 +89,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - **Home Size Adjustments**: Report incorrect bed/bath counts with photos
 - **Service Area Config**: Set location and radius for last-minute job notifications
 - **Last-Minute Job Alerts**: Receive urgent notifications for nearby last-minute bookings
+- **Dual-Role Support**: Cleaners can add homes and switch to homeowner view for booking personal cleanings
 
 </td>
 </tr>
@@ -246,6 +247,11 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | **Multi-Account Support** | Users can have multiple account types (homeowner + cleaner, business owner + employee) linked to the same email. Account selection during login. |
 | **2-Step Job Completion** | Cleaners submit job completion with photos/checklist. Homeowners approve within configurable window. Auto-approval after timeout with notification workflow. |
 | **Employee Bonuses** | Business owners can award bonuses to employees. Bonus tracking with reason and payment status. Includes in payroll calculations. |
+| **Dual-Role Users** | Cleaners can register homes and become homeowners too. Role toggle component allows switching between cleaner and homeowner views. Each role has separate Stripe integration (Connect for payouts, Customer for payments). |
+| **Role Switching with Stripe Checks** | When switching to homeowner role, user must have payment method set up. When switching to cleaner role, user must have Stripe Connect onboarding complete. Automatic redirects to setup flows if requirements not met. |
+| **Tax Section Role Switching** | Tax documents section displays appropriate content based on active role. Cleaners see 1099-NEC earnings summary and Stripe Dashboard access. Homeowners see informational message about no forms issued. Business owners see Schedule C data. |
+| **Expired Appointment Monitoring** | Automated cron job monitors appointments 24+ hours past their scheduled time that were never cleaned. Marks them as system-cancelled with "expired_no_show" category. Removes from homeowner's "Recent Cleanings" and cleaner's payout overview. Cleans up stale notifications. |
+| **Solo Completion Offers** | When multi-cleaner job slots remain unfilled or cleaners drop out, remaining cleaners receive offers to complete the job solo for additional pay. Configurable offer expiration and pricing. |
 
 ---
 
@@ -511,6 +517,7 @@ kleanr/
 |------|-------------|------------------|
 | **Homeowner** | Property owners needing cleaning services | Book appointments, manage homes, pay bills, review cleaners, respond to disputes |
 | **Cleaner** | Independent cleaning professionals | Apply for work, accept jobs, upload photos, earn money, achieve tier bonuses |
+| **Dual-Role User** | Cleaner who also owns homes | Switch between cleaner/homeowner views via role toggle, separate Stripe accounts for each role |
 | **Business Owner** | Cleaner with own client base and employees | All cleaner features + manage employees, payroll, direct clients, team calendar |
 | **Business Client** | Corporate client of a business owner | Book via business portal, manage company properties, view service history |
 | **Business Employee** | Works for a business owner | Accept assigned jobs, track earnings, availability settings, coworker messaging |
@@ -587,8 +594,8 @@ npm test -- --watch
 | IT Management | 45 | CRUD operations, password generation |
 | Service Area | 56 | Config, validation, history, bulk recheck |
 | **Server Total** | **5445** | 215 test suites |
-| **Client Total** | **5961** | 210 test suites |
-| **Combined Total** | **11406** | 425 test suites |
+| **Client Total** | **6025** | 213 test suites |
+| **Combined Total** | **11470** | 428 test suites |
 
 ---
 
@@ -652,6 +659,7 @@ See [Server README](./server/README.md) for complete API documentation.
 | `0 6 * * 5` | Bi-Weekly Payout | Processes employee batch payouts every other Friday |
 | `*/5 * * * *` | Auto-Complete Monitor | Sends reminders and auto-completes jobs |
 | `*/15 * * * *` | Completion Approval | Auto-approves homeowner/cleaner completions |
+| `0 */6 * * *` | Expired Appointment Monitor | Marks 24+ hour overdue appointments as expired no-show, cleans up stale notifications |
 
 ---
 
