@@ -38,6 +38,8 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
   const [privacyToAccept, setPrivacyToAccept] = useState(null);
   const [paymentTermsToAccept, setPaymentTermsToAccept] = useState(null);
   const [damageProtectionToAccept, setDamageProtectionToAccept] = useState(null);
+  const [cleanerAgreementToAccept, setCleanerAgreementToAccept] = useState(null);
+  const [businessOwnerAgreementToAccept, setBusinessOwnerAgreementToAccept] = useState(null);
 
   // Track original total for progress calculation (doesn't change as docs are accepted)
   const [originalTotalDocs, setOriginalTotalDocs] = useState(0);
@@ -45,7 +47,7 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
   const [currentStepNumber, setCurrentStepNumber] = useState(1);
 
   // Track current document being viewed
-  // 'terms', 'privacy', 'paymentTerms', or 'damageProtection'
+  // 'terms', 'privacy', 'paymentTerms', 'damageProtection', 'cleanerAgreement', or 'businessOwnerAgreement'
   const [currentDocument, setCurrentDocument] = useState(null);
 
   useEffect(() => {
@@ -86,12 +88,18 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
       if (data.damageProtection) {
         setDamageProtectionToAccept(data.damageProtection);
       }
+      if (data.cleanerAgreement) {
+        setCleanerAgreementToAccept(data.cleanerAgreement);
+      }
+      if (data.businessOwnerAgreement) {
+        setBusinessOwnerAgreementToAccept(data.businessOwnerAgreement);
+      }
 
       // Calculate and store original total for progress tracking
-      const total = (data.terms ? 1 : 0) + (data.privacyPolicy ? 1 : 0) + (data.paymentTerms ? 1 : 0) + (data.damageProtection ? 1 : 0);
+      const total = (data.terms ? 1 : 0) + (data.privacyPolicy ? 1 : 0) + (data.paymentTerms ? 1 : 0) + (data.damageProtection ? 1 : 0) + (data.cleanerAgreement ? 1 : 0) + (data.businessOwnerAgreement ? 1 : 0);
       setOriginalTotalDocs(total);
 
-      // Start with terms if available, then privacy policy, then payment terms, then damage protection
+      // Start with terms if available, then privacy policy, then payment terms, then damage protection, then cleaner agreement, then business owner agreement
       if (data.terms) {
         setCurrentDocument("terms");
       } else if (data.privacyPolicy) {
@@ -100,6 +108,10 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
         setCurrentDocument("paymentTerms");
       } else if (data.damageProtection) {
         setCurrentDocument("damageProtection");
+      } else if (data.cleanerAgreement) {
+        setCurrentDocument("cleanerAgreement");
+      } else if (data.businessOwnerAgreement) {
+        setCurrentDocument("businessOwnerAgreement");
       }
     } catch (err) {
       setError("Failed to check acceptance status");
@@ -127,7 +139,11 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
         ? privacyToAccept
         : currentDocument === "paymentTerms"
           ? paymentTermsToAccept
-          : damageProtectionToAccept;
+          : currentDocument === "damageProtection"
+            ? damageProtectionToAccept
+            : currentDocument === "cleanerAgreement"
+              ? cleanerAgreementToAccept
+              : businessOwnerAgreementToAccept;
     if (!currentDoc) return;
 
     setAccepting(true);
@@ -145,7 +161,7 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
       const data = await response.json();
 
       if (response.ok) {
-        // Check if there's more to accept - flow: terms → privacy → paymentTerms → damageProtection
+        // Check if there's more to accept - flow: terms → privacy → paymentTerms → damageProtection → cleanerAgreement → businessOwnerAgreement
         if (currentDocument === "terms") {
           setTermsToAccept(null); // Mark as accepted
           setHasScrolledToBottom(false); // Reset scroll state
@@ -158,6 +174,12 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
           } else if (damageProtectionToAccept) {
             setCurrentStepNumber(prev => prev + 1);
             setCurrentDocument("damageProtection");
+          } else if (cleanerAgreementToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("cleanerAgreement");
+          } else if (businessOwnerAgreementToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("businessOwnerAgreement");
           } else {
             // All done
             if (onAccepted) {
@@ -175,6 +197,12 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
           } else if (damageProtectionToAccept) {
             setCurrentStepNumber(prev => prev + 1);
             setCurrentDocument("damageProtection");
+          } else if (cleanerAgreementToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("cleanerAgreement");
+          } else if (businessOwnerAgreementToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("businessOwnerAgreement");
           } else {
             // All done
             if (onAccepted) {
@@ -189,6 +217,12 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
           if (damageProtectionToAccept) {
             setCurrentStepNumber(prev => prev + 1);
             setCurrentDocument("damageProtection");
+          } else if (cleanerAgreementToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("cleanerAgreement");
+          } else if (businessOwnerAgreementToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("businessOwnerAgreement");
           } else {
             // All done
             if (onAccepted) {
@@ -199,6 +233,37 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
           }
         } else if (currentDocument === "damageProtection") {
           setDamageProtectionToAccept(null); // Mark as accepted
+          setHasScrolledToBottom(false); // Reset scroll state
+          if (cleanerAgreementToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("cleanerAgreement");
+          } else if (businessOwnerAgreementToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("businessOwnerAgreement");
+          } else {
+            // All done
+            if (onAccepted) {
+              onAccepted();
+            } else {
+              navigate("/");
+            }
+          }
+        } else if (currentDocument === "cleanerAgreement") {
+          setCleanerAgreementToAccept(null); // Mark as accepted
+          setHasScrolledToBottom(false); // Reset scroll state
+          if (businessOwnerAgreementToAccept) {
+            setCurrentStepNumber(prev => prev + 1);
+            setCurrentDocument("businessOwnerAgreement");
+          } else {
+            // All done
+            if (onAccepted) {
+              onAccepted();
+            } else {
+              navigate("/");
+            }
+          }
+        } else if (currentDocument === "businessOwnerAgreement") {
+          setBusinessOwnerAgreementToAccept(null); // Mark as accepted
           // All done
           if (onAccepted) {
             onAccepted();
@@ -218,8 +283,8 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
   };
 
   const handleLogout = () => {
-    dispatch({ type: "CURRENT_USER", payload: null });
-    dispatch({ type: "SET_USER_ID", payload: null });
+    // Use LOGOUT action to properly clear all state
+    dispatch({ type: "LOGOUT" });
     navigate("/sign-in");
   };
 
@@ -232,7 +297,7 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
     );
   }
 
-  if (error && !termsToAccept && !privacyToAccept && !paymentTermsToAccept && !damageProtectionToAccept) {
+  if (error && !termsToAccept && !privacyToAccept && !paymentTermsToAccept && !damageProtectionToAccept && !cleanerAgreementToAccept && !businessOwnerAgreementToAccept) {
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.errorText}>{error}</Text>
@@ -253,14 +318,22 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
       ? privacyToAccept
       : currentDocument === "paymentTerms"
         ? paymentTermsToAccept
-        : damageProtectionToAccept;
+        : currentDocument === "damageProtection"
+          ? damageProtectionToAccept
+          : currentDocument === "cleanerAgreement"
+            ? cleanerAgreementToAccept
+            : businessOwnerAgreementToAccept;
   const currentTitle = currentDocument === "terms"
     ? "Terms and Conditions"
     : currentDocument === "privacy"
       ? "Privacy Policy"
       : currentDocument === "paymentTerms"
         ? "Payment Terms"
-        : "Damage Protection";
+        : currentDocument === "damageProtection"
+          ? "Damage Protection"
+          : currentDocument === "cleanerAgreement"
+            ? "Cleaner Service Agreement"
+            : "Business Owner Agreement";
 
   // Calculate progress - use originalTotalDocs for consistent progress display
   const totalDocs = originalTotalDocs;
@@ -289,7 +362,55 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
           <WebView
             source={{ uri: pdfUrl }}
             style={{ flex: 1 }}
-            onLoadEnd={() => setHasScrolledToBottom(true)}
+            onScroll={(event) => {
+              // Detect when user has scrolled near the bottom of the PDF
+              const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+              if (contentSize && layoutMeasurement) {
+                const paddingToBottom = 50;
+                const isCloseToBottom =
+                  layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+                if (isCloseToBottom && !hasScrolledToBottom) {
+                  setHasScrolledToBottom(true);
+                }
+              }
+            }}
+            // Inject JS to enable scroll events and add a fallback timer
+            injectedJavaScript={`
+              // Send scroll events to React Native
+              let lastScrollTop = 0;
+              window.addEventListener('scroll', function() {
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                const scrollHeight = document.documentElement.scrollHeight;
+                const clientHeight = document.documentElement.clientHeight;
+
+                if (scrollTop + clientHeight >= scrollHeight - 50) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrolledToBottom' }));
+                }
+                lastScrollTop = scrollTop;
+              });
+
+              // Also check after PDF loads (some PDFs may fit on screen)
+              setTimeout(function() {
+                const scrollHeight = document.documentElement.scrollHeight;
+                const clientHeight = document.documentElement.clientHeight;
+                // If content fits on screen without scrolling, enable accept
+                if (scrollHeight <= clientHeight + 10) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scrolledToBottom' }));
+                }
+              }, 2000);
+
+              true;
+            `}
+            onMessage={(event) => {
+              try {
+                const data = JSON.parse(event.nativeEvent.data);
+                if (data.type === 'scrolledToBottom' && !hasScrolledToBottom) {
+                  setHasScrolledToBottom(true);
+                }
+              } catch (e) {
+                // Ignore parse errors
+              }
+            }}
           />
         </View>
       );
@@ -330,7 +451,11 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
               ? "Our privacy policy has been updated. Please review and accept to continue using the app."
               : currentDocument === "paymentTerms"
                 ? "Our payment terms have been updated. Please review and accept to continue using the app."
-                : "Our damage protection policy has been updated. Please review and accept to continue using the app."}
+                : currentDocument === "damageProtection"
+                  ? "Our damage protection policy has been updated. Please review and accept to continue using the app."
+                  : currentDocument === "cleanerAgreement"
+                    ? "Please review and accept the Cleaner Service Agreement to continue using the app."
+                    : "Please review and accept the Business Owner Agreement to continue using the app."}
         </Text>
         {totalDocs > 1 && (
           <View style={styles.progressContainer}>
@@ -338,7 +463,7 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
               <View
                 style={[
                   styles.progressFill,
-                  { width: `${(currentDocNum / totalDocs) * 100}%` },
+                  { width: `${totalDocs > 0 ? (currentDocNum / totalDocs) * 100 : 0}%` },
                 ]}
               />
             </View>
@@ -347,14 +472,38 @@ const TermsAcceptanceScreen = ({ state, dispatch, onAccepted }) => {
                 ? "Terms and Conditions"
                 : currentDocument === "privacy"
                   ? "Privacy Policy"
-                  : "Payment Terms"}
-              {currentDocument === "terms" && privacyToAccept
-                ? " → Privacy Policy next"
-                : currentDocument === "terms" && paymentTermsToAccept
-                  ? " → Payment Terms next"
-                  : currentDocument === "privacy" && paymentTermsToAccept
-                    ? " → Payment Terms next"
-                    : ""}
+                  : currentDocument === "paymentTerms"
+                    ? "Payment Terms"
+                    : currentDocument === "damageProtection"
+                      ? "Damage Protection"
+                      : currentDocument === "cleanerAgreement"
+                        ? "Cleaner Service Agreement"
+                        : "Business Owner Agreement"}
+              {currentDocument === "terms"
+                ? privacyToAccept ? " → Privacy Policy next"
+                  : paymentTermsToAccept ? " → Payment Terms next"
+                  : damageProtectionToAccept ? " → Damage Protection next"
+                  : cleanerAgreementToAccept ? " → Cleaner Agreement next"
+                  : businessOwnerAgreementToAccept ? " → Business Owner Agreement next"
+                  : ""
+                : currentDocument === "privacy"
+                  ? paymentTermsToAccept ? " → Payment Terms next"
+                    : damageProtectionToAccept ? " → Damage Protection next"
+                    : cleanerAgreementToAccept ? " → Cleaner Agreement next"
+                    : businessOwnerAgreementToAccept ? " → Business Owner Agreement next"
+                    : ""
+                  : currentDocument === "paymentTerms"
+                    ? damageProtectionToAccept ? " → Damage Protection next"
+                      : cleanerAgreementToAccept ? " → Cleaner Agreement next"
+                      : businessOwnerAgreementToAccept ? " → Business Owner Agreement next"
+                      : ""
+                    : currentDocument === "damageProtection"
+                      ? cleanerAgreementToAccept ? " → Cleaner Agreement next"
+                        : businessOwnerAgreementToAccept ? " → Business Owner Agreement next"
+                        : ""
+                      : currentDocument === "cleanerAgreement" && businessOwnerAgreementToAccept
+                        ? " → Business Owner Agreement next"
+                        : ""}
             </Text>
           </View>
         )}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Pressable,
   RefreshControl,
@@ -11,6 +12,8 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import SecureStorage from "../../services/SecureStorage";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
 import CleanerApprovalService from "../../services/fetchRequests/CleanerApprovalService";
 import MessageService from "../../services/fetchRequests/MessageClass";
@@ -29,6 +32,7 @@ import HomeownerAdjustmentNotification from "./HomeownerAdjustmentNotification";
 import { parseLocalDate, isFutureOrToday, isPast, compareDates } from "../../utils/dateUtils";
 import TodaysCleaningCard from "./TodaysCleaningCard";
 import DiscountedPrice from "../pricing/DiscountedPrice";
+import LastMinutePriceBreakdown from "../pricing/LastMinutePriceBreakdown";
 import MyCleanerCard from "./MyCleanerCard";
 import RecurringScheduleCard from "./RecurringScheduleCard";
 import DeclinedAppointmentsSection from "./DeclinedAppointmentsSection";
@@ -236,7 +240,13 @@ const AppointmentCard = ({ homes, appointment, onPress, navigate }) => {
           </View>
         )}
         <View style={styles.appointmentPriceContainer}>
-          {appointment.discountApplied && appointment.originalPrice ? (
+          {appointment.isLastMinuteBooking && appointment.lastMinuteFeeApplied > 0 ? (
+            <LastMinutePriceBreakdown
+              lastMinuteFee={Number(appointment.lastMinuteFeeApplied)}
+              totalPrice={Number(appointment.price)}
+              size="sm"
+            />
+          ) : appointment.discountApplied && appointment.originalPrice ? (
             <>
               <DiscountedPrice
                 originalPrice={Number(appointment.originalPrice)}
@@ -532,11 +542,27 @@ const ClientDashboard = ({ state, dispatch }) => {
     0
   );
 
-  // Get recent/past appointments
+  // Get recent/past appointments (only completed, non-cancelled)
   const recentAppointments = appointments
-    .filter((apt) => isPast(apt.date))
+    .filter((apt) => isPast(apt.date) && apt.completed && !apt.wasCancelled)
     .sort((a, b) => compareDates(b.date, a.date))
     .slice(0, 3);
+
+  // Helper to handle booking navigation with payment method check
+  const handleBookingNavigation = (path) => {
+    if (!state.currentUser?.hasPaymentMethod) {
+      Alert.alert(
+        "Payment Method Required",
+        "Please add a payment method before booking a cleaning.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Add Payment Method", onPress: () => navigate("/payment-setup") },
+        ]
+      );
+      return;
+    }
+    navigate(path);
+  };
 
   if (loading) {
     return (
@@ -588,6 +614,27 @@ const ClientDashboard = ({ state, dispatch }) => {
           onComplete={() => navigate(`/complete-home-setup/${incompleteHome.id}`)}
         />
       ))}
+
+      {/* Payment Method Setup Banner - for homeowners without payment method */}
+      {!state.currentUser?.hasPaymentMethod && (
+        <Pressable
+          style={styles.paymentSetupBanner}
+          onPress={() => navigate("/payment-setup")}
+        >
+          <View style={styles.paymentSetupBannerContent}>
+            <View style={styles.paymentSetupIconContainer}>
+              <Icon name="credit-card" size={20} color={colors.warning[600]} />
+            </View>
+            <View style={styles.paymentSetupTextContainer}>
+              <Text style={styles.paymentSetupTitle}>Payment Method Required</Text>
+              <Text style={styles.paymentSetupSubtitle}>
+                Add a payment method to book cleanings for your home
+              </Text>
+            </View>
+          </View>
+          <Icon name="chevron-right" size={16} color={colors.warning[600]} />
+        </Pressable>
+      )}
 
       {/* Tenant Present Alert - urgent action required */}
       {tenantPresentReports.map(report => (
@@ -716,7 +763,7 @@ const ClientDashboard = ({ state, dispatch }) => {
             iconColor="#fff"
             bgColor="#fff"
             accentColor="#6366f1"
-            onPress={() => navigate("/schedule-cleaning")}
+            onPress={() => handleBookingNavigation("/schedule-cleaning")}
           />
           <QuickActionButton
             title="My Homes"
@@ -905,7 +952,7 @@ const ClientDashboard = ({ state, dispatch }) => {
                       styles.quickBookItem,
                       pressed && styles.cardPressed,
                     ]}
-                    onPress={() => navigate(`/quick-book/${home.id}`)}
+                    onPress={() => handleBookingNavigation(`/quick-book/${home.id}`)}
                   >
                     <View style={styles.quickBookInfo}>
                       <Text style={styles.quickBookName} numberOfLines={1}>
@@ -1092,6 +1139,35 @@ const ClientDashboard = ({ state, dispatch }) => {
             ))}
           </View>
         </View>
+      )}
+
+      {/* Switch to Cleaner Profile Banner - for dual-role users */}
+      {state.account === "cleaner" && (
+        <Pressable
+          style={({ pressed }) => [
+            styles.switchToCleanerBanner,
+            pressed && styles.switchToCleanerBannerPressed,
+          ]}
+          onPress={async () => {
+            await SecureStorage.setItem("activeRole", "cleaner");
+            dispatch({ type: "SET_ACTIVE_ROLE", payload: "cleaner" });
+            navigate("/");
+          }}
+        >
+          <View style={styles.switchToCleanerIcon}>
+            <Ionicons name="briefcase" size={20} color={colors.primary[600]} />
+          </View>
+          <View style={styles.switchToCleanerContent}>
+            <Text style={styles.switchToCleanerTitle}>Switch to Cleaner View</Text>
+            <Text style={styles.switchToCleanerSubtitle}>
+              View your cleaning jobs and earnings
+            </Text>
+          </View>
+          <View style={styles.switchToCleanerAction}>
+            <Text style={styles.switchToCleanerActionText}>Switch</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.primary[600]} />
+          </View>
+        </Pressable>
       )}
 
       {/* Tax Documents Section */}
@@ -1836,6 +1912,47 @@ const styles = StyleSheet.create({
     color: colors.warning[700],
   },
 
+  // Payment Setup Banner
+  paymentSetupBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    ...shadows.sm,
+  },
+  paymentSetupBannerContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  paymentSetupIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.warning[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  paymentSetupTextContainer: {
+    flex: 1,
+  },
+  paymentSetupTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[800],
+    marginBottom: 2,
+  },
+  paymentSetupSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[600],
+    lineHeight: 18,
+  },
+
   // Cleaner Approval Banner
   cleanerApprovalBanner: {
     flexDirection: "row",
@@ -1883,6 +2000,62 @@ const styles = StyleSheet.create({
     borderColor: colors.primary[200],
   },
   cleanerApprovalBannerActionText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+
+  // Switch to Cleaner Banner
+  switchToCleanerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    ...shadows.sm,
+  },
+  switchToCleanerBannerPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  switchToCleanerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  switchToCleanerContent: {
+    flex: 1,
+  },
+  switchToCleanerTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[800],
+    marginBottom: 2,
+  },
+  switchToCleanerSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    lineHeight: 18,
+  },
+  switchToCleanerAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  switchToCleanerActionText: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[600],

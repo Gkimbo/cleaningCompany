@@ -23,8 +23,8 @@ class Appointment {
     return result;
   }
 
-  static async deleteAppointmentById(id) {
-    const result = await HttpClient.delete(`/appointments/id/${id}`, { skipAuth: true });
+  static async deleteAppointmentById(id, token) {
+    const result = await HttpClient.delete(`/appointments/id/${id}`, { token });
 
     if (result.success === false) {
       throw new Error(result.error || "Failed to delete appointment");
@@ -43,8 +43,8 @@ class Appointment {
     return result;
   }
 
-  static async getHomeInfo(homeId) {
-    const result = await HttpClient.get(`/appointments/home/${homeId}`, { skipAuth: true });
+  static async getHomeInfo(homeId, token) {
+    const result = await HttpClient.get(`/appointments/home/${homeId}`, { token });
 
     if (result.success === false) {
       throw new Error("No data received");

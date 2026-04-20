@@ -9,12 +9,16 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigate, useParams } from "react-router-native";
+import { useParams } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { UserContext } from "../../context/UserContext";
 import NotificationsService from "../../services/fetchRequests/NotificationsService";
+import HttpClient from "../../services/HttpClient";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { formatCurrency } from "../../services/formatters";
+import PendingBookingModal from "../client/PendingBookingModal";
+import BusinessOwnerDeclinedModal from "../client/BusinessOwnerDeclinedModal";
+import CleanerDropoutModal from "../multiCleaner/CleanerDropoutModal";
 
 import useSafeNavigation from "../../hooks/useSafeNavigation";
 const NotificationDetailScreen = () => {
@@ -27,6 +31,12 @@ const NotificationDetailScreen = () => {
   const [processing, setProcessing] = useState(false);
   const [showDeclineInput, setShowDeclineInput] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
+
+  // Modal states
+  const [showPendingBookingModal, setShowPendingBookingModal] = useState(false);
+  const [showDeclinedModal, setShowDeclinedModal] = useState(false);
+  const [showDropoutModal, setShowDropoutModal] = useState(false);
+  const [dropoutLoading, setDropoutLoading] = useState(false);
 
   useEffect(() => {
     const fetchNotification = async () => {
@@ -82,6 +92,24 @@ const NotificationDetailScreen = () => {
         return { name: "check-circle", color: colors.success[500], bg: colors.success[50] };
       case "new_home_declined":
         return { name: "x-circle", color: colors.warning[500], bg: colors.warning[50] };
+      case "solo_completion_offer":
+        return { name: "dollar-sign", color: colors.success[500], bg: colors.success[50] };
+      case "edge_case_decision_required":
+        return { name: "alert-triangle", color: colors.warning[500], bg: colors.warning[50] };
+      case "multi_cleaner_urgent":
+      case "multi_cleaner_final_warning":
+        return { name: "users", color: colors.warning[500], bg: colors.warning[50] };
+      case "cleaner_dropout":
+        return { name: "user-minus", color: colors.warning[500], bg: colors.warning[50] };
+      case "payment_failed":
+      case "payment_retry_failed":
+        return { name: "credit-card", color: colors.error[500], bg: colors.error[50] };
+      case "appointment_cancelled_payment":
+        return { name: "x-circle", color: colors.error[500], bg: colors.error[50] };
+      case "guest_not_left":
+        return { name: "alert-triangle", color: colors.error[500], bg: colors.error[50] };
+      case "unassigned_reminder_bo":
+        return { name: "user-plus", color: colors.warning[500], bg: colors.warning[50] };
       default:
         return { name: "bell", color: colors.primary[500], bg: colors.primary[50] };
     }
@@ -130,6 +158,26 @@ const NotificationDetailScreen = () => {
         return "Home Request Accepted";
       case "new_home_declined":
         return "Home Request Declined";
+      case "solo_completion_offer":
+        return "Solo Completion Offer";
+      case "edge_case_decision_required":
+        return "Decision Required";
+      case "multi_cleaner_urgent":
+        return "Multi-Cleaner Urgent";
+      case "multi_cleaner_final_warning":
+        return "Final Warning - Unfilled Slots";
+      case "cleaner_dropout":
+        return "Cleaner Unavailable";
+      case "payment_failed":
+        return "Payment Failed";
+      case "payment_retry_failed":
+        return "Payment Retry Failed";
+      case "appointment_cancelled_payment":
+        return "Appointment Cancelled";
+      case "guest_not_left":
+        return "Guest Still Present";
+      case "unassigned_reminder_bo":
+        return "Unassigned Appointment";
       default:
         return "Notification";
     }
@@ -140,16 +188,22 @@ const NotificationDetailScreen = () => {
 
     switch (notification.type) {
       case "pending_booking":
-        if (notification.data?.appointmentId) {
-          navigate("/");
-        }
+        // Show the pending booking modal to accept/decline
+        setShowPendingBookingModal(true);
         break;
+
+      case "business_owner_declined":
+        // Show the declined modal to choose cancel or marketplace
+        setShowDeclinedModal(true);
+        break;
+
       case "booking_accepted":
       case "booking_declined":
         if (notification.data?.cleanerClientId) {
           navigate(`/client-detail/${notification.data.cleanerClientId}`);
         }
         break;
+
       case "client_booked":
       case "client_booked_appointment":
         // Navigate to Job Assignment for this appointment
@@ -159,14 +213,165 @@ const NotificationDetailScreen = () => {
           navigate("/business-owner/assign");
         }
         break;
+
       case "new_message":
         if (notification.data?.conversationId) {
           navigate(`/messages/${notification.data.conversationId}`);
         }
         break;
+
+      case "payment_failed":
+      case "payment_retry_failed":
+      case "appointment_cancelled_payment":
+        // Navigate to payment setup to update payment method
+        navigate("/payment-setup");
+        break;
+
+      case "edge_case_decision_required":
+      case "cleaner_dropout":
+      case "multi_cleaner_final_warning":
+        // Show the cleaner dropout modal for multi-cleaner decisions
+        setShowDropoutModal(true);
+        break;
+
+      case "unassigned_reminder_bo":
+        // Navigate to job assignment for this appointment
+        if (notification.data?.appointmentId) {
+          navigate(`/business-owner/assign?jobId=${notification.data.appointmentId}`);
+        } else {
+          navigate("/business-owner/assign");
+        }
+        break;
+
+      case "guest_not_left":
+        // Navigate to dashboard where TenantPresentAlertCard will show
+        navigate("/");
+        break;
+
+      case "new_home_declined":
+        // Navigate to home details to re-request or list on marketplace
+        if (notification.data?.homeId) {
+          navigate(`/edit-home?homeId=${notification.data.homeId}`);
+        } else {
+          navigate("/list-of-homes");
+        }
+        break;
+
       default:
         navigate("/");
         break;
+    }
+  };
+
+  // Handle pending booking modal actions
+  const handlePendingBookingAction = (action, result) => {
+    setShowPendingBookingModal(false);
+    if (action === "accepted" || action === "declined") {
+      // Update notification state to mark action complete
+      setNotification(prev => prev ? { ...prev, actionRequired: false } : prev);
+      Alert.alert(
+        action === "accepted" ? "Booking Accepted" : "Booking Declined",
+        action === "accepted"
+          ? "Your appointment has been confirmed!"
+          : "The booking has been declined.",
+        [{ text: "OK", onPress: () => navigate("/notifications") }]
+      );
+    }
+  };
+
+  // Handle cleaner dropout/edge case modal actions
+  const handleDropoutProceed = async () => {
+    if (!notification?.data?.appointmentId) return;
+    setDropoutLoading(true);
+    try {
+      const isEdgeCase = notification.type === "edge_case_decision_required";
+      const response = isEdgeCase ? "proceed_edge_case" : "proceed_with_one";
+
+      const result = await HttpClient.post(
+        `/multi-cleaner/${notification.data.appointmentId}/homeowner-response`,
+        { response },
+        { token: state.currentUser.token }
+      );
+
+      if (result.success) {
+        setShowDropoutModal(false);
+        // Update notification with decision made
+        setNotification(prev => prev ? {
+          ...prev,
+          actionRequired: false,
+          data: {
+            ...prev.data,
+            decisionMade: "proceed",
+            decisionMadeAt: new Date().toISOString(),
+          },
+        } : prev);
+        Alert.alert(
+          "Cleaning Confirmed",
+          "Your cleaning will proceed with the available cleaner(s)."
+        );
+      } else {
+        Alert.alert("Error", result.error || "Failed to confirm. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error confirming proceed:", error);
+      Alert.alert("Error", "Something went wrong. Please try again.");
+    } finally {
+      setDropoutLoading(false);
+    }
+  };
+
+  const handleDropoutWait = async () => {
+    // Wait for replacement - just close modal for now
+    setShowDropoutModal(false);
+    Alert.alert(
+      "Waiting for Replacement",
+      "We'll notify you if we find a replacement cleaner before your appointment."
+    );
+  };
+
+  const handleDropoutReschedule = () => {
+    setShowDropoutModal(false);
+    // Navigate to appointments calendar to reschedule
+    navigate("/appointments");
+  };
+
+  const handleDropoutCancel = async () => {
+    if (!notification?.data?.appointmentId) return;
+    setDropoutLoading(true);
+    try {
+      const isEdgeCase = notification.type === "edge_case_decision_required";
+      const response = isEdgeCase ? "cancel_edge_case" : "cancel";
+
+      const result = await HttpClient.post(
+        `/multi-cleaner/${notification.data.appointmentId}/homeowner-response`,
+        { response },
+        { token: state.currentUser.token }
+      );
+
+      if (result.success) {
+        setShowDropoutModal(false);
+        // Update notification with decision made
+        setNotification(prev => prev ? {
+          ...prev,
+          actionRequired: false,
+          data: {
+            ...prev.data,
+            decisionMade: "cancelled",
+            decisionMadeAt: new Date().toISOString(),
+          },
+        } : prev);
+        Alert.alert(
+          "Appointment Cancelled",
+          "Your appointment has been cancelled without any fees."
+        );
+      } else {
+        Alert.alert("Error", result.error || "Failed to cancel. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error cancelling:", error);
+      Alert.alert("Error", "Something went wrong. Please try again.");
+    } finally {
+      setDropoutLoading(false);
     }
   };
 
@@ -236,6 +441,80 @@ const NotificationDetailScreen = () => {
       setShowDeclineInput(false);
       setDeclineReason("");
     }
+  };
+
+  const handleAcceptSoloOffer = async () => {
+    if (!notification?.data?.appointmentId) return;
+
+    const earnings = notification.data?.fullEarnings || notification.data?.fullEarningsDollars;
+    Alert.alert(
+      "Accept Solo Completion",
+      `Accept to complete this job by yourself for full pay${earnings ? ` ($${typeof earnings === "number" ? (earnings / 100).toFixed(2) : earnings})` : ""}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Accept",
+          onPress: async () => {
+            setProcessing(true);
+            try {
+              const result = await NotificationsService.acceptSoloCompletionOffer(
+                state.currentUser.token,
+                notification.data.appointmentId
+              );
+              if (result.success) {
+                Alert.alert("Success", "You've accepted to complete this job solo!", [
+                  { text: "OK", onPress: () => navigate("/") },
+                ]);
+              } else {
+                Alert.alert("Error", result.error || "Failed to accept solo offer");
+              }
+            } catch (error) {
+              console.error("Error accepting solo offer:", error);
+              Alert.alert("Error", "Something went wrong. Please try again.");
+            } finally {
+              setProcessing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeclineSoloOffer = async () => {
+    if (!notification?.data?.appointmentId) return;
+
+    Alert.alert(
+      "Decline Solo Completion",
+      "Are you sure you want to decline? The homeowner will be notified and offered options.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Decline",
+          style: "destructive",
+          onPress: async () => {
+            setProcessing(true);
+            try {
+              const result = await NotificationsService.declineSoloCompletionOffer(
+                state.currentUser.token,
+                notification.data.appointmentId
+              );
+              if (result.success) {
+                Alert.alert("Declined", "The homeowner has been notified.", [
+                  { text: "OK", onPress: () => navigate("/notifications") },
+                ]);
+              } else {
+                Alert.alert("Error", result.error || "Failed to decline solo offer");
+              }
+            } catch (error) {
+              console.error("Error declining solo offer:", error);
+              Alert.alert("Error", "Something went wrong. Please try again.");
+            } finally {
+              setProcessing(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -363,6 +642,84 @@ const NotificationDetailScreen = () => {
               </View>
             )}
 
+            {/* Cleaner Profile Card */}
+            {notification.data.cleanerProfile && (
+              <View style={styles.cleanerProfileCard}>
+                <View style={styles.cleanerProfileHeader}>
+                  <View style={styles.cleanerAvatar}>
+                    <Feather name="user" size={24} color={colors.primary[600]} />
+                  </View>
+                  <View style={styles.cleanerProfileInfo}>
+                    <Text style={styles.cleanerProfileName}>{notification.data.cleanerName}</Text>
+                    {notification.data.cleanerProfile.totalReviews > 0 ? (
+                      <View style={styles.cleanerRatingRow}>
+                        <View style={styles.starsContainer}>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Feather
+                              key={star}
+                              name="star"
+                              size={14}
+                              color={star <= Math.round(notification.data.cleanerProfile.averageRating)
+                                ? colors.warning[500]
+                                : colors.neutral[300]}
+                              style={{ marginRight: 2 }}
+                            />
+                          ))}
+                        </View>
+                        <Text style={styles.cleanerRatingText}>
+                          {notification.data.cleanerProfile.averageRating.toFixed(1)} ({notification.data.cleanerProfile.totalReviews} reviews)
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.noReviewsText}>New cleaner - no reviews yet</Text>
+                    )}
+                  </View>
+                </View>
+
+                {notification.data.cleanerProfile.recommendationRate > 0 && (
+                  <View style={styles.recommendationBadge}>
+                    <Feather name="thumbs-up" size={14} color={colors.success[600]} />
+                    <Text style={styles.recommendationText}>
+                      {notification.data.cleanerProfile.recommendationRate}% would recommend
+                    </Text>
+                  </View>
+                )}
+
+                {/* Recent Reviews */}
+                {notification.data.cleanerProfile.recentReviews?.length > 0 && (
+                  <View style={styles.recentReviewsSection}>
+                    <Text style={styles.recentReviewsTitle}>Recent Reviews</Text>
+                    {notification.data.cleanerProfile.recentReviews.map((review, index) => (
+                      <View key={review.id || index} style={styles.reviewItem}>
+                        <View style={styles.reviewHeader}>
+                          <View style={styles.reviewStars}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Feather
+                                key={star}
+                                name="star"
+                                size={12}
+                                color={star <= Math.round(review.rating)
+                                  ? colors.warning[500]
+                                  : colors.neutral[300]}
+                              />
+                            ))}
+                          </View>
+                          <Text style={styles.reviewerName}>
+                            {review.reviewerFirstName || "Client"}
+                          </Text>
+                        </View>
+                        {review.comment && (
+                          <Text style={styles.reviewComment} numberOfLines={2}>
+                            {review.comment}
+                          </Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
             {notification.data.homeAddress && (
               <View style={styles.detailRow}>
                 <Feather name="map-pin" size={16} color={colors.neutral[600]} />
@@ -469,8 +826,449 @@ const NotificationDetailScreen = () => {
           </View>
         )}
 
-        {/* Action Button */}
-        {notification.actionRequired && (
+        {/* Pending Booking Accept/Decline Buttons */}
+        {notification.type === "pending_booking" && notification.actionRequired && notification.data?.appointmentId && (
+          <View style={styles.newHomeActionCard}>
+            <Text style={styles.newHomeActionTitle}>Respond to Booking</Text>
+            <Text style={styles.newHomeActionDescription}>
+              Your cleaner has proposed this appointment. Would you like to accept?
+            </Text>
+
+            <View style={styles.newHomeButtonRow}>
+              <Pressable
+                style={[styles.declineButton, processing && styles.buttonDisabled]}
+                onPress={() => setShowPendingBookingModal(true)}
+                disabled={processing}
+              >
+                <Feather name="x" size={18} color={colors.error[600]} />
+                <Text style={styles.declineButtonText}>Decline</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.acceptButton, processing && styles.buttonDisabled]}
+                onPress={() => setShowPendingBookingModal(true)}
+                disabled={processing}
+              >
+                <Feather name="check" size={18} color={colors.neutral[0]} />
+                <Text style={styles.acceptButtonText}>Review & Accept</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Business Owner Declined - Action Buttons */}
+        {notification.type === "business_owner_declined" && notification.actionRequired && (
+          <View style={styles.newHomeActionCard}>
+            <Text style={styles.newHomeActionTitle}>Your Cleaner Declined</Text>
+            <Text style={styles.newHomeActionDescription}>
+              What would you like to do with this appointment?
+            </Text>
+
+            <View style={styles.optionsContainer}>
+              <Pressable
+                style={styles.actionOptionButton}
+                onPress={() => setShowDeclinedModal(true)}
+              >
+                <View style={[styles.optionIconContainer, { backgroundColor: colors.error[50] }]}>
+                  <Feather name="x-circle" size={22} color={colors.error[500]} />
+                </View>
+                <View style={styles.optionContent}>
+                  <Text style={styles.optionTitle}>Cancel Appointment</Text>
+                  <Text style={styles.optionDescription}>Remove this appointment from your schedule</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+              </Pressable>
+
+              <Pressable
+                style={styles.actionOptionButton}
+                onPress={() => setShowDeclinedModal(true)}
+              >
+                <View style={[styles.optionIconContainer, { backgroundColor: colors.primary[50] }]}>
+                  <Feather name="search" size={22} color={colors.primary[500]} />
+                </View>
+                <View style={styles.optionContent}>
+                  <Text style={styles.optionTitle}>Find Another Cleaner</Text>
+                  <Text style={styles.optionDescription}>Open to marketplace for other cleaners</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Payment Failed - Action Buttons */}
+        {(notification.type === "payment_failed" || notification.type === "payment_retry_failed") && notification.actionRequired && (
+          <View style={styles.newHomeActionCard}>
+            <Text style={styles.newHomeActionTitle}>Update Payment Method</Text>
+            <Text style={styles.newHomeActionDescription}>
+              Your payment failed. Please update your payment method to keep your appointment.
+            </Text>
+
+            <View style={styles.urgentWarningBox}>
+              <Feather name="alert-triangle" size={18} color={colors.error[600]} />
+              <Text style={styles.urgentWarningText}>
+                {notification.data?.hoursRemaining
+                  ? `You have ${notification.data.hoursRemaining} hours to update your payment method.`
+                  : "Please update your payment method as soon as possible to avoid cancellation."}
+              </Text>
+            </View>
+
+            <Pressable
+              style={[styles.primaryActionButton, processing && styles.buttonDisabled]}
+              onPress={() => navigate("/payment-setup")}
+              disabled={processing}
+            >
+              <Feather name="credit-card" size={18} color={colors.neutral[0]} />
+              <Text style={styles.primaryActionButtonText}>Update Payment Method</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Decision Made - Show when a decision has already been recorded */}
+        {notification.data?.decisionMade && (
+          <View style={styles.decisionMadeCard}>
+            <View style={[
+              styles.decisionMadeIconContainer,
+              notification.data.decisionMade === "proceed"
+                ? { backgroundColor: colors.success[100] }
+                : { backgroundColor: colors.error[100] }
+            ]}>
+              <Feather
+                name={notification.data.decisionMade === "proceed" ? "check-circle" : "x-circle"}
+                size={28}
+                color={notification.data.decisionMade === "proceed" ? colors.success[600] : colors.error[600]}
+              />
+            </View>
+            <Text style={styles.decisionMadeTitle}>
+              {notification.data.decisionMade === "proceed"
+                ? "You chose to proceed"
+                : "You cancelled this appointment"}
+            </Text>
+            <Text style={styles.decisionMadeDescription}>
+              {notification.data.decisionMade === "proceed"
+                ? "Your cleaning will continue with the available cleaner(s). Normal cancellation fees apply going forward."
+                : "This appointment was cancelled without any fees due to the cleaner shortage."}
+            </Text>
+            {notification.data.decisionMadeAt && (
+              <Text style={styles.decisionMadeTime}>
+                Decision made on {new Date(notification.data.decisionMadeAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Edge Case Decision Required - Action Buttons */}
+        {notification.type === "edge_case_decision_required" && notification.actionRequired && !notification.data?.decisionMade && (
+          <View style={styles.newHomeActionCard}>
+            <Text style={styles.newHomeActionTitle}>Decision Required</Text>
+            <Text style={styles.newHomeActionDescription}>
+              Your cleaning requires {notification.data?.originalRequired || 2} cleaners, but only {notification.data?.confirmedCleaners || 1} is available.
+              What would you like to do?
+            </Text>
+
+            <View style={styles.optionsContainer}>
+              <Pressable
+                style={[styles.actionOptionButton, dropoutLoading && styles.buttonDisabled]}
+                onPress={handleDropoutProceed}
+                disabled={dropoutLoading}
+              >
+                <View style={[styles.optionIconContainer, { backgroundColor: colors.success[50] }]}>
+                  <Feather name="check-circle" size={22} color={colors.success[500]} />
+                </View>
+                <View style={styles.optionContent}>
+                  <Text style={styles.optionTitle}>Proceed with 1 Cleaner</Text>
+                  <Text style={styles.optionDescription}>
+                    Continue with available cleaner. Normal cancellation fees apply.
+                  </Text>
+                </View>
+                {dropoutLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary[500]} />
+                ) : (
+                  <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+                )}
+              </Pressable>
+
+              <Pressable
+                style={[styles.actionOptionButton, dropoutLoading && styles.buttonDisabled]}
+                onPress={handleDropoutCancel}
+                disabled={dropoutLoading}
+              >
+                <View style={[styles.optionIconContainer, { backgroundColor: colors.error[50] }]}>
+                  <Feather name="x-circle" size={22} color={colors.error[500]} />
+                </View>
+                <View style={styles.optionContent}>
+                  <Text style={styles.optionTitle}>Cancel Without Fee</Text>
+                  <Text style={styles.optionDescription}>
+                    Cancel this appointment with no cancellation fee.
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+              </Pressable>
+            </View>
+
+            {notification.data?.decisionExpiresAt && (
+              <View style={styles.expirationNote}>
+                <Feather name="clock" size={14} color={colors.warning[600]} />
+                <Text style={styles.expirationText}>
+                  Decision auto-proceeds in 24 hours if no action taken.
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Cleaner Dropout - Action Buttons */}
+        {notification.type === "cleaner_dropout" && notification.actionRequired && !notification.data?.decisionMade && (
+          <View style={styles.newHomeActionCard}>
+            <Text style={styles.newHomeActionTitle}>Cleaner Unavailable</Text>
+            <Text style={styles.newHomeActionDescription}>
+              One of your cleaners is no longer available for this appointment.
+              {notification.data?.remainingCleaners
+                ? ` You have ${notification.data.remainingCleaners} remaining cleaner(s).`
+                : ""}
+            </Text>
+
+            <View style={styles.optionsContainer}>
+              <Pressable
+                style={[styles.actionOptionButton, dropoutLoading && styles.buttonDisabled]}
+                onPress={handleDropoutProceed}
+                disabled={dropoutLoading}
+              >
+                <View style={[styles.optionIconContainer, { backgroundColor: colors.success[50] }]}>
+                  <Feather name="check-circle" size={22} color={colors.success[500]} />
+                </View>
+                <View style={styles.optionContent}>
+                  <Text style={styles.optionTitle}>Proceed with Remaining</Text>
+                  <Text style={styles.optionDescription}>Continue with available cleaner(s)</Text>
+                </View>
+                {dropoutLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary[500]} />
+                ) : (
+                  <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+                )}
+              </Pressable>
+
+              <Pressable
+                style={styles.actionOptionButton}
+                onPress={handleDropoutWait}
+              >
+                <View style={[styles.optionIconContainer, { backgroundColor: colors.primary[50] }]}>
+                  <Feather name="clock" size={22} color={colors.primary[500]} />
+                </View>
+                <View style={styles.optionContent}>
+                  <Text style={styles.optionTitle}>Wait for Replacement</Text>
+                  <Text style={styles.optionDescription}>We will try to find another cleaner</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+              </Pressable>
+
+              <Pressable
+                style={styles.actionOptionButton}
+                onPress={handleDropoutReschedule}
+              >
+                <View style={[styles.optionIconContainer, { backgroundColor: colors.warning[50] }]}>
+                  <Feather name="calendar" size={22} color={colors.warning[500]} />
+                </View>
+                <View style={styles.optionContent}>
+                  <Text style={styles.optionTitle}>Reschedule</Text>
+                  <Text style={styles.optionDescription}>Move to a different date</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+              </Pressable>
+
+              <Pressable
+                style={[styles.actionOptionButton, dropoutLoading && styles.buttonDisabled]}
+                onPress={handleDropoutCancel}
+                disabled={dropoutLoading}
+              >
+                <View style={[styles.optionIconContainer, { backgroundColor: colors.error[50] }]}>
+                  <Feather name="x-circle" size={22} color={colors.error[500]} />
+                </View>
+                <View style={styles.optionContent}>
+                  <Text style={styles.optionTitle}>Cancel Appointment</Text>
+                  <Text style={styles.optionDescription}>No fee due to cleaner change</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Multi-Cleaner Final Warning - Action Buttons */}
+        {notification.type === "multi_cleaner_final_warning" && notification.actionRequired && !notification.data?.decisionMade && (
+          <View style={styles.newHomeActionCard}>
+            <Text style={styles.newHomeActionTitle}>Unfilled Slots Warning</Text>
+            <Text style={styles.newHomeActionDescription}>
+              Your cleaning appointment is coming up, but not all cleaner slots have been filled.
+              {notification.data?.confirmedCleaners && notification.data?.requiredCleaners
+                ? ` ${notification.data.confirmedCleaners} of ${notification.data.requiredCleaners} cleaners confirmed.`
+                : ""}
+            </Text>
+
+            <View style={styles.optionsContainer}>
+              <Pressable
+                style={[styles.actionOptionButton, dropoutLoading && styles.buttonDisabled]}
+                onPress={handleDropoutProceed}
+                disabled={dropoutLoading}
+              >
+                <View style={[styles.optionIconContainer, { backgroundColor: colors.success[50] }]}>
+                  <Feather name="check-circle" size={22} color={colors.success[500]} />
+                </View>
+                <View style={styles.optionContent}>
+                  <Text style={styles.optionTitle}>Proceed Anyway</Text>
+                  <Text style={styles.optionDescription}>Continue with available cleaners</Text>
+                </View>
+                {dropoutLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary[500]} />
+                ) : (
+                  <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+                )}
+              </Pressable>
+
+              <Pressable
+                style={[styles.actionOptionButton, dropoutLoading && styles.buttonDisabled]}
+                onPress={handleDropoutCancel}
+                disabled={dropoutLoading}
+              >
+                <View style={[styles.optionIconContainer, { backgroundColor: colors.error[50] }]}>
+                  <Feather name="x-circle" size={22} color={colors.error[500]} />
+                </View>
+                <View style={styles.optionContent}>
+                  <Text style={styles.optionTitle}>Cancel Without Fee</Text>
+                  <Text style={styles.optionDescription}>Cancel with no cancellation fee</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Solo Completion Offer Accept/Decline Buttons */}
+        {notification.type === "solo_completion_offer" && notification.data?.appointmentId && (
+          <View style={styles.newHomeActionCard}>
+            <Text style={styles.newHomeActionTitle}>Solo Completion Offer</Text>
+            <Text style={styles.newHomeActionDescription}>
+              Another cleaner dropped from this job. Would you like to complete it by yourself for the full pay?
+            </Text>
+
+            {/* Job Details Section */}
+            <View style={styles.soloJobDetails}>
+              {/* Date & Time */}
+              {(notification.data?.formattedDate || notification.data?.date) && (
+                <View style={styles.soloDetailRow}>
+                  <Feather name="calendar" size={16} color={colors.primary[600]} />
+                  <Text style={styles.soloDetailText}>
+                    {notification.data?.formattedDate || (() => {
+                      // Parse YYYY-MM-DD as local time to avoid timezone shift
+                      const d = notification.data?.date;
+                      if (typeof d === "string" && d.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                        const [year, month, day] = d.split("-");
+                        return new Date(year, month - 1, day).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                      }
+                      return new Date(d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                    })()}
+                    {notification.data?.timeToBeCompleted && ` • ${notification.data.timeToBeCompleted}`}
+                  </Text>
+                </View>
+              )}
+
+              {/* Home Size */}
+              {(notification.data?.numBeds || notification.data?.numBaths) && (
+                <View style={styles.soloDetailRow}>
+                  <Feather name="home" size={16} color={colors.primary[600]} />
+                  <Text style={styles.soloDetailText}>
+                    {notification.data?.numBeds || 0} bed, {notification.data?.numBaths || 0} bath
+                    {notification.data?.city && ` in ${notification.data.city}`}
+                  </Text>
+                </View>
+              )}
+
+              {/* Square Footage */}
+              {notification.data?.squareFootage && (
+                <View style={styles.soloDetailRow}>
+                  <Feather name="maximize" size={16} color={colors.primary[600]} />
+                  <Text style={styles.soloDetailText}>
+                    {notification.data.squareFootage.toLocaleString()} sq ft
+                  </Text>
+                </View>
+              )}
+
+              {/* Estimated Duration */}
+              {notification.data?.estimatedHours && (
+                <View style={styles.soloDetailRow}>
+                  <Feather name="clock" size={16} color={colors.primary[600]} />
+                  <Text style={styles.soloDetailText}>
+                    Est. {notification.data.estimatedHours} {notification.data.estimatedHours === 1 ? "hour" : "hours"}
+                  </Text>
+                </View>
+              )}
+
+              {/* Linen Requirements */}
+              {(notification.data?.bringSheets || notification.data?.bringTowels) && (
+                <View style={styles.soloDetailRow}>
+                  <Feather name="package" size={16} color={colors.warning[600]} />
+                  <Text style={styles.soloDetailText}>
+                    Bring: {[
+                      notification.data?.bringSheets && "sheets",
+                      notification.data?.bringTowels && "towels"
+                    ].filter(Boolean).join(" & ")}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Earnings Display */}
+            {(notification.data?.earningsOffered || notification.data?.fullEarnings || notification.data?.fullEarningsDollars) && (
+              <View style={styles.soloEarningsDisplay}>
+                <Text style={styles.soloEarningsLabel}>Your Earnings</Text>
+                <Text style={styles.soloEarningsValue}>
+                  ${notification.data?.fullEarningsDollars ||
+                    (typeof notification.data?.earningsOffered === "number"
+                      ? (notification.data.earningsOffered / 100).toFixed(2)
+                      : typeof notification.data?.fullEarnings === "number"
+                        ? (notification.data.fullEarnings / 100).toFixed(2)
+                        : notification.data?.fullEarnings || "0.00")}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.newHomeButtonRow}>
+              <Pressable
+                style={[styles.declineButton, processing && styles.buttonDisabled]}
+                onPress={handleDeclineSoloOffer}
+                disabled={processing}
+              >
+                <Feather name="x" size={18} color={colors.error[600]} />
+                <Text style={styles.declineButtonText}>Decline</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.acceptButton, processing && styles.buttonDisabled]}
+                onPress={handleAcceptSoloOffer}
+                disabled={processing}
+              >
+                {processing ? (
+                  <ActivityIndicator size="small" color={colors.neutral[0]} />
+                ) : (
+                  <>
+                    <Feather name="check" size={18} color={colors.neutral[0]} />
+                    <Text style={styles.acceptButtonText}>Accept</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Action Button - only for types without inline actions */}
+        {notification.actionRequired &&
+          !["solo_completion_offer", "new_home_request", "pending_booking", "business_owner_declined",
+            "payment_failed", "payment_retry_failed", "edge_case_decision_required",
+            "cleaner_dropout", "multi_cleaner_final_warning"].includes(notification.type) && (
           <Pressable style={styles.actionButton} onPress={handleActionPress}>
             <Text style={styles.actionButtonText}>Take Action</Text>
             <Feather name="arrow-right" size={18} color={colors.neutral[0]} />
@@ -487,6 +1285,63 @@ const NotificationDetailScreen = () => {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Pending Booking Modal */}
+      {notification && (
+        <PendingBookingModal
+          visible={showPendingBookingModal}
+          booking={{
+            id: notification.data?.appointmentId,
+            date: notification.data?.date,
+            price: notification.data?.price,
+            timeWindow: notification.data?.timeWindow,
+            expiresAt: notification.expiresAt,
+            cleanerBusiness: {
+              name: notification.data?.cleanerName || notification.data?.businessOwnerName,
+            },
+            Home: {
+              nickname: notification.data?.homeName,
+              address: notification.data?.homeAddress,
+            },
+            notes: notification.data?.notes,
+          }}
+          onClose={() => setShowPendingBookingModal(false)}
+          onActionComplete={handlePendingBookingAction}
+        />
+      )}
+
+      {/* Business Owner Declined Modal */}
+      {notification && (
+        <BusinessOwnerDeclinedModal
+          visible={showDeclinedModal}
+          notification={notification}
+          onClose={() => setShowDeclinedModal(false)}
+          onComplete={() => {
+            setShowDeclinedModal(false);
+            setNotification(prev => prev ? { ...prev, actionRequired: false } : prev);
+            navigate("/notifications");
+          }}
+        />
+      )}
+
+      {/* Cleaner Dropout Modal */}
+      {notification && (
+        <CleanerDropoutModal
+          visible={showDropoutModal}
+          appointmentDetails={{
+            date: notification.data?.date,
+            address: notification.data?.homeAddress,
+          }}
+          remainingCleaners={notification.data?.remainingCleaners || notification.data?.confirmedCleaners || 1}
+          originalCleaners={notification.data?.originalCleaners || notification.data?.requiredCleaners || 2}
+          onProceed={handleDropoutProceed}
+          onWaitReplacement={handleDropoutWait}
+          onReschedule={handleDropoutReschedule}
+          onCancel={handleDropoutCancel}
+          onClose={() => setShowDropoutModal(false)}
+          loading={dropoutLoading}
+        />
+      )}
     </View>
   );
 };
@@ -708,6 +1563,44 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.success[600],
   },
+  // Solo job details styles
+  soloJobDetails: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  soloDetailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  soloDetailText: {
+    fontSize: typography.fontSize.base,
+    color: colors.neutral[700],
+    flex: 1,
+  },
+  soloEarningsDisplay: {
+    backgroundColor: colors.success[50],
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    marginBottom: spacing.lg,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  soloEarningsLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    marginBottom: spacing.xs,
+    fontWeight: "500",
+  },
+  soloEarningsValue: {
+    fontSize: typography.fontSize.xxxl || 32,
+    fontWeight: "700",
+    color: colors.success[600],
+  },
   declineInputContainer: {
     marginBottom: spacing.md,
   },
@@ -793,6 +1686,227 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  // Action options styles (for multi-choice notification actions)
+  optionsContainer: {
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  actionOptionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    gap: spacing.md,
+  },
+  optionIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionContent: {
+    flex: 1,
+  },
+  optionTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "600",
+    color: colors.neutral[800],
+    marginBottom: 2,
+  },
+  optionDescription: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[500],
+  },
+  // Urgent warning box (for payment failed)
+  urgentWarningBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.error[50],
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.error[200],
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  urgentWarningText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.error[700],
+    lineHeight: 20,
+  },
+  // Primary action button (full-width)
+  primaryActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  primaryActionButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "600",
+    color: colors.neutral[0],
+  },
+  // Expiration note
+  expirationNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    padding: spacing.md,
+    borderRadius: radius.md,
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  expirationText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[700],
+  },
+  // Decision Made card styles
+  decisionMadeCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    marginTop: spacing.lg,
+    alignItems: "center",
+    ...shadows.md,
+  },
+  decisionMadeIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  decisionMadeTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: "700",
+    color: colors.neutral[900],
+    textAlign: "center",
+    marginBottom: spacing.sm,
+  },
+  decisionMadeDescription: {
+    fontSize: typography.fontSize.base,
+    color: colors.neutral[600],
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: spacing.md,
+  },
+  decisionMadeTime: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[400],
+    textAlign: "center",
+  },
+  // Cleaner Profile Card styles
+  cleanerProfileCard: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  cleanerProfileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  cleanerAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.md,
+  },
+  cleanerProfileInfo: {
+    flex: 1,
+  },
+  cleanerProfileName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "600",
+    color: colors.neutral[900],
+    marginBottom: 4,
+  },
+  cleanerRatingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  starsContainer: {
+    flexDirection: "row",
+    marginRight: spacing.sm,
+  },
+  cleanerRatingText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[600],
+  },
+  noReviewsText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[500],
+    fontStyle: "italic",
+  },
+  recommendationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.success[50],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    alignSelf: "flex-start",
+    marginBottom: spacing.sm,
+    gap: spacing.xs,
+  },
+  recommendationText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    fontWeight: "500",
+  },
+  recentReviewsSection: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.primary[200],
+  },
+  recentReviewsTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: "600",
+    color: colors.neutral[700],
+    marginBottom: spacing.sm,
+  },
+  reviewItem: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  reviewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  reviewStars: {
+    flexDirection: "row",
+  },
+  reviewerName: {
+    fontSize: typography.fontSize.xs,
+    color: colors.neutral[500],
+  },
+  reviewComment: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[600],
+    lineHeight: 18,
   },
 });
 

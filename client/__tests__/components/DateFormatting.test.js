@@ -111,7 +111,11 @@ describe("Date Formatting - Timezone Handling", () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const todayString = today.toISOString().split("T")[0];
+      // Format date as local YYYY-MM-DD to avoid timezone issues
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, "0");
+      const day = String(today.getDate()).padStart(2, "0");
+      const todayString = `${year}-${month}-${day}`;
       const appointmentDate = new Date(todayString + "T00:00:00");
 
       expect(appointmentDate.getTime()).toBe(today.getTime());

@@ -159,7 +159,9 @@ describe("SignInForm - Basic Login", () => {
 			});
 		});
 
-		it("should handle terms acceptance requirement", async () => {
+		it("should redirect to home regardless of terms acceptance flag (wrapper handles blocking)", async () => {
+			// Note: Terms acceptance is now handled by TermsAcceptanceWrapper, not SignInForm
+			// SignInForm always redirects to "/" and the wrapper blocks if terms needed
 			FetchData.login.mockResolvedValueOnce({
 				user: {
 					id: 1,
@@ -188,7 +190,7 @@ describe("SignInForm - Basic Login", () => {
 			fireEvent.press(signInButton);
 
 			await waitFor(() => {
-				expect(mockNavigate).toHaveBeenCalledWith("/terms-acceptance");
+				expect(mockNavigate).toHaveBeenCalledWith("/");
 			});
 		});
 

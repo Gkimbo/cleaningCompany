@@ -87,15 +87,18 @@ const TodaysJobsList = ({
     }
   }, [appointments]);
 
-  // Build locations map from homeDetails
+  // Build locations map from homeDetails or inline appointment data (team jobs)
   useEffect(() => {
     const locations = {};
     orderedAppointments.forEach((apt) => {
       const home = homeDetails[apt.homeId];
-      if (home?.latitude && home?.longitude) {
+      // Try homeDetails first, then fall back to inline data (team jobs)
+      const lat = home?.latitude || apt.latitude;
+      const lng = home?.longitude || apt.longitude;
+      if (lat && lng) {
         locations[apt.id] = {
-          latitude: parseFloat(home.latitude),
-          longitude: parseFloat(home.longitude),
+          latitude: parseFloat(lat),
+          longitude: parseFloat(lng),
         };
       }
     });
@@ -163,7 +166,17 @@ const TodaysJobsList = ({
   // Render item for DraggableFlatList
   const renderItem = useCallback(({ item, drag, isActive, getIndex }) => {
     const index = getIndex();
-    const home = homeDetails[item.homeId] || {};
+    // Use homeDetails if available, otherwise use inline data from team jobs
+    const home = homeDetails[item.homeId] || {
+      address: item.address,
+      city: item.city,
+      state: item.state,
+      numBeds: item.numBeds,
+      numBaths: item.numBaths,
+      zipcode: item.zipcode,
+      latitude: item.latitude,
+      longitude: item.longitude,
+    };
     const payout = calculatePayout(item);
     const fromLocation = index > 0 ? jobLocations[orderedAppointments[index - 1]?.id] : null;
     const toLocation = jobLocations[item.id];

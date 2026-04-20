@@ -859,7 +859,8 @@ const MyRequestsCalendar = ({ state }) => {
                             try {
                               await FetchData.removeRequest(
                                 employeeId,
-                                appointmentId
+                                appointmentId,
+                                state.currentUser?.token
                               );
                               setRequests((prev) =>
                                 prev.filter((r) => r.id !== appointmentId)

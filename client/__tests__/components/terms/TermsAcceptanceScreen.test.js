@@ -454,13 +454,9 @@ describe("TermsAcceptanceScreen", () => {
 
       fireEvent.press(getByText("Logout"));
 
+      // Should use proper LOGOUT action to clear all state
       expect(mockDispatch).toHaveBeenCalledWith({
-        type: "CURRENT_USER",
-        payload: null,
-      });
-      expect(mockDispatch).toHaveBeenCalledWith({
-        type: "SET_USER_ID",
-        payload: null,
+        type: "LOGOUT",
       });
       expect(mockNavigate).toHaveBeenCalledWith("/sign-in");
     });
@@ -627,6 +623,166 @@ describe("TermsAcceptanceScreen", () => {
 
       await waitFor(() => {
         expect(getByText("End of Document")).toBeTruthy();
+      });
+    });
+  });
+
+  describe("Business Owner Agreement", () => {
+    it("should display business owner agreement when only it needs acceptance", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          requiresAcceptance: true,
+          businessOwnerAgreement: {
+            id: 5,
+            type: "business_owner",
+            version: 1,
+            title: "Kleanr Business Owner Agreement",
+            content: "Business owner agreement content here",
+            contentType: "text",
+          },
+        }),
+      });
+
+      const { getByText } = render(
+        <TermsAcceptanceScreen state={mockState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Business Owner Agreement")).toBeTruthy();
+        expect(getByText("Kleanr Business Owner Agreement")).toBeTruthy();
+        expect(getByText("Version 1")).toBeTruthy();
+      });
+    });
+
+    it("should show appropriate subtitle for business owner agreement", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          requiresAcceptance: true,
+          businessOwnerAgreement: {
+            id: 5,
+            type: "business_owner",
+            version: 1,
+            title: "Business Owner Agreement",
+            content: "Content",
+            contentType: "text",
+          },
+        }),
+      });
+
+      const { getByText } = render(
+        <TermsAcceptanceScreen state={mockState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText(/Please review and accept the Business Owner Agreement/)).toBeTruthy();
+      });
+    });
+
+    it("should show Updated badge when only business owner agreement", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          requiresAcceptance: true,
+          businessOwnerAgreement: {
+            id: 5,
+            type: "business_owner",
+            version: 1,
+            title: "Business Owner Agreement",
+            content: "Content",
+            contentType: "text",
+          },
+        }),
+      });
+
+      const { getByText } = render(
+        <TermsAcceptanceScreen state={mockState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Updated")).toBeTruthy();
+      });
+    });
+
+    it("should show business owner agreement in multi-document flow", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          requiresAcceptance: true,
+          terms: {
+            id: 1,
+            type: "homeowner",
+            version: 1,
+            title: "Terms",
+            content: "Terms content",
+            contentType: "text",
+          },
+          privacyPolicy: {
+            id: 2,
+            type: "privacy_policy",
+            version: 1,
+            title: "Privacy",
+            content: "Privacy content",
+            contentType: "text",
+          },
+          businessOwnerAgreement: {
+            id: 5,
+            type: "business_owner",
+            version: 1,
+            title: "Business Owner Agreement",
+            content: "Business owner content",
+            contentType: "text",
+          },
+        }),
+      });
+
+      const { getByText } = render(
+        <TermsAcceptanceScreen state={mockState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        // Should show step indicator for 3 documents
+        expect(getByText("Step 1 of 3")).toBeTruthy();
+      });
+    });
+
+    it("should show business owner agreement after payment terms for business owners", async () => {
+      // Note: Business owners get terms → privacy → paymentTerms → businessOwnerAgreement
+      // They do NOT get cleanerAgreement (that's only for non-business-owner cleaners)
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          requiresAcceptance: true,
+          paymentTerms: {
+            id: 3,
+            type: "payment_terms",
+            version: 1,
+            title: "Payment Terms",
+            content: "Payment terms content",
+            contentType: "text",
+          },
+          businessOwnerAgreement: {
+            id: 5,
+            type: "business_owner",
+            version: 1,
+            title: "Business Owner Agreement",
+            content: "Business owner content",
+            contentType: "text",
+          },
+        }),
+      });
+
+      const { getByText } = render(
+        <TermsAcceptanceScreen state={mockState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        // Should show payment terms first - check for the unique title in content
+        expect(getByText("Payment terms content")).toBeTruthy();
+        expect(getByText("Step 1 of 2")).toBeTruthy();
+        // Should indicate business owner agreement is next
+        expect(getByText(/Business Owner Agreement next/)).toBeTruthy();
       });
     });
   });

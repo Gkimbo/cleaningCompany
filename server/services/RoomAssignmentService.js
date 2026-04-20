@@ -5,6 +5,8 @@
  * Supports proportional assignment based on estimated effort.
  */
 
+const { Op } = require("sequelize");
+
 class RoomAssignmentService {
   /**
    * Standard effort estimates in minutes by room type
@@ -434,7 +436,7 @@ class RoomAssignmentService {
     const activeCompletions = await CleanerJobCompletion.findAll({
       where: {
         multiCleanerJobId,
-        status: { $notIn: ["dropped_out", "no_show"] },
+        status: { [Op.notIn]: ["dropped_out", "no_show"] },
       },
     });
 

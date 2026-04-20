@@ -7,6 +7,83 @@ import CleanerApprovalService from "../../services/fetchRequests/CleanerApproval
 import CalendarComponent from "../calender/CalendarComponent";
 import { API_BASE } from "../../services/config";
 import { usePricing } from "../../context/PricingContext";
+import useCountdown from "../../hooks/useCountdown";
+
+// Separate component for approval card to use countdown hook
+const ApprovalRequestCard = ({
+  request,
+  isProcessing,
+  onApprove,
+  onDecline,
+  formatApprovalDate,
+}) => {
+  // Use countdown hook for real-time updates (updates every 30 seconds)
+  const countdown = useCountdown(request.expiresAt, 30000);
+
+  return (
+    <View style={styles.approvalCard}>
+      <View style={styles.approvalHeader}>
+        <View style={styles.cleanerAvatarSmall}>
+          <Text style={styles.cleanerInitialsSmall}>
+            {request.cleanerFirstName?.charAt(0) || "?"}
+          </Text>
+        </View>
+        <View style={styles.approvalInfo}>
+          <Text style={styles.approvalCleanerName}>{request.cleanerName}</Text>
+          <Text style={styles.approvalSubtext}>
+            For {formatApprovalDate(request.appointmentDate)}
+          </Text>
+        </View>
+        <View style={[
+          styles.approvalTimeBadge,
+          countdown.isUrgent && styles.approvalTimeBadgeUrgent,
+        ]}>
+          <Icon
+            name="clock-o"
+            size={10}
+            color={countdown.isUrgent ? "#ef4444" : "#f59e0b"}
+          />
+          <Text style={[
+            styles.approvalTimeText,
+            countdown.isUrgent && styles.approvalTimeTextUrgent,
+          ]}>
+            {countdown.timeRemaining}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.approvalActions}>
+        <Pressable
+          style={[styles.declineBtn, isProcessing && styles.btnDisabled]}
+          onPress={() => onDecline(request.id, request.cleanerName)}
+          disabled={isProcessing}
+        >
+          {isProcessing ? (
+            <ActivityIndicator size="small" color="#ef4444" />
+          ) : (
+            <>
+              <Icon name="times" size={12} color="#ef4444" />
+              <Text style={styles.declineBtnText}>Decline</Text>
+            </>
+          )}
+        </Pressable>
+        <Pressable
+          style={[styles.approveBtn, isProcessing && styles.btnDisabled]}
+          onPress={() => onApprove(request.id, request.cleanerName)}
+          disabled={isProcessing}
+        >
+          {isProcessing ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Icon name="check" size={12} color="#fff" />
+              <Text style={styles.approveBtnText}>Approve</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+};
 
 const { width } = Dimensions.get("window");
 
@@ -151,21 +228,6 @@ const DetailsComponent = ({ state, dispatch }) => {
     });
   };
 
-  const formatTimeRemaining = (expiresAt) => {
-    if (!expiresAt) return "";
-    const now = new Date();
-    const expires = new Date(expiresAt);
-    const diffMs = expires - now;
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    if (diffHours > 24) {
-      const days = Math.floor(diffHours / 24);
-      return `${days}d left`;
-    }
-    if (diffHours > 0) return `${diffHours}h ${diffMins}m left`;
-    if (diffMins > 0) return `${diffMins}m left`;
-    return "Expiring soon";
-  };
 
   const onAppointmentDelete = async (date, cancellationFee) => {
     if (!homeDetails) return;
@@ -261,7 +323,7 @@ const DetailsComponent = ({ state, dispatch }) => {
       return { text: "Not set", surcharge: null };
     }
 
-    const surcharge = windowConfig.surcharge > 0 ? `+$${windowConfig.surcharge}` : null;
+    const surcharge = windowConfig.surcharge > 0 ? `+$${(windowConfig.surcharge / 100).toFixed(2)}` : null;
     return { text: windowConfig.label, surcharge };
   };
 
@@ -502,55 +564,14 @@ const DetailsComponent = ({ state, dispatch }) => {
             </View>
           </View>
           {pendingApprovals.map((request) => (
-            <View key={request.id} style={styles.approvalCard}>
-              <View style={styles.approvalHeader}>
-                <View style={styles.cleanerAvatarSmall}>
-                  <Text style={styles.cleanerInitialsSmall}>
-                    {request.cleanerFirstName?.charAt(0) || "?"}
-                  </Text>
-                </View>
-                <View style={styles.approvalInfo}>
-                  <Text style={styles.approvalCleanerName}>{request.cleanerName}</Text>
-                  <Text style={styles.approvalSubtext}>
-                    For {formatApprovalDate(request.appointmentDate)}
-                  </Text>
-                </View>
-                <View style={styles.approvalTimeBadge}>
-                  <Icon name="clock-o" size={10} color="#f59e0b" />
-                  <Text style={styles.approvalTimeText}>{formatTimeRemaining(request.expiresAt)}</Text>
-                </View>
-              </View>
-              <View style={styles.approvalActions}>
-                <Pressable
-                  style={[styles.declineBtn, processingApprovalId === request.id && styles.btnDisabled]}
-                  onPress={() => handleDeclineRequest(request.id, request.cleanerName)}
-                  disabled={processingApprovalId === request.id}
-                >
-                  {processingApprovalId === request.id ? (
-                    <ActivityIndicator size="small" color="#ef4444" />
-                  ) : (
-                    <>
-                      <Icon name="times" size={12} color="#ef4444" />
-                      <Text style={styles.declineBtnText}>Decline</Text>
-                    </>
-                  )}
-                </Pressable>
-                <Pressable
-                  style={[styles.approveBtn, processingApprovalId === request.id && styles.btnDisabled]}
-                  onPress={() => handleApproveRequest(request.id, request.cleanerName)}
-                  disabled={processingApprovalId === request.id}
-                >
-                  {processingApprovalId === request.id ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <Icon name="check" size={12} color="#fff" />
-                      <Text style={styles.approveBtnText}>Approve</Text>
-                    </>
-                  )}
-                </Pressable>
-              </View>
-            </View>
+            <ApprovalRequestCard
+              key={request.id}
+              request={request}
+              isProcessing={processingApprovalId === request.id}
+              onApprove={handleApproveRequest}
+              onDecline={handleDeclineRequest}
+              formatApprovalDate={formatApprovalDate}
+            />
           ))}
           <Text style={styles.approvalNote}>
             If you don't respond, cleaners will be auto-approved when the timer expires.
@@ -1127,10 +1148,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 4,
   },
+  approvalTimeBadgeUrgent: {
+    backgroundColor: "#fee2e2",
+  },
   approvalTimeText: {
     fontSize: 11,
     fontWeight: "600",
     color: "#d97706",
+  },
+  approvalTimeTextUrgent: {
+    color: "#dc2626",
+    fontWeight: "700",
   },
   approvalActions: {
     flexDirection: "row",

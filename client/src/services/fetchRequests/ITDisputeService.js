@@ -6,7 +6,7 @@ class ITDisputeService {
     const result = await HttpClient.post(
       "/it-disputes/submit",
       disputeData,
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -19,7 +19,7 @@ class ITDisputeService {
 
   // Get user's submitted disputes
   static async getMyDisputes(token) {
-    const result = await HttpClient.get("/it-disputes/my-disputes", { token, useBaseUrl: true });
+    const result = await HttpClient.get("/it-disputes/my-disputes", { token });
 
     if (result.success === false) {
       __DEV__ && console.warn("[ITDisputeService] getMyDisputes failed:", result.error);
@@ -33,7 +33,7 @@ class ITDisputeService {
   static async getDispute(token, disputeId) {
     const result = await HttpClient.get(
       `/it-disputes/${disputeId}`,
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -49,7 +49,7 @@ class ITDisputeService {
     const result = await HttpClient.post(
       `/it-disputes/${disputeId}/add-info`,
       info,
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -64,7 +64,7 @@ class ITDisputeService {
   static async getCategories(token) {
     const result = await HttpClient.get(
       "/it-disputes/categories/list",
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {

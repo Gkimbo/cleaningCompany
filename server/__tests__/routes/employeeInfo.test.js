@@ -19,7 +19,9 @@ jest.mock("../../models", () => ({
     findAll: jest.fn(),
     count: jest.fn(),
   },
-  UserCleanerAppointments: {},
+  UserCleanerAppointments: {
+    findOne: jest.fn().mockResolvedValue(null),
+  },
   UserBills: {},
   UserReviews: {
     findAll: jest.fn().mockResolvedValue([]),
@@ -60,6 +62,7 @@ app.use("/api/v1/employee", employeeInfoRouter);
 describe("Employee Info Router", () => {
   const secretKey = process.env.SESSION_SECRET || "test_secret";
   const cleanerToken = jwt.sign({ userId: 2 }, secretKey);
+  const ownerToken = jwt.sign({ userId: 1 }, secretKey);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -106,9 +109,12 @@ describe("Employee Info Router", () => {
   });
 
   describe("GET /home/:id", () => {
+    const { UserCleanerAppointments } = require("../../models");
+
     it("should return home info by id", async () => {
       const mockHome = {
         id: 10,
+        userId: 2, // Matches cleanerToken userId (cleaner is homeowner)
         nickName: "Beach House",
         address: "123 Beach St",
         city: "Boston",
@@ -116,42 +122,57 @@ describe("Employee Info Router", () => {
         zipcode: "02101",
       };
       UserHomes.findOne.mockResolvedValue(mockHome);
+      UserCleanerAppointments.findOne.mockResolvedValue(null);
 
-      const response = await request(app).get("/api/v1/employee/home/10");
+      const response = await request(app)
+        .get("/api/v1/employee/home/10")
+        .set("Authorization", `Bearer ${cleanerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.home).toEqual(mockHome);
+      expect(response.body.home.id).toBe(mockHome.id);
     });
 
     it("should return null for non-existent home", async () => {
       UserHomes.findOne.mockResolvedValue(null);
+      UserCleanerAppointments.findOne.mockResolvedValue(null);
 
-      const response = await request(app).get("/api/v1/employee/home/999");
+      const response = await request(app)
+        .get("/api/v1/employee/home/999")
+        .set("Authorization", `Bearer ${cleanerToken}`);
 
-      expect(response.status).toBe(200);
-      expect(response.body.home).toBeNull();
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe("Home not found");
     });
 
     it("should handle database error", async () => {
       UserHomes.findOne.mockRejectedValue(new Error("Database error"));
 
-      const response = await request(app).get("/api/v1/employee/home/10");
+      const response = await request(app)
+        .get("/api/v1/employee/home/10")
+        .set("Authorization", `Bearer ${cleanerToken}`);
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(500);
     });
   });
 
   describe("GET /home/LL/:id", () => {
+    const { UserCleanerAppointments } = require("../../models");
+
     describe("Using Stored Coordinates", () => {
       it("should return stored latitude and longitude when available", async () => {
+        // Mock cleaner is assigned to this home
+        UserCleanerAppointments.findOne.mockResolvedValue({ id: 1 });
         UserHomes.findOne.mockResolvedValue({
           id: 10,
+          userId: 2, // Matches cleanerToken userId
           zipcode: "02101",
           latitude: "42.3601",
           longitude: "-71.0589",
         });
 
-        const response = await request(app).get("/api/v1/employee/home/LL/10");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/10")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.latitude).toBe(42.3601);
@@ -161,14 +182,18 @@ describe("Employee Info Router", () => {
       });
 
       it("should parse stored coordinates as floats", async () => {
+        UserCleanerAppointments.findOne.mockResolvedValue({ id: 1 });
         UserHomes.findOne.mockResolvedValue({
           id: 10,
+          userId: 2,
           zipcode: "02101",
           latitude: "42.36012345",
           longitude: "-71.05891234",
         });
 
-        const response = await request(app).get("/api/v1/employee/home/LL/10");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/10")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(typeof response.body.latitude).toBe("number");
@@ -179,14 +204,18 @@ describe("Employee Info Router", () => {
 
       it("should handle stored coordinates from DECIMAL type", async () => {
         // Sequelize DECIMAL returns strings
+        UserCleanerAppointments.findOne.mockResolvedValue({ id: 1 });
         UserHomes.findOne.mockResolvedValue({
           id: 10,
+          userId: 2,
           zipcode: "02101",
           latitude: "34.0522000000",
           longitude: "-118.2437000000",
         });
 
-        const response = await request(app).get("/api/v1/employee/home/LL/10");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/10")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.latitude).toBe(34.0522);
@@ -195,9 +224,13 @@ describe("Employee Info Router", () => {
     });
 
     describe("Fallback to ZIP Code Lookup", () => {
+      const { UserCleanerAppointments } = require("../../models");
+
       it("should fallback to getLatAndLong when no stored coordinates", async () => {
+        UserCleanerAppointments.findOne.mockResolvedValue({ id: 1 });
         UserHomes.findOne.mockResolvedValue({
           id: 10,
+          userId: 2,
           zipcode: "02101",
           latitude: null,
           longitude: null,
@@ -207,7 +240,9 @@ describe("Employee Info Router", () => {
           longitude: -71.0272,
         });
 
-        const response = await request(app).get("/api/v1/employee/home/LL/10");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/10")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.latitude).toBe(42.3706);
@@ -216,8 +251,10 @@ describe("Employee Info Router", () => {
       });
 
       it("should fallback when only latitude is null", async () => {
+        UserCleanerAppointments.findOne.mockResolvedValue({ id: 1 });
         UserHomes.findOne.mockResolvedValue({
           id: 10,
+          userId: 2,
           zipcode: "02101",
           latitude: null,
           longitude: "-71.0589",
@@ -227,15 +264,19 @@ describe("Employee Info Router", () => {
           longitude: -71.0272,
         });
 
-        const response = await request(app).get("/api/v1/employee/home/LL/10");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/10")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(HomeClass.getLatAndLong).toHaveBeenCalled();
       });
 
       it("should fallback when only longitude is null", async () => {
+        UserCleanerAppointments.findOne.mockResolvedValue({ id: 1 });
         UserHomes.findOne.mockResolvedValue({
           id: 10,
+          userId: 2,
           zipcode: "02101",
           latitude: "42.3601",
           longitude: null,
@@ -245,7 +286,9 @@ describe("Employee Info Router", () => {
           longitude: -71.0272,
         });
 
-        const response = await request(app).get("/api/v1/employee/home/LL/10");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/10")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(HomeClass.getLatAndLong).toHaveBeenCalled();
@@ -253,8 +296,10 @@ describe("Employee Info Router", () => {
 
       it("should fallback for old homes without coordinate fields", async () => {
         // Old homes may not have latitude/longitude properties at all
+        UserCleanerAppointments.findOne.mockResolvedValue({ id: 1 });
         UserHomes.findOne.mockResolvedValue({
           id: 10,
+          userId: 2,
           zipcode: "02101",
           // No latitude or longitude properties
         });
@@ -263,7 +308,9 @@ describe("Employee Info Router", () => {
           longitude: -71.0272,
         });
 
-        const response = await request(app).get("/api/v1/employee/home/LL/10");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/10")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(HomeClass.getLatAndLong).toHaveBeenCalledWith("02101");
@@ -271,49 +318,67 @@ describe("Employee Info Router", () => {
     });
 
     describe("Error Handling", () => {
+      const { UserCleanerAppointments } = require("../../models");
+
       it("should handle missing home", async () => {
+        UserCleanerAppointments.findOne.mockResolvedValue(null);
         UserHomes.findOne.mockResolvedValue(null);
 
-        const response = await request(app).get("/api/v1/employee/home/LL/999");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/999")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(404);
       });
 
       it("should handle geocoding error during fallback", async () => {
+        UserCleanerAppointments.findOne.mockResolvedValue({ id: 1 });
         UserHomes.findOne.mockResolvedValue({
           id: 10,
+          userId: 2,
           zipcode: "02101",
           latitude: null,
           longitude: null,
         });
         HomeClass.getLatAndLong.mockRejectedValue(new Error("Geocoding failed"));
 
-        const response = await request(app).get("/api/v1/employee/home/LL/10");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/10")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(500);
         expect(response.body.error).toBe("Error fetching coordinates");
       });
 
       it("should handle database error", async () => {
+        UserCleanerAppointments.findOne.mockResolvedValue({ id: 1 });
         UserHomes.findOne.mockRejectedValue(new Error("Database error"));
 
-        const response = await request(app).get("/api/v1/employee/home/LL/10");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/10")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(500);
       });
     });
 
     describe("Edge Cases", () => {
+      const { UserCleanerAppointments } = require("../../models");
+
       it("should handle zero coordinates (valid values)", async () => {
         // 0,0 is in the Atlantic Ocean but is a valid coordinate
+        UserCleanerAppointments.findOne.mockResolvedValue({ id: 1 });
         UserHomes.findOne.mockResolvedValue({
           id: 10,
+          userId: 2,
           zipcode: "00000",
           latitude: "0",
           longitude: "0",
         });
 
-        const response = await request(app).get("/api/v1/employee/home/LL/10");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/10")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         // 0 is falsy, so it should fallback - this is a known limitation
         // but acceptable since no real US addresses have 0,0 coordinates
@@ -321,14 +386,18 @@ describe("Employee Info Router", () => {
       });
 
       it("should handle negative coordinates correctly", async () => {
+        UserCleanerAppointments.findOne.mockResolvedValue({ id: 1 });
         UserHomes.findOne.mockResolvedValue({
           id: 10,
+          userId: 2,
           zipcode: "90028",
           latitude: "34.0522",
           longitude: "-118.2437",
         });
 
-        const response = await request(app).get("/api/v1/employee/home/LL/10");
+        const response = await request(app)
+          .get("/api/v1/employee/home/LL/10")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.longitude).toBe(-118.2437);
@@ -337,6 +406,16 @@ describe("Employee Info Router", () => {
   });
 
   describe("GET /employeeSchedule", () => {
+    beforeEach(() => {
+      // Mock owner user for authorization
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) {
+          return Promise.resolve({ id: 1, type: "owner" });
+        }
+        return Promise.resolve(null);
+      });
+    });
+
     it("should return all cleaner employees", async () => {
       const mockEmployees = [
         { id: 2, username: "cleaner1", type: "cleaner", daysWorking: ["Monday", "Tuesday"] },
@@ -344,7 +423,9 @@ describe("Employee Info Router", () => {
       ];
       User.findAll.mockResolvedValue(mockEmployees);
 
-      const response = await request(app).get("/api/v1/employee/employeeSchedule");
+      const response = await request(app)
+        .get("/api/v1/employee/employeeSchedule")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.employees).toHaveLength(2);
@@ -356,7 +437,9 @@ describe("Employee Info Router", () => {
     it("should return empty array when no cleaners", async () => {
       User.findAll.mockResolvedValue([]);
 
-      const response = await request(app).get("/api/v1/employee/employeeSchedule");
+      const response = await request(app)
+        .get("/api/v1/employee/employeeSchedule")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.employees).toHaveLength(0);
@@ -365,9 +448,11 @@ describe("Employee Info Router", () => {
     it("should handle database error", async () => {
       User.findAll.mockRejectedValue(new Error("Database error"));
 
-      const response = await request(app).get("/api/v1/employee/employeeSchedule");
+      const response = await request(app)
+        .get("/api/v1/employee/employeeSchedule")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(500);
     });
   });
 
@@ -387,7 +472,9 @@ describe("Employee Info Router", () => {
       });
       UserAppointments.count.mockResolvedValue(25);
 
-      const response = await request(app).get("/api/v1/employee/cleaner/2");
+      const response = await request(app)
+        .get("/api/v1/employee/cleaner/2")
+        .set("Authorization", `Bearer ${cleanerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.cleaner.id).toBe(2);
@@ -398,7 +485,9 @@ describe("Employee Info Router", () => {
     it("should return 404 for non-existent cleaner", async () => {
       User.findByPk.mockResolvedValue(null);
 
-      const response = await request(app).get("/api/v1/employee/cleaner/999");
+      const response = await request(app)
+        .get("/api/v1/employee/cleaner/999")
+        .set("Authorization", `Bearer ${cleanerToken}`);
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBe("Cleaner not found");
@@ -416,7 +505,9 @@ describe("Employee Info Router", () => {
       });
       UserAppointments.count.mockResolvedValue(0);
 
-      const response = await request(app).get("/api/v1/employee/cleaner/2");
+      const response = await request(app)
+        .get("/api/v1/employee/cleaner/2")
+        .set("Authorization", `Bearer ${cleanerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.cleaner.totalReviews).toBe(0);
@@ -426,7 +517,9 @@ describe("Employee Info Router", () => {
     it("should handle server error", async () => {
       User.findByPk.mockRejectedValue(new Error("Database error"));
 
-      const response = await request(app).get("/api/v1/employee/cleaner/2");
+      const response = await request(app)
+        .get("/api/v1/employee/cleaner/2")
+        .set("Authorization", `Bearer ${cleanerToken}`);
 
       expect(response.status).toBe(500);
       expect(response.body.error).toBe("Server error");
@@ -506,6 +599,7 @@ describe("Employee Info Router", () => {
       it("should return serialized home data without Sequelize metadata", async () => {
         const mockHome = {
           id: 1,
+          userId: 2, // Match cleanerToken userId
           nickName: "Beach House",
           address: "encrypted_address",
           city: "encrypted_city",
@@ -517,6 +611,7 @@ describe("Employee Info Router", () => {
           towelsProvided: false,
           dataValues: {
             id: 1,
+            userId: 2,
             nickName: "Beach House",
             address: "encrypted_address",
             city: "encrypted_city",
@@ -538,7 +633,9 @@ describe("Employee Info Router", () => {
         };
         UserHomes.findOne.mockResolvedValue(mockHome);
 
-        const response = await request(app).get("/api/v1/employee/home/1");
+        const response = await request(app)
+          .get("/api/v1/employee/home/1")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.home).toBeDefined();
@@ -561,13 +658,16 @@ describe("Employee Info Router", () => {
       it("should handle home without dataValues (plain object)", async () => {
         const plainHome = {
           id: 2,
+          userId: 2, // Match cleanerToken userId
           nickName: "City Apartment",
           numBeds: 2,
           numBaths: 1,
         };
         UserHomes.findOne.mockResolvedValue(plainHome);
 
-        const response = await request(app).get("/api/v1/employee/home/2");
+        const response = await request(app)
+          .get("/api/v1/employee/home/2")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.home.id).toBe(2);
@@ -612,8 +712,11 @@ describe("Employee Info Router", () => {
           },
         ];
         User.findAll.mockResolvedValue(mockEmployees);
+        User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
-        const response = await request(app).get("/api/v1/employee/employeeSchedule");
+        const response = await request(app)
+          .get("/api/v1/employee/employeeSchedule")
+          .set("Authorization", `Bearer ${ownerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.employees).toHaveLength(2);
@@ -632,8 +735,11 @@ describe("Employee Info Router", () => {
           { id: 4, username: "plain_cleaner", type: "cleaner" },
         ];
         User.findAll.mockResolvedValue(plainEmployees);
+        User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
-        const response = await request(app).get("/api/v1/employee/employeeSchedule");
+        const response = await request(app)
+          .get("/api/v1/employee/employeeSchedule")
+          .set("Authorization", `Bearer ${ownerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.employees[0].id).toBe(4);
@@ -665,7 +771,9 @@ describe("Employee Info Router", () => {
         });
         UserAppointments.count.mockResolvedValue(10);
 
-        const response = await request(app).get("/api/v1/employee/cleaner/2");
+        const response = await request(app)
+          .get("/api/v1/employee/cleaner/2")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.cleaner.id).toBe(2);
@@ -691,7 +799,9 @@ describe("Employee Info Router", () => {
         });
         UserAppointments.count.mockResolvedValue(5);
 
-        const response = await request(app).get("/api/v1/employee/cleaner/3");
+        const response = await request(app)
+          .get("/api/v1/employee/cleaner/3")
+          .set("Authorization", `Bearer ${cleanerToken}`);
 
         expect(response.status).toBe(200);
         expect(response.body.cleaner.reviews).toHaveLength(2);

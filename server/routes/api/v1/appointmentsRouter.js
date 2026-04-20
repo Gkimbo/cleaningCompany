@@ -936,14 +936,23 @@ appointmentRouter.get("/home/:homeId", async (req, res) => {
     const decodedToken = jwt.verify(token, secretKey);
     const requestingUserId = decodedToken.userId;
 
+    // Fetch requesting user to check if they're a business owner
+    const requestingUser = await User.findByPk(requestingUserId);
+    if (!requestingUser) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
     const home = await UserHomes.findByPk(homeId);
 
     if (!home) {
       return res.status(404).json({ error: "Home not found" });
     }
 
+    // Business owners can view all homes
+    const isBusinessOwner = requestingUser.type === "owner";
+
     // Verify user owns this home or is assigned to clean it
-    const isOwner = home.userId === requestingUserId;
+    const isHomeOwner = home.userId === requestingUserId;
 
     // Check if user is a cleaner assigned to an appointment at this home
     const isAssignedCleaner = await UserAppointments.findOne({
@@ -953,7 +962,7 @@ appointmentRouter.get("/home/:homeId", async (req, res) => {
       },
     });
 
-    if (!isOwner && !isAssignedCleaner) {
+    if (!isBusinessOwner && !isHomeOwner && !isAssignedCleaner) {
       return res.status(403).json({ error: "You don't have permission to view this home" });
     }
 
@@ -1269,6 +1278,32 @@ appointmentRouter.post("/", async (req, res) => {
           estimatedHours: (estimatedMinutes / 60).toFixed(1),
           warning: `This is a large home (${home.dataValues.numBeds} beds, ${home.dataValues.numBaths} baths). We recommend ${recommendedCleaners} cleaners for optimal service.`,
         };
+
+        // Create MultiCleanerJob records for large homes that require multiple cleaners
+        const multiCleanerRequired = await MultiCleanerService.isMultiCleanerRequired(
+          home.dataValues.numBeds,
+          home.dataValues.numBaths
+        );
+        if (multiCleanerRequired) {
+          for (const apt of appointments) {
+            try {
+              const multiCleanerJob = await MultiCleanerService.createMultiCleanerJob(
+                apt.id,
+                recommendedCleaners,
+                null, // no primary cleaner yet
+                true  // auto-generated
+              );
+              // Update the appointment with the multi-cleaner job reference
+              await apt.update({
+                isMultiCleanerJob: true,
+                multiCleanerJobId: multiCleanerJob.id,
+              });
+              console.log(`[Appointment] Created MultiCleanerJob ${multiCleanerJob.id} for appointment ${apt.id}`);
+            } catch (mcErr) {
+              console.error(`[Appointment] Error creating MultiCleanerJob for appointment ${apt.id}:`, mcErr);
+            }
+          }
+        }
       }
     } catch (err) {
       console.error("Error checking large home:", err);

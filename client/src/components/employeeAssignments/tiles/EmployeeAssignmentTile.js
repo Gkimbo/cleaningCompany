@@ -47,6 +47,14 @@ const EmployeeAssignmentTile = ({
   employeesAssigned = [],
   cleanerRoomAssignments = null,
   isEarlyAccess = false,
+  // Optional home data props for team jobs (avoids extra API call)
+  homeCity = null,
+  homeState = null,
+  homeNumBeds = null,
+  homeNumBaths = null,
+  homeAddress = null,
+  homeZipcode = null,
+  totalCleanersRequired = null,
 }) => {
   const navigate = useNavigate();
   const { pricing } = usePricing();
@@ -55,13 +63,14 @@ const EmployeeAssignmentTile = ({
   // Normalize linen values to handle case-insensitivity ("yes", "Yes", "YES")
   const needsSheets = bringSheets?.toLowerCase() === "yes";
   const needsTowels = bringTowels?.toLowerCase() === "yes";
+  // Initialize home state with props if available (team jobs pass these directly)
   const [home, setHome] = useState({
-    address: "",
-    city: "",
-    state: "",
-    zipcode: "",
-    numBaths: "",
-    numBeds: "",
+    address: homeAddress || "",
+    city: homeCity || "",
+    state: homeState || "",
+    zipcode: homeZipcode || "",
+    numBaths: homeNumBaths || "",
+    numBeds: homeNumBeds || "",
     cleanersNeeded: "",
   });
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -81,7 +90,7 @@ const EmployeeAssignmentTile = ({
   const cleanerSharePercent = 1 - platformFeePercent;
   // For multi-cleaner jobs, split by number of cleaners
   const numCleaners = isMultiCleanerJob
-    ? (multiCleanerJob?.totalCleanersRequired || employeesAssigned?.length || 1)
+    ? (totalCleanersRequired || multiCleanerJob?.totalCleanersRequired || employeesAssigned?.length || 1)
     : 1;
   // Price is stored in cents - formatCurrency handles conversion to dollars
   const amount = (Number(price) / numCleaners) * cleanerSharePercent;
@@ -120,10 +129,22 @@ const EmployeeAssignmentTile = ({
   };
 
   useEffect(() => {
-    FetchData.getHome(homeId).then((response) => {
-      setHome(response.home);
-    });
-  }, [homeId]);
+    // Skip fetch if we already have home data from props (team jobs)
+    if (homeCity && homeNumBeds !== null) {
+      return;
+    }
+    // Only fetch if we have a homeId
+    if (!homeId) {
+      return;
+    }
+    FetchData.getHome(homeId)
+      .then((response) => {
+        setHome(response.home);
+      })
+      .catch(() => {
+        // Silently handle - home details are optional
+      });
+  }, [homeId, homeCity, homeNumBeds]);
 
   const miles = distance ? (distance * 0.621371).toFixed(1) : null;
 

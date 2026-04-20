@@ -12,7 +12,6 @@ const SignInForm = ({ state, dispatch }) => {
 	const [userName, setUserName] = useState("");
 	const [password, setPassword] = useState("");
 	const [redirect, setRedirect] = useState(false);
-	const [redirectToTerms, setRedirectToTerms] = useState(false);
 	const [errors, setErrors] = useState([]);
 	const [showPassword, setShowPassword] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
@@ -152,12 +151,8 @@ const SignInForm = ({ state, dispatch }) => {
 				}
 				login(response.token);
 
-				// Check if user needs to accept updated terms
-				if (response.requiresTermsAcceptance) {
-					setRedirectToTerms(true);
-				} else {
-					setRedirect(true);
-				}
+				// TermsAcceptanceWrapper handles blocking for terms acceptance
+				setRedirect(true);
 			}
 		}
 	};
@@ -173,11 +168,6 @@ const SignInForm = ({ state, dispatch }) => {
 		}
 	}, [redirect, redirectTo]);
 
-	useEffect(() => {
-		if (redirectToTerms) {
-			navigate("/terms-acceptance");
-		}
-	}, [redirectToTerms]);
 
 	const getAccountIcon = (accountType) => {
 		switch (accountType) {

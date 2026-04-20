@@ -2,10 +2,10 @@
 
 # Kleanr Mobile App
 
-![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
-![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
+![React Native](https://img.shields.io/badge/React_Native-0.81-61DAFB?style=for-the-badge&logo=react&logoColor=white)
+![Expo](https://img.shields.io/badge/Expo-SDK_54-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/Tests-5961_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-6025_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
 
@@ -22,6 +22,7 @@ The Kleanr mobile app is a React Native application built with Expo that provide
 **Key Features:**
 - Full offline-first architecture with background sync
 - Multi-user role support (8 user types including IT Support)
+- **Dual-role support** for cleaners who also have homes (role toggle with Stripe checks)
 - Real-time messaging with WebSocket
 - Stripe payment integration with Apple Pay/Google Pay
 - iCal calendar sync for vacation rentals
@@ -37,6 +38,7 @@ The Kleanr mobile app is a React Native application built with Expo that provide
 - Bi-weekly batch payouts for employees with pending earnings display
 - Database-driven pricing configuration
 - Service Area Management for geographic restrictions
+- **Role-based tax section** displaying appropriate content per active role
 
 ---
 
@@ -114,6 +116,7 @@ export const API_BASE = "http://localhost:3000/api/v1";
 - Guest-not-left reporting
 - Home size adjustment filing
 - Supply reminders with snooze
+- **Dual-role support** - can add homes and switch to homeowner view
 
 </td>
 </tr>
@@ -227,6 +230,9 @@ export const API_BASE = "http://localhost:3000/api/v1";
 | **Guest-Not-Left** | GPS-verified reporting when guests haven't left by checkout |
 | **Conflict Resolution** | Unified case management for disputes and support tickets with photo comparison, evidence gallery, message threads, and audit trail |
 | **Cancellation Appeals** | Submit appeals within 72 hours, HR review within 48-hour SLA, penalty waiver and refund options |
+| **Dual-Role Support** | Cleaners can add homes and switch between cleaner/homeowner views. Role toggle with separate Stripe accounts for each role |
+| **Role-Based Tax Section** | Tax documents section displays appropriate content based on active role (cleaner 1099s vs homeowner info) |
+| **Stripe Setup Checks** | Payment method required for homeowner role, Stripe Connect required for cleaner role, with automatic redirects to setup |
 | **New Home Requests** | Business owners notified when clients add new homes. 48-hour response window with accept/decline. Automatic pricing calculation. Re-request after 30 days if declined. |
 | **Preview as Role** | Platform owners can preview app as Cleaner, Homeowner, Business Owner, or Employee using demo accounts |
 | **Internal Analytics** | Platform metrics dashboard: flow abandonment funnels, job duration stats, offline usage monitoring, dispute/pay override frequency |
@@ -481,13 +487,16 @@ const initialState = {
     token: null,
     id: null,
     email: null,
-    type: null,        // 'cleaner', 'owner1', 'hr', 'it', 'businessOwner', 'businessEmployee'
+    type: null,           // 'cleaner', 'owner1', 'hr', 'it', 'businessOwner', 'businessEmployee'
+    hasPaymentMethod: false,      // For homeowner payment
+    stripeConnectComplete: false, // For cleaner payouts
   },
-  homes: [],           // User's properties
-  appointments: [],    // Scheduled cleanings
-  bill: {},            // Current billing info
-  cleaningRequests: [], // Pending job requests
-  employees: [],       // Business employees (for owners)
+  homes: [],              // User's properties
+  appointments: [],       // Scheduled cleanings
+  bill: {},               // Current billing info
+  cleaningRequests: [],   // Pending job requests
+  employees: [],          // Business employees (for owners)
+  activeRole: null,       // 'cleaner' or 'homeowner' for dual-role users
 };
 
 // Actions
@@ -495,6 +504,7 @@ dispatch({ type: 'SET_USER', payload: user });
 dispatch({ type: 'ADD_HOME', payload: home });
 dispatch({ type: 'UPDATE_APPOINTMENT', payload: appointment });
 dispatch({ type: 'SET_EMPLOYEES', payload: employees });
+dispatch({ type: 'SET_ACTIVE_ROLE', payload: 'homeowner' }); // For dual-role switching
 ```
 
 ### Navigation
@@ -759,6 +769,44 @@ Dashboard for business owner client management:
 - Client list with search and filter
 - Invite new clients via email
 - Per-client pricing management
+
+### RoleToggle (Dual-Role Users)
+
+Allows cleaners with homes to switch between roles:
+
+```javascript
+<RoleToggle
+  activeRole={state.activeRole}
+  dispatch={dispatch}
+  closeModal={closeModal}
+  isOffline={isOffline}
+  hasPaymentMethod={state.currentUser?.hasPaymentMethod}
+  stripeConnectComplete={state.currentUser?.stripeConnectComplete}
+/>
+```
+
+**Features:**
+- Toggle between "Cleaner" and "Homeowner" views
+- Stripe payment method check before switching to homeowner
+- Stripe Connect check before switching to cleaner
+- Automatic redirect to setup flows if requirements not met
+- Disabled in offline mode
+- Persisted preference across sessions
+
+### TaxFormsSection (Role-Aware)
+
+Tax documents with role-based content:
+
+```javascript
+<TaxFormsSection state={state} />
+```
+
+**Features:**
+- Displays cleaner tax info (1099-NEC, earnings) when in cleaner role
+- Displays homeowner tax info (no forms issued) when in homeowner role
+- Displays business owner tax info (Schedule C) for owners
+- Year selection (current year, -1, -2)
+- Stripe Dashboard link for 1099 access
 - Appointment booking for clients
 - Recurring schedule setup
 - Client history view
@@ -918,7 +966,10 @@ npm test -- CleaningChecklist.test.js
 | IT Employee Management | 40 | CRUD operations, password generation |
 | IT Services | 92 | ITDashboardService, ITDisputeService, ITManagementService |
 | Service Area | 24 | Configuration, validation, history |
-| **Total** | **5961** | 210 test suites |
+| RoleToggle | 20 | Role switching, payment method checks, Stripe Connect checks |
+| TaxFormsSectionRoleSwitch | 19 | Tax section role switching, content display |
+| ClientDashboardPaymentSetup | 25 | Payment setup banner, booking validation |
+| **Total** | **6025** | 213 test suites |
 
 ---
 
@@ -926,8 +977,8 @@ npm test -- CleaningChecklist.test.js
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `expo` | ~52.0.0 | Development platform |
-| `react-native` | 0.76.x | Mobile framework |
+| `expo` | ~54.0.0 | Development platform |
+| `react-native` | 0.81.x | Mobile framework |
 | `react-router-native` | ^6.x | Navigation |
 | `@stripe/stripe-react-native` | ^0.38.x | Payment UI |
 | `socket.io-client` | ^4.x | Real-time messaging |

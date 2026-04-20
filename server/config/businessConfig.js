@@ -354,14 +354,18 @@ async function updateAllHomesServiceAreaStatus(
   User = null,
   EmailClass = null
 ) {
+  const { Op } = require("sequelize");
   try {
     // Include user association if User model is provided
+    // Also filter out demo homes (homes owned by demo accounts)
     const includeOptions = User
       ? [
           {
             model: User,
             as: "user",
             attributes: ["id", "username", "email", "notifications"],
+            where: { isDemoAccount: { [Op.ne]: true } },
+            required: true,
           },
         ]
       : [];

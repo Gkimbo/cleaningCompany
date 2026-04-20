@@ -50,6 +50,11 @@ jest.mock("../../../src/services/offline/PhotoStorage", () => ({
   },
 }));
 
+jest.mock("expo-file-system/legacy", () => ({
+  readAsStringAsync: jest.fn().mockResolvedValue("mock-base64-data"),
+  EncodingType: { Base64: "base64" },
+}));
+
 // Mock fetch
 global.fetch = jest.fn();
 
@@ -57,6 +62,7 @@ let SyncEngine;
 let database;
 let syncQueueCollection;
 let offlineJobsCollection;
+let offlinePhotosCollection;
 let NetworkMonitor;
 
 describe("SyncEngine", () => {
@@ -68,6 +74,7 @@ describe("SyncEngine", () => {
     database = require("../../../src/services/offline/database").default;
     syncQueueCollection = require("../../../src/services/offline/database").syncQueueCollection;
     offlineJobsCollection = require("../../../src/services/offline/database").offlineJobsCollection;
+    offlinePhotosCollection = require("../../../src/services/offline/database").offlinePhotosCollection;
     NetworkMonitor = require("../../../src/services/offline/NetworkMonitor").default;
     SyncEngine = require("../../../src/services/offline/SyncEngine").default;
 
@@ -371,6 +378,11 @@ describe("SyncEngine", () => {
     });
 
     it("should sync home size mismatch operation", async () => {
+      const mockPhoto = {
+        id: "photo-1",
+        localUri: "file:///mock/photo.jpg",
+      };
+
       const operation = {
         id: "op-1",
         jobId: "job-1",
@@ -382,7 +394,7 @@ describe("SyncEngine", () => {
           reportedNumBeds: "3",
           reportedNumBaths: "2",
           cleanerNote: "Extra bedroom found",
-          photos: [], // Empty for simplicity - no file reads needed
+          photos: [{ id: "photo-1", roomType: "bedroom", roomNumber: 1 }],
         },
         markInProgress: jest.fn(),
         markCompleted: jest.fn(),
@@ -406,6 +418,9 @@ describe("SyncEngine", () => {
       offlineJobsCollection.query.mockReturnValue({
         fetch: jest.fn().mockResolvedValue([job]),
       });
+
+      // Mock photo lookup for mismatch photos
+      offlinePhotosCollection.find.mockResolvedValue(mockPhoto);
 
       global.fetch.mockResolvedValue({
         ok: true,

@@ -48,6 +48,7 @@ const employeeInviteLimiter = rateLimit({
   message: { error: "Too many employee invitations, please try again later" },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 // Helper function for date formatting (YYYY-MM-DD) - timezone-safe
@@ -4358,6 +4359,8 @@ router.delete("/job-flows/:flowId/checklist", async (req, res) => {
 
 /**
  * POST /job-flows/:flowId/checklist/fork-platform - Fork platform checklist
+ * If an existing checklist exists, returns 409 with confirmation required.
+ * Caller must pass { confirmOverwrite: true } to proceed with overwriting.
  */
 router.post("/job-flows/:flowId/checklist/fork-platform", async (req, res) => {
   try {
@@ -4369,16 +4372,25 @@ router.post("/job-flows/:flowId/checklist/fork-platform", async (req, res) => {
       return res.status(400).json({ error: flowIdError });
     }
 
-    const { versionId } = req.body;
+    const { versionId, confirmOverwrite } = req.body;
 
     const checklist = await CustomJobFlowService.forkPlatformChecklist(
       flowId,
       req.businessOwnerId,
-      versionId
+      versionId,
+      confirmOverwrite === true
     );
 
     res.status(201).json({ success: true, message: "Platform checklist forked", checklist: CustomJobFlowChecklistSerializer.serializeOne(checklist) });
   } catch (error) {
+    // Handle confirmation required error specially
+    if (error.requiresConfirmation) {
+      return res.status(409).json({
+        error: error.message,
+        requiresConfirmation: true,
+        existingChecklist: error.existingChecklist,
+      });
+    }
     console.error("Error forking platform checklist:", error);
     res.status(400).json({ error: error.message });
   }

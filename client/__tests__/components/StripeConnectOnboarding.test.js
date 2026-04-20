@@ -75,7 +75,8 @@ describe("StripeConnectOnboarding Component", () => {
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining("/stripe-connect/account-status/1")
+          expect.stringContaining("/stripe-connect/account-status/1"),
+          expect.any(Object)
         );
       });
     });
@@ -548,7 +549,7 @@ describe("Update Bank Account", () => {
         expect.stringContaining("/stripe-connect/update-bank-account"),
         expect.objectContaining({
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: expect.objectContaining({ "Content-Type": "application/json" }),
         })
       );
     });

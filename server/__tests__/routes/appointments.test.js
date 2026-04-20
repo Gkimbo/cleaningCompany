@@ -505,6 +505,18 @@ describe("Appointment Routes", () => {
 
   describe("GET /:homeId", () => {
     it("should return appointments for a home", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      // Mock home ownership check
+      UserHomes.findByPk.mockResolvedValue({
+        id: 1,
+        userId: 1, // User owns this home
+        dataValues: { id: 1, userId: 1 },
+      });
+
+      // Mock the assigned cleaner check (not needed since user is owner)
+      UserAppointments.findOne.mockResolvedValue(null);
+
       UserAppointments.findAll.mockResolvedValue([
         {
           id: 1,
@@ -517,7 +529,9 @@ describe("Appointment Routes", () => {
         },
       ]);
 
-      const res = await request(app).get("/api/v1/appointments/1");
+      const res = await request(app)
+        .get("/api/v1/appointments/1")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("appointments");
@@ -526,18 +540,26 @@ describe("Appointment Routes", () => {
 
   describe("GET /home/:homeId", () => {
     it("should return home details", async () => {
-      UserHomes.findAll.mockResolvedValue([
-        {
-          id: 1,
-          dataValues: {
-            id: 1,
-            nickName: "Test Home",
-            address: "123 Test St",
-          },
-        },
-      ]);
+      const token = jwt.sign({ userId: 1 }, secretKey);
 
-      const res = await request(app).get("/api/v1/appointments/home/1");
+      // Mock home with user ownership
+      UserHomes.findByPk.mockResolvedValue({
+        id: 1,
+        userId: 1, // User owns this home
+        dataValues: {
+          id: 1,
+          userId: 1,
+          nickName: "Test Home",
+          address: "123 Test St",
+        },
+      });
+
+      // Mock assigned cleaner check
+      UserAppointments.findOne.mockResolvedValue(null);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/home/1")
+        .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("home");
@@ -554,6 +576,7 @@ describe("Appointment Routes", () => {
       });
 
       UserHomes.findOne.mockResolvedValue({
+        userId: 1, // Must match token userId for ownership check
         dataValues: {
           id: 1,
           numBeds: 3,
@@ -614,6 +637,7 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
+        userId: 1, // Must match token userId for ownership check
         dataValues: {
           price: "150",
           homeId: 1,
@@ -1607,6 +1631,12 @@ describe("Appointment Routes", () => {
   });
 
   describe("PATCH /approve-request", () => {
+    let approveToken;
+
+    beforeEach(() => {
+      approveToken = jwt.sign({ userId: 1 }, secretKey);
+    });
+
     it("should approve a cleaning request", async () => {
       const { Payout } = require("../../models");
 
@@ -1627,6 +1657,7 @@ describe("Appointment Routes", () => {
 
       UserAppointments.findOne.mockResolvedValue({
         id: 1,
+        userId: 1, // For ownership check
         dataValues: {
           id: 1,
           employeesAssigned: [],
@@ -1683,6 +1714,7 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/approve-request")
+        .set("Authorization", `Bearer ${approveToken}`)
         .send({ requestId: 1, approve: true });
 
       expect(res.status).toBe(200);
@@ -1695,8 +1727,20 @@ describe("Appointment Routes", () => {
         destroy: jest.fn().mockResolvedValue(true),
       });
 
+      // Mock appointment for ownership check
+      UserAppointments.findOne.mockResolvedValue({
+        id: 1,
+        userId: 1, // For ownership check
+        dataValues: {
+          id: 1,
+          userId: 1,
+          appointmentId: 1,
+        },
+      });
+
       const res = await request(app)
         .patch("/api/v1/appointments/approve-request")
+        .set("Authorization", `Bearer ${approveToken}`)
         .send({ requestId: 1, approve: false });
 
       expect(res.status).toBe(200);
@@ -1724,6 +1768,7 @@ describe("Appointment Routes", () => {
 
       UserAppointments.findOne.mockResolvedValue({
         id: 1,
+        userId: 1, // For ownership check
         dataValues: {
           id: 1,
           employeesAssigned: [],
@@ -1779,6 +1824,7 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/approve-request")
+        .set("Authorization", `Bearer ${approveToken}`)
         .send({ requestId: 1, approve: true });
 
       expect(res.status).toBe(200);
@@ -1805,6 +1851,7 @@ describe("Appointment Routes", () => {
       // Already has one cleaner assigned
       UserAppointments.findOne.mockResolvedValue({
         id: 1,
+        userId: 1, // For ownership check
         dataValues: {
           id: 1,
           employeesAssigned: ["2"], // One cleaner already assigned
@@ -1842,6 +1889,7 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/approve-request")
+        .set("Authorization", `Bearer ${approveToken}`)
         .send({ requestId: 1, approve: true });
 
       expect(res.status).toBe(409);
@@ -1858,6 +1906,7 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/approve-request")
+        .set("Authorization", `Bearer ${approveToken}`)
         .send({ requestId: 999, approve: true });
 
       expect(res.status).toBe(404);
@@ -1896,6 +1945,7 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
+        userId: 1, // For ownership check
         dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" }, // Price is higher than appointmentDue
       });
 
@@ -1929,6 +1979,7 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
+        userId: 1, // For ownership check
         dataValues: { price: "150", paid: true, homeId: 1, date: "2025-01-15" }, // Already paid
       });
 
@@ -1962,6 +2013,7 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
+        userId: 1, // For ownership check
         dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" },
       });
 
@@ -1995,6 +2047,7 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
+        userId: 1, // For ownership check
         dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" },
       });
 
@@ -2029,6 +2082,7 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
+        userId: 1, // For ownership check
         dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" },
       });
 
@@ -2568,8 +2622,11 @@ describe("Appointment Routes", () => {
       },
     };
 
+    let denyToken;
+
     beforeEach(() => {
       jest.clearAllMocks();
+      denyToken = jwt.sign({ userId: 3 }, secretKey); // Token for homeowner (userId: 3)
       UserPendingRequests.findOne.mockResolvedValue(mockRequest);
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
       User.findByPk
@@ -2581,6 +2638,7 @@ describe("Appointment Routes", () => {
     it("should deny a pending request successfully", async () => {
       const res = await request(app)
         .patch("/api/v1/appointments/deny-request")
+        .set("Authorization", `Bearer ${denyToken}`)
         .send({ id: 2, appointmentId: 10 });
 
       expect(res.status).toBe(200);
@@ -2592,6 +2650,7 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/deny-request")
+        .set("Authorization", `Bearer ${denyToken}`)
         .send({ id: 2, appointmentId: 10 });
 
       expect(res.status).toBe(404);
@@ -2603,6 +2662,7 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/deny-request")
+        .set("Authorization", `Bearer ${denyToken}`)
         .send({ id: 2, appointmentId: 10 });
 
       expect(res.status).toBe(404);
@@ -2615,6 +2675,7 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/deny-request")
+        .set("Authorization", `Bearer ${denyToken}`)
         .send({ id: 2, appointmentId: 10 });
 
       expect(res.status).toBe(404);
@@ -2629,6 +2690,7 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/deny-request")
+        .set("Authorization", `Bearer ${denyToken}`)
         .send({ id: 2, appointmentId: 10 });
 
       expect(res.status).toBe(404);
@@ -2638,6 +2700,7 @@ describe("Appointment Routes", () => {
     it("should destroy the pending request", async () => {
       await request(app)
         .patch("/api/v1/appointments/deny-request")
+        .set("Authorization", `Bearer ${denyToken}`)
         .send({ id: 2, appointmentId: 10 });
 
       expect(mockRequest.destroy).toHaveBeenCalled();
@@ -2646,6 +2709,7 @@ describe("Appointment Routes", () => {
     it("should find request with correct parameters", async () => {
       await request(app)
         .patch("/api/v1/appointments/deny-request")
+        .set("Authorization", `Bearer ${denyToken}`)
         .send({ id: 2, appointmentId: 10 });
 
       expect(UserPendingRequests.findOne).toHaveBeenCalledWith({
@@ -2656,6 +2720,7 @@ describe("Appointment Routes", () => {
     it("should handle missing id parameter", async () => {
       const res = await request(app)
         .patch("/api/v1/appointments/deny-request")
+        .set("Authorization", `Bearer ${denyToken}`)
         .send({ appointmentId: 10 });
 
       // Should still attempt to find with undefined id, resulting in not found
@@ -2665,6 +2730,7 @@ describe("Appointment Routes", () => {
     it("should handle missing appointmentId parameter", async () => {
       const res = await request(app)
         .patch("/api/v1/appointments/deny-request")
+        .set("Authorization", `Bearer ${denyToken}`)
         .send({ id: 2 });
 
       // Should still attempt to find with undefined appointmentId
@@ -2676,6 +2742,7 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/deny-request")
+        .set("Authorization", `Bearer ${denyToken}`)
         .send({ id: 2, appointmentId: 10 });
 
       expect(res.status).toBe(500);
@@ -2684,6 +2751,7 @@ describe("Appointment Routes", () => {
     it("should convert string ids to numbers", async () => {
       await request(app)
         .patch("/api/v1/appointments/deny-request")
+        .set("Authorization", `Bearer ${denyToken}`)
         .send({ id: "2", appointmentId: "10" });
 
       expect(UserPendingRequests.findOne).toHaveBeenCalledWith({

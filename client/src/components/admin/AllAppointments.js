@@ -47,7 +47,7 @@ const AllAppointments = ({ state }) => {
   const fetchHomeInfo = async (homeId) => {
     if (homeDetails[homeId]) return;
     try {
-      const response = await Appointment.getHomeInfo(homeId);
+      const response = await Appointment.getHomeInfo(homeId, state.currentUser?.token);
       if (response?.home?.[0]) {
         setHomeDetails((prev) => ({ ...prev, [homeId]: response.home[0] }));
       }
@@ -77,7 +77,7 @@ const AllAppointments = ({ state }) => {
     if (!selectedAppointment) return;
     setIsDeleting(true);
     try {
-      await Appointment.deleteAppointmentById(selectedAppointment.id);
+      await Appointment.deleteAppointmentById(selectedAppointment.id, state.currentUser?.token);
       await fetchAppointments();
     } catch (error) {
       console.error("Error deleting appointment:", error);
@@ -93,13 +93,15 @@ const AllAppointments = ({ state }) => {
   };
 
   const formatDate = (dateString) => {
-    const date = parseDateString(dateString);
-    return date.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    if (!dateString) return "—";
+    // Parse YYYY-MM-DD directly to avoid timezone issues
+    const [year, month, day] = dateString.split("-").map(Number);
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    // Create date at noon local time to get correct day of week
+    const date = new Date(year, month - 1, day, 12, 0, 0);
+    const dayOfWeek = days[date.getDay()];
+    return `${dayOfWeek}, ${months[month - 1]} ${day}, ${year}`;
   };
 
   const formatPrice = (price) => {

@@ -92,7 +92,6 @@ class TermsAndConditionsSerializer {
 			termsId: data.termsId,
 			acceptedAt: data.acceptedAt,
 			ipAddress: data.ipAddress,
-			userAgent: data.userAgent
 		};
 	}
 

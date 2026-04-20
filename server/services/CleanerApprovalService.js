@@ -7,8 +7,10 @@
 
 const { Op } = require("sequelize");
 
-// 48 hours in milliseconds
-const APPROVAL_TIMEOUT_MS = 48 * 60 * 60 * 1000;
+// Approval timeout constants
+const APPROVAL_TIMEOUT_SHORT_MS = 24 * 60 * 60 * 1000; // 24 hours for jobs within 5 days
+const APPROVAL_TIMEOUT_LONG_MS = 72 * 60 * 60 * 1000;  // 72 hours for jobs 6+ days away
+const DAYS_THRESHOLD = 5; // Jobs within this many days get shorter timeout
 
 class CleanerApprovalService {
   /**
@@ -92,7 +94,16 @@ class CleanerApprovalService {
     }
 
     // Non-preferred cleaner: create approval request
-    const expiresAt = new Date(Date.now() + APPROVAL_TIMEOUT_MS);
+    // Calculate days until appointment to determine timeout
+    const appointmentDate = new Date(appointment.date);
+    const now = new Date();
+    const daysUntilAppointment = Math.ceil((appointmentDate - now) / (1000 * 60 * 60 * 24));
+
+    // Use shorter timeout (24h) for jobs within 5 days, longer timeout (72h) for 6+ days
+    const timeoutMs = daysUntilAppointment <= DAYS_THRESHOLD
+      ? APPROVAL_TIMEOUT_SHORT_MS
+      : APPROVAL_TIMEOUT_LONG_MS;
+    const expiresAt = new Date(Date.now() + timeoutMs);
 
     // Check for existing pending request
     const existingRequest = await CleanerJoinRequest.findOne({
@@ -456,6 +467,7 @@ class CleanerApprovalService {
     const { User } = require("../models");
     const NotificationService = require("./NotificationService");
     const EncryptionService = require("./EncryptionService");
+    const ReviewsClass = require("./ReviewsClass");
 
     const cleaner = await User.findByPk(cleanerId);
     const home = appointment.home;
@@ -479,6 +491,14 @@ class CleanerApprovalService {
       (new Date(joinRequest.expiresAt) - new Date()) / (1000 * 60 * 60)
     );
 
+    // Get cleaner profile summary (rating, reviews)
+    let cleanerProfile = null;
+    try {
+      cleanerProfile = await ReviewsClass.getCleanerProfileSummary(cleanerId);
+    } catch (error) {
+      console.error("[CleanerApprovalService] Error fetching cleaner profile:", error);
+    }
+
     // In-app notification
     await NotificationService.createNotification({
       userId: joinRequest.homeownerId,
@@ -491,6 +511,7 @@ class CleanerApprovalService {
         cleanerId,
         cleanerName,
         expiresAt: joinRequest.expiresAt,
+        cleanerProfile,
       },
       actionRequired: true,
       relatedAppointmentId: appointment.id,

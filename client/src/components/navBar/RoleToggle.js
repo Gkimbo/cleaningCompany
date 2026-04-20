@@ -9,7 +9,7 @@ import { colors, spacing, radius, typography } from "../../services/styles/theme
  * RoleToggle - Allows dual-role users (cleaner + homeowner) to switch views
  * Only shown for cleaners who also have homes registered
  */
-const RoleToggle = ({ activeRole, dispatch, closeModal, isOffline = false }) => {
+const RoleToggle = ({ activeRole, dispatch, closeModal, isOffline = false, hasPaymentMethod = false, stripeConnectComplete = false }) => {
   const navigate = useNavigate();
   const [isToggling, setIsToggling] = useState(false);
   const isHomeownerView = activeRole === "homeowner";
@@ -32,9 +32,18 @@ const RoleToggle = ({ activeRole, dispatch, closeModal, isOffline = false }) => 
       await SecureStorage.setItem("activeRole", newRole);
       // Update state with explicit role (ensures storage and state match)
       dispatch({ type: "SET_ACTIVE_ROLE", payload: newRole });
-      // Close modal and navigate home to refresh dashboard
+      // Close modal
       closeModal();
-      navigate("/");
+
+      // If switching to homeowner and no payment method, redirect to payment setup
+      if (newRole === "homeowner" && !hasPaymentMethod) {
+        navigate("/payment-setup");
+      } else if (newRole === "cleaner" && !stripeConnectComplete) {
+        // If switching to cleaner and Stripe Connect not complete, redirect to earnings/onboarding
+        navigate("/earnings");
+      } else {
+        navigate("/");
+      }
     } catch (err) {
       console.error("Failed to save role preference:", err);
       Alert.alert("Error", "Could not save your preference. Please try again.");
@@ -44,105 +53,97 @@ const RoleToggle = ({ activeRole, dispatch, closeModal, isOffline = false }) => 
 
   return (
     <View style={styles.container}>
-      <View style={styles.roleInfo}>
-        <View style={[styles.iconContainer, isHomeownerView ? styles.homeownerIcon : styles.cleanerIcon]}>
+      <Text style={styles.headerLabel}>Switch View</Text>
+      <View style={styles.toggleTrack}>
+        {/* Cleaner Option */}
+        <Pressable
+          style={[
+            styles.toggleOption,
+            !isHomeownerView && styles.toggleOptionActive,
+          ]}
+          onPress={isHomeownerView ? handleToggle : undefined}
+          disabled={isDisabled || !isHomeownerView}
+        >
           <Feather
-            name={isHomeownerView ? "home" : "briefcase"}
-            size={20}
-            color={isHomeownerView ? colors.secondary[600] : colors.primary[600]}
+            name="briefcase"
+            size={16}
+            color={!isHomeownerView ? colors.primary[600] : "rgba(255, 255, 255, 0.5)"}
           />
-        </View>
-        <View style={styles.textContainer}>
-          <Text style={styles.label}>Viewing as</Text>
-          <Text style={styles.roleName}>
-            {isHomeownerView ? "Homeowner" : "Cleaner"}
+          <Text style={[
+            styles.toggleText,
+            !isHomeownerView && styles.toggleTextActive,
+          ]}>
+            Cleaner
           </Text>
-        </View>
+        </Pressable>
+
+        {/* Homeowner Option */}
+        <Pressable
+          style={[
+            styles.toggleOption,
+            isHomeownerView && styles.toggleOptionActive,
+          ]}
+          onPress={!isHomeownerView ? handleToggle : undefined}
+          disabled={isDisabled || isHomeownerView}
+        >
+          <Feather
+            name="home"
+            size={16}
+            color={isHomeownerView ? colors.secondary[600] : "rgba(255, 255, 255, 0.5)"}
+          />
+          <Text style={[
+            styles.toggleText,
+            isHomeownerView && styles.toggleTextActive,
+          ]}>
+            Homeowner
+          </Text>
+        </Pressable>
       </View>
-      <Pressable
-        style={({ pressed }) => [
-          styles.switchButton,
-          pressed && !isDisabled && styles.switchButtonPressed,
-          isDisabled && styles.switchButtonDisabled,
-        ]}
-        onPress={handleToggle}
-        disabled={isDisabled}
-      >
-        <Feather
-          name={isOffline ? "wifi-off" : "repeat"}
-          size={16}
-          color={colors.neutral[0]}
-        />
-        <Text style={styles.switchText}>
-          {isToggling ? "..." : isOffline ? "Offline" : "Switch"}
-        </Text>
-      </Pressable>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    marginBottom: spacing.lg,
+  },
+  headerLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: "rgba(255, 255, 255, 0.5)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
+  },
+  toggleTrack: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
     borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
+    padding: 4,
+    gap: 4,
   },
-  roleInfo: {
+  toggleOption: {
+    flex: 1,
     flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
     alignItems: "center",
     justifyContent: "center",
-  },
-  homeownerIcon: {
-    backgroundColor: colors.secondary[100],
-  },
-  cleanerIcon: {
-    backgroundColor: colors.primary[100],
-  },
-  textContainer: {
-    gap: 2,
-  },
-  label: {
-    fontSize: typography.fontSize.xs,
-    color: "rgba(255, 255, 255, 0.6)",
-  },
-  roleName: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.neutral[0],
-  },
-  switchButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    backgroundColor: colors.primary[600],
-    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
   },
-  switchButtonPressed: {
-    backgroundColor: colors.primary[700],
+  toggleOptionActive: {
+    backgroundColor: colors.neutral[0],
   },
-  switchButtonDisabled: {
-    backgroundColor: colors.neutral[400],
-    opacity: 0.7,
-  },
-  switchText: {
+  toggleText: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
-    color: colors.neutral[0],
+    color: "rgba(255, 255, 255, 0.5)",
+  },
+  toggleTextActive: {
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.semibold,
   },
 });
 

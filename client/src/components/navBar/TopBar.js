@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import { colors, spacing, radius, shadows } from "../../services/styles/theme";
+import { useOffline } from "../../services/offline/OfflineContext";
 import Application from "../../services/fetchRequests/ApplicationClass";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
 import ReferralService from "../../services/fetchRequests/ReferralService";
@@ -69,6 +70,7 @@ const getCurrentAccountDisplayName = (account) => {
 };
 
 const TopBar = ({ dispatch, state }) => {
+  const { isOffline } = useOffline();
   const [modalVisible, setModalVisible] = useState(false);
   const [signInRedirect, setSignInRedirect] = useState(false);
   const [signUpRedirect, setSignUpRedirect] = useState(false);
@@ -86,8 +88,6 @@ const TopBar = ({ dispatch, state }) => {
   const navigate = useNavigate();
   const { onNotification, onNotificationCountUpdate } = useSocket();
   const { login } = useContext(AuthContext);
-
-  
 
   // Fetch pending applications count for owners and HR
   useEffect(() => {
@@ -358,7 +358,13 @@ const TopBar = ({ dispatch, state }) => {
                   >
                     <Feather name="users" size={20} color="white" />
                     <View style={styles.badge}>
-                      <Text style={pendingApplications > 9 ? styles.badgeTextSmall : styles.badgeText}>
+                      <Text
+                        style={
+                          pendingApplications > 9
+                            ? styles.badgeTextSmall
+                            : styles.badgeText
+                        }
+                      >
                         {pendingApplications > 99 ? "99+" : pendingApplications}
                       </Text>
                     </View>
@@ -375,7 +381,13 @@ const TopBar = ({ dispatch, state }) => {
                 >
                   <Feather name="user-check" size={20} color="white" />
                   <View style={styles.badge}>
-                    <Text style={pendingCleanerRequests > 9 ? styles.badgeTextSmall : styles.badgeText}>
+                    <Text
+                      style={
+                        pendingCleanerRequests > 9
+                          ? styles.badgeTextSmall
+                          : styles.badgeText
+                      }
+                    >
                       {pendingCleanerRequests > 99
                         ? "99+"
                         : pendingCleanerRequests}
@@ -392,10 +404,18 @@ const TopBar = ({ dispatch, state }) => {
                 onPress={() => navigate("/notifications")}
               >
                 <Feather name="bell" size={20} color="white" />
-                {(unreadNotifications + pendingReviews) > 0 && (
+                {unreadNotifications + pendingReviews > 0 && (
                   <View style={styles.badge}>
-                    <Text style={(unreadNotifications + pendingReviews) > 9 ? styles.badgeTextSmall : styles.badgeText}>
-                      {(unreadNotifications + pendingReviews) > 99 ? "99+" : (unreadNotifications + pendingReviews)}
+                    <Text
+                      style={
+                        unreadNotifications + pendingReviews > 9
+                          ? styles.badgeTextSmall
+                          : styles.badgeText
+                      }
+                    >
+                      {unreadNotifications + pendingReviews > 99
+                        ? "99+"
+                        : unreadNotifications + pendingReviews}
                     </Text>
                   </View>
                 )}
@@ -454,20 +474,29 @@ const TopBar = ({ dispatch, state }) => {
                         ) : state.account === "cleaner" ? (
                           <>
                             {/* Role Toggle for non-business-owner cleaners with homes (dual-role users) */}
-                            {!state.isBusinessOwner && state.homes && state.homes.length > 0 && (
-                              <RoleToggle
-                                activeRole={state.activeRole || "cleaner"}
-                                dispatch={dispatch}
-                                closeModal={closeModal}
-                                isOffline={state.offlineMode || state.isOnline === false}
-                              />
-                            )}
+                            {!state.isBusinessOwner &&
+                              state.homes &&
+                              state.homes.length > 0 && (
+                                <RoleToggle
+                                  activeRole={state.activeRole || "cleaner"}
+                                  dispatch={dispatch}
+                                  closeModal={closeModal}
+                                  isOffline={isOffline}
+                                  hasPaymentMethod={state.currentUser?.hasPaymentMethod}
+                                  stripeConnectComplete={state.currentUser?.stripeConnectComplete}
+                                />
+                              )}
 
                             {/* Show homeowner menu if non-business-owner cleaner is viewing as homeowner */}
-                            {!state.isBusinessOwner && state.homes && state.homes.length > 0 && state.activeRole === "homeowner" ? (
+                            {!state.isBusinessOwner &&
+                            state.homes &&
+                            state.homes.length > 0 &&
+                            state.activeRole === "homeowner" ? (
                               <>
                                 <AppointmentsButton closeModal={closeModal} />
-                                <ScheduleCleaningButton closeModal={closeModal} />
+                                <ScheduleCleaningButton
+                                  closeModal={closeModal}
+                                />
                                 <MyHomesButton closeModal={closeModal} />
                                 <BillButton closeModal={closeModal} />
                                 <PendingReviewsButton closeModal={closeModal} />
@@ -482,7 +511,9 @@ const TopBar = ({ dispatch, state }) => {
                                 {/* Search Jobs, My Jobs, Earnings only for non-business-owner cleaners */}
                                 {!state.isBusinessOwner && (
                                   <>
-                                    <ChooseNewJobButton closeModal={closeModal} />
+                                    <ChooseNewJobButton
+                                      closeModal={closeModal}
+                                    />
                                     <EmployeeAssignmentsButton
                                       closeModal={closeModal}
                                     />
@@ -629,12 +660,12 @@ const TopBar = ({ dispatch, state }) => {
             >
               <Text style={styles.authButtonText}>Become a Cleaner</Text>
             </Pressable>
-            <Pressable
+            {/* <Pressable
               style={[styles.authButton, styles.importBusinessButton]}
               onPress={() => setImportBusinessRedirect(true)}
             >
-              <Text style={styles.authButtonText}>Business Owner</Text>
-            </Pressable>
+              <Text style={styles.authButtonText}>Become a Business</Text>
+            </Pressable> */}
           </View>
         </View>
       )}

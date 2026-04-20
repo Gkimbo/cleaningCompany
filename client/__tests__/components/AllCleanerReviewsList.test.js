@@ -168,7 +168,7 @@ describe("AllCleanerReviewsList Component", () => {
       });
 
       await waitFor(() => {
-        expect(FetchData.approveRequest).toHaveBeenCalledWith(1, true);
+        expect(FetchData.approveRequest).toHaveBeenCalledWith(1, true, undefined);
       });
     });
 
@@ -206,7 +206,7 @@ describe("AllCleanerReviewsList Component", () => {
       });
 
       await waitFor(() => {
-        expect(FetchData.denyRequest).toHaveBeenCalledWith(123, 10);
+        expect(FetchData.denyRequest).toHaveBeenCalledWith(123, 10, undefined);
       });
     });
 

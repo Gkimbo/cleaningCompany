@@ -31,7 +31,12 @@ jest.mock("../../models", () => ({
     findOne: jest.fn(),
     findByPk: jest.fn(),
   },
-  sequelize: {},
+  sequelize: {
+    transaction: jest.fn((callback) => callback({
+      commit: jest.fn(),
+      rollback: jest.fn(),
+    })),
+  },
   Op: require("sequelize").Op,
 }));
 
@@ -271,9 +276,14 @@ describe("CustomJobFlowService", () => {
 
       expect(CustomJobFlow.update).toHaveBeenCalledWith(
         { isDefault: false },
-        { where: { businessOwnerId: 1, isDefault: true } }
+        expect.objectContaining({
+          where: { businessOwnerId: 1, isDefault: true },
+        })
       );
-      expect(mockFlow.update).toHaveBeenCalledWith({ isDefault: true });
+      expect(mockFlow.update).toHaveBeenCalledWith(
+        { isDefault: true },
+        expect.anything()
+      );
       expect(result).toEqual(mockFlow);
     });
 

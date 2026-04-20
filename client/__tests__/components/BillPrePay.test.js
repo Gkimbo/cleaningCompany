@@ -441,7 +441,13 @@ describe("Bill Component - Pre-Pay and Retry Features", () => {
       const yesterdayDate = new Date(today);
       yesterdayDate.setDate(yesterdayDate.getDate() - 1);
 
-      const formatDate = (d) => d.toISOString().split("T")[0];
+      // Use local date format to avoid timezone issues
+      const formatDate = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      };
 
       const appointments = [
         { id: 1, date: formatDate(tomorrowDate), paid: false },
@@ -461,10 +467,18 @@ describe("Bill Component - Pre-Pay and Retry Features", () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 7);
 
+      // Use local date format to avoid timezone issues
+      const formatDate = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      };
+
       const appointments = [
         {
           id: 1,
-          date: pastDate.toISOString().split("T")[0],
+          date: formatDate(pastDate),
           paid: false,
           hasBeenAssigned: true,
           paymentIntentId: "pi_123",

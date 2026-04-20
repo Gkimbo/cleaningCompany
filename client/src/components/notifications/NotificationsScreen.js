@@ -16,6 +16,7 @@ import { useSocket } from "../../services/SocketContext";
 import NotificationCard from "./NotificationCard";
 import RebookingModal from "../cleaner/RebookingModal";
 import BusinessOwnerDeclinedModal from "../client/BusinessOwnerDeclinedModal";
+import PendingBookingModal from "../client/PendingBookingModal";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
 import useSafeNavigation from "../../hooks/useSafeNavigation";
@@ -34,6 +35,8 @@ const NotificationsScreen = () => {
   const [selectedNotificationForRebook, setSelectedNotificationForRebook] = useState(null);
   const [showDeclinedModal, setShowDeclinedModal] = useState(false);
   const [selectedDeclinedNotification, setSelectedDeclinedNotification] = useState(null);
+  const [showPendingBookingModal, setShowPendingBookingModal] = useState(false);
+  const [selectedPendingBooking, setSelectedPendingBooking] = useState(null);
   const [pendingReviewsCount, setPendingReviewsCount] = useState(0);
 
   const fetchNotifications = useCallback(async (pageNum = 1, refresh = false) => {
@@ -129,6 +132,27 @@ const NotificationsScreen = () => {
       );
     }
 
+    // Special case: pending_booking with action required shows modal
+    if (notification.type === "pending_booking" && notification.actionRequired) {
+      setSelectedPendingBooking({
+        id: notification.data?.appointmentId,
+        date: notification.data?.date,
+        price: notification.data?.price,
+        timeWindow: notification.data?.timeWindow,
+        expiresAt: notification.expiresAt,
+        cleanerBusiness: {
+          name: notification.data?.cleanerName || notification.data?.businessOwnerName,
+        },
+        Home: {
+          nickname: notification.data?.homeName,
+          address: notification.data?.homeAddress,
+        },
+        notes: notification.data?.notes,
+      });
+      setShowPendingBookingModal(true);
+      return;
+    }
+
     // Special case: business_owner_declined with action required shows modal
     if (notification.type === "business_owner_declined" && notification.actionRequired) {
       setSelectedDeclinedNotification(notification);
@@ -139,6 +163,12 @@ const NotificationsScreen = () => {
     // Special case: unassigned_reminder_bo - navigate to job assignment page
     if (notification.type === "unassigned_reminder_bo" && notification.data?.appointmentId) {
       navigate(`/business-owner/assign?jobId=${notification.data.appointmentId}`);
+      return;
+    }
+
+    // Special case: payment_failed - navigate directly to payment setup
+    if ((notification.type === "payment_failed" || notification.type === "payment_retry_failed") && notification.actionRequired) {
+      navigate("/payment-setup");
       return;
     }
 
@@ -292,6 +322,22 @@ const NotificationsScreen = () => {
           setSelectedDeclinedNotification(null);
         }}
         onComplete={() => {
+          // Refresh notifications after action is taken
+          fetchNotifications(1, true);
+        }}
+      />
+
+      {/* Pending Booking Modal */}
+      <PendingBookingModal
+        visible={showPendingBookingModal}
+        booking={selectedPendingBooking}
+        onClose={() => {
+          setShowPendingBookingModal(false);
+          setSelectedPendingBooking(null);
+        }}
+        onActionComplete={(action, result) => {
+          setShowPendingBookingModal(false);
+          setSelectedPendingBooking(null);
           // Refresh notifications after action is taken
           fetchNotifications(1, true);
         }}

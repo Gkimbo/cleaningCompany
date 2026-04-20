@@ -18,7 +18,16 @@ jest.mock("../../models", () => ({
   },
 }));
 
+// Mock AppointmentJobFlowService for status endpoint
+jest.mock("../../services/AppointmentJobFlowService", () => ({
+  getJobFlowByAppointmentId: jest.fn().mockResolvedValue({
+    photoRequirement: "required",
+    hasChecklist: jest.fn().mockReturnValue(false),
+  }),
+}));
+
 const { JobPhoto, UserAppointments, User } = require("../../models");
+const AppointmentJobFlowService = require("../../services/AppointmentJobFlowService");
 
 // Set up express app with the router
 const jobPhotosRouter = require("../../routes/api/v1/jobPhotosRouter");
@@ -416,6 +425,15 @@ describe("Job Photos Router", () => {
   });
 
   describe("GET /:appointmentId/status", () => {
+    beforeEach(() => {
+      // Mock appointment for status endpoint
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        userId: 1, // homeowner
+        employeesAssigned: ["2"], // cleaner assigned
+      });
+    });
+
     it("should return photo status counts including passes", async () => {
       JobPhoto.count
         .mockResolvedValueOnce(3) // before count

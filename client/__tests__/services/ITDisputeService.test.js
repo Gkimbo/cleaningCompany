@@ -46,7 +46,7 @@ describe("ITDisputeService", () => {
       expect(HttpClient.post).toHaveBeenCalledWith(
         "/it-disputes/submit",
         disputeData,
-        { token: "test-token", useBaseUrl: true }
+        { token: "test-token" }
       );
       expect(result.success).toBe(true);
       expect(result.dispute).toEqual(mockDispute);
@@ -92,7 +92,7 @@ describe("ITDisputeService", () => {
       expect(HttpClient.post).toHaveBeenCalledWith(
         "/it-disputes/submit",
         disputeData,
-        { token: "test-token", useBaseUrl: true }
+        { token: "test-token" }
       );
     });
   });
@@ -109,7 +109,7 @@ describe("ITDisputeService", () => {
 
       expect(HttpClient.get).toHaveBeenCalledWith(
         "/it-disputes/my-disputes",
-        { token: "test-token", useBaseUrl: true }
+        { token: "test-token" }
       );
       expect(result.success).toBe(true);
       expect(result.disputes).toEqual(mockDisputes);
@@ -161,7 +161,7 @@ describe("ITDisputeService", () => {
 
       expect(HttpClient.get).toHaveBeenCalledWith(
         "/it-disputes/1",
-        { token: "test-token", useBaseUrl: true }
+        { token: "test-token" }
       );
       expect(result.success).toBe(true);
       expect(result.dispute).toEqual(mockDispute);
@@ -201,7 +201,7 @@ describe("ITDisputeService", () => {
       expect(HttpClient.post).toHaveBeenCalledWith(
         "/it-disputes/1/add-info",
         { additionalInfo: "More details" },
-        { token: "test-token", useBaseUrl: true }
+        { token: "test-token" }
       );
       expect(result.success).toBe(true);
     });
@@ -241,7 +241,7 @@ describe("ITDisputeService", () => {
 
       expect(HttpClient.get).toHaveBeenCalledWith(
         "/it-disputes/categories/list",
-        { token: "test-token", useBaseUrl: true }
+        { token: "test-token" }
       );
       expect(result.success).toBe(true);
       expect(result.categories).toEqual(mockCategories);

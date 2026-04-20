@@ -38,10 +38,18 @@ describe("TermsAndConditions Model", () => {
       );
     });
 
-    it("should have type field as ENUM with homeowner, cleaner, privacy_policy, and payment_terms", () => {
+    it("should have type field as ENUM with all document types", () => {
       const attributes = mockDefine.mock.calls[0][1];
       expect(attributes.type.type.type).toBe("ENUM");
-      expect(attributes.type.type.values).toEqual(["homeowner", "cleaner", "privacy_policy", "payment_terms"]);
+      expect(attributes.type.type.values).toEqual([
+        "homeowner",
+        "cleaner",
+        "privacy_policy",
+        "payment_terms",
+        "damage_protection",
+        "cleaner_agreement",
+        "business_owner",
+      ]);
       expect(attributes.type.allowNull).toBe(false);
     });
 

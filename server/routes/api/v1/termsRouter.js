@@ -3,16 +3,25 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const { TermsAndConditions, UserTermsAcceptance, User } = require("../../../models");
+const { TermsAndConditions, UserTermsAcceptance, User, sequelize } = require("../../../models");
 const EncryptionService = require("../../../services/EncryptionService");
 
 const termsRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
+// Valid document types - defined early for use in multer validation
+const VALID_TYPES = ["homeowner", "cleaner", "privacy_policy", "payment_terms", "damage_protection", "cleaner_agreement", "business_owner"];
+
 // Configure multer for PDF uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const type = req.body.type || "homeowner";
+
+    // SECURITY: Validate type before using in path to prevent path traversal
+    if (!VALID_TYPES.includes(type)) {
+      return cb(new Error(`Invalid type. Must be one of: ${VALID_TYPES.join(", ")}`), null);
+    }
+
     const uploadDir = path.join(__dirname, "../../../public/uploads/terms", type);
 
     // Ensure directory exists
@@ -80,9 +89,6 @@ const getNextVersion = async (type) => {
   return latest ? latest.version + 1 : 1;
 };
 
-// Valid document types
-const VALID_TYPES = ["homeowner", "cleaner", "privacy_policy", "payment_terms", "damage_protection"];
-
 /**
  * Get current T&C for a type (public - no auth required)
  * GET /api/v1/terms/current/:type
@@ -91,7 +97,7 @@ termsRouter.get("/current/:type", async (req, res) => {
   const { type } = req.params;
 
   if (!VALID_TYPES.includes(type)) {
-    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', 'payment_terms', or 'damage_protection'" });
+    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', 'payment_terms', 'damage_protection', 'cleaner_agreement', or 'business_owner'" });
   }
 
   try {
@@ -141,7 +147,13 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
     }
 
     // Determine user type for terms
-    const termsType = user.type === "employee" ? "cleaner" : "homeowner";
+    // - "employee" (business employees) and "cleaner" (independent cleaners) get cleaner terms
+    // - "owner", "it", "humanResources" are internal staff - they don't need homeowner/cleaner terms
+    //   but still need privacy policy and payment terms
+    // - Everyone else (homeowner, client, null, undefined) gets homeowner terms
+    const INTERNAL_STAFF_TYPES = ["owner", "it", "humanResources"];
+    const isInternalStaff = INTERNAL_STAFF_TYPES.includes(user.type);
+    const termsType = (user.type === "employee" || user.type === "cleaner") ? "cleaner" : "homeowner";
 
     // Get current terms for this user type
     const currentTerms = await TermsAndConditions.findOne({
@@ -168,9 +180,10 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
     });
 
     // Check if user needs to accept terms
+    // Internal staff (owner, IT, HR) don't need homeowner/cleaner terms
     let requiresTermsAcceptance = false;
     let termsData = null;
-    if (currentTerms) {
+    if (currentTerms && !isInternalStaff) {
       const userTermsVersion = user.termsAcceptedVersion;
       requiresTermsAcceptance = !userTermsVersion || userTermsVersion < currentTerms.version;
 
@@ -242,10 +255,13 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       }
     }
 
-    // Check if user needs to accept damage protection (homeowners only)
+    // Check if user needs to accept damage protection (homeowners only, not internal staff)
+    // Note: Homeowners can have type "homeowner", "client", null, or undefined
+    // We use termsType === "homeowner" to match all homeowner cases consistently
+    // Internal staff don't need damage protection terms
     let requiresDamageProtectionAcceptance = false;
     let damageProtectionData = null;
-    if (currentDamageProtection && user.type === "homeowner") {
+    if (currentDamageProtection && termsType === "homeowner" && !isInternalStaff) {
       const userDamageProtectionVersion = user.damageProtectionAcceptedVersion;
       requiresDamageProtectionAcceptance = !userDamageProtectionVersion || userDamageProtectionVersion < currentDamageProtection.version;
 
@@ -267,7 +283,71 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       }
     }
 
-    const requiresAcceptance = requiresTermsAcceptance || requiresPrivacyAcceptance || requiresPaymentTermsAcceptance || requiresDamageProtectionAcceptance;
+    // Get current cleaner agreement (applies to cleaners and employees only)
+    const currentCleanerAgreement = await TermsAndConditions.findOne({
+      where: { type: "cleaner_agreement" },
+      order: [["version", "DESC"]],
+    });
+
+    // Check if user needs to accept cleaner agreement (cleaners and employees, but NOT business owners)
+    // Business owners get the business_owner agreement instead
+    let requiresCleanerAgreementAcceptance = false;
+    let cleanerAgreementData = null;
+    if (currentCleanerAgreement && (user.type === "employee" || (user.type === "cleaner" && !user.isBusinessOwner))) {
+      const userCleanerAgreementVersion = user.cleanerAgreementAcceptedVersion;
+      requiresCleanerAgreementAcceptance = !userCleanerAgreementVersion || userCleanerAgreementVersion < currentCleanerAgreement.version;
+
+      if (requiresCleanerAgreementAcceptance) {
+        cleanerAgreementData = {
+          id: currentCleanerAgreement.id,
+          type: currentCleanerAgreement.type,
+          version: currentCleanerAgreement.version,
+          title: currentCleanerAgreement.title,
+          contentType: currentCleanerAgreement.contentType,
+          effectiveDate: currentCleanerAgreement.effectiveDate,
+        };
+        if (currentCleanerAgreement.contentType === "text") {
+          cleanerAgreementData.content = currentCleanerAgreement.content;
+        } else {
+          cleanerAgreementData.pdfFileName = currentCleanerAgreement.pdfFileName;
+          cleanerAgreementData.pdfUrl = `/api/v1/terms/pdf/${currentCleanerAgreement.id}`;
+        }
+      }
+    }
+
+    // Get current business owner agreement (applies to business owners only)
+    const currentBusinessOwnerAgreement = await TermsAndConditions.findOne({
+      where: { type: "business_owner" },
+      order: [["version", "DESC"]],
+    });
+
+    // Check if user needs to accept business owner agreement (business owners only)
+    // Note: Business owners have type="cleaner" with isBusinessOwner=true
+    let requiresBusinessOwnerAgreementAcceptance = false;
+    let businessOwnerAgreementData = null;
+    if (currentBusinessOwnerAgreement && user.isBusinessOwner) {
+      const userBusinessOwnerAgreementVersion = user.businessOwnerAgreementAcceptedVersion;
+      requiresBusinessOwnerAgreementAcceptance = !userBusinessOwnerAgreementVersion || userBusinessOwnerAgreementVersion < currentBusinessOwnerAgreement.version;
+
+      if (requiresBusinessOwnerAgreementAcceptance) {
+        businessOwnerAgreementData = {
+          id: currentBusinessOwnerAgreement.id,
+          type: currentBusinessOwnerAgreement.type,
+          version: currentBusinessOwnerAgreement.version,
+          title: currentBusinessOwnerAgreement.title,
+          contentType: currentBusinessOwnerAgreement.contentType,
+          effectiveDate: currentBusinessOwnerAgreement.effectiveDate,
+        };
+        if (currentBusinessOwnerAgreement.contentType === "text") {
+          businessOwnerAgreementData.content = currentBusinessOwnerAgreement.content;
+        } else {
+          businessOwnerAgreementData.pdfFileName = currentBusinessOwnerAgreement.pdfFileName;
+          businessOwnerAgreementData.pdfUrl = `/api/v1/terms/pdf/${currentBusinessOwnerAgreement.id}`;
+        }
+      }
+    }
+
+    const requiresAcceptance = requiresTermsAcceptance || requiresPrivacyAcceptance || requiresPaymentTermsAcceptance || requiresDamageProtectionAcceptance || requiresCleanerAgreementAcceptance || requiresBusinessOwnerAgreementAcceptance;
 
     const response = {
       requiresAcceptance,
@@ -275,6 +355,8 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       privacyPolicyAcceptedVersion: user.privacyPolicyAcceptedVersion,
       paymentTermsAcceptedVersion: user.paymentTermsAcceptedVersion,
       damageProtectionAcceptedVersion: user.damageProtectionAcceptedVersion,
+      cleanerAgreementAcceptedVersion: user.cleanerAgreementAcceptedVersion,
+      businessOwnerAgreementAcceptedVersion: user.businessOwnerAgreementAcceptedVersion,
     };
 
     if (requiresTermsAcceptance) {
@@ -297,8 +379,18 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       response.currentDamageProtectionVersion = currentDamageProtection?.version;
     }
 
+    if (requiresCleanerAgreementAcceptance) {
+      response.cleanerAgreement = cleanerAgreementData;
+      response.currentCleanerAgreementVersion = currentCleanerAgreement?.version;
+    }
+
+    if (requiresBusinessOwnerAgreementAcceptance) {
+      response.businessOwnerAgreement = businessOwnerAgreementData;
+      response.currentBusinessOwnerAgreementVersion = currentBusinessOwnerAgreement?.version;
+    }
+
     // For backwards compatibility, also include the old format if only terms need acceptance
-    if (requiresTermsAcceptance && !requiresPrivacyAcceptance && !requiresPaymentTermsAcceptance && !requiresDamageProtectionAcceptance) {
+    if (requiresTermsAcceptance && !requiresPrivacyAcceptance && !requiresPaymentTermsAcceptance && !requiresDamageProtectionAcceptance && !requiresCleanerAgreementAcceptance && !requiresBusinessOwnerAgreementAcceptance) {
       response.currentVersion = currentTerms?.version;
       response.acceptedVersion = user.termsAcceptedVersion;
     }
@@ -322,15 +414,76 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
     return res.status(400).json({ error: "termsId is required" });
   }
 
+  // Use transaction to ensure atomicity of acceptance record + user update
+  const transaction = await sequelize.transaction();
+
   try {
-    const terms = await TermsAndConditions.findByPk(termsId);
+    const terms = await TermsAndConditions.findByPk(termsId, { transaction });
     if (!terms) {
+      await transaction.rollback();
       return res.status(404).json({ error: "Terms not found" });
     }
 
-    const user = await User.findByPk(userId);
+    const user = await User.findByPk(userId, { transaction });
     if (!user) {
+      await transaction.rollback();
       return res.status(404).json({ error: "User not found" });
+    }
+
+    // Validate that the user can accept this specific terms type
+    const INTERNAL_STAFF_TYPES = ["owner", "it", "humanResources"];
+    const isInternalStaff = INTERNAL_STAFF_TYPES.includes(user.type);
+    const isCleanerOrEmployee = user.type === "employee" || user.type === "cleaner";
+
+    // Define which terms types each user role can accept
+    const canAcceptTermsType = () => {
+      switch (terms.type) {
+        case "homeowner":
+        case "cleaner":
+          // Internal staff shouldn't accept homeowner/cleaner terms
+          return !isInternalStaff;
+        case "privacy_policy":
+        case "payment_terms":
+          // Everyone can accept these
+          return true;
+        case "damage_protection":
+          // Only homeowners (non-internal, non-cleaner)
+          return !isInternalStaff && !isCleanerOrEmployee;
+        case "cleaner_agreement":
+          // Only cleaners/employees who are NOT business owners
+          return isCleanerOrEmployee && !user.isBusinessOwner;
+        case "business_owner":
+          // Only business owners
+          return user.isBusinessOwner === true;
+        default:
+          return false;
+      }
+    };
+
+    if (!canAcceptTermsType()) {
+      await transaction.rollback();
+      return res.status(403).json({
+        error: "You are not authorized to accept this document type",
+        termsType: terms.type,
+        userType: user.type
+      });
+    }
+
+    // Check if user already accepted this exact terms version (idempotency)
+    const existingAcceptance = await UserTermsAcceptance.findOne({
+      where: { userId, termsId },
+      transaction,
+    });
+
+    if (existingAcceptance) {
+      // Already accepted - return success without creating duplicate
+      await transaction.commit();
+      return res.json({
+        success: true,
+        message: "Already accepted",
+        acceptedVersion: terms.version,
+        type: terms.type,
+      });
     }
 
     // Create snapshot for text content
@@ -356,9 +509,19 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
       const snapshotFilename = `user_${userId}_v${terms.version}_${timestamp}.pdf`;
       pdfSnapshotPath = path.join(snapshotsDir, snapshotFilename);
 
-      // Copy the file
+      // Copy the file with error handling
       if (fs.existsSync(terms.pdfFilePath)) {
-        fs.copyFileSync(terms.pdfFilePath, pdfSnapshotPath);
+        try {
+          fs.copyFileSync(terms.pdfFilePath, pdfSnapshotPath);
+        } catch (copyError) {
+          console.error("Failed to copy PDF snapshot:", copyError);
+          // Continue without snapshot - the acceptance is more important
+          // than having a copy of the PDF (original is still available)
+          pdfSnapshotPath = null;
+        }
+      } else {
+        console.warn(`PDF file not found for terms ${termsId}: ${terms.pdfFilePath}`);
+        pdfSnapshotPath = null;
       }
     }
 
@@ -373,18 +536,25 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
       ipAddress,
       termsContentSnapshot,
       pdfSnapshotPath,
-    });
+    }, { transaction });
 
     // Update user's accepted version based on document type
     if (terms.type === "privacy_policy") {
-      await user.update({ privacyPolicyAcceptedVersion: terms.version });
+      await user.update({ privacyPolicyAcceptedVersion: terms.version }, { transaction });
     } else if (terms.type === "payment_terms") {
-      await user.update({ paymentTermsAcceptedVersion: terms.version });
+      await user.update({ paymentTermsAcceptedVersion: terms.version }, { transaction });
     } else if (terms.type === "damage_protection") {
-      await user.update({ damageProtectionAcceptedVersion: terms.version });
+      await user.update({ damageProtectionAcceptedVersion: terms.version }, { transaction });
+    } else if (terms.type === "cleaner_agreement") {
+      await user.update({ cleanerAgreementAcceptedVersion: terms.version }, { transaction });
+    } else if (terms.type === "business_owner") {
+      await user.update({ businessOwnerAgreementAcceptedVersion: terms.version }, { transaction });
     } else {
-      await user.update({ termsAcceptedVersion: terms.version });
+      await user.update({ termsAcceptedVersion: terms.version }, { transaction });
     }
+
+    // Commit the transaction
+    await transaction.commit();
 
     // Generate appropriate success message
     let message = "Terms accepted successfully";
@@ -394,6 +564,10 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
       message = "Payment Terms accepted successfully";
     } else if (terms.type === "damage_protection") {
       message = "Damage Protection Policy accepted successfully";
+    } else if (terms.type === "cleaner_agreement") {
+      message = "Cleaner Service Agreement accepted successfully";
+    } else if (terms.type === "business_owner") {
+      message = "Business Owner Agreement accepted successfully";
     }
 
     return res.json({
@@ -403,6 +577,8 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
       type: terms.type,
     });
   } catch (error) {
+    // Rollback transaction on any error
+    await transaction.rollback();
     console.error("Error accepting terms:", error);
     return res.status(500).json({ error: "Failed to accept terms" });
   }
@@ -465,7 +641,7 @@ termsRouter.get("/history/:type", authenticateToken, requireOwner, async (req, r
   const { type } = req.params;
 
   if (!VALID_TYPES.includes(type)) {
-    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', 'payment_terms', or 'damage_protection'" });
+    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', 'payment_terms', 'damage_protection', 'cleaner_agreement', or 'business_owner'" });
   }
 
   try {
@@ -515,7 +691,7 @@ termsRouter.post("/", authenticateToken, requireOwner, async (req, res) => {
   }
 
   if (!VALID_TYPES.includes(type)) {
-    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', 'payment_terms', or 'damage_protection'" });
+    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', 'payment_terms', 'damage_protection', 'cleaner_agreement', or 'business_owner'" });
   }
 
   try {
@@ -576,7 +752,7 @@ termsRouter.post(
     }
 
     if (!VALID_TYPES.includes(type)) {
-      return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', or 'payment_terms'" });
+      return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', 'privacy_policy', 'payment_terms', 'damage_protection', 'cleaner_agreement', or 'business_owner'" });
     }
 
     if (!req.file) {

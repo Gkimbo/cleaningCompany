@@ -36,21 +36,31 @@ const TaxFormsSection = ({ state }) => {
   const [statusError, setStatusError] = useState(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState(null);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   const currentYear = new Date().getFullYear();
   const availableYears = [currentYear, currentYear - 1, currentYear - 2];
 
   // Safely get user type with fallback
   // Employees are treated like cleaners for tax purposes (they receive 1099s)
-  const rawUserType = state?.account || null;
+  let rawUserType = state?.account || null;
+
+  // For dual-role users (cleaners with homes), respect the activeRole
+  // When viewing as homeowner, show homeowner tax info instead of cleaner tax info
+  if (rawUserType === "cleaner" && state?.activeRole === "homeowner") {
+    rawUserType = null; // null = homeowner in this component's logic
+  }
+
   const userType = rawUserType === "employee" ? "cleaner" : rawUserType;
 
   useEffect(() => {
     if (!state?.currentUser?.token) return;
 
-    // Reset errors when year changes
+    // Reset errors when year or role changes
     setError(null);
     setDashboardError(null);
+    setTaxData(null);
+    setTaxStatus(null);
 
     fetchTaxData();
 
@@ -58,7 +68,7 @@ const TaxFormsSection = ({ state }) => {
     if (userType === "cleaner") {
       fetchTaxStatus();
     }
-  }, [selectedYear, state?.currentUser?.token, userType]);
+  }, [selectedYear, state?.currentUser?.token, userType, state?.activeRole]);
 
   const fetchTaxStatus = async () => {
     setStatusError(null);
@@ -391,6 +401,170 @@ const TaxFormsSection = ({ state }) => {
           </>
         )}
       </Pressable>
+
+      {/* How to Access Tax Forms - Expandable Instructions */}
+      <Pressable
+        style={styles.instructionsToggle}
+        onPress={() => setShowInstructions(!showInstructions)}
+      >
+        <Icon
+          name={showInstructions ? "chevron-up" : "chevron-down"}
+          size={14}
+          color="#3b82f6"
+          style={{ marginRight: 8 }}
+        />
+        <Text style={styles.instructionsToggleText}>
+          {showInstructions ? "Hide Instructions" : "How to Get Your Tax Forms"}
+        </Text>
+      </Pressable>
+
+      {showInstructions && (
+        <View style={styles.instructionsContainer}>
+          {/* Timeline Section */}
+          <View style={styles.instructionsSection}>
+            <View style={styles.instructionsSectionHeader}>
+              <Icon name="calendar" size={14} color="#1e40af" style={{ marginRight: 8 }} />
+              <Text style={styles.instructionsSectionTitle}>Important Dates</Text>
+            </View>
+            <View style={styles.timelineItem}>
+              <View style={styles.timelineDot} />
+              <View style={styles.timelineContent}>
+                <Text style={styles.timelineDate}>November</Text>
+                <Text style={styles.timelineText}>
+                  Stripe sends an email to set up e-delivery for faster access
+                </Text>
+              </View>
+            </View>
+            <View style={styles.timelineItem}>
+              <View style={styles.timelineDot} />
+              <View style={styles.timelineContent}>
+                <Text style={styles.timelineDate}>Mid-January</Text>
+                <Text style={styles.timelineText}>
+                  Deadline to confirm your tax info and agree to paperless delivery
+                </Text>
+              </View>
+            </View>
+            <View style={styles.timelineItem}>
+              <View style={styles.timelineDot} />
+              <View style={styles.timelineContent}>
+                <Text style={styles.timelineDate}>January 31</Text>
+                <Text style={styles.timelineText}>
+                  1099 forms available for download (or mailed if you did not opt for e-delivery)
+                </Text>
+              </View>
+            </View>
+            <View style={styles.timelineItem}>
+              <View style={[styles.timelineDot, styles.timelineDotHighlight]} />
+              <View style={styles.timelineContent}>
+                <Text style={[styles.timelineDate, styles.timelineDateHighlight]}>April 15</Text>
+                <Text style={styles.timelineText}>
+                  IRS deadline to file your taxes
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Step by Step Instructions */}
+          <View style={styles.instructionsSection}>
+            <View style={styles.instructionsSectionHeader}>
+              <Icon name="list-ol" size={14} color="#1e40af" style={{ marginRight: 8 }} />
+              <Text style={styles.instructionsSectionTitle}>Step-by-Step Guide</Text>
+            </View>
+
+            <View style={styles.stepItem}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>1</Text>
+              </View>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepTitle}>Tap the Button Above</Text>
+                <Text style={styles.stepText}>
+                  Click the purple button to open your Stripe Dashboard
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.stepItem}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>2</Text>
+              </View>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepTitle}>Verify Your Identity</Text>
+                <Text style={styles.stepText}>
+                  Enter the 6-digit code sent to your phone number
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.stepItem}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>3</Text>
+              </View>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepTitle}>Go to Tax Forms</Text>
+                <Text style={styles.stepText}>
+                  Look for the Tax Forms section in your Stripe dashboard
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.stepItem}>
+              <View style={styles.stepNumber}>
+                <Text style={styles.stepNumberText}>4</Text>
+              </View>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepTitle}>Download Your 1099</Text>
+                <Text style={styles.stepText}>
+                  Enter the last 4 digits of your SSN to securely download your form
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Troubleshooting Tips */}
+          <View style={styles.instructionsSection}>
+            <View style={styles.instructionsSectionHeader}>
+              <Icon name="question-circle" size={14} color="#1e40af" style={{ marginRight: 8 }} />
+              <Text style={styles.instructionsSectionTitle}>Troubleshooting</Text>
+            </View>
+
+            <View style={styles.troubleshootItem}>
+              <Text style={styles.troubleshootQuestion}>Cannot find the email from Stripe?</Text>
+              <Text style={styles.troubleshootAnswer}>
+                Check your spam folder for an email about setting up e-delivery for your tax forms
+              </Text>
+            </View>
+
+            <View style={styles.troubleshootItem}>
+              <Text style={styles.troubleshootQuestion}>Changed your phone number?</Text>
+              <Text style={styles.troubleshootAnswer}>
+                During login, select the option to verify via email instead of phone
+              </Text>
+            </View>
+
+            <View style={styles.troubleshootItem}>
+              <Text style={styles.troubleshootQuestion}>Information on your form is wrong?</Text>
+              <Text style={styles.troubleshootAnswer}>
+                Use the edit option in the Tax Forms page to request a correction. You will be notified within 72 hours.
+              </Text>
+            </View>
+
+            <View style={styles.troubleshootItem}>
+              <Text style={styles.troubleshootQuestion}>Do not see your 1099 form yet?</Text>
+              <Text style={styles.troubleshootAnswer}>
+                Forms are available by January 31. If you earned less than $600, you will not receive a 1099 (but should still report income).
+              </Text>
+            </View>
+          </View>
+
+          {/* Quick Note */}
+          <View style={styles.quickNote}>
+            <Icon name="info-circle" size={14} color="#0369a1" style={{ marginRight: 8 }} />
+            <Text style={styles.quickNoteText}>
+              Stripe securely stores your tax information (SSN/EIN). We never see or store this data.
+            </Text>
+          </View>
+        </View>
+      )}
 
       <Text style={styles.taxHint}>
         Your 1099 forms are securely managed by Stripe. They handle tax document generation,
@@ -1093,6 +1267,150 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
+  },
+  // Instructions toggle button
+  instructionsToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+    paddingVertical: 10,
+    backgroundColor: "#f0f9ff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#bae6fd",
+  },
+  instructionsToggleText: {
+    fontSize: 14,
+    color: "#3b82f6",
+    fontWeight: "500",
+  },
+  // Instructions container
+  instructionsContainer: {
+    marginTop: 12,
+    backgroundColor: "#fafafa",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  instructionsSection: {
+    marginBottom: 20,
+  },
+  instructionsSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
+  instructionsSectionTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1e40af",
+  },
+  // Timeline styles
+  timelineItem: {
+    flexDirection: "row",
+    marginBottom: 12,
+    paddingLeft: 4,
+  },
+  timelineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#93c5fd",
+    marginTop: 4,
+    marginRight: 12,
+  },
+  timelineDotHighlight: {
+    backgroundColor: "#dc2626",
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  timelineDate: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 2,
+  },
+  timelineDateHighlight: {
+    color: "#dc2626",
+  },
+  timelineText: {
+    fontSize: 12,
+    color: "#6b7280",
+    lineHeight: 17,
+  },
+  // Step-by-step styles
+  stepItem: {
+    flexDirection: "row",
+    marginBottom: 14,
+    alignItems: "flex-start",
+  },
+  stepNumber: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#3b82f6",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  stepNumberText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1f2937",
+    marginBottom: 2,
+  },
+  stepText: {
+    fontSize: 12,
+    color: "#6b7280",
+    lineHeight: 17,
+  },
+  // Troubleshooting styles
+  troubleshootItem: {
+    marginBottom: 14,
+    paddingLeft: 4,
+  },
+  troubleshootQuestion: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 4,
+  },
+  troubleshootAnswer: {
+    fontSize: 12,
+    color: "#6b7280",
+    lineHeight: 17,
+    paddingLeft: 8,
+    borderLeftWidth: 2,
+    borderLeftColor: "#e5e7eb",
+  },
+  // Quick note
+  quickNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#f0f9ff",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 4,
+  },
+  quickNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#0369a1",
+    lineHeight: 17,
   },
 });
 

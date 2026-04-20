@@ -13,6 +13,7 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import { UserContext } from "../../context/UserContext";
 import CleanerApprovalService from "../../services/fetchRequests/CleanerApprovalService";
 import useSafeNavigation from "../../hooks/useSafeNavigation";
+import useCountdown from "../../hooks/useCountdown";
 import {
   colors,
   spacing,
@@ -20,6 +21,107 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+
+// Separate component for each request card to use countdown hook
+const RequestCard = ({ item, isProcessing, onApprove, onDecline, formatDate, getInitials }) => {
+  // Use countdown hook for real-time updates (updates every 30 seconds)
+  const countdown = useCountdown(item.expiresAt, 30000);
+
+  // Format hours remaining for the note (rounded to nearest hour)
+  const formatHoursForNote = () => {
+    if (countdown.isExpired) return "soon";
+    const totalHours = Math.round((countdown.hoursLeft * 60 + countdown.minutesLeft) / 60);
+    if (totalHours <= 0) return "less than 1 hour";
+    if (totalHours === 1) return "1 hour";
+    return `${totalHours} hours`;
+  };
+
+  return (
+    <View style={styles.requestCard}>
+      <View style={styles.requestHeader}>
+        <View style={styles.cleanerAvatar}>
+          <Text style={styles.cleanerInitials}>{getInitials(item.cleanerName)}</Text>
+        </View>
+        <View style={styles.cleanerInfo}>
+          <Text style={styles.cleanerName}>{item.cleanerName}</Text>
+          <Text style={styles.requestSubtitle}>Wants to join your cleaning</Text>
+        </View>
+        <View style={[
+          styles.timeBadge,
+          countdown.isUrgent && styles.timeBadgeUrgent,
+          countdown.isWarning && styles.timeBadgeWarning,
+        ]}>
+          <Icon
+            name="clock-o"
+            size={10}
+            color={countdown.isUrgent ? colors.error[600] : colors.warning[600]}
+          />
+          <Text style={[
+            styles.timeText,
+            countdown.isUrgent && styles.timeTextUrgent,
+          ]}>
+            {countdown.timeRemaining}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.appointmentInfo}>
+        <View style={styles.infoRow}>
+          <Icon name="calendar" size={14} color={colors.text.secondary} />
+          <Text style={styles.infoText}>{formatDate(item.appointmentDate)}</Text>
+        </View>
+        {item.homeAddress && (
+          <View style={styles.infoRow}>
+            <Icon name="map-marker" size={14} color={colors.text.secondary} />
+            <Text style={styles.infoText} numberOfLines={1}>
+              {item.homeAddress}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.noteBox}>
+        <Icon name="info-circle" size={12} color={colors.primary[600]} />
+        <Text style={styles.noteText}>
+          If you don't respond, the cleaner will be automatically approved in{" "}
+          {formatHoursForNote()}.
+        </Text>
+      </View>
+
+      <View style={styles.actionButtons}>
+        <Pressable
+          style={[styles.declineButton, isProcessing && styles.buttonDisabled]}
+          onPress={() => onDecline(item.id, item.cleanerName)}
+          disabled={isProcessing}
+        >
+          {isProcessing ? (
+            <ActivityIndicator size="small" color={colors.error[600]} />
+          ) : (
+            <>
+              <Icon name="times" size={16} color={colors.error[600]} />
+              <Text style={styles.declineButtonText}>Decline</Text>
+            </>
+          )}
+        </Pressable>
+
+        <Pressable
+          style={[styles.approveButton, isProcessing && styles.buttonDisabled]}
+          onPress={() => onApprove(item.id, item.cleanerName)}
+          disabled={isProcessing}
+        >
+          {isProcessing ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <>
+              <Icon name="check" size={16} color={colors.white} />
+              <Text style={styles.approveButtonText}>Approve</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
+    </View>
+  );
+};
 
 const PendingCleanerApprovals = () => {
   const { state } = useContext(UserContext);
@@ -130,27 +232,6 @@ const PendingCleanerApprovals = () => {
     });
   };
 
-  const formatTimeRemaining = (expiresAt) => {
-    if (!expiresAt) return "";
-    const now = new Date();
-    const expires = new Date(expiresAt);
-    const diffMs = expires - now;
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (diffHours > 24) {
-      const days = Math.floor(diffHours / 24);
-      return `${days} day${days > 1 ? "s" : ""} left`;
-    }
-    if (diffHours > 0) {
-      return `${diffHours}h ${diffMins}m left`;
-    }
-    if (diffMins > 0) {
-      return `${diffMins}m left`;
-    }
-    return "Expiring soon";
-  };
-
   const getInitials = (name) => {
     if (!name) return "?";
     return name
@@ -161,82 +242,16 @@ const PendingCleanerApprovals = () => {
       .slice(0, 2);
   };
 
-  const renderRequest = ({ item }) => {
-    const isProcessing = processingId === item.id;
-
-    return (
-      <View style={styles.requestCard}>
-        <View style={styles.requestHeader}>
-          <View style={styles.cleanerAvatar}>
-            <Text style={styles.cleanerInitials}>{getInitials(item.cleanerName)}</Text>
-          </View>
-          <View style={styles.cleanerInfo}>
-            <Text style={styles.cleanerName}>{item.cleanerName}</Text>
-            <Text style={styles.requestSubtitle}>Wants to join your cleaning</Text>
-          </View>
-          <View style={styles.timeBadge}>
-            <Icon name="clock-o" size={10} color={colors.warning[600]} />
-            <Text style={styles.timeText}>{formatTimeRemaining(item.expiresAt)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.appointmentInfo}>
-          <View style={styles.infoRow}>
-            <Icon name="calendar" size={14} color={colors.text.secondary} />
-            <Text style={styles.infoText}>{formatDate(item.appointmentDate)}</Text>
-          </View>
-          {item.homeAddress && (
-            <View style={styles.infoRow}>
-              <Icon name="map-marker" size={14} color={colors.text.secondary} />
-              <Text style={styles.infoText} numberOfLines={1}>
-                {item.homeAddress}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.noteBox}>
-          <Icon name="info-circle" size={12} color={colors.primary[600]} />
-          <Text style={styles.noteText}>
-            If you don't respond, the cleaner will be automatically approved in{" "}
-            {formatTimeRemaining(item.expiresAt)}.
-          </Text>
-        </View>
-
-        <View style={styles.actionButtons}>
-          <Pressable
-            style={[styles.declineButton, isProcessing && styles.buttonDisabled]}
-            onPress={() => handleDecline(item.id, item.cleanerName)}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <ActivityIndicator size="small" color={colors.error[600]} />
-            ) : (
-              <>
-                <Icon name="times" size={16} color={colors.error[600]} />
-                <Text style={styles.declineButtonText}>Decline</Text>
-              </>
-            )}
-          </Pressable>
-
-          <Pressable
-            style={[styles.approveButton, isProcessing && styles.buttonDisabled]}
-            onPress={() => handleApprove(item.id, item.cleanerName)}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <>
-                <Icon name="check" size={16} color={colors.white} />
-                <Text style={styles.approveButtonText}>Approve</Text>
-              </>
-            )}
-          </Pressable>
-        </View>
-      </View>
-    );
-  };
+  const renderRequest = ({ item }) => (
+    <RequestCard
+      item={item}
+      isProcessing={processingId === item.id}
+      onApprove={handleApprove}
+      onDecline={handleDecline}
+      formatDate={formatDate}
+      getInitials={getInitials}
+    />
+  );
 
   if (loading) {
     return (
@@ -413,10 +428,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     gap: 4,
   },
+  timeBadgeWarning: {
+    backgroundColor: colors.warning[200],
+  },
+  timeBadgeUrgent: {
+    backgroundColor: colors.error[100],
+  },
   timeText: {
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.medium,
     color: colors.warning[700],
+  },
+  timeTextUrgent: {
+    color: colors.error[700],
+    fontWeight: typography.fontWeight.bold,
   },
   appointmentInfo: {
     backgroundColor: colors.neutral[50],

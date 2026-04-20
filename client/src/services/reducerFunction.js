@@ -53,7 +53,8 @@ const reducer = (state, action) => {
         ...state,
         currentUser: {
           ...state.currentUser,
-          user: action.payload,
+          ...action.payload, // Spread user properties directly for easy access
+          user: action.payload, // Keep nested for backwards compatibility
         },
       };
     case "UPDATE_BILL":
@@ -267,24 +268,6 @@ const reducer = (state, action) => {
         ...state,
         linkedAccounts: action.payload,
       };
-    // Offline mode actions
-    case "SET_OFFLINE_MODE":
-      return {
-        ...state,
-        offlineMode: action.payload,
-      };
-    case "SET_NETWORK_STATUS":
-      return {
-        ...state,
-        networkStatus: action.payload.status,
-        isOnline: action.payload.isOnline,
-      };
-    case "SET_SYNC_STATUS":
-      return {
-        ...state,
-        syncStatus: action.payload.status,
-        pendingSyncCount: action.payload.pendingCount ?? state.pendingSyncCount,
-      };
     // Preview mode actions for owner "Preview as Role" feature
     case "PREVIEW_ENTER":
       return {
@@ -364,6 +347,23 @@ const reducer = (state, action) => {
       return {
         ...state,
         activeRole: state.activeRole === "homeowner" ? "cleaner" : "homeowner",
+      };
+    case "SET_OFFLINE_MODE":
+      return {
+        ...state,
+        offlineMode: action.payload,
+      };
+    case "SET_NETWORK_STATUS":
+      return {
+        ...state,
+        networkStatus: action.payload.status,
+        isOnline: action.payload.isOnline,
+      };
+    case "SET_SYNC_STATUS":
+      return {
+        ...state,
+        syncStatus: action.payload.status,
+        pendingSyncCount: action.payload.pendingCount ?? state.pendingSyncCount,
       };
     default:
       throw new Error();

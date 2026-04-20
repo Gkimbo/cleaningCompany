@@ -37,7 +37,7 @@ describe("ITManagementService", () => {
 
       expect(HttpClient.get).toHaveBeenCalledWith(
         "/users/it-staff",
-        { token: "test-token", useBaseUrl: true }
+        { token: "test-token" }
       );
       expect(result.success).toBe(true);
       expect(result.itStaff).toEqual(mockStaff);
@@ -97,7 +97,7 @@ describe("ITManagementService", () => {
       expect(HttpClient.post).toHaveBeenCalledWith(
         "/users/new-it",
         employeeData,
-        { token: "test-token", useBaseUrl: true }
+        { token: "test-token" }
       );
       expect(result.success).toBe(true);
       expect(result.user).toEqual(mockUser);
@@ -164,7 +164,7 @@ describe("ITManagementService", () => {
       expect(HttpClient.post).toHaveBeenCalledWith(
         "/users/new-it",
         expect.objectContaining({ phone: "1234567890" }),
-        { token: "test-token", useBaseUrl: true }
+        { token: "test-token" }
       );
     });
   });
@@ -190,7 +190,7 @@ describe("ITManagementService", () => {
       expect(HttpClient.patch).toHaveBeenCalledWith(
         "/users/it-staff/10",
         updates,
-        { token: "test-token", useBaseUrl: true }
+        { token: "test-token" }
       );
       expect(result.success).toBe(true);
       expect(result.user).toEqual(mockUser);
@@ -237,7 +237,7 @@ describe("ITManagementService", () => {
 
       expect(HttpClient.delete).toHaveBeenCalledWith(
         "/users/it-staff/10",
-        { token: "test-token", useBaseUrl: true }
+        { token: "test-token" }
       );
       expect(result.success).toBe(true);
       expect(result.message).toBe("IT employee removed successfully");

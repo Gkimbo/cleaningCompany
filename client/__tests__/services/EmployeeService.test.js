@@ -32,7 +32,7 @@ describe("FetchData - Employee Service Methods", () => {
       const result = await FetchData.getEmployeesWorking();
 
       expect(result).toEqual(mockEmployees);
-      expect(HttpClient.get).toHaveBeenCalledWith("/employee-info/employeeSchedule", { skipAuth: true });
+      expect(HttpClient.get).toHaveBeenCalledWith("/employee-info/employeeSchedule", { token: undefined });
     });
 
     it("should return empty array when no employees", async () => {
@@ -45,22 +45,16 @@ describe("FetchData - Employee Service Methods", () => {
       expect(result.employees).toHaveLength(0);
     });
 
-    it("should return error when response is not ok", async () => {
+    it("should throw error when response is not ok", async () => {
       HttpClient.get.mockResolvedValueOnce({ success: false, status: 500 });
 
-      const result = await FetchData.getEmployeesWorking();
-
-      expect(result).toBeInstanceOf(Error);
-      expect(result.message).toBe("No data received");
+      await expect(FetchData.getEmployeesWorking()).rejects.toThrow("No data received");
     });
 
-    it("should handle network error", async () => {
+    it("should throw error on network error", async () => {
       HttpClient.get.mockRejectedValueOnce(new Error("Network error"));
 
-      const result = await FetchData.getEmployeesWorking();
-
-      expect(result).toBeInstanceOf(Error);
-      expect(result.message).toBe("Network error");
+      await expect(FetchData.getEmployeesWorking()).rejects.toThrow("Network error");
     });
   });
 
@@ -126,19 +120,13 @@ describe("FetchData - Employee Service Methods", () => {
     it("should throw error for other status codes", async () => {
       HttpClient.post.mockResolvedValueOnce({ success: false, status: 500 });
 
-      const result = await FetchData.makeNewEmployee(validEmployeeData);
-
-      expect(result).toBeInstanceOf(Error);
-      expect(result.message).toBe("Failed to create user");
+      await expect(FetchData.makeNewEmployee(validEmployeeData)).rejects.toThrow("Failed to create user");
     });
 
-    it("should handle network error", async () => {
+    it("should throw error on network error", async () => {
       HttpClient.post.mockRejectedValueOnce(new Error("Network error"));
 
-      const result = await FetchData.makeNewEmployee(validEmployeeData);
-
-      expect(result).toBeInstanceOf(Error);
-      expect(result.message).toBe("Network error");
+      await expect(FetchData.makeNewEmployee(validEmployeeData)).rejects.toThrow("Network error");
     });
 
     it("should omit optional fields when not provided", async () => {
@@ -230,18 +218,13 @@ describe("FetchData - Employee Service Methods", () => {
     it("should throw error for other status codes", async () => {
       HttpClient.patch.mockResolvedValueOnce({ success: false, status: 500 });
 
-      const result = await FetchData.editEmployee(updateData);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(FetchData.editEmployee(updateData)).rejects.toThrow("Failed to create user");
     });
 
-    it("should handle network error", async () => {
+    it("should throw error on network error", async () => {
       HttpClient.patch.mockRejectedValueOnce(new Error("Network error"));
 
-      const result = await FetchData.editEmployee(updateData);
-
-      expect(result).toBeInstanceOf(Error);
-      expect(result.message).toBe("Network error");
+      await expect(FetchData.editEmployee(updateData)).rejects.toThrow("Network error");
     });
 
     it("should change employee type from cleaner to owner", async () => {
@@ -307,13 +290,10 @@ describe("FetchData - Employee Service Methods", () => {
       expect(result.error).toContain("delete");
     });
 
-    it("should handle network error", async () => {
+    it("should throw on network error", async () => {
       HttpClient.delete.mockRejectedValueOnce(new Error("Network error"));
 
-      const result = await FetchData.deleteEmployee(1);
-
-      expect(result).toHaveProperty("error");
-      expect(result.error).toBe("Failed to delete employee");
+      await expect(FetchData.deleteEmployee(1)).rejects.toThrow("Network error");
     });
 
     it("should send employee ID in request body", async () => {
@@ -339,7 +319,7 @@ describe("FetchData - Employee Service Methods", () => {
 
       await FetchData.getEmployeesWorking();
 
-      expect(HttpClient.get).toHaveBeenCalledWith("/employee-info/employeeSchedule", { skipAuth: true });
+      expect(HttpClient.get).toHaveBeenCalledWith("/employee-info/employeeSchedule", { token: undefined });
     });
 
     it("should construct correct URL for makeNewEmployee", async () => {

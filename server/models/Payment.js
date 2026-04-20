@@ -204,6 +204,22 @@ module.exports = (sequelize, DataTypes) => {
     });
   };
 
+  // Defensive toJSON method to exclude sensitive Stripe IDs
+  // This is a safety net - always use PaymentSerializer for API responses
+  if (Payment.prototype) {
+    Payment.prototype.toJSON = function () {
+      const values = { ...this.get() };
+
+      // Exclude sensitive Stripe IDs from direct serialization
+      delete values.stripePaymentIntentId;
+      delete values.stripeTransferId;
+      delete values.stripeRefundId;
+      delete values.stripeChargeId;
+
+      return values;
+    };
+  }
+
   // Get total reportable amount for a cleaner in a tax year
   // Calculates net amount: payouts minus payout_reversals
   Payment.getTotalReportableAmount = async (cleanerId, taxYear) => {

@@ -429,8 +429,8 @@ const SelectNewJobList = ({ state }) => {
             if (response && !response.error) {
               details[homeId] = response.home || response;
             }
-          } catch (err) {
-            console.error("Error fetching home:", homeId, err);
+          } catch {
+            // Silently handle - home details are optional
           }
         })
       );
@@ -1250,7 +1250,10 @@ const SelectNewJobList = ({ state }) => {
           />
         }
       >
-        {filteredData.length === 0 ? (
+        {filteredData.length === 0 &&
+        multiCleanerOffers.length === 0 &&
+        availableMultiCleanerJobs.length === 0 &&
+        pendingMultiCleanerRequests.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
               <Icon
@@ -1341,7 +1344,8 @@ const SelectNewJobList = ({ state }) => {
                             try {
                               await FetchData.removeRequest(
                                 employeeId,
-                                appointmentId
+                                appointmentId,
+                                state.currentUser?.token
                               );
                               setAllRequests((prev) => {
                                 const removed = prev.find(
@@ -1794,7 +1798,8 @@ const SelectNewJobList = ({ state }) => {
                             try {
                               await FetchData.removeEmployee(
                                 employeeId,
-                                appointmentId
+                                appointmentId,
+                                state.currentUser?.token
                               );
                               setAllAppointments((prev) =>
                                 prev.map((a) =>

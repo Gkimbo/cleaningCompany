@@ -30,7 +30,6 @@ const ROUTE_ACCESS = {
     "/messages/*",
     "/notifications",
     "/notifications/*",
-    "/terms-acceptance",
   ],
 
   // Owner-only routes
@@ -84,6 +83,7 @@ const ROUTE_ACCESS = {
     "/cleaner-profile",
     "/upgrade-to-business",
     "/upgrade-form",
+    "/pending-reviews",
     // Home management routes (for dual-role cleaners who also own properties)
     "/add-home",
     "/list-of-homes",

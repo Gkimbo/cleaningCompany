@@ -575,7 +575,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 
     try {
       const appointments = await Appointment.getHomeAppointments(homeData.id);
-      const deleteHome = await FetchData.deleteHome(homeData.id);
+      const deleteHome = await FetchData.deleteHome(homeData.id, user?.token);
 
       if (deleteHome) {
         let priceOfAppointments = 0;
@@ -833,6 +833,18 @@ const EditHomeForm = ({ state, dispatch }) => {
           <Text style={[styles.inputHelper, { marginBottom: 12, marginTop: 0 }]}>
             For larger homes, let us know how many of each room type you have for accurate cleaning assignments.
           </Text>
+          <View style={{
+            backgroundColor: "#fffbeb",
+            borderWidth: 1,
+            borderColor: "#fcd34d",
+            borderRadius: 8,
+            padding: 12,
+            marginBottom: 12,
+          }}>
+            <Text style={{ fontSize: 13, color: "#92400e", lineHeight: 18 }}>
+              <Text style={{ fontWeight: "600" }}>Note:</Text> If a room has a bed where sheets need to be changed (including pullout sofas), please count it as a bedroom instead.
+            </Text>
+          </View>
           {renderRoomCounter("Kitchens", "numKitchens", 1, 5)}
           {renderRoomCounter("Living Rooms", "numLivingRooms", 0, 5)}
           {renderRoomCounter("Dining Rooms", "numDiningRooms", 0, 5)}

@@ -30,6 +30,7 @@ class UserSerializer {
 			"notifications",
 			"reviews",
 			"hasPaymentMethod",
+			"stripeConnectComplete",
 			"referralCode",
 			"referralCredits",
 			"isBusinessOwner",

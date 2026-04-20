@@ -70,21 +70,27 @@ const PayoutHistory = ({ state, dispatch }) => {
       ...multiCleanerJobs.map((job) => ({ ...job, jobType: "team" })),
     ];
 
-    // Calculate total using exact same logic as Earnings.js and CleanerDashboard
+    // Calculate total using exact same logic as Earnings.js
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
     const upcomingAssignments = allAssignments.filter(
       (appt) => !appt.completed && parseLocalDate(appt.date) >= today
     );
 
     const total = upcomingAssignments
       .reduce((sum, appt) => {
-        // For multi-cleaner jobs, use totalCleanersRequired; for solo jobs, use 1
         const isTeamJob = appt.jobType === "team" || appt.isMultiCleanerJob;
+
+        // For team jobs, prefer pre-calculated perCleanerEarnings from API (same as Earnings.js)
+        if (isTeamJob && appt.perCleanerEarnings) {
+          return sum + (appt.perCleanerEarnings / 100); // Convert cents to dollars
+        }
+
+        // Fallback calculation for solo jobs or if perCleanerEarnings not available
         const numCleaners = isTeamJob
           ? (appt.multiCleanerJob?.totalCleanersRequired || appt.totalCleanersRequired || appt.employeesAssigned?.length || 1)
           : 1;
-        // Calculate share with full precision (same as CleanerDashboard.js)
         const feePercent = isTeamJob ? multiCleanerFeePercent : regularFeePercent;
         const sharePercent = 1 - feePercent;
         const share = ((Number(appt.price) || 0) / numCleaners) * sharePercent / 100;
@@ -140,6 +146,9 @@ const PayoutHistory = ({ state, dispatch }) => {
       setAssignedAppointments(soloAppointments);
       setConfirmedMultiCleanerJobs(multiCleanerJobs);
 
+      // Always calculate potential earnings regardless of payouts API status
+      const potentialEarnings = calculatePotentialEarnings(soloAppointments, multiCleanerJobs);
+
       const data = await payoutRes.json();
       if (payoutRes.ok) {
         const allPayouts = data.payouts || [];
@@ -166,7 +175,6 @@ const PayoutHistory = ({ state, dispatch }) => {
           (sum, p) => sum + (p.preferredBonusApplied ? (p.preferredBonusAmount || 0) : 0),
           0
         );
-        const potentialEarnings = calculatePotentialEarnings(soloAppointments, multiCleanerJobs);
 
         setPayouts(pastPayouts);
         setTotals({
@@ -176,6 +184,13 @@ const PayoutHistory = ({ state, dispatch }) => {
           completedCount: completedPayouts.length,
           pendingCount: potentialEarnings.count,
         });
+      } else {
+        // Payouts API failed but still show potential earnings
+        setTotals((prev) => ({
+          ...prev,
+          pendingAmountDollars: potentialEarnings.amount,
+          pendingCount: potentialEarnings.count,
+        }));
       }
     } catch (err) {
       console.error("Error fetching payouts:", err);

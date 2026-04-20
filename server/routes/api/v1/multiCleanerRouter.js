@@ -17,6 +17,8 @@ const {
   CleanerJobCompletion,
   UserCleanerAppointments,
   Payout,
+  Notification,
+  sequelize,
 } = require("../../../models");
 
 const MultiCleanerService = require("../../../services/MultiCleanerService");
@@ -80,8 +82,10 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
             {
               model: UserAppointments,
               as: "appointment",
+              required: true,
               where: {
                 completed: false,
+                wasCancelled: { [Op.ne]: true }, // Hide cancelled appointments
                 isPaused: { [Op.ne]: true }, // Hide paused appointments (homeowner account frozen)
               },
               include: [
@@ -97,11 +101,19 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
       order: [[{ model: MultiCleanerJob, as: "multiCleanerJob" }, { model: UserAppointments, as: "appointment" }, "date", "ASC"]],
     });
 
+    console.log(`[my-confirmed-jobs] Cleaner ${cleanerId}: Found ${completions.length} upcoming multi-cleaner jobs`);
+
     // Transform to a format similar to regular appointments
     const confirmedJobs = completions.map((completion) => {
       const job = completion.multiCleanerJob;
       const appointment = job.appointment;
       const home = appointment.home;
+
+      // Calculate per-cleaner earnings (price split by cleaners, minus platform fee)
+      const totalPrice = appointment.price || 0;
+      const numCleaners = job.totalCleanersRequired || 1;
+      const platformFeePercent = 0.13; // Multi-cleaner platform fee
+      const perCleanerEarnings = Math.round((totalPrice / numCleaners) * (1 - platformFeePercent));
 
       return {
         id: completion.id,
@@ -110,6 +122,7 @@ multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
         appointmentId: appointment.id,
         date: appointment.date,
         price: appointment.price,  // Price in cents (consistent with AppointmentSerializer)
+        perCleanerEarnings,  // Pre-calculated per-cleaner share in cents
         isMultiCleanerJob: true,
         status: completion.status,
         completionStatus: completion.completionStatus,
@@ -276,7 +289,8 @@ multiCleanerRouter.get("/offers", async (req, res) => {
           ],
         },
       ],
-      order: [["createdAt", "DESC"]],
+      // Sort by appointment date (soonest first) for better UX
+      order: [[{ model: UserAppointments, as: "appointment" }, "date", "ASC"]],
       limit: 20,
     });
 
@@ -355,12 +369,19 @@ multiCleanerRouter.get("/offers", async (req, res) => {
     const pendingRequestJobIds = await CleanerApprovalService.getPendingJobIdsForCleaner(cleanerId);
 
     // Filter out jobs that cleaner already has offers for, is assigned to, or has pending requests
-    const availableJobs = [...filteredOpenJobs, ...edgeLargeHomeJobs].filter(
-      (job) =>
-        !existingOfferJobIds.includes(job.id) &&
-        !assignedJobIds.includes(job.id) &&
-        !pendingRequestJobIds.includes(job.id)
-    );
+    const availableJobs = [...filteredOpenJobs, ...edgeLargeHomeJobs]
+      .filter(
+        (job) =>
+          !existingOfferJobIds.includes(job.id) &&
+          !assignedJobIds.includes(job.id) &&
+          !pendingRequestJobIds.includes(job.id)
+      )
+      // Sort by appointment date (soonest first)
+      .sort((a, b) => {
+        const dateA = a.appointment?.date || "";
+        const dateB = b.appointment?.date || "";
+        return dateA.localeCompare(dateB);
+      });
 
     // Serialize with decrypted home data
     const response = MultiCleanerJobSerializer.serializeOffersResponse(offers, availableJobs);
@@ -1082,6 +1103,15 @@ multiCleanerRouter.post("/:appointmentId/accept-solo", async (req, res) => {
       return res.status(404).json({ error: "Multi-cleaner job not found" });
     }
 
+    // Check if job is past due - cannot accept/decline solo offers for past jobs
+    const now = new Date();
+    if (appointment.scheduledEndTime && new Date(appointment.scheduledEndTime) < now) {
+      return res.status(400).json({
+        error: "This job is past due and can no longer be accepted",
+        code: "JOB_PAST_DUE",
+      });
+    }
+
     const job = appointment.multiCleanerJob;
 
     // Verify cleaner is assigned
@@ -1145,6 +1175,15 @@ multiCleanerRouter.post("/:appointmentId/decline-solo", async (req, res) => {
       return res.status(404).json({ error: "Multi-cleaner job not found" });
     }
 
+    // Check if job is past due - cannot accept/decline solo offers for past jobs
+    const now = new Date();
+    if (appointment.scheduledEndTime && new Date(appointment.scheduledEndTime) < now) {
+      return res.status(400).json({
+        error: "This job is past due and can no longer be declined",
+        code: "JOB_PAST_DUE",
+      });
+    }
+
     const job = appointment.multiCleanerJob;
 
     // Verify cleaner is assigned to this job
@@ -1196,6 +1235,15 @@ multiCleanerRouter.post("/:appointmentId/accept-extra-work", async (req, res) =>
       return res.status(404).json({ error: "Multi-cleaner job not found" });
     }
 
+    // Check if job is past due - cannot accept extra work for past jobs
+    const now = new Date();
+    if (appointment.scheduledEndTime && new Date(appointment.scheduledEndTime) < now) {
+      return res.status(400).json({
+        error: "This job is past due and can no longer be modified",
+        code: "JOB_PAST_DUE",
+      });
+    }
+
     const job = appointment.multiCleanerJob;
 
     // Verify cleaner is assigned to this job
@@ -1236,6 +1284,15 @@ multiCleanerRouter.post("/:appointmentId/decline-extra-work", async (req, res) =
 
     if (!appointment?.multiCleanerJob) {
       return res.status(404).json({ error: "Multi-cleaner job not found" });
+    }
+
+    // Check if job is past due - cannot decline extra work for past jobs
+    const now = new Date();
+    if (appointment.scheduledEndTime && new Date(appointment.scheduledEndTime) < now) {
+      return res.status(400).json({
+        error: "This job is past due and can no longer be modified",
+        code: "JOB_PAST_DUE",
+      });
     }
 
     const job = appointment.multiCleanerJob;
@@ -1405,6 +1462,22 @@ multiCleanerRouter.post("/:appointmentId/homeowner-response", async (req, res) =
           }
         }
 
+        // Mark the homeowner's notification as actioned
+        await Notification.update(
+          {
+            actionRequired: false,
+            data: sequelize.literal(`data || '{"decisionMade": "proceed", "decisionMadeAt": "${new Date().toISOString()}"}'::jsonb`),
+          },
+          {
+            where: {
+              userId: userId,
+              relatedAppointmentId: appointment.id,
+              type: { [Op.in]: ["edge_case_decision_required", "cleaner_dropout", "multi_cleaner_final_warning"] },
+              actionRequired: true,
+            },
+          }
+        );
+
         return res.status(200).json({
           success: true,
           message: "Appointment will proceed with available cleaner(s)",
@@ -1491,6 +1564,22 @@ multiCleanerRouter.post("/:appointmentId/homeowner-response", async (req, res) =
           }
         }
 
+        // Mark the homeowner's notification as actioned
+        await Notification.update(
+          {
+            actionRequired: false,
+            data: sequelize.literal(`data || '{"decisionMade": "proceed", "decisionMadeAt": "${new Date().toISOString()}"}'::jsonb`),
+          },
+          {
+            where: {
+              userId: userId,
+              relatedAppointmentId: appointment.id,
+              type: { [Op.in]: ["edge_case_decision_required", "cleaner_dropout", "multi_cleaner_final_warning"] },
+              actionRequired: true,
+            },
+          }
+        );
+
         return res.status(200).json({
           success: true,
           message: "You've chosen to proceed with 1 cleaner. Payment will be captured and normal cancellation fees apply.",
@@ -1516,6 +1605,22 @@ multiCleanerRouter.post("/:appointmentId/homeowner-response", async (req, res) =
         if (!cancelResult.success) {
           return res.status(500).json({ error: cancelResult.error || "Failed to cancel appointment" });
         }
+
+        // Mark the homeowner's notification as actioned
+        await Notification.update(
+          {
+            actionRequired: false,
+            data: sequelize.literal(`data || '{"decisionMade": "cancelled", "decisionMadeAt": "${new Date().toISOString()}"}'::jsonb`),
+          },
+          {
+            where: {
+              userId: userId,
+              relatedAppointmentId: appointment.id,
+              type: { [Op.in]: ["edge_case_decision_required", "cleaner_dropout", "multi_cleaner_final_warning"] },
+              actionRequired: true,
+            },
+          }
+        );
 
         return res.status(200).json({
           success: true,

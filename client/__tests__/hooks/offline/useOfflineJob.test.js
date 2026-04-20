@@ -313,10 +313,10 @@ describe("useOfflineChecklist", () => {
       });
 
       await act(async () => {
-        await result.current.markComplete("item-1");
+        await result.current.markComplete("section-1", "item-1");
       });
 
-      expect(OfflineManager.updateChecklistItem).toHaveBeenCalledWith("job-1", "item-1", true);
+      expect(OfflineManager.updateChecklistItem).toHaveBeenCalledWith("job-1", "section-1", "item-1", true);
       expect(result.current.items["item-1"].completed).toBe(true);
     });
 
@@ -336,7 +336,7 @@ describe("useOfflineChecklist", () => {
       });
 
       await act(async () => {
-        await result.current.markComplete("item-1");
+        await result.current.markComplete("section-1", "item-1");
       });
 
       expect(OfflineManager.updateChecklistItem).not.toHaveBeenCalled();

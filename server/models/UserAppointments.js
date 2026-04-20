@@ -488,6 +488,28 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "When first before photo was uploaded (job start time)",
 		},
+		// No-show tracking fields
+		noShowWarningsSent: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Number of no-show warnings sent (0-3)",
+		},
+		lastNoShowWarningAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When the last no-show warning was sent",
+		},
+		noShowProcessedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When the cleaner was marked as no-show",
+		},
+		noShowCleanerId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "ID of cleaner who was marked as no-show",
+		},
 		// Demo appointment flag - never show on marketplace
 		isDemoAppointment: {
 			type: DataTypes.BOOLEAN,

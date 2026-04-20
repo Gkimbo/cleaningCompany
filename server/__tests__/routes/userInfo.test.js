@@ -260,6 +260,8 @@ describe("User Info Router", () => {
     });
 
     it("should update home successfully", async () => {
+      // Mock that home belongs to authenticated user
+      UserHomes.findByPk.mockResolvedValue({ id: 1, userId: 1 });
       UserInfo.editHomeInDB.mockResolvedValue({
         id: 1,
         ...updateData,
@@ -267,6 +269,7 @@ describe("User Info Router", () => {
 
       const response = await request(app)
         .patch("/api/v1/user-info/home")
+        .set("Authorization", `Bearer ${userToken}`)
         .send(updateData);
 
       expect(response.status).toBe(200);
@@ -275,10 +278,12 @@ describe("User Info Router", () => {
     });
 
     it("should return 400 for invalid zipcode", async () => {
+      UserHomes.findByPk.mockResolvedValue({ id: 1, userId: 1 });
       HomeClass.checkZipCodeExists.mockResolvedValue(false);
 
       const response = await request(app)
         .patch("/api/v1/user-info/home")
+        .set("Authorization", `Bearer ${userToken}`)
         .send(updateData);
 
       expect(response.status).toBe(400);
@@ -286,6 +291,7 @@ describe("User Info Router", () => {
     });
 
     it("should include service area message when outside area", async () => {
+      UserHomes.findByPk.mockResolvedValue({ id: 1, userId: 1 });
       isInServiceArea.mockReturnValue({
         isServiceable: false,
         message: "This area is not currently serviced",
@@ -298,6 +304,7 @@ describe("User Info Router", () => {
 
       const response = await request(app)
         .patch("/api/v1/user-info/home")
+        .set("Authorization", `Bearer ${userToken}`)
         .send(updateData);
 
       expect(response.status).toBe(200);
@@ -308,6 +315,8 @@ describe("User Info Router", () => {
 
   describe("DELETE /home", () => {
     beforeEach(() => {
+      // Mock findByPk for authorization check
+      UserHomes.findByPk.mockResolvedValue({ id: 1, userId: 1 });
       UserHomes.findAll.mockResolvedValue([
         {
           dataValues: {
@@ -378,7 +387,10 @@ describe("User Info Router", () => {
     });
 
     it("should handle deletion errors", async () => {
-      UserHomes.findAll.mockRejectedValue(new Error("Database error"));
+      // Mock authorization to pass but then fail on bill lookup
+      // Note: The route catches all errors and returns 401
+      UserHomes.findByPk.mockResolvedValue({ id: 1, userId: 1 });
+      UserBills.findOne.mockRejectedValue(new Error("Database error"));
 
       const response = await request(app)
         .delete("/api/v1/user-info/home")

@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
+import Ionicons from "react-native-vector-icons/Ionicons";
 import * as Location from "expo-location";
 import FetchData from "../../services/fetchRequests/fetchData";
 import PreferredCleanerService from "../../services/fetchRequests/PreferredCleanerService";
@@ -32,6 +33,7 @@ import JobCompletionFlow from "../employeeAssignments/jobPhotos/JobCompletionFlo
 import ClientAppointmentsSection from "./ClientAppointmentsSection";
 import { usePricing } from "../../context/PricingContext";
 import { parseLocalDate } from "../../utils/dateUtils";
+import SecureStorage from "../../services/SecureStorage";
 
 // Payment Setup Banner Component
 const PaymentSetupBanner = ({ onPress }) => (
@@ -321,11 +323,13 @@ const PendingRequestCard = ({ request, onPress, distance }) => {
 
   useEffect(() => {
     if (request.homeId) {
-      FetchData.getHome(request.homeId).then((response) => {
-        setHome(response.home);
-      }).catch((err) => {
-        console.error("Error fetching home for request:", err);
-      });
+      FetchData.getHome(request.homeId)
+        .then((response) => {
+          setHome(response.home);
+        })
+        .catch(() => {
+          // Silently handle - home details are optional
+        });
     }
   }, [request.homeId]);
 
@@ -602,18 +606,25 @@ const CleanerDashboard = ({ state, dispatch }) => {
           });
         }
 
-        // Fetch home details for each appointment
+        // Fetch home details for each appointment (handle failures gracefully)
         const uniqueHomeIds = [...new Set(cleanerAppointments.map(apt => apt.homeId))];
         const homePromises = uniqueHomeIds.map(homeId =>
-          FetchData.getHome(homeId).then(response => ({
-            homeId,
-            home: response.home,
-          }))
+          FetchData.getHome(homeId)
+            .then(response => ({
+              homeId,
+              home: response.home,
+            }))
+            .catch(() => ({
+              homeId,
+              home: null,
+            }))
         );
         const homeResults = await Promise.all(homePromises);
         const homeMap = {};
         homeResults.forEach(({ homeId, home }) => {
-          homeMap[homeId] = home;
+          if (home) {
+            homeMap[homeId] = home;
+          }
         });
         setHomeDetails(homeMap);
       }
@@ -719,13 +730,17 @@ const CleanerDashboard = ({ state, dispatch }) => {
   const expectedPayout = sortedAppointments
     .filter((apt) => !apt.completed && parseLocalDate(apt.date) >= today)
     .reduce((sum, apt) => {
-      // Check if this is a team/multi-cleaner job
       const isTeamJob = apt.jobType === "team" || apt.isMultiCleanerJob;
-      // For multi-cleaner/team jobs, divide by number of cleaners; for solo jobs, use 1
+
+      // For team jobs, prefer pre-calculated perCleanerEarnings from API
+      if (isTeamJob && apt.perCleanerEarnings) {
+        return sum + (apt.perCleanerEarnings / 100); // Convert cents to dollars
+      }
+
+      // Fallback calculation for solo jobs or if perCleanerEarnings not available
       const numCleaners = isTeamJob
         ? (apt.multiCleanerJob?.totalCleanersRequired || apt.totalCleanersRequired || apt.employeesAssigned?.length || 1)
         : 1;
-      // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
       const feePercent = isTeamJob
         ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
         : (pricing?.platform?.feePercent || 0.1);
@@ -857,18 +872,6 @@ const CleanerDashboard = ({ state, dispatch }) => {
                 }
               }}
             />
-            {/* My Homes - for non-business-owner cleaners only */}
-            {!state.isBusinessOwner && (
-              <QuickActionButton
-                title={state.homes?.length > 0 ? "My Homes" : "Add Home"}
-                subtitle={state.homes?.length > 0 ? "Manage properties" : "Register a property"}
-                icon="home"
-                iconColor="#fff"
-                bgColor="#fff"
-                accentColor="#8b5cf6"
-                onPress={() => navigate(state.homes?.length > 0 ? "/list-of-homes" : "/add-home")}
-              />
-            )}
           </View>
         </View>
 
@@ -1076,6 +1079,71 @@ const CleanerDashboard = ({ state, dispatch }) => {
           <SectionHeader title="My Reviews" />
           <ReviewsOverview state={state} dispatch={dispatch} />
         </View>
+
+        {/* Add Home / Switch to Homeowner Banner - for non-business-owner cleaners only */}
+        {!state.isBusinessOwner && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.addHomeBanner,
+              state.homes?.length > 0 && styles.switchHomeBanner,
+              pressed && styles.addHomeBannerPressed,
+            ]}
+            onPress={async () => {
+              if (state.homes?.length > 0) {
+                // Switch to homeowner view
+                await SecureStorage.setItem("activeRole", "homeowner");
+                dispatch({ type: "SET_ACTIVE_ROLE", payload: "homeowner" });
+                navigate("/");
+              } else {
+                // Add a home
+                navigate("/add-home");
+              }
+            }}
+          >
+            <View style={[
+              styles.addHomeBannerIcon,
+              state.homes?.length > 0 && styles.switchHomeBannerIcon,
+            ]}>
+              <Ionicons
+                name={state.homes?.length > 0 ? "home" : "home-outline"}
+                size={20}
+                color={state.homes?.length > 0 ? colors.secondary[600] : colors.primary[600]}
+              />
+            </View>
+            <View style={styles.addHomeBannerContent}>
+              <Text style={[
+                styles.addHomeBannerTitle,
+                state.homes?.length > 0 && styles.switchHomeBannerTitle,
+              ]}>
+                {state.homes?.length > 0 ? "Switch to Homeowner View" : "Need your home cleaned?"}
+              </Text>
+              <Text style={[
+                styles.addHomeBannerSubtitle,
+                state.homes?.length > 0 && styles.switchHomeBannerSubtitle,
+              ]}>
+                {state.homes?.length > 0
+                  ? "Manage your homes and book cleanings"
+                  : "Add your home and let others clean for you"}
+              </Text>
+            </View>
+            <View style={[
+              styles.addHomeBannerAction,
+              state.homes?.length > 0 && styles.switchHomeBannerAction,
+            ]}>
+              <Text style={[
+                styles.addHomeBannerActionText,
+                state.homes?.length > 0 && styles.switchHomeBannerActionText,
+              ]}>
+                {state.homes?.length > 0 ? "Switch" : "Add"}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={14}
+                color={state.homes?.length > 0 ? colors.secondary[600] : colors.primary[600]}
+              />
+            </View>
+          </Pressable>
+        )}
 
         {/* Tax Forms Section */}
         <TaxFormsSection state={state} />
@@ -1664,6 +1732,81 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,
     marginTop: 2,
+  },
+
+  // Add Home / Switch to Homeowner Banner
+  addHomeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    ...shadows.sm,
+  },
+  switchHomeBanner: {
+    backgroundColor: colors.secondary[50],
+    borderColor: colors.secondary[200],
+  },
+  addHomeBannerPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  addHomeBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  switchHomeBannerIcon: {
+    backgroundColor: colors.secondary[100],
+  },
+  addHomeBannerContent: {
+    flex: 1,
+  },
+  addHomeBannerTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[800],
+    marginBottom: 2,
+  },
+  switchHomeBannerTitle: {
+    color: colors.secondary[800],
+  },
+  addHomeBannerSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    lineHeight: 18,
+  },
+  switchHomeBannerSubtitle: {
+    color: colors.secondary[600],
+  },
+  addHomeBannerAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  switchHomeBannerAction: {
+    borderColor: colors.secondary[200],
+  },
+  addHomeBannerActionText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+  switchHomeBannerActionText: {
+    color: colors.secondary[600],
   },
 });
 

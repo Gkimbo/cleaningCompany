@@ -95,8 +95,10 @@ const CleanerApplicationForm = () => {
   // Prices from API are in cents - convert to dollars for display
   const platformFeePercent =
     pricing.platform?.feePercent ?? defaultPricing.platform.feePercent;
-  const basePriceDollars = (pricing.basePrice ?? defaultPricing.basePrice) / 100;
-  const extraBedBathFeeDollars = (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee) / 100;
+  const basePriceDollars =
+    (pricing.basePrice ?? defaultPricing.basePrice) / 100;
+  const extraBedBathFeeDollars =
+    (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee) / 100;
   const minCleanerPay = Math.round(basePriceDollars * (1 - platformFeePercent));
   // Max pay assumes a 2bed/1bath (1 extra bed = 1 extra)
   const maxCleanerPay = Math.round(
@@ -112,6 +114,7 @@ const CleanerApplicationForm = () => {
     return { weekly, monthly, yearly };
   };
 
+  const casualEarnings = calculateEarnings(1.5, 1); // 1-2 houses/week
   const partTimeEarnings = calculateEarnings(1.5); // 1-2 houses/day average
   const fullTimeEarnings = calculateEarnings(3);
   const hustleModeEarnings = calculateEarnings(4);
@@ -449,7 +452,10 @@ const CleanerApplicationForm = () => {
             base64Data = photoUri;
           } catch (error) {
             console.error("Error converting blob to data URL:", error);
-            Alert.alert("Error", "Failed to process the selected image. Please try again.");
+            Alert.alert(
+              "Error",
+              "Failed to process the selected image. Please try again."
+            );
             return;
           }
         } else {
@@ -604,10 +610,21 @@ const CleanerApplicationForm = () => {
     setFormError(null);
 
     // Show warning when leaving step 2 with ID name mismatch (only if verification is enabled)
-    if (currentStep === 2 && idVerification.verified === false && !idVerification.skipped && !idVerification.disabled) {
+    if (
+      currentStep === 2 &&
+      idVerification.verified === false &&
+      !idVerification.skipped &&
+      !idVerification.disabled
+    ) {
       Alert.alert(
         "Name Mismatch Warning",
-        `The name on your ID does not appear to match your application.\n\nApplication: ${formData.firstName} ${formData.lastName}\n${idVerification.detectedName ? `ID: ${idVerification.detectedName.firstName} ${idVerification.detectedName.lastName}` : ""}\n\nWould you like to go back and fix your name, or continue anyway? Continuing with mismatched information may delay your application.`,
+        `The name on your ID does not appear to match your application.\n\nApplication: ${
+          formData.firstName
+        } ${formData.lastName}\n${
+          idVerification.detectedName
+            ? `ID: ${idVerification.detectedName.firstName} ${idVerification.detectedName.lastName}`
+            : ""
+        }\n\nWould you like to go back and fix your name, or continue anyway? Continuing with mismatched information may delay your application.`,
         [
           {
             text: "Go Back & Fix",
@@ -616,7 +633,8 @@ const CleanerApplicationForm = () => {
           {
             text: "Continue Anyway",
             style: "destructive",
-            onPress: () => setCurrentStep((prev) => Math.min(prev + 1, totalSteps)),
+            onPress: () =>
+              setCurrentStep((prev) => Math.min(prev + 1, totalSteps)),
           },
         ]
       );
@@ -668,7 +686,7 @@ const CleanerApplicationForm = () => {
       const submittedApplication = await Application.addApplicationToDb(
         submissionData
       );
-      console.log("Form submitted:", submittedApplication);
+      console.log("Form submitted:");
       setSubmitted(true);
       Alert.alert(
         "Thank You",
@@ -798,7 +816,11 @@ const CleanerApplicationForm = () => {
 
   const comparisonData = [
     { feature: "Set your own schedule", us: true, traditional: false },
-    { feature: "Fast payouts (1-2 business days)", us: true, traditional: false },
+    {
+      feature: "Fast payouts (1-2 business days)",
+      us: true,
+      traditional: false,
+    },
     { feature: "Choose which jobs to take", us: true, traditional: false },
     { feature: "No boss or supervisor", us: true, traditional: false },
     {
@@ -1158,11 +1180,20 @@ const CleanerApplicationForm = () => {
 
           <View
             style={{
-              flexDirection: width > 500 ? "row" : "column",
-              justifyContent: "space-around",
+              flexDirection: "row",
+              flexWrap: "wrap",
+              justifyContent: "center",
+              width: "100%",
             }}
           >
             {[
+              {
+                hours: "1-2 houses/week",
+                week: `$${casualEarnings.weekly.toLocaleString()}+`,
+                month: `$${casualEarnings.monthly.toLocaleString()}+`,
+                year: `$${casualEarnings.yearly.toLocaleString()}+`,
+                label: "Casual",
+              },
               {
                 hours: "1-2 houses/day",
                 week: `$${partTimeEarnings.weekly.toLocaleString()}+`,
@@ -1189,9 +1220,9 @@ const CleanerApplicationForm = () => {
                 key={index}
                 style={{
                   alignItems: "center",
-                  marginBottom: width > 500 ? 0 : spacing.xl,
-                  flex: width > 500 ? 1 : undefined,
-                  paddingHorizontal: spacing.sm,
+                  width: width > 500 ? "50%" : "100%",
+                  paddingHorizontal: spacing.md,
+                  marginBottom: spacing.xl,
                 }}
               >
                 <Text
@@ -1300,7 +1331,7 @@ const CleanerApplicationForm = () => {
             }}
           >
             *Earnings based on ${minCleanerPay}-${maxCleanerPay} per house. $
-            {minCleanerPay} per house is the absolute mininimum you'll earn
+            {minCleanerPay} per house is the absolute minimum you'll earn
             cleaning a 1 bed 1 bath home. It only goes up from there!
           </Text>
         </View>
@@ -1940,7 +1971,8 @@ const CleanerApplicationForm = () => {
                 {idVerification.detectedName ? (
                   <>
                     <Text style={idVerificationStyles.errorText}>
-                      Your application says: {formData.firstName} {formData.lastName}
+                      Your application says: {formData.firstName}{" "}
+                      {formData.lastName}
                     </Text>
                     <Text style={idVerificationStyles.errorText}>
                       Your ID shows: {idVerification.detectedName.firstName}{" "}
@@ -1953,7 +1985,8 @@ const CleanerApplicationForm = () => {
                   </Text>
                 )}
                 <Text style={idVerificationStyles.errorHint}>
-                  Please go back and enter your name exactly as shown on your ID, or your application may be delayed
+                  Please go back and enter your name exactly as shown on your
+                  ID, or your application may be delayed
                 </Text>
               </View>
             </View>

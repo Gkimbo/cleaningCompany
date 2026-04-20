@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
+import { AuthContext } from "../../services/AuthContext";
 
 const AppointmentTile = ({
   id,
@@ -20,13 +21,14 @@ const AppointmentTile = ({
   const [home, setHome] = useState({});
   const [minCleaners, setMinCleaners] = useState(1);
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
   const numberOfAssigned = Array.isArray(employeesAssigned)
     ? employeesAssigned.length
     : 0;
 
   const fetchHomeInfo = async () => {
     try {
-      const response = await Appointment.getHomeInfo(homeId);
+      const response = await Appointment.getHomeInfo(homeId, user?.token);
       if (response?.home?.[0]) {
         setHome(response.home[0]);
       }

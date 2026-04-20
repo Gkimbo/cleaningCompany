@@ -273,7 +273,7 @@ class OfflineBusinessEmployeeService {
       // For offline, we only support marking items as completed (status = "completed")
       // N/A status requires online because it may have business logic implications
       if (status === "completed") {
-        await OfflineManager.updateChecklistItem(assignmentId, itemId, true);
+        await OfflineManager.updateChecklistItem(assignmentId, sectionId, itemId, true);
         return {
           success: true,
           message: "Checklist updated (will sync when online)",
@@ -334,7 +334,7 @@ class OfflineBusinessEmployeeService {
       // Only process "completed" status updates offline
       const completedUpdates = updates.filter((u) => u.status === "completed");
       for (const update of completedUpdates) {
-        await OfflineManager.updateChecklistItem(assignmentId, update.itemId, true);
+        await OfflineManager.updateChecklistItem(assignmentId, update.sectionId, update.itemId, true);
       }
 
       const skippedCount = updates.length - completedUpdates.length;

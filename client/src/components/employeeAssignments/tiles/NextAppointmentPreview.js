@@ -99,11 +99,15 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
     // Fetch home if not provided or incomplete, and we don't have inline data
     const hasInlineData = appointment.city && appointment.state;
     if (!initialHome && !hasInlineData && appointment.homeId) {
-      FetchData.getHome(appointment.homeId).then((response) => {
-        if (response.home) {
-          setHome(response.home);
-        }
-      });
+      FetchData.getHome(appointment.homeId)
+        .then((response) => {
+          if (response.home) {
+            setHome(response.home);
+          }
+        })
+        .catch(() => {
+          // Silently handle - home details are optional
+        });
     }
   }, [appointment.homeId, appointment.city, appointment.state, initialHome]);
 

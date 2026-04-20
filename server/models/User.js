@@ -90,6 +90,17 @@ module.exports = (sequelize, DataTypes) => {
 			defaultValue: 0,
 			comment: "Number of warnings issued to this user",
 		},
+		noShowCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Number of no-shows recorded for this cleaner",
+		},
+		lastNoShowAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When the last no-show was recorded",
+		},
 		accountStatusUpdatedById: {
 			type: DataTypes.INTEGER,
 			allowNull: true,
@@ -112,6 +123,14 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 		},
 		damageProtectionAcceptedVersion: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
+		cleanerAgreementAcceptedVersion: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
+		businessOwnerAgreementAcceptedVersion: {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
@@ -541,7 +560,27 @@ module.exports = (sequelize, DataTypes) => {
 		  as: "businessEmployeeRecord",
 		});
 	  };
-	  
+
+	// Defensive toJSON method to exclude sensitive fields
+	// This is a safety net - always use UserSerializer for API responses
+	if (User.prototype) {
+		User.prototype.toJSON = function () {
+			const values = { ...this.get() };
+
+			// Always exclude these sensitive fields
+			delete values.password;
+			delete values.emailHash;
+			delete values.failedLoginAttempts;
+			delete values.lockedUntil;
+			delete values.ownerPrivateNotes;
+			delete values.expoPushToken;
+			delete values.stripeCustomerId;
+			delete values.currentPreviewOwnerId;
+
+			return values;
+		};
+	}
+
 
 	return User;
 };

@@ -19,6 +19,34 @@ const NotificationService = require("../NotificationService");
 const EncryptionService = require("../EncryptionService");
 const Email = require("../sendNotifications/EmailClass");
 const PushNotification = require("../sendNotifications/PushNotificationClass");
+const TimezoneService = require("../TimezoneService");
+
+/**
+ * Check if an appointment is overdue by more than 24 hours (a full day)
+ * Uses TimezoneService for consistent timezone handling across the codebase.
+ * An appointment is considered overdue by a full day if its date is strictly
+ * before today (i.e., yesterday or earlier).
+ *
+ * Used to skip sending reminders for appointments that are way past their date -
+ * these should be handled by cleanup processes (no-show, auto-complete) instead.
+ *
+ * @param {string} dateStr - Appointment date string (YYYY-MM-DD)
+ * @returns {boolean} True if overdue by 24+ hours (date is before today)
+ */
+function isOverdueByFullDay(dateStr) {
+  // Safety check for null/undefined/empty dates
+  if (!dateStr || typeof dateStr !== "string") {
+    console.warn("[AutoCompleteMonitor] isOverdueByFullDay called with invalid date:", dateStr);
+    return false; // Don't skip if we can't determine the date
+  }
+
+  // Use TimezoneService for consistent timezone handling (defaults to America/New_York)
+  const todayStr = TimezoneService.getTodayInTimezone();
+
+  // String comparison works for YYYY-MM-DD format (lexicographically ordered)
+  // If appointment date is before today (yesterday or earlier), it's overdue by a full day
+  return dateStr < todayStr;
+}
 
 /**
  * Parse time window string to get start and end hours
@@ -132,6 +160,15 @@ async function processReminders(io = null) {
 
     for (const appointment of jobsNeedingReminders) {
       try {
+        // Skip reminders for appointments that are overdue by a full day
+        // These should be handled by cleanup processes, not reminder notifications
+        if (isOverdueByFullDay(appointment.date)) {
+          console.log(
+            `[AutoCompleteMonitor] Skipping reminder for appointment ${appointment.id} - date ${appointment.date} is overdue by 24+ hours`
+          );
+          continue;
+        }
+
         const scheduledEnd = new Date(appointment.scheduledEndTime);
         const minutesPassed = Math.floor((now.getTime() - scheduledEnd.getTime()) / 60000);
         const expectedReminderNum = getReminderNumber(minutesPassed, config.reminderIntervals);
@@ -157,11 +194,13 @@ async function processReminders(io = null) {
 
           // Send reminder via all channels
           // In-app notification
-          await NotificationService.createNotification(
-            cleanerId,
-            getInAppReminderMessage(expectedReminderNum, appointment.date, minutesLeft),
-            { appointmentId: appointment.id }
-          );
+          await NotificationService.createNotification({
+            userId: cleanerId,
+            type: "auto_complete_reminder",
+            title: "Complete Your Job",
+            body: getInAppReminderMessage(expectedReminderNum, appointment.date, minutesLeft),
+            data: { appointmentId: appointment.id },
+          });
 
           // Email notification
           if (cleanerEmail) {
@@ -263,6 +302,24 @@ async function processMultiCleanerReminders(io = null) {
     for (const completion of completionsNeedingReminders) {
       try {
         const appointment = completion.appointment;
+
+        // Safety check - appointment should always exist due to required include, but verify
+        if (!appointment) {
+          console.warn(
+            `[AutoCompleteMonitor] Skipping completion ${completion.id} - no appointment found`
+          );
+          continue;
+        }
+
+        // Skip reminders for appointments that are overdue by a full day
+        // These should be handled by cleanup processes, not reminder notifications
+        if (isOverdueByFullDay(appointment.date)) {
+          console.log(
+            `[AutoCompleteMonitor] Skipping multi-cleaner reminder for completion ${completion.id} - appointment ${appointment.date} is overdue by 24+ hours`
+          );
+          continue;
+        }
+
         const scheduledEnd = new Date(appointment.scheduledEndTime);
         const minutesPassed = Math.floor((now.getTime() - scheduledEnd.getTime()) / 60000);
         const expectedReminderNum = getReminderNumber(minutesPassed, config.reminderIntervals);
@@ -279,11 +336,13 @@ async function processMultiCleanerReminders(io = null) {
           const minutesLeft = getMinutesUntilAutoComplete(completion.autoCompleteAt);
 
           // Send notifications
-          await NotificationService.createNotification(
-            cleaner.id,
-            getInAppReminderMessage(expectedReminderNum, appointment.date, minutesLeft),
-            { appointmentId: appointment.id }
-          );
+          await NotificationService.createNotification({
+            userId: cleaner.id,
+            type: "auto_complete_reminder",
+            title: "Complete Your Job",
+            body: getInAppReminderMessage(expectedReminderNum, appointment.date, minutesLeft),
+            data: { appointmentId: appointment.id },
+          });
 
           if (cleanerEmail) {
             await Email.sendAutoCompleteReminder(
@@ -415,11 +474,13 @@ async function processAutoCompletions(io = null) {
           const cleanerFirstName = EncryptionService.decrypt(cleaner.firstName);
           const cleanerEmail = cleaner.email ? EncryptionService.decrypt(cleaner.email) : null;
 
-          await NotificationService.createNotification(
-            cleanerId,
-            `Your job on ${appointment.date} was auto-completed by the system. The homeowner has 24 hours to review.`,
-            { appointmentId: appointment.id }
-          );
+          await NotificationService.createNotification({
+            userId: cleanerId,
+            type: "job_auto_completed",
+            title: "Job Auto-Completed",
+            body: `Your job on ${appointment.date} was auto-completed by the system. The homeowner has 24 hours to review.`,
+            data: { appointmentId: appointment.id },
+          });
 
           if (cleanerEmail) {
             await Email.sendJobAutoCompleted(
@@ -448,11 +509,13 @@ async function processAutoCompletions(io = null) {
             ? EncryptionService.decrypt(cleaner.firstName)
             : "Your cleaner";
 
-          await NotificationService.createNotification(
-            appointment.userId,
-            `Your cleaning on ${appointment.date} has been marked complete. Please review within 24 hours.`,
-            { appointmentId: appointment.id }
-          );
+          await NotificationService.createNotification({
+            userId: appointment.userId,
+            type: "job_auto_completed_review",
+            title: "Cleaning Completed - Review Required",
+            body: `Your cleaning on ${appointment.date} has been marked complete. Please review within 24 hours.`,
+            data: { appointmentId: appointment.id },
+          });
 
           if (homeownerEmail) {
             await Email.sendJobAutoCompletedHomeowner(
@@ -571,11 +634,13 @@ async function processMultiCleanerAutoCompletions(io = null) {
           const cleanerFirstName = EncryptionService.decrypt(cleaner.firstName);
           const cleanerEmail = cleaner.email ? EncryptionService.decrypt(cleaner.email) : null;
 
-          await NotificationService.createNotification(
-            cleaner.id,
-            `Your work on ${appointment.date} was auto-completed. The homeowner has 24 hours to review.`,
-            { appointmentId: appointment.id }
-          );
+          await NotificationService.createNotification({
+            userId: cleaner.id,
+            type: "job_auto_completed",
+            title: "Job Auto-Completed",
+            body: `Your work on ${appointment.date} was auto-completed. The homeowner has 24 hours to review.`,
+            data: { appointmentId: appointment.id },
+          });
 
           if (cleanerEmail) {
             await Email.sendJobAutoCompleted(
@@ -601,11 +666,13 @@ async function processMultiCleanerAutoCompletions(io = null) {
             ? EncryptionService.decrypt(cleaner.firstName)
             : "A cleaner";
 
-          await NotificationService.createNotification(
-            homeowner.id,
-            `${cleanerName}'s work on ${appointment.date} has been marked complete. Please review within 24 hours.`,
-            { appointmentId: appointment.id }
-          );
+          await NotificationService.createNotification({
+            userId: homeowner.id,
+            type: "job_auto_completed_review",
+            title: "Cleaning Completed - Review Required",
+            body: `${cleanerName}'s work on ${appointment.date} has been marked complete. Please review within 24 hours.`,
+            data: { appointmentId: appointment.id },
+          });
 
           if (homeownerEmail) {
             await Email.sendJobAutoCompletedHomeowner(

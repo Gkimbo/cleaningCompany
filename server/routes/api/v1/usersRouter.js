@@ -1469,7 +1469,12 @@ usersRouter.get("/appointments", async (req, res) => {
     return res.status(401).json({ error: "Authorization token required" });
   }
   try {
-    const userAppointments = await UserAppointments.findAll();
+    // Exclude demo appointments from owner's view
+    const userAppointments = await UserAppointments.findAll({
+      where: {
+        isDemoAppointment: { [Op.ne]: true },
+      },
+    });
     const serializedAppointments =
       AppointmentSerializer.serializeArray(userAppointments);
 

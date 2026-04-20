@@ -2,7 +2,7 @@ import HttpClient from "../HttpClient";
 
 class ITManagementService {
   static async getITStaff(token) {
-    const result = await HttpClient.get("/users/it-staff", { token, useBaseUrl: true });
+    const result = await HttpClient.get("/users/it-staff", { token });
 
     if (result.success === false) {
       __DEV__ && console.warn("[ITManagementService] getITStaff failed:", result.error);
@@ -16,7 +16,7 @@ class ITManagementService {
     const result = await HttpClient.post(
       "/users/new-it",
       employeeData,
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -31,7 +31,7 @@ class ITManagementService {
     const result = await HttpClient.patch(
       `/users/it-staff/${employeeId}`,
       updates,
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -45,7 +45,7 @@ class ITManagementService {
   static async removeITEmployee(token, employeeId) {
     const result = await HttpClient.delete(
       `/users/it-staff/${employeeId}`,
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {

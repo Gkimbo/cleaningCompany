@@ -154,6 +154,7 @@ API_NINJA_API_KEY=your_api_ninja_key
 |------|-------------|
 | **Homeowner/Client** | Book cleanings, manage homes, pay bills, leave reviews |
 | **Cleaner** | Apply for platform work, accept jobs, earn money, achieve tier bonuses |
+| **Dual-Role User** | Cleaner who also owns homes, can switch between cleaner and homeowner views |
 | **Business Owner** | Cleaner who can onboard clients and manage employees with payroll |
 | **Business Client** | Corporate client of a business owner, book via business portal |
 | **Business Employee** | Works for a business owner, accepts assigned jobs, tracks earnings |
@@ -303,6 +304,19 @@ Handle situations when guests haven't left by checkout time:
 - **Supply Reminders**: Get reminders to bring supplies (with 1-week snooze option)
 - **Tax Documents**: Access W-9 submission and 1099-NEC downloads
 - **Working Days Configuration**: Set available days for scheduling
+- **Dual-Role Support**: Cleaners can register homes and switch to homeowner view
+
+### Dual-Role Users
+
+Cleaners who also own homes can switch between cleaner and homeowner views:
+
+- **Role Toggle**: Switch between cleaner and homeowner views via UI toggle
+- **Separate Stripe Accounts**: Stripe Connect for cleaner payouts, Stripe Customer for homeowner payments
+- **Payment Method Check**: Must have payment method before switching to homeowner role
+- **Stripe Connect Check**: Must complete Stripe Connect onboarding before switching to cleaner role
+- **Tax Section Switching**: Tax documents display appropriate content based on active role
+- **Persistent Preference**: Role preference saved and restored across sessions
+- **Offline Restriction**: Role switching disabled when offline
 
 ### Job Photo System
 
@@ -1041,7 +1055,7 @@ Handle situations when guests haven't left by checkout time:
 
 ## Database
 
-### Models (68 Total)
+### Models (77 Total)
 
 #### Core Models
 
@@ -1720,6 +1734,7 @@ const optimized = await TransitTimeService.optimizeJobOrder(jobIds);
 | `*/5 * * * *` | Auto-Complete Monitor | Sends reminders and auto-completes jobs past scheduled time |
 | `*/15 * * * *` | Completion Approval | Auto-approves homeowner/cleaner completion after timeout |
 | `0 */4 * * *` | Expired Requests | Expires unanswered new home requests after 48 hours |
+| `0 */6 * * *` | Expired Appointment Monitor | Marks 24+ hour overdue appointments as expired no-show, cleans up stale notifications |
 
 ### Cron Job Details
 
@@ -1753,6 +1768,14 @@ const optimized = await TransitTimeService.optimizeJobOrder(jobIds);
 **Completion Approval Monitor** (`CompletionApprovalMonitor.js`)
 - Auto-approves homeowner after 24 hours if not manually approved
 - Auto-approves cleaner after 48 hours if homeowner approved
+
+**Expired Appointment Monitor** (`ExpiredMultiCleanerMonitor.js`)
+- Monitors appointments 24+ hours past their scheduled time
+- Marks as system-cancelled with "expired_no_show" category
+- Handles both multi-cleaner and solo appointments
+- Removes from homeowner's "Recent Cleanings" view
+- Removes from cleaner's payout overview
+- Cleans up stale notifications (solo completion offers, multi-cleaner offers, etc.)
 
 ---
 

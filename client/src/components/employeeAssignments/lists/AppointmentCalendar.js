@@ -437,7 +437,7 @@ const AppointmentCalendar = ({ state }) => {
                           cleanerId={userId}
                           removeRequest={async (employeeId, appointmentId) => {
                             try {
-                              await FetchData.removeRequest(employeeId, appointmentId);
+                              await FetchData.removeRequest(employeeId, appointmentId, state.currentUser?.token);
                               setRequests((prev) => {
                                 const removed = prev.find((r) => r.id === appointmentId);
                                 if (removed) {

@@ -427,7 +427,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
                               status: "approved",
                             },
                           });
-                          await FetchData.approveRequest(requestId, true);
+                          await FetchData.approveRequest(requestId, true, state.currentUser?.token);
                         } catch (error) {
                           console.error("Error approving request:", error);
                         }
@@ -442,7 +442,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
                               status: "denied",
                             },
                           });
-                          await FetchData.denyRequest(employeeId, appointmentId);
+                          await FetchData.denyRequest(employeeId, appointmentId, state.currentUser?.token);
                         } catch (error) {
                           console.error("Error denying request:", error);
                         }
@@ -457,7 +457,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
                               status: "pending",
                             },
                           });
-                          await FetchData.undoRequest(employeeId, appointmentId);
+                          await FetchData.undoRequest(employeeId, appointmentId, state.currentUser?.token);
                         } catch (error) {
                           console.error("Error undoing request:", error);
                         }

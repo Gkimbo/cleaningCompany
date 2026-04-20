@@ -463,7 +463,7 @@ const MyAppointmentsCalendar = ({ state }) => {
                       addEmployee={async () => {}}
                       removeEmployee={async (employeeId, appointmentId) => {
                         try {
-                          await FetchData.removeEmployee(employeeId, appointmentId);
+                          await FetchData.removeEmployee(employeeId, appointmentId, state.currentUser?.token);
                           setAppointments((prev) =>
                             prev.filter((a) => a.id !== appointmentId)
                           );

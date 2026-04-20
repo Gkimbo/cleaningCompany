@@ -17,7 +17,7 @@ class GuestNotLeftService {
         longitude: gpsData.longitude,
         notes,
       },
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -34,7 +34,7 @@ class GuestNotLeftService {
     const result = await HttpClient.post(
       `/guest-not-left/${reportId}/wait`,
       {},
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -51,7 +51,7 @@ class GuestNotLeftService {
     const result = await HttpClient.post(
       `/guest-not-left/${reportId}/will-return`,
       { estimatedReturnTime },
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -68,7 +68,7 @@ class GuestNotLeftService {
     const result = await HttpClient.post(
       `/guest-not-left/${reportId}/cancel`,
       {},
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -88,7 +88,7 @@ class GuestNotLeftService {
         latitude: gpsData.latitude,
         longitude: gpsData.longitude,
       },
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -105,7 +105,7 @@ class GuestNotLeftService {
     const result = await HttpClient.post(
       `/guest-not-left/${reportId}/proceed`,
       {},
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -126,7 +126,7 @@ class GuestNotLeftService {
     const result = await HttpClient.post(
       `/guest-not-left/${reportId}/resolved`,
       { note },
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -143,7 +143,7 @@ class GuestNotLeftService {
     const result = await HttpClient.post(
       `/guest-not-left/${reportId}/need-time`,
       { additionalMinutes, note },
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -160,7 +160,7 @@ class GuestNotLeftService {
     const result = await HttpClient.post(
       `/guest-not-left/${reportId}/cannot-resolve`,
       {},
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -180,7 +180,7 @@ class GuestNotLeftService {
   static async getActiveReport(token, appointmentId) {
     const result = await HttpClient.get(
       `/guest-not-left/active/${appointmentId}`,
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -196,7 +196,7 @@ class GuestNotLeftService {
   static async getPendingReports(token) {
     const result = await HttpClient.get(
       "/guest-not-left/pending",
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {
@@ -212,7 +212,7 @@ class GuestNotLeftService {
   static async getReport(token, reportId) {
     const result = await HttpClient.get(
       `/guest-not-left/${reportId}`,
-      { token, useBaseUrl: true }
+      { token }
     );
 
     if (result.success === false) {

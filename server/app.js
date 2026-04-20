@@ -29,6 +29,9 @@ const { startRecurringScheduleGenerationJob } = require("./services/cron/Recurri
 const { startUnassignedExpiredJob } = require("./services/cron/UnassignedExpiredJob");
 const { startPaymentRetryMonitor } = require("./services/cron/PaymentRetryMonitor");
 const { startPausedAppointmentCancellationJob } = require("./services/cron/PausedAppointmentCancellationJob");
+const { startNoShowMonitor } = require("./services/cron/NoShowMonitor");
+const { startFillMonitorJob } = require("./services/cron/MultiCleanerFillMonitor");
+const { startExpiredMultiCleanerMonitor } = require("./services/cron/ExpiredMultiCleanerMonitor");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -52,6 +55,7 @@ const apiLimiter = rateLimit({
 	message: { error: "Too many requests, please try again later" },
 	standardHeaders: true,
 	legacyHeaders: false,
+	validate: { xForwardedForHeader: false },
 });
 
 const authLimiter = rateLimit({
@@ -60,6 +64,7 @@ const authLimiter = rateLimit({
 	message: { error: "Too many login attempts, please try again later" },
 	standardHeaders: true,
 	legacyHeaders: false,
+	validate: { xForwardedForHeader: false },
 });
 
 // Stricter rate limiter for financial/sensitive endpoints (withdrawals, payouts, etc.)
@@ -244,5 +249,8 @@ server.listen(port, () => {
 		startUnassignedExpiredJob(io, 24 * 60 * 60 * 1000); // Daily cleanup of past unassigned appointments
 		startPaymentRetryMonitor(io, 4 * 60 * 60 * 1000); // Payment retry processing (every 4 hours)
 		startPausedAppointmentCancellationJob(io, 24 * 60 * 60 * 1000); // Daily cancellation of paused appointments within 7 days
+		startNoShowMonitor(io, 5 * 60 * 1000); // No-show detection and warnings (every 5 min)
+		startFillMonitorJob(io, 60 * 60 * 1000); // Multi-cleaner fill monitoring and edge case handling (every hour)
+		startExpiredMultiCleanerMonitor(io, 6 * 60 * 60 * 1000); // Expired multi-cleaner cleanup (every 6 hours)
 	}
 });

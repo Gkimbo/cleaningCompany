@@ -23,7 +23,7 @@ class StripeConnectAccountSerializer {
 		const serialized = {
 			id: data.id,
 			userId: data.userId,
-			stripeAccountId: data.stripeAccountId,
+			// Note: stripeAccountId intentionally excluded - use serializeForAdmin if needed
 			accountStatus: data.accountStatus,
 			payoutsEnabled: data.payoutsEnabled,
 			chargesEnabled: data.chargesEnabled,
@@ -98,6 +98,34 @@ class StripeConnectAccountSerializer {
 			isFullyActive: data.payoutsEnabled && data.chargesEnabled && data.onboardingComplete,
 			needsOnboarding: !data.onboardingComplete
 		};
+	}
+
+	/**
+	 * Admin-only serializer that includes sensitive Stripe IDs
+	 * Only use this for IT support tools and admin dashboards
+	 */
+	static serializeForAdmin(account) {
+		const data = account.dataValues || account;
+
+		const serialized = {
+			id: data.id,
+			userId: data.userId,
+			stripeAccountId: data.stripeAccountId, // Only exposed for admin use
+			accountStatus: data.accountStatus,
+			payoutsEnabled: data.payoutsEnabled,
+			chargesEnabled: data.chargesEnabled,
+			detailsSubmitted: data.detailsSubmitted,
+			onboardingComplete: data.onboardingComplete,
+			isFullyActive: data.payoutsEnabled && data.chargesEnabled && data.onboardingComplete,
+			createdAt: data.createdAt,
+			updatedAt: data.updatedAt
+		};
+
+		if (account.user) {
+			serialized.user = this.serializeUser(account.user);
+		}
+
+		return serialized;
 	}
 }
 

@@ -132,10 +132,7 @@ const parseResponse = async (response) => {
       }
 
       return data;
-    } catch (parseError) {
-      if (__DEV__) {
-        console.error("[HttpClient] JSON parse error:", parseError);
-      }
+    } catch (_parseError) {
       return createErrorResponse(
         "Invalid response from server",
         response.status
@@ -172,10 +169,7 @@ class HttpClientClass {
   async getAuthToken() {
     try {
       return await SecureStorage.getItem("token");
-    } catch (error) {
-      if (__DEV__) {
-        console.error("[HttpClient] Failed to get auth token:", error);
-      }
+    } catch (_error) {
       return null;
     }
   }
@@ -242,16 +236,9 @@ class HttpClientClass {
     for (const interceptor of requestInterceptors) {
       try {
         requestOptions = await interceptor(fullUrl, requestOptions);
-      } catch (error) {
-        if (__DEV__) {
-          console.error("[HttpClient] Request interceptor error:", error);
-        }
+      } catch (_error) {
+        // Silently handle interceptor errors
       }
-    }
-
-    // Log request in development
-    if (__DEV__) {
-      console.log(`[HttpClient] ${requestOptions.method || "GET"} ${fullUrl}`);
     }
 
     // Attempt request with retries
@@ -282,16 +269,9 @@ class HttpClientClass {
         for (const interceptor of responseInterceptors) {
           try {
             data = await interceptor(response, data);
-          } catch (error) {
-            if (__DEV__) {
-              console.error("[HttpClient] Response interceptor error:", error);
-            }
+          } catch (_error) {
+            // Silently handle interceptor errors
           }
-        }
-
-        // Log response in development
-        if (__DEV__ && !response.ok) {
-          console.log(`[HttpClient] ${response.status} ${fullUrl}`, data);
         }
 
         return data;
@@ -302,10 +282,8 @@ class HttpClientClass {
         for (const interceptor of errorInterceptors) {
           try {
             await interceptor(error, fullUrl, requestOptions);
-          } catch (interceptorError) {
-            if (__DEV__) {
-              console.error("[HttpClient] Error interceptor error:", interceptorError);
-            }
+          } catch (_interceptorError) {
+            // Silently handle interceptor errors
           }
         }
 
@@ -317,17 +295,11 @@ class HttpClientClass {
         // Retry logic
         if (attempt < retries) {
           const delay = getRetryDelay(attempt);
-          if (__DEV__) {
-            console.log(`[HttpClient] Retrying in ${Math.round(delay)}ms (attempt ${attempt + 1}/${retries})`);
-          }
           await sleep(delay);
           continue;
         }
 
         // Network error
-        if (__DEV__) {
-          console.error("[HttpClient] Request failed:", error);
-        }
         return createErrorResponse(
           error.message || "Network request failed",
           null,

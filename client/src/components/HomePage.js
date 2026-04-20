@@ -87,6 +87,10 @@ const HomePage = ({ state, dispatch }) => {
 
   useEffect(() => {
     if (!state.currentUser.token) return;
+    // Skip data fetching for owner, HR, IT, and employee accounts - they have their own dashboards
+    if (["owner", "humanResources", "it", "employee"].includes(state.account)) {
+      return;
+    }
     if (state.account === "cleaner") {
       FetchData.get("/api/v1/employee-info", state.currentUser.token).then(
         (response) => {
@@ -97,8 +101,11 @@ const HomePage = ({ state, dispatch }) => {
             });
           }
         }
-      );
+      ).catch((err) => {
+        __DEV__ && console.log("Failed to fetch employee info:", err.message);
+      });
     } else {
+      // This branch is for homeowner accounts (including business owners viewing as homeowner)
       FetchData.get("/api/v1/user-info", state.currentUser.token).then(
         (response) => {
           if (response?.user) {
@@ -110,7 +117,9 @@ const HomePage = ({ state, dispatch }) => {
             dispatch({ type: "DB_BILL", payload: response.user.bill });
           }
         }
-      );
+      ).catch((err) => {
+        __DEV__ && console.log("Failed to fetch user info:", err.message);
+      });
       FetchData.get(
         "/api/v1/appointments/my-requests",
         state.currentUser.token
@@ -121,6 +130,8 @@ const HomePage = ({ state, dispatch }) => {
             payload: response.pendingRequestsEmployee,
           });
         }
+      }).catch(() => {
+        // No pending requests found - this is normal, not an error
       });
     }
   }, []);

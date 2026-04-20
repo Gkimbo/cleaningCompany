@@ -232,45 +232,6 @@ describe("SignInForm Component", () => {
     });
   });
 
-  describe("Terms Acceptance Redirect", () => {
-    it("should redirect to terms-acceptance if required", async () => {
-      const mockResponse = {
-        user: { id: 1, type: "cleaner" },
-        token: "token",
-        requiresTermsAcceptance: true,
-      };
-
-      let redirectToTerms = false;
-      let redirect = false;
-
-      if (mockResponse.requiresTermsAcceptance) {
-        redirectToTerms = true;
-      } else {
-        redirect = true;
-      }
-
-      expect(redirectToTerms).toBe(true);
-      expect(redirect).toBe(false);
-    });
-
-    it("should redirect to home if terms acceptance not required", async () => {
-      const mockResponse = {
-        user: { id: 1, type: "cleaner" },
-        token: "token",
-        requiresTermsAcceptance: false,
-      };
-
-      let redirectToTerms = false;
-      let redirect = false;
-
-      if (mockResponse.requiresTermsAcceptance) {
-        redirectToTerms = true;
-      } else {
-        redirect = true;
-      }
-
-      expect(redirectToTerms).toBe(false);
-      expect(redirect).toBe(true);
-    });
-  });
+  // Note: Terms acceptance is now handled by TermsAcceptanceWrapper, not SignInForm
+  // The wrapper blocks navigation until terms are accepted
 });

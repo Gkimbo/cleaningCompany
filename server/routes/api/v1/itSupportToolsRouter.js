@@ -426,7 +426,6 @@ itSupportToolsRouter.get("/user/:id/billing", async (req, res) => {
     return res.status(200).json({
       billing: {
         hasStripeCustomer: !!user.stripeCustomerId,
-        stripeCustomerId: user.stripeCustomerId,
         hasPaymentMethod: user.hasPaymentMethod,
         stats: {
           totalBills,

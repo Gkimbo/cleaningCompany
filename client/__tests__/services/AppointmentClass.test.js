@@ -168,7 +168,7 @@ describe("Appointment Service", () => {
 
       expect(HttpClient.delete).toHaveBeenCalledWith(
         "/appointments/id/5",
-        { skipAuth: true }
+        { token: undefined }
       );
       expect(result.message).toBe("Appointment Deleted");
     });
@@ -233,24 +233,20 @@ describe("Appointment Service", () => {
       expect(result.appointments).toHaveLength(0);
     });
 
-    it("should return error on failed response", async () => {
+    it("should throw error on failed response", async () => {
       HttpClient.get.mockResolvedValueOnce({
         success: false,
         status: 404,
         error: "Not Found",
       });
 
-      const result = await Appointment.getHomeAppointments(999);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(Appointment.getHomeAppointments(999)).rejects.toThrow("No data received");
     });
 
-    it("should handle network error", async () => {
+    it("should throw error on network error", async () => {
       HttpClient.get.mockResolvedValueOnce({ success: false, error: "Network request failed" });
 
-      const result = await Appointment.getHomeAppointments(1);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(Appointment.getHomeAppointments(1)).rejects.toThrow("No data received");
     });
   });
 
@@ -279,16 +275,14 @@ describe("Appointment Service", () => {
       expect(result.home[0].nickName).toBe("Test Home");
     });
 
-    it("should return error for non-existent home", async () => {
+    it("should throw error for non-existent home", async () => {
       HttpClient.get.mockResolvedValueOnce({
         success: false,
         status: 404,
         error: "Not Found",
       });
 
-      const result = await Appointment.getHomeInfo(999);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(Appointment.getHomeInfo(999)).rejects.toThrow("No data received");
     });
   });
 
@@ -314,16 +308,14 @@ describe("Appointment Service", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should return error on failed response", async () => {
+    it("should throw error on failed response", async () => {
       HttpClient.patch.mockResolvedValueOnce({
         success: false,
         status: 500,
         error: "Server error",
       });
 
-      const result = await Appointment.updateSheetsAppointments("yes", 1);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(Appointment.updateSheetsAppointments("yes", 1)).rejects.toThrow("No data received");
     });
   });
 
@@ -349,16 +341,14 @@ describe("Appointment Service", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should return error on failed response", async () => {
+    it("should throw error on failed response", async () => {
       HttpClient.patch.mockResolvedValueOnce({
         success: false,
         status: 500,
         error: "Server error",
       });
 
-      const result = await Appointment.updateTowelsAppointments("yes", 1);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(Appointment.updateTowelsAppointments("yes", 1)).rejects.toThrow("No data received");
     });
   });
 
@@ -384,16 +374,14 @@ describe("Appointment Service", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should return error on failed response", async () => {
+    it("should throw error on failed response", async () => {
       HttpClient.patch.mockResolvedValueOnce({
         success: false,
         status: 500,
         error: "Server error",
       });
 
-      const result = await Appointment.updateCodeAppointments("1234", 1);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(Appointment.updateCodeAppointments("1234", 1)).rejects.toThrow("No data received");
     });
   });
 
@@ -422,16 +410,14 @@ describe("Appointment Service", () => {
       expect(result.success).toBe(true);
     });
 
-    it("should return error on failed response", async () => {
+    it("should throw error on failed response", async () => {
       HttpClient.patch.mockResolvedValueOnce({
         success: false,
         status: 500,
         error: "Server error",
       });
 
-      const result = await Appointment.updateKeyAppointments("Under mat", 1);
-
-      expect(result).toBeInstanceOf(Error);
+      await expect(Appointment.updateKeyAppointments("Under mat", 1)).rejects.toThrow("No data received");
     });
   });
 
@@ -580,7 +566,7 @@ describe("Appointment Service", () => {
 
       expect(HttpClient.delete).toHaveBeenCalledWith(
         "/appointments/id/99",
-        { skipAuth: true }
+        { token: undefined }
       );
     });
 
