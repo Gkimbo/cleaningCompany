@@ -63,6 +63,12 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+    urgentNotificationCount: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: "Total number of urgent fill notifications sent for this job",
+    },
     finalWarningAt: {
       type: DataTypes.DATE,
       allowNull: true,

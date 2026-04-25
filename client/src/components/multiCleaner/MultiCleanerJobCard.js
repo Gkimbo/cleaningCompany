@@ -147,7 +147,7 @@ const MultiCleanerJobCard = ({
               {job.numBeds} bed / {job.numBaths} bath
             </Text>
           )}
-          {job.distance != null && (
+          {job.distance != null && !isNaN(job.distance) && (
             <Text style={styles.detailText}>
               {(job.distance * 0.621371).toFixed(1)} mi away
             </Text>

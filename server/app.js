@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 /* eslint-disable no-console */
 const express = require("express");
 const passport = require("passport");
@@ -8,7 +7,8 @@ const http = require("http");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
+const { apiLimiter, authLimiter, financialLimiter } = require("./middleware/rateLimiters");
+const logger = require("./utils/logger");
 
 require("dotenv").config();
 require("./passport-config");
@@ -33,62 +33,34 @@ const { startNoShowMonitor } = require("./services/cron/NoShowMonitor");
 const { startFillMonitorJob } = require("./services/cron/MultiCleanerFillMonitor");
 const { startExpiredMultiCleanerMonitor } = require("./services/cron/ExpiredMultiCleanerMonitor");
 
-// Allow multiple origins for web, iOS simulator, and Android emulator
-const allowedOrigins = [
-	"http://localhost:19006",
-	"http://localhost:8081",
-	"http://localhost:8082",
-	"http://localhost:8083",
-	"http://localhost:8084",
-	"http://localhost:8085",
-	"http://localhost:19000",
-	"http://10.0.2.2:8081", // Android emulator
-];
+// CORS origins — in production set ALLOWED_ORIGINS=https://kleanr.app,https://www.kleanr.app
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+	? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
+	: [
+			"http://localhost:19006",
+			"http://localhost:8081",
+			"http://localhost:8082",
+			"http://localhost:8083",
+			"http://localhost:8084",
+			"http://localhost:8085",
+			"http://localhost:19000",
+			"http://10.0.2.2:8081", // Android emulator
+	  ];
 
-const clientURL = "http://localhost:19006"; // Default for backwards compatibility
 const secretKey = process.env.SESSION_SECRET;
-
-// Rate limiters for API security
-const apiLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 10000, // 10000 requests per window
-	message: { error: "Too many requests, please try again later" },
-	standardHeaders: true,
-	legacyHeaders: false,
-	validate: { xForwardedForHeader: false },
-});
-
-const authLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 10, // 10 login attempts per 15 minutes
-	message: { error: "Too many login attempts, please try again later" },
-	standardHeaders: true,
-	legacyHeaders: false,
-	validate: { xForwardedForHeader: false },
-});
-
-// Stricter rate limiter for financial/sensitive endpoints (withdrawals, payouts, etc.)
-const financialLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 20, // Only 20 financial operations per 15 minutes
-	message: { error: "Too many financial requests, please try again later" },
-	standardHeaders: true,
-	legacyHeaders: false,
-	validate: false, // Disable strict IP validation for IPv6 compatibility
-	keyGenerator: (req) => {
-		// Rate limit by user ID if authenticated, otherwise by IP
-		return req.user?.id || req.ip || "unknown";
-	},
-});
+const port = process.env.PORT || 3000;
 
 // Export for use in routers
 module.exports.financialLimiter = financialLimiter;
 
 const app = express();
-const port = 3000;
 
 // Create HTTP server and Socket.io instance
 const server = http.createServer(app);
+
+// 30-second request timeout to prevent hanging connections
+server.setTimeout(30000);
+
 const io = new Server(server, {
 	cors: {
 		origin: allowedOrigins,
@@ -114,7 +86,7 @@ io.use((socket, next) => {
 
 // Socket.io connection handler
 io.on("connection", (socket) => {
-	console.log(`User ${socket.userId} connected to socket`);
+	logger.info(`User ${socket.userId} connected to socket`);
 
 	// Join user to their personal room for direct notifications
 	socket.join(`user_${socket.userId}`);
@@ -128,28 +100,33 @@ io.on("connection", (socket) => {
 			});
 			if (participant) {
 				socket.join(`conversation_${conversationId}`);
-				console.log(`User ${socket.userId} joined conversation ${conversationId}`);
+				logger.info(`User ${socket.userId} joined conversation ${conversationId}`);
 			} else {
-				console.log(`User ${socket.userId} denied access to conversation ${conversationId}`);
+				logger.warn(`User ${socket.userId} denied access to conversation ${conversationId}`);
 			}
 		} catch (error) {
-			console.error(`Error joining conversation ${conversationId}:`, error.message);
+			logger.error(`Error joining conversation ${conversationId}: ${error.message}`);
 		}
 	});
 
 	// Leave a conversation room
 	socket.on("leave_conversation", (conversationId) => {
 		socket.leave(`conversation_${conversationId}`);
-		console.log(`User ${socket.userId} left conversation ${conversationId}`);
+		logger.info(`User ${socket.userId} left conversation ${conversationId}`);
 	});
 
 	socket.on("disconnect", () => {
-		console.log(`User ${socket.userId} disconnected from socket`);
+		logger.info(`User ${socket.userId} disconnected from socket`);
 	});
 });
 
 // Make io accessible to routes
 app.set("io", io);
+
+// Health check — unauthenticated, before rate limiters and auth middleware
+app.get("/health", (req, res) => {
+	res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 // Security headers with Helmet
 app.use(helmet({
@@ -200,7 +177,7 @@ app.use(
 		resave: false,
 		saveUninitialized: false,
 		cookie: {
-			maxAge: 24 * 60 * 60 * 1000, // 24 hours (reduced from 30 days)
+			maxAge: 24 * 60 * 60 * 1000, // 24 hours
 			httpOnly: true,
 			secure: process.env.NODE_ENV === "production",
 			sameSite: "strict",
@@ -212,15 +189,15 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Stripe Webhook needs raw body
+// Stripe Webhook needs raw body — exempt from rate limiting
 app.use("/api/v1/payments/webhook", express.raw({ type: "application/json" }));
 
 // Normal JSON parsing for other routes (increased limit for photo uploads)
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// Apply rate limiting
-app.use("/api/", apiLimiter);
+// Apply rate limiting (Stripe webhook route is already handled above, excluded via path specificity)
+app.use(/^\/api\/(?!v1\/payments\/webhook)/, apiLimiter);
 app.use("/api/v1/user-sessions/login", authLimiter);
 app.use("/api/v1/user-sessions/forgot-password", authLimiter);
 app.use("/api/v1/user-sessions/forgot-username", authLimiter);
@@ -228,13 +205,30 @@ app.use("/api/v1/user-sessions/forgot-username", authLimiter);
 // Routes
 app.use(rootRouter);
 
+// Graceful shutdown
+function shutdown(signal) {
+	logger.info(`${signal} received — shutting down gracefully`);
+	server.close(() => {
+		logger.info("HTTP server closed");
+		process.exit(0);
+	});
+
+	// Force exit after 10 seconds if server hasn't closed
+	setTimeout(() => {
+		logger.error("Forced shutdown after timeout");
+		process.exit(1);
+	}, 10000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+
 // Start server (use http server for Socket.io)
 server.listen(port, () => {
-	console.log(`Server running on port ${port}`);
+	logger.info(`Server running on port ${port}`);
 
-	// Start periodic calendar sync (every hour)
-	// Only in non-test environment
-	if (process.env.NODE_ENV !== "test") {
+	// Only start cron jobs in production to avoid unintended side effects in development
+	if (process.env.NODE_ENV === "production") {
 		startPeriodicSync(60 * 60 * 1000); // 1 hour
 		startBillingScheduler(); // Monthly interest on unpaid fees
 		startCompletionApprovalMonitor(io, 15 * 60 * 1000); // 2-step completion auto-approval (every 15 min)

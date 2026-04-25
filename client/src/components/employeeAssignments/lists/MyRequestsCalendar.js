@@ -230,10 +230,33 @@ const MyRequestsCalendar = ({ state }) => {
 
       if (allHomeIds.length === 0) return;
 
+      // Build inline coord map from request data first
+      const inlineCoords = {};
+      (requests || []).forEach((r) => {
+        if (r.homeId && r.latitude != null && r.longitude != null) {
+          inlineCoords[r.homeId] = { latitude: r.latitude, longitude: r.longitude };
+        }
+      });
+      (multiCleanerRequests || []).forEach((r) => {
+        const homeId = r.homeId || r.appointment?.home?.id;
+        const lat = r.appointment?.home?.latitude;
+        const lng = r.appointment?.home?.longitude;
+        if (homeId && lat != null && lng != null) {
+          inlineCoords[homeId] = { latitude: lat, longitude: lng };
+        }
+      });
+
       const locations = await Promise.all(
         allHomeIds.map(async (homeId) => {
-          const loc = await FetchData.getLatAndLong(homeId);
-          if (!loc) return null;
+          let loc = inlineCoords[homeId];
+          if (!loc) {
+            try {
+              loc = await FetchData.getLatAndLong(homeId);
+            } catch {
+              return null;
+            }
+          }
+          if (!loc?.latitude || !loc?.longitude) return null;
           const distance = haversineDistance(
             userLocation.latitude,
             userLocation.longitude,

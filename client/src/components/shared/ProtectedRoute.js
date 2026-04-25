@@ -128,6 +128,7 @@ const ROUTE_ACCESS = {
     "/client-reviews",
     "/cleaner-approvals",
     "/all-reviews",
+    "/all-cleaner-reviews/*",
     "/my-referrals",
   ],
 };

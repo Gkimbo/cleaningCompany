@@ -582,6 +582,23 @@ multiCleanerRouter.post("/offers/:offerId/accept", async (req, res) => {
       ],
     });
 
+    // If all slots are now filled, mark all urgent/offer notifications for this appointment as filled
+    if (updatedJob.status === "filled") {
+      const urgentNotifs = await Notification.findAll({
+        where: {
+          relatedAppointmentId: offer.appointmentId,
+          type: { [Op.in]: ["multi_cleaner_urgent", "multi_cleaner_offer"] },
+          actionRequired: true,
+        },
+      });
+      for (const notif of urgentNotifs) {
+        await notif.update({
+          actionRequired: false,
+          data: { ...notif.data, filled: true },
+        });
+      }
+    }
+
     return res.status(200).json({
       success: true,
       offer: MultiCleanerJobSerializer.serializeOffer(offer),

@@ -8,6 +8,7 @@
 
 const { Op } = require("sequelize");
 const {
+  sequelize,
   MultiCleanerJob,
   UserAppointments,
   UserHomes,
@@ -15,6 +16,7 @@ const {
   CleanerJobCompletion,
   CleanerJobOffer,
 } = require("../../models");
+const { checkBookingDistance } = require("../../utils/geoUtils");
 const NotificationService = require("../NotificationService");
 const MultiCleanerService = require("../MultiCleanerService");
 const MultiCleanerPricingService = require("../MultiCleanerPricingService");
@@ -58,10 +60,15 @@ async function processUrgentFillNotifications(io = null) {
   const config = await getPricingConfig();
   const urgentDays = config?.multiCleaner?.urgentFillDays || 7;
   const urgentIntervalHours = config?.multiCleaner?.urgentNotificationIntervalHours || 6;
+  // Cap: send initial notification + this many re-sends (default 3 = 4 total over 24 hours)
+  const maxUrgentNotifications = config?.multiCleaner?.maxUrgentNotifications || 4;
 
   const urgentDate = new Date();
   urgentDate.setDate(urgentDate.getDate() + urgentDays);
   const urgentDateStr = TimezoneService.formatDateInTimezone(urgentDate);
+
+  // Only notify about future appointments (not already past)
+  const todayStr = TimezoneService.getTodayInTimezone();
 
   // Time threshold for resending notifications (6 hours ago)
   const resendThreshold = new Date();
@@ -69,11 +76,13 @@ async function processUrgentFillNotifications(io = null) {
 
   // Find jobs that need urgent notifications:
   // - Status is open or partially_filled
-  // - Appointment date is within 7 days
+  // - Appointment date is today or in the next urgentDays (not past)
   // - Either never notified OR last notified more than 6 hours ago
+  // - Have not exceeded the max notification cap
   const jobs = await MultiCleanerJob.findAll({
     where: {
       status: { [Op.in]: ["open", "partially_filled"] },
+      urgentNotificationCount: { [Op.lt]: maxUrgentNotifications },
       [Op.or]: [
         { urgentNotificationSentAt: null },
         { urgentNotificationSentAt: { [Op.lte]: resendThreshold } },
@@ -84,7 +93,7 @@ async function processUrgentFillNotifications(io = null) {
         model: UserAppointments,
         as: "appointment",
         where: {
-          date: { [Op.lte]: urgentDateStr },
+          date: { [Op.between]: [todayStr, urgentDateStr] },
         },
         include: [{ model: UserHomes, as: "home" }],
       },
@@ -133,15 +142,44 @@ async function processUrgentFillNotifications(io = null) {
       const today = new Date();
       const daysUntil = Math.ceil((appointmentDate - today) / (1000 * 60 * 60 * 24));
 
-      // Find nearby cleaners to notify
-      // For now, notify all cleaners - in production, filter by location
-      const cleaners = await User.findAll({
+      // Decrypt home coordinates once for this job
+      const homeLat = appointment.home.latitude
+        ? parseFloat(EncryptionService.decrypt(appointment.home.latitude))
+        : null;
+      const homeLon = appointment.home.longitude
+        ? parseFloat(EncryptionService.decrypt(appointment.home.longitude))
+        : null;
+
+      // Find all eligible cleaners with their service area coordinates
+      const allCleaners = await User.findAll({
         where: {
           type: "cleaner",
           accountFrozen: false,
         },
-        attributes: ["id", "firstName", "expoPushToken"],
-        limit: 50,
+        attributes: [
+          "id",
+          "firstName",
+          "expoPushToken",
+          "serviceAreaLatitude",
+          "serviceAreaLongitude",
+          "serviceAreaRadiusMiles",
+        ],
+      });
+
+      // Filter to nearby cleaners (within MAX_BOOKING_DISTANCE_MILES of home)
+      // If either side has no coordinates, include the cleaner so they aren't silently dropped
+      const nearbyCleaners = allCleaners.filter((cleaner) => {
+        const cleanerLat = cleaner.serviceAreaLatitude
+          ? parseFloat(cleaner.serviceAreaLatitude)
+          : null;
+        const cleanerLon = cleaner.serviceAreaLongitude
+          ? parseFloat(cleaner.serviceAreaLongitude)
+          : null;
+
+        if (!cleanerLat || !cleanerLon || !homeLat || !homeLon) return true;
+
+        const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
+        return distanceCheck.canBook !== false;
       });
 
       // Get already assigned cleaner IDs
@@ -158,9 +196,9 @@ async function processUrgentFillNotifications(io = null) {
         urgencyPrefix = "⚠️ ";
       }
 
-      // Notify eligible cleaners
+      // Notify eligible nearby cleaners
       let notifiedCount = 0;
-      for (const cleaner of cleaners) {
+      for (const cleaner of nearbyCleaners) {
         if (assignedCleanerIds.includes(cleaner.id)) continue;
 
         await NotificationService.createNotification({
@@ -180,13 +218,16 @@ async function processUrgentFillNotifications(io = null) {
         notifiedCount++;
       }
 
-      // Update last notification time
-      await job.update({ urgentNotificationSentAt: new Date() });
+      // Update last notification time and increment count
+      const isResend = job.urgentNotificationSentAt !== null;
+      await job.update({
+        urgentNotificationSentAt: new Date(),
+        urgentNotificationCount: (job.urgentNotificationCount || 0) + 1,
+      });
       processed++;
 
-      const isResend = job.urgentNotificationSentAt !== null;
       console.log(
-        `[MultiCleanerFillMonitor] ${isResend ? "Resent" : "Sent"} urgent fill notifications for job ${job.id} to ${notifiedCount} cleaners (${daysUntil} days until appointment)`
+        `[MultiCleanerFillMonitor] ${isResend ? "Resent" : "Sent"} urgent fill notifications for job ${job.id} to ${notifiedCount} nearby cleaners (${daysUntil} days until appointment, send #${(job.urgentNotificationCount || 0) + 1}/${maxUrgentNotifications})`
       );
     } catch (error) {
       console.error(
@@ -781,11 +822,23 @@ async function processExpiredEdgeCaseDecisions(io = null) {
 
   for (const job of jobs) {
     try {
+      await sequelize.transaction(async (t) => {
+        // Re-read with a row lock so two cron instances can't both auto-proceed the same job
+        const lockedJob = await MultiCleanerJob.findByPk(job.id, {
+          lock: t.LOCK.UPDATE,
+          transaction: t,
+        });
+
+        if (!lockedJob || lockedJob.homeownerDecision !== "pending") {
+          // Already processed by another instance or state changed — skip
+          return;
+        }
+
       const { appointment } = job;
       const home = appointment.home;
       const homeowner = appointment.user;
 
-      if (!home || !homeowner) continue;
+      if (!home || !homeowner) return;
 
       // Get all confirmed cleaners
       const confirmedCompletions = await CleanerJobCompletion.findAll({
@@ -794,19 +847,19 @@ async function processExpiredEdgeCaseDecisions(io = null) {
           status: { [Op.notIn]: ["dropped_out", "no_show"] },
         },
         include: [{ model: User, as: "cleaner" }],
+        transaction: t,
       });
 
-      if (confirmedCompletions.length === 0) continue;
+      if (confirmedCompletions.length === 0) return;
 
       const confirmedCount = confirmedCompletions.length;
       const requiredCount = job.totalCleanersRequired;
 
-      // Auto-proceed: Update job status
-      await job.update({
+      // Auto-proceed: Update job status inside the transaction
+      await lockedJob.update({
         homeownerDecision: "auto_proceeded",
         homeownerDecisionAt: now,
-        // Keep the job as partially_filled but allow payment capture
-      });
+      }, { transaction: t });
 
       // Format date and address for notifications
       const appointmentDate = new Date(appointment.date);
@@ -957,6 +1010,7 @@ async function processExpiredEdgeCaseDecisions(io = null) {
       console.log(
         `[MultiCleanerFillMonitor] Auto-proceeded job ${job.id} - homeowner ${homeowner.id} didn't respond, ${confirmedCount}/${requiredCount} cleaners confirmed: [${cleanerIds.join(", ")}]`
       );
+      }); // end sequelize.transaction
     } catch (error) {
       console.error(
         `[MultiCleanerFillMonitor] Error processing expired edge case for job ${job.id}:`,

@@ -225,17 +225,17 @@ const MyRequests = ({ state }) => {
 
       if (homeIdsNeedingFetch.length === 0) return;
 
-      try {
-        const locations = await Promise.all(
-          homeIdsNeedingFetch.map(async (homeId) => {
+      const locations = await Promise.all(
+        homeIdsNeedingFetch.map(async (homeId) => {
+          try {
             const loc = await FetchData.getLatAndLong(homeId);
             return { [homeId]: loc };
-          })
-        );
-        setAppointmentLocations(Object.assign({}, ...locations));
-      } catch (error) {
-        console.log("Error fetching appointment locations:", error.message);
-      }
+          } catch {
+            return null;
+          }
+        })
+      );
+      setAppointmentLocations(Object.assign({}, ...locations.filter(Boolean)));
     };
 
     fetchLocations();

@@ -1,6 +1,7 @@
 const EncryptionService = require("../services/EncryptionService");
 const MultiCleanerService = require("../services/MultiCleanerService");
 
+
 class AppointmentSerializer {
 	// Fields that are encrypted in the database
 	static encryptedFields = ["keyPadCode", "keyLocation", "contact"];
@@ -181,6 +182,18 @@ class AppointmentSerializer {
 					const isEdgeLargeHome = await MultiCleanerService.isEdgeLargeHome(numBeds, numBaths);
 					const soloAllowed = await MultiCleanerService.isSoloAllowed(numBeds, numBaths);
 
+					const homeData = home.dataValues || home;
+					const decryptField = (val) => (val ? EncryptionService.decrypt(val) : null);
+					// Coordinates may be encrypted strings when home is a nested include
+					// (afterFind hook only fires for direct queries). Decrypt and parse explicitly.
+					const decryptCoord = (val) => {
+						if (val === null || val === undefined) return null;
+						if (typeof val === "number") return isNaN(val) ? null : val;
+						const dec = EncryptionService.decrypt(String(val));
+						const num = parseFloat(dec);
+						return isNaN(num) ? null : num;
+					};
+
 					return {
 						...appt,
 						isLargeHome,
@@ -188,11 +201,16 @@ class AppointmentSerializer {
 						soloAllowed,
 						numBeds,
 						numBaths,
+						// Named home props for EmployeeAssignmentTile (avoids extra API call)
+						homeCity: decryptField(homeData.city),
+						homeState: decryptField(homeData.state),
+						homeNumBeds: numBeds,
+						homeNumBaths: numBaths,
 						// Include home location for distance calculations
-						latitude: home.latitude,
-						longitude: home.longitude,
+						latitude: decryptCoord(homeData.latitude),
+						longitude: decryptCoord(homeData.longitude),
 						// Include home timezone for date handling
-						timezone: home.timezone || "America/New_York",
+						timezone: homeData.timezone || "America/New_York",
 					};
 				}
 

@@ -27,6 +27,16 @@ class MultiCleanerJobSerializer {
 		return EncryptionService.decrypt(value);
 	}
 
+	// Coordinates are stored as encrypted strings; if the afterFind hook already
+	// decrypted them they'll be numbers — handle both cases.
+	static decryptCoordinate(value) {
+		if (value === null || value === undefined) return null;
+		if (typeof value === "number") return isNaN(value) ? null : value;
+		const decrypted = EncryptionService.decrypt(String(value));
+		const num = parseFloat(decrypted);
+		return isNaN(num) ? null : num;
+	}
+
 	static decryptUserField(value) {
 		if (!value) return null;
 		return EncryptionService.decrypt(value);
@@ -68,8 +78,10 @@ class MultiCleanerJobSerializer {
 			timeToBeCompleted: data.timeToBeCompleted,
 			cleanersNeeded: data.cleanersNeeded,
 			// Include coordinates for distance calculations (not sensitive)
-			latitude: data.latitude,
-			longitude: data.longitude,
+			// Coordinates may be encrypted strings (afterFind hook only fires for direct queries,
+			// not nested includes), so decrypt and parse explicitly
+			latitude: this.decryptCoordinate(data.latitude),
+			longitude: this.decryptCoordinate(data.longitude),
 		};
 
 		// Only include sensitive address and access details when allowed

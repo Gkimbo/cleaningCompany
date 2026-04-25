@@ -234,6 +234,17 @@ const NotificationDetailScreen = () => {
         setShowDropoutModal(true);
         break;
 
+      case "multi_cleaner_urgent":
+      case "multi_cleaner_offer":
+      case "last_minute_urgent":
+        // Navigate to job search page filtered to this specific appointment
+        if (notification.data?.appointmentId) {
+          navigate(`/new-job-choice?appointmentId=${notification.data.appointmentId}`);
+        } else {
+          navigate("/new-job-choice");
+        }
+        break;
+
       case "unassigned_reminder_bo":
         // Navigate to job assignment for this appointment
         if (notification.data?.appointmentId) {
@@ -580,8 +591,9 @@ const NotificationDetailScreen = () => {
           </View>
         </View>
 
-        {/* Additional Details */}
-        {notification.data && Object.keys(notification.data).length > 0 && (
+        {/* Additional Details — hidden for urgent job types which have their own details card */}
+        {notification.data && Object.keys(notification.data).length > 0 &&
+          !["multi_cleaner_urgent", "multi_cleaner_offer", "last_minute_urgent"].includes(notification.type) && (
           <View style={styles.detailsCard}>
             <Text style={styles.detailsTitle}>Details</Text>
 
@@ -1264,11 +1276,182 @@ const NotificationDetailScreen = () => {
           </View>
         )}
 
+        {/* Urgent Job Notification - Appointment Details + Action/Status */}
+        {["multi_cleaner_urgent", "multi_cleaner_offer", "last_minute_urgent"].includes(notification.type) && (() => {
+          const isExpired = notification.expiresAt && new Date() > new Date(notification.expiresAt);
+          const isFilled = notification.data?.filled;
+          const appt = notification.appointment;
+          const home = appt?.home;
+          const appointmentGone = !appt;
+
+          // Earnings: multi-cleaner uses earningsAmount, last-minute uses price
+          const earningsCents = notification.data?.earningsAmount || appt?.price;
+          const earningsDisplay = earningsCents
+            ? `$${(earningsCents / 100).toFixed(2)}`
+            : null;
+
+          const appointmentDate = appt?.date;
+          const formattedDate = appointmentDate
+            ? (() => {
+                const d = appointmentDate;
+                if (typeof d === "string" && d.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                  const [year, month, day] = d.split("-");
+                  return new Date(year, month - 1, day).toLocaleDateString("en-US", {
+                    weekday: "long", month: "long", day: "numeric", year: "numeric",
+                  });
+                }
+                return new Date(d).toLocaleDateString("en-US", {
+                  weekday: "long", month: "long", day: "numeric", year: "numeric",
+                });
+              })()
+            : null;
+
+          return (
+            <>
+              {/* Appointment Details Card — only when appointment still exists */}
+              {!appointmentGone && <View style={styles.urgentJobDetailsCard}>
+                <Text style={styles.urgentJobDetailsTitle}>Appointment Details</Text>
+
+                {formattedDate && (
+                  <View style={styles.urgentJobDetailRow}>
+                    <Feather name="calendar" size={16} color={colors.primary[600]} />
+                    <Text style={styles.urgentJobDetailText}>{formattedDate}</Text>
+                  </View>
+                )}
+
+                {appt?.timeToBeCompleted && (
+                  <View style={styles.urgentJobDetailRow}>
+                    <Feather name="clock" size={16} color={colors.primary[600]} />
+                    <Text style={styles.urgentJobDetailText}>{appt.timeToBeCompleted}</Text>
+                  </View>
+                )}
+
+                {earningsDisplay && (
+                  <View style={styles.urgentJobDetailRow}>
+                    <Feather name="dollar-sign" size={16} color={colors.success[600]} />
+                    <Text style={[styles.urgentJobDetailText, styles.urgentJobEarnings]}>{earningsDisplay}</Text>
+                  </View>
+                )}
+
+                {home && (home.numBeds || home.numBaths) && (
+                  <View style={styles.urgentJobDetailRow}>
+                    <Feather name="home" size={16} color={colors.primary[600]} />
+                    <Text style={styles.urgentJobDetailText}>
+                      {[home.numBeds && `${home.numBeds} bed`, home.numBaths && `${home.numBaths} bath`].filter(Boolean).join(", ")}
+                      {home.squareFootage ? ` · ${home.squareFootage.toLocaleString()} sq ft` : ""}
+                    </Text>
+                  </View>
+                )}
+
+                {home?.city && (
+                  <View style={styles.urgentJobDetailRow}>
+                    <Feather name="map-pin" size={16} color={colors.primary[600]} />
+                    <Text style={styles.urgentJobDetailText}>{home.city}</Text>
+                  </View>
+                )}
+
+                {notification.data?.distanceMiles && (
+                  <View style={styles.urgentJobDetailRow}>
+                    <Feather name="navigation" size={16} color={colors.primary[600]} />
+                    <Text style={styles.urgentJobDetailText}>{notification.data.distanceMiles} miles away</Text>
+                  </View>
+                )}
+
+                {(appt?.bringSheets?.toLowerCase() === "yes" || appt?.bringTowels?.toLowerCase() === "yes") && (
+                  <View style={styles.urgentJobDetailRow}>
+                    <Feather name="package" size={16} color={colors.warning[600]} />
+                    <Text style={styles.urgentJobDetailText}>
+                      {"Bring: " + [
+                        appt.bringSheets?.toLowerCase() === "yes" && "sheets",
+                        appt.bringTowels?.toLowerCase() === "yes" && "towels",
+                      ].filter(Boolean).join(" & ")}
+                    </Text>
+                  </View>
+                )}
+
+                {notification.type === "multi_cleaner_urgent" && notification.data?.daysRemaining != null && (
+                  <View style={[styles.urgentJobDetailRow, styles.urgentJobWarningRow]}>
+                    <Feather name="alert-circle" size={16} color={colors.error[600]} />
+                    <Text style={styles.urgentJobWarningText}>
+                      {notification.data.daysRemaining === 0
+                        ? "Job is today — act now!"
+                        : `${notification.data.daysRemaining} day${notification.data.daysRemaining === 1 ? "" : "s"} until appointment`}
+                    </Text>
+                  </View>
+                )}
+              </View>}
+
+              {/* Action / Status Card */}
+              <View style={styles.newHomeActionCard}>
+                {appointmentGone ? (
+                  <>
+                    <View style={styles.filledJobIconContainer}>
+                      <Feather name="x-circle" size={28} color={colors.neutral[400]} />
+                    </View>
+                    <Text style={styles.filledJobTitle}>Appointment No Longer Available</Text>
+                    <Text style={styles.filledJobDescription}>
+                      This appointment has been removed or cancelled. Check out other available jobs in your area.
+                    </Text>
+                    <Pressable style={styles.viewButton} onPress={() => navigate("/new-job-choice")}>
+                      <Feather name="search" size={16} color={colors.primary[600]} />
+                      <Text style={styles.viewButtonText}>Browse Other Jobs</Text>
+                    </Pressable>
+                  </>
+                ) : isFilled ? (
+                  <>
+                    <View style={styles.filledJobIconContainer}>
+                      <Feather name="check-circle" size={28} color={colors.neutral[500]} />
+                    </View>
+                    <Text style={styles.filledJobTitle}>Job Already Filled</Text>
+                    <Text style={styles.filledJobDescription}>
+                      Another cleaner has already taken this job. Check out other available appointments.
+                    </Text>
+                    <Pressable style={styles.viewButton} onPress={() => navigate("/new-job-choice")}>
+                      <Feather name="search" size={16} color={colors.primary[600]} />
+                      <Text style={styles.viewButtonText}>Browse Other Jobs</Text>
+                    </Pressable>
+                  </>
+                ) : isExpired ? (
+                  <>
+                    <View style={styles.filledJobIconContainer}>
+                      <Feather name="clock" size={28} color={colors.neutral[400]} />
+                    </View>
+                    <Text style={styles.filledJobTitle}>This Job Has Passed</Text>
+                    <Text style={styles.filledJobDescription}>
+                      The window for this job has closed. Check out other available appointments in your area.
+                    </Text>
+                    <Pressable style={styles.viewButton} onPress={() => navigate("/new-job-choice")}>
+                      <Feather name="search" size={16} color={colors.primary[600]} />
+                      <Text style={styles.viewButtonText}>Browse Other Jobs</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.newHomeActionTitle}>
+                      {notification.type === "last_minute_urgent" ? "Last-Minute Job Available" : "Urgent: Job Needs Cleaners"}
+                    </Text>
+                    <Text style={styles.newHomeActionDescription}>
+                      {notification.type === "last_minute_urgent"
+                        ? "A last-minute cleaning is available. Tap below to view and request it."
+                        : "This multi-cleaner job still has open slots. Tap below to view and join."}
+                    </Text>
+                    <Pressable style={styles.primaryActionButton} onPress={handleActionPress}>
+                      <Feather name="briefcase" size={18} color={colors.neutral[0]} />
+                      <Text style={styles.primaryActionButtonText}>View & Request Appointment</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </>
+          );
+        })()}
+
         {/* Action Button - only for types without inline actions */}
         {notification.actionRequired &&
           !["solo_completion_offer", "new_home_request", "pending_booking", "business_owner_declined",
             "payment_failed", "payment_retry_failed", "edge_case_decision_required",
-            "cleaner_dropout", "multi_cleaner_final_warning"].includes(notification.type) && (
+            "cleaner_dropout", "multi_cleaner_final_warning",
+            "multi_cleaner_urgent", "multi_cleaner_offer", "last_minute_urgent"].includes(notification.type) && (
           <Pressable style={styles.actionButton} onPress={handleActionPress}>
             <Text style={styles.actionButtonText}>Take Action</Text>
             <Feather name="arrow-right" size={18} color={colors.neutral[0]} />
@@ -1806,6 +1989,67 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.neutral[400],
     textAlign: "center",
+  },
+  // Urgent job appointment details card
+  urgentJobDetailsCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  urgentJobDetailsTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "700",
+    color: colors.neutral[800],
+    marginBottom: spacing.md,
+  },
+  urgentJobDetailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  urgentJobDetailText: {
+    fontSize: typography.fontSize.base,
+    color: colors.neutral[700],
+    flex: 1,
+  },
+  urgentJobEarnings: {
+    fontWeight: "700",
+    color: colors.success[700],
+    fontSize: typography.fontSize.lg,
+  },
+  urgentJobWarningRow: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.error[50],
+    padding: spacing.sm,
+    borderRadius: radius.md,
+  },
+  urgentJobWarningText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.error[700],
+    fontWeight: "600",
+    flex: 1,
+  },
+  // Filled job state styles
+  filledJobIconContainer: {
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  filledJobTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: "600",
+    color: colors.neutral[600],
+    textAlign: "center",
+    marginBottom: spacing.xs,
+  },
+  filledJobDescription: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[500],
+    textAlign: "center",
+    marginBottom: spacing.lg,
+    lineHeight: 20,
   },
   // Cleaner Profile Card styles
   cleanerProfileCard: {

@@ -537,8 +537,8 @@ class FetchData {
     return result;
   }
 
-  static async getCleanerProfile(cleanerId) {
-    const result = await HttpClient.get(`/employee-info/cleaner/${cleanerId}`, { skipAuth: true });
+  static async getCleanerProfile(cleanerId, token = null) {
+    const result = await HttpClient.get(`/employee-info/cleaner/${cleanerId}`, { token });
 
     if (result.success === false) {
       if (__DEV__) console.error("Error fetching cleaner profile:", result.error);

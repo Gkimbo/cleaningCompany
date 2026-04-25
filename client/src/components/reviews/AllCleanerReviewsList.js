@@ -135,7 +135,7 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
     setLoading(true);
     try {
       // First try to get from API
-      const response = await FetchData.getCleanerProfile(id);
+      const response = await FetchData.getCleanerProfile(id, state.currentUser?.token);
       if (response.cleaner) {
         setCleaner(response.cleaner);
       } else {

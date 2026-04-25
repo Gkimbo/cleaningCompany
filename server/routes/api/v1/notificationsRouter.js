@@ -1,6 +1,7 @@
 const express = require("express");
 const { Op } = require("sequelize");
-const { Notification, UserAppointments, CleanerClient, User } = require("../../../models");
+const { Notification, UserAppointments, UserHomes, CleanerClient, User } = require("../../../models");
+const EncryptionService = require("../../../services/EncryptionService");
 const authenticateToken = require("../../../middleware/authenticatedToken");
 const NotificationSerializer = require("../../../serializers/NotificationSerializer");
 
@@ -137,8 +138,16 @@ notificationsRouter.get("/:id", authenticateToken, async (req, res) => {
         {
           model: UserAppointments,
           as: "appointment",
-          attributes: ["id", "date", "price", "homeId", "clientResponse", "expiresAt"],
+          attributes: ["id", "date", "price", "homeId", "clientResponse", "expiresAt", "timeToBeCompleted", "bringSheets", "bringTowels"],
           required: false,
+          include: [
+            {
+              model: UserHomes,
+              as: "home",
+              attributes: ["id", "address", "city", "numBeds", "numBaths", "squareFootage", "nickName"],
+              required: false,
+            },
+          ],
         },
       ],
     });

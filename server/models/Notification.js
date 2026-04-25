@@ -140,24 +140,34 @@ module.exports = (sequelize, DataTypes) => {
     return new Date() > new Date(this.expiresAt);
   };
 
-  // Class method to get unread count for a user
+  // Class method to get unread count for a user (excludes expired notifications)
   Notification.getUnreadCount = async function (userId) {
+    const { Op } = require("sequelize");
     return await this.count({
       where: {
         userId,
         isRead: false,
+        [Op.or]: [
+          { expiresAt: null },
+          { expiresAt: { [Op.gt]: new Date() } },
+        ],
       },
     });
   };
 
-  // Class method to get action-required count for a user
+  // Class method to get action-required count for a user (excludes expired notifications)
   // Note: Counts ALL action-required notifications regardless of read status
   // Badge persists until the action is resolved (e.g., appointment assigned)
   Notification.getActionRequiredCount = async function (userId) {
+    const { Op } = require("sequelize");
     return await this.count({
       where: {
         userId,
         actionRequired: true,
+        [Op.or]: [
+          { expiresAt: null },
+          { expiresAt: { [Op.gt]: new Date() } },
+        ],
       },
     });
   };

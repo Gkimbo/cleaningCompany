@@ -38,9 +38,18 @@ const RequestedTile = ({
   removeRequest,
   distance,
   timeToBeCompleted,
+  homeCity = null,
+  homeState = null,
+  homeNumBeds = null,
+  homeNumBaths = null,
 }) => {
   const { pricing } = usePricing();
-  const [home, setHome] = useState({});
+  const [home, setHome] = useState({
+    city: homeCity || "",
+    state: homeState || "",
+    numBeds: homeNumBeds || "",
+    numBaths: homeNumBaths || "",
+  });
   const [linensExpanded, setLinensExpanded] = useState(false);
 
   const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
@@ -55,6 +64,9 @@ const RequestedTile = ({
   };
 
   useEffect(() => {
+    // Skip fetch if inline home data was passed as props
+    if (homeCity && homeNumBeds !== null) return;
+    if (!homeId) return;
     FetchData.getHome(homeId)
       .then((response) => {
         setHome(response.home);
@@ -62,7 +74,7 @@ const RequestedTile = ({
       .catch(() => {
         // Silently handle - home details are optional
       });
-  }, [homeId]);
+  }, [homeId, homeCity, homeNumBeds]);
 
   const miles = distance ? (distance * 0.621371).toFixed(1) : null;
 
@@ -119,13 +131,13 @@ const RequestedTile = ({
         <Text style={styles.pendingBadge}>Awaiting Approval</Text>
       </View>
 
-      {/* Location */}
-      <Text style={styles.address}>
-        {home.city || "Loading..."}, {home.state}
-      </Text>
-
       {/* Date */}
       <Text style={styles.date}>{formatDate(date)}</Text>
+
+      {/* Location */}
+      <Text style={styles.address}>
+        {home.city && home.state ? `${home.city}, ${home.state}` : home.city || "—"}
+      </Text>
 
       {/* Details Row */}
       <View style={styles.detailsRow}>
@@ -208,7 +220,7 @@ const RequestedTile = ({
       {/* Earnings */}
       <View style={styles.earningsRow}>
         <Icon name="dollar" size={12} color={colors.success[600]} />
-        <Text style={styles.earningsText}>{(amount / 100).toFixed(0)} potential</Text>
+        <Text style={styles.earningsText}>{(amount / 100).toFixed(2)} potential</Text>
       </View>
 
       {/* Time Constraint */}
@@ -280,8 +292,9 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   date: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
     marginBottom: spacing.sm,
   },
   detailsRow: {

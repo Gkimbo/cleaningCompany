@@ -4,8 +4,9 @@
 // ============================================================
 import { Platform } from "react-native";
 
-// Environment configuration - change this single value to switch environments
-const ENVIRONMENT = "development"; // "development" or "production"
+// Environment configuration — automatically "production" in production builds, "development" otherwise
+// __DEV__ is set by Expo/Metro: true during `expo start`, false in standalone/production builds
+const ENVIRONMENT = typeof __DEV__ !== "undefined" && __DEV__ ? "development" : "production";
 
 // Production URLs
 const PRODUCTION_API_HOST = "https://api.kleanr.app";

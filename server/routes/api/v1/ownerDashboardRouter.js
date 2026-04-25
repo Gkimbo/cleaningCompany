@@ -37,17 +37,7 @@ const NotificationService = require("../../../services/NotificationService");
 const LastMinuteNotificationService = require("../../../services/LastMinuteNotificationService");
 const HomeownerFreezeService = require("../../../services/HomeownerFreezeService");
 const TimezoneService = require("../../../services/TimezoneService");
-const rateLimit = require("express-rate-limit");
-
-// Stricter rate limiter for financial endpoints (withdrawals)
-const financialLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // Only 20 financial operations per 15 minutes
-  message: { error: "Too many financial requests, please try again later" },
-  standardHeaders: true,
-  legacyHeaders: false,
-  validate: { xForwardedForHeader: false },
-});
+const { financialLimiter } = require("../../../middleware/rateLimiters");
 
 const ownerDashboardRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;

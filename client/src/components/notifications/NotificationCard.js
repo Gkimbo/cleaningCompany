@@ -63,6 +63,10 @@ const NotificationCard = ({ notification, onPress, onMarkRead, onRebook }) => {
     notification.data?.appointmentId &&
     (notification.data?.rebookingAttempts || 0) < 3;
 
+  const isUrgentJobType = ["multi_cleaner_urgent", "multi_cleaner_offer", "last_minute_urgent"].includes(notification.type);
+  const isUrgentJobFilled = isUrgentJobType && notification.data?.filled === true;
+  const isUrgentJobExpired = isUrgentJobType && !notification.data?.filled && isExpired;
+
   // Get expiration display text
   const getExpirationText = () => {
     if (!notification.expiresAt) return null;
@@ -132,7 +136,15 @@ const NotificationCard = ({ notification, onPress, onMarkRead, onRebook }) => {
           )}
         </View>
 
-        {notification.actionRequired && (
+        {isUrgentJobFilled ? (
+          <View style={styles.filledBadge}>
+            <Text style={styles.filledBadgeText}>Job Filled</Text>
+          </View>
+        ) : isUrgentJobExpired ? (
+          <View style={styles.filledBadge}>
+            <Text style={styles.filledBadgeText}>Job Passed</Text>
+          </View>
+        ) : notification.actionRequired && (
           <View style={styles.actionBadge}>
             <Text style={styles.actionBadgeText}>Action Required</Text>
           </View>
@@ -286,6 +298,19 @@ const styles = StyleSheet.create({
   actionBadgeText: {
     fontSize: typography.fontSize.xs,
     color: colors.warning[700],
+    fontWeight: "600",
+  },
+  filledBadge: {
+    marginTop: spacing.xs,
+    alignSelf: "flex-start",
+    backgroundColor: colors.neutral[200],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  filledBadgeText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.neutral[600],
     fontWeight: "600",
   },
 });

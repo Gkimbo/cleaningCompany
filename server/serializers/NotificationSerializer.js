@@ -51,12 +51,30 @@ class NotificationSerializer {
 
 	static serializeAppointmentSummary(appointment) {
 		const data = appointment.dataValues || appointment;
-		return {
+		const summary = {
 			id: data.id,
 			date: data.date,
+			price: data.price,
 			homeId: data.homeId,
-			completed: data.completed
+			completed: data.completed,
+			timeToBeCompleted: data.timeToBeCompleted,
+			bringSheets: data.bringSheets,
+			bringTowels: data.bringTowels,
 		};
+
+		if (appointment.home) {
+			const home = appointment.home.dataValues || appointment.home;
+			summary.home = {
+				id: home.id,
+				nickName: home.nickName,
+				city: home.city ? EncryptionService.decrypt(home.city) : null,
+				numBeds: home.numBeds,
+				numBaths: home.numBaths,
+				squareFootage: home.squareFootage,
+			};
+		}
+
+		return summary;
 	}
 
 	static serializeCleanerClientSummary(cleanerClient) {

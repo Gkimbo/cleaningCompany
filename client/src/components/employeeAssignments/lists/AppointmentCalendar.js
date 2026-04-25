@@ -181,15 +181,30 @@ const AppointmentCalendar = ({ state }) => {
       const all = [...appointments, ...requests];
       const locations = await Promise.all(
         all.map(async (appt) => {
-          const loc = await FetchData.getLatAndLong(appt.homeId);
-          if (!loc) return null;
+          // Use inline coordinates from API response when available
+          let lat = appt.latitude;
+          let lng = appt.longitude;
+
+          // Fall back to fetching only if inline coords are missing
+          if ((lat == null || lng == null) && appt.homeId) {
+            try {
+              const loc = await FetchData.getLatAndLong(appt.homeId);
+              lat = loc?.latitude;
+              lng = loc?.longitude;
+            } catch {
+              // Permission denied or network error — skip distance for this home
+              return null;
+            }
+          }
+
+          if (lat == null || lng == null) return null;
           const distance = haversineDistance(
             userLocation.latitude,
             userLocation.longitude,
-            loc.latitude,
-            loc.longitude
+            lat,
+            lng
           );
-          return { [appt.homeId]: { location: loc, distance } };
+          return { [appt.homeId]: { location: { latitude: lat, longitude: lng }, distance } };
         })
       );
       setAppointmentLocations(Object.assign({}, ...locations.filter(Boolean)));

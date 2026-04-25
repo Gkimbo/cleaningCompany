@@ -13,8 +13,12 @@ jest.mock("../../services/TimezoneService", () => ({
 }));
 
 jest.mock("../../models", () => ({
+  sequelize: {
+    transaction: jest.fn(async (cb) => cb({ LOCK: { UPDATE: "UPDATE" } })),
+  },
   MultiCleanerJob: {
     findAll: jest.fn(),
+    findByPk: jest.fn(),
   },
   UserAppointments: {},
   UserHomes: {},
@@ -26,6 +30,12 @@ jest.mock("../../models", () => ({
   },
   CleanerJobOffer: {},
   Op: require("sequelize").Op,
+}));
+
+// geoUtils: default to canBook: true so existing tests are unaffected
+jest.mock("../../utils/geoUtils", () => ({
+  checkBookingDistance: jest.fn(() => ({ canBook: true })),
+  MAX_BOOKING_DISTANCE_MILES: 30,
 }));
 
 jest.mock("../../config/businessConfig", () => ({
@@ -105,6 +115,7 @@ describe("MultiCleanerFillMonitor", () => {
       totalCleanersRequired: options.totalCleanersRequired || 2,
       cleanersConfirmed: options.cleanersConfirmed || 0,
       urgentNotificationSentAt: options.urgentNotificationSentAt || null,
+      urgentNotificationCount: options.urgentNotificationCount || 0,
       getRemainingSlots: jest.fn().mockReturnValue(options.remainingSlots || 2),
       update: jest.fn().mockResolvedValue(true),
       appointment: {
@@ -112,6 +123,8 @@ describe("MultiCleanerFillMonitor", () => {
         date: dateStr,
         home: {
           id: 1,
+          latitude: "42.3601",
+          longitude: "-71.0589",
           address: "123 Main St",
           city: "Boston",
         },
@@ -159,7 +172,10 @@ describe("MultiCleanerFillMonitor", () => {
       const result = await processUrgentFillNotifications();
 
       expect(NotificationService.createNotification).toHaveBeenCalled();
-      expect(mockJob.update).toHaveBeenCalledWith({ urgentNotificationSentAt: expect.any(Date) });
+      expect(mockJob.update).toHaveBeenCalledWith({
+        urgentNotificationSentAt: expect.any(Date),
+        urgentNotificationCount: 1,
+      });
       expect(result).toBe(1);
     });
 

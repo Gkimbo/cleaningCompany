@@ -22,7 +22,7 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 import Icon from "react-native-vector-icons/FontAwesome";
-import { useNavigate } from "react-router-native";
+import { useNavigate, useLocation } from "react-router-native";
 import * as Location from "expo-location";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
@@ -132,6 +132,14 @@ const SelectNewJobList = ({ state }) => {
   const [stripeSetupMessage, setStripeSetupMessage] = useState("");
 
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Read appointmentId from query params (from urgent notification deep link)
+  const highlightAppointmentId = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const id = params.get("appointmentId");
+    return id ? parseInt(id, 10) : null;
+  }, [location.search]);
 
   // Filter state
   const [filters, setFilters] = useState(defaultFilters);
@@ -415,40 +423,33 @@ const SelectNewJobList = ({ state }) => {
     };
   }, []);
 
-  // Fetch home details for filtering
+  // Build home details for filtering from inline appointment data
+  // (homeCity, homeState, homeNumBeds, homeNumBaths are now included in the
+  //  appointment response from the server, so no separate API call is needed)
   useEffect(() => {
-    const fetchHomeDetails = async () => {
-      const allItems = [...allAppointments, ...allRequests];
-      const homeIds = [...new Set(allItems.map((a) => a.homeId))];
-      const details = {};
+    const allItems = [...allAppointments, ...allRequests];
+    const details = {};
 
-      await Promise.all(
-        homeIds.map(async (homeId) => {
-          try {
-            const response = await FetchData.getHome(homeId);
-            if (response && !response.error) {
-              details[homeId] = response.home || response;
-            }
-          } catch {
-            // Silently handle - home details are optional
-          }
-        })
-      );
+    allItems.forEach((appt) => {
+      if (appt.homeId) {
+        details[appt.homeId] = {
+          city: appt.homeCity ?? null,
+          state: appt.homeState ?? null,
+          numBeds: appt.homeNumBeds ?? appt.numBeds ?? null,
+          numBaths: appt.homeNumBaths ?? appt.numBaths ?? null,
+        };
+      }
+    });
 
-      setHomeDetails(details);
-      const cities = [
-        ...new Set(
-          Object.values(details)
-            .map((h) => h?.city)
-            .filter(Boolean)
-        ),
-      ].sort();
-      setAvailableCities(cities);
-    };
-
-    if (allAppointments.length > 0 || allRequests.length > 0) {
-      fetchHomeDetails();
-    }
+    setHomeDetails(details);
+    const cities = [
+      ...new Set(
+        Object.values(details)
+          .map((h) => h?.city)
+          .filter(Boolean)
+      ),
+    ].sort();
+    setAvailableCities(cities);
   }, [allAppointments, allRequests]);
 
   const onRefresh = useCallback(() => {
@@ -1144,9 +1145,19 @@ const SelectNewJobList = ({ state }) => {
     if (item.isMultiCleanerJob) return false;
     // Exclude appointments already in the multi-cleaner offers/jobs lists
     if (multiCleanerAppointmentIds.has(item.id)) return false;
+    // When deep-linked from a notification, only show that specific appointment
+    if (highlightAppointmentId && item.id !== highlightAppointmentId) return false;
     return true;
   });
   const requestedJobs = filteredData.filter((item) => item.isRequest);
+
+  // When deep-linked from a notification, filter multi-cleaner items too
+  const displayedMultiCleanerOffers = highlightAppointmentId
+    ? multiCleanerOffers.filter((o) => o.appointmentId === highlightAppointmentId)
+    : multiCleanerOffers;
+  const displayedMultiCleanerJobs = highlightAppointmentId
+    ? availableMultiCleanerJobs.filter((j) => j.appointment?.id === highlightAppointmentId)
+    : availableMultiCleanerJobs;
 
   const currentSortLabel =
     sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
@@ -1177,16 +1188,26 @@ const SelectNewJobList = ({ state }) => {
         </Pressable>
       </View>
 
+      {/* Notification deep-link banner */}
+      {highlightAppointmentId && (
+        <View style={styles.highlightBanner}>
+          <Text style={styles.highlightBannerText}>Showing appointment from notification</Text>
+          <Pressable onPress={() => navigate("/new-job-choice")} style={styles.highlightBannerLink}>
+            <Text style={styles.highlightBannerLinkText}>View All Jobs</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Stats Summary */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>{availableJobs.length}</Text>
           <Text style={styles.statLabel}>Available</Text>
         </View>
-        {multiCleanerOffers.length + availableMultiCleanerJobs.length > 0 && (
+        {displayedMultiCleanerOffers.length + displayedMultiCleanerJobs.length > 0 && (
           <View style={[styles.statCard, styles.statCardTeam]}>
             <Text style={[styles.statValue, styles.statValueTeam]}>
-              {multiCleanerOffers.length + availableMultiCleanerJobs.length}
+              {displayedMultiCleanerOffers.length + displayedMultiCleanerJobs.length}
             </Text>
             <Text style={[styles.statLabel, styles.statLabelTeam]}>Team</Text>
           </View>
@@ -1250,9 +1271,10 @@ const SelectNewJobList = ({ state }) => {
           />
         }
       >
-        {filteredData.length === 0 &&
-        multiCleanerOffers.length === 0 &&
-        availableMultiCleanerJobs.length === 0 &&
+        {availableJobs.length === 0 &&
+        displayedMultiCleanerOffers.length === 0 &&
+        displayedMultiCleanerJobs.length === 0 &&
+        requestedJobs.length === 0 &&
         pendingMultiCleanerRequests.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
@@ -1267,16 +1289,25 @@ const SelectNewJobList = ({ state }) => {
               />
             </View>
             <Text style={styles.emptyTitle}>
-              {activeFilterCount > 0
+              {highlightAppointmentId
+                ? "Job No Longer Available"
+                : activeFilterCount > 0
                 ? "No Jobs Match Your Filters"
                 : "No Jobs Available"}
             </Text>
             <Text style={styles.emptyText}>
-              {activeFilterCount > 0
+              {highlightAppointmentId
+                ? "This job may have already been filled or expired. Browse other available opportunities."
+                : activeFilterCount > 0
                 ? "Try adjusting your filters to see more opportunities."
                 : "Check back later to see new cleaning opportunities in your area."}
             </Text>
-            {activeFilterCount > 0 ? (
+            {highlightAppointmentId ? (
+              <Pressable style={styles.refreshButton} onPress={() => navigate("/new-job-choice")}>
+                <Icon name="search" size={14} color={colors.neutral[0]} />
+                <Text style={styles.refreshButtonText}>Browse All Jobs</Text>
+              </Pressable>
+            ) : activeFilterCount > 0 ? (
               <Pressable
                 style={styles.clearFiltersButton}
                 onPress={() => setFilters(defaultFilters)}
@@ -1657,8 +1688,8 @@ const SelectNewJobList = ({ state }) => {
             )}
 
             {/* Team Cleaning Jobs Section */}
-            {(multiCleanerOffers.length > 0 ||
-              availableMultiCleanerJobs.length > 0) && (
+            {(displayedMultiCleanerOffers.length > 0 ||
+              displayedMultiCleanerJobs.length > 0) && (
               <View style={styles.section}>
                 <Pressable
                   style={styles.sectionHeader}
@@ -1678,8 +1709,8 @@ const SelectNewJobList = ({ state }) => {
                   </View>
                   <View style={styles.sectionHeaderRight}>
                     <Text style={styles.sectionCount}>
-                      {multiCleanerOffers.length +
-                        availableMultiCleanerJobs.length}
+                      {displayedMultiCleanerOffers.length +
+                        displayedMultiCleanerJobs.length}
                     </Text>
                     <Icon
                       name={
@@ -1694,7 +1725,7 @@ const SelectNewJobList = ({ state }) => {
                 {expandedSections.team && (
                   <>
                     {/* Personal Offers (direct invitations) */}
-                    {multiCleanerOffers.map((offer) => {
+                    {displayedMultiCleanerOffers.map((offer) => {
                       const jobData = transformOfferToJobData(offer);
                       return (
                         <View
@@ -1715,7 +1746,7 @@ const SelectNewJobList = ({ state }) => {
                     })}
 
                     {/* Available Open Jobs - Join directly without modal */}
-                    {availableMultiCleanerJobs.map((job) => {
+                    {displayedMultiCleanerJobs.map((job) => {
                       const jobData = transformJobData(job);
                       return (
                         <View key={`job-${job.id}`} style={styles.tileWrapper}>
@@ -1996,6 +2027,33 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     fontSize: typography.fontSize.base,
     color: colors.text.secondary,
+  },
+
+  // Notification deep-link banner
+  highlightBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.primary[200],
+  },
+  highlightBannerText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[700],
+    fontWeight: "500",
+  },
+  highlightBannerLink: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  highlightBannerLinkText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    fontWeight: "600",
+    textDecorationLine: "underline",
   },
 
   // Header

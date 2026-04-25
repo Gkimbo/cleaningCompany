@@ -1949,8 +1949,8 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
       // Check distance from cleaner's service area to home (max 30 miles)
       const cleanerLat = cleaner.serviceAreaLatitude ? parseFloat(cleaner.serviceAreaLatitude) : null;
       const cleanerLon = cleaner.serviceAreaLongitude ? parseFloat(cleaner.serviceAreaLongitude) : null;
-      const homeLat = home.latitude ? parseFloat(EncryptionService.decrypt(home.latitude)) : null;
-      const homeLon = home.longitude ? parseFloat(EncryptionService.decrypt(home.longitude)) : null;
+      const homeLat = home.latitude != null ? (typeof home.latitude === "number" ? home.latitude : parseFloat(EncryptionService.decrypt(home.latitude))) : null;
+      const homeLon = home.longitude != null ? (typeof home.longitude === "number" ? home.longitude : parseFloat(EncryptionService.decrypt(home.longitude))) : null;
 
       if (cleanerLat && cleanerLon && homeLat && homeLon) {
         const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);
@@ -2796,6 +2796,21 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
         },
       });
 
+      // Mark all last-minute urgent notifications for this appointment as filled
+      const lastMinuteNotifs = await Notification.findAll({
+        where: {
+          relatedAppointmentId: request.dataValues.appointmentId,
+          type: "last_minute_urgent",
+          actionRequired: true,
+        },
+      });
+      for (const notif of lastMinuteNotifs) {
+        await notif.update({
+          actionRequired: false,
+          data: { ...notif.data, filled: true },
+        });
+      }
+
       return res.status(200).json({ message: "Cleaner assigned successfully" });
     } else {
       await request.destroy();
@@ -2849,8 +2864,8 @@ appointmentRouter.post("/switch-cleaner", async (req, res) => {
     if (home) {
       const cleanerLat = newCleaner.serviceAreaLatitude ? parseFloat(newCleaner.serviceAreaLatitude) : null;
       const cleanerLon = newCleaner.serviceAreaLongitude ? parseFloat(newCleaner.serviceAreaLongitude) : null;
-      const homeLat = home.latitude ? parseFloat(EncryptionService.decrypt(home.latitude)) : null;
-      const homeLon = home.longitude ? parseFloat(EncryptionService.decrypt(home.longitude)) : null;
+      const homeLat = home.latitude != null ? (typeof home.latitude === "number" ? home.latitude : parseFloat(EncryptionService.decrypt(home.latitude))) : null;
+      const homeLon = home.longitude != null ? (typeof home.longitude === "number" ? home.longitude : parseFloat(EncryptionService.decrypt(home.longitude))) : null;
 
       if (cleanerLat && cleanerLon && homeLat && homeLon) {
         const distanceCheck = checkBookingDistance(cleanerLat, cleanerLon, homeLat, homeLon);

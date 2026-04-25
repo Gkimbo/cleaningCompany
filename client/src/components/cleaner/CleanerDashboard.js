@@ -319,18 +319,21 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, pricing }) => {
 
 // Pending Request Card Component
 const PendingRequestCard = ({ request, onPress, distance }) => {
-  const [home, setHome] = useState(null);
+  const [home, setHome] = useState(
+    request.homeCity
+      ? { city: request.homeCity, state: request.homeState, numBeds: request.homeNumBeds, numBaths: request.homeNumBaths }
+      : null
+  );
 
   useEffect(() => {
-    if (request.homeId) {
-      FetchData.getHome(request.homeId)
-        .then((response) => {
-          setHome(response.home);
-        })
-        .catch(() => {
-          // Silently handle - home details are optional
-        });
-    }
+    if (home || !request.homeId) return;
+    FetchData.getHome(request.homeId)
+      .then((response) => {
+        setHome(response.home);
+      })
+      .catch(() => {
+        // Silently handle - home details are optional
+      });
   }, [request.homeId]);
 
   const appointmentDate = new Date(request.date + "T12:00:00");
@@ -557,22 +560,26 @@ const CleanerDashboard = ({ state, dispatch }) => {
     const fetchRequestLocations = async () => {
       if (pendingRequests.length === 0) return;
 
-      try {
-        const uniqueHomeIds = [...new Set(pendingRequests.map(r => r.homeId))];
-        const locations = await Promise.all(
-          uniqueHomeIds.map(async (homeId) => {
+      // Use inline coordinates when available; fall back per-item to avoid one 403 killing all
+      const locMap = {};
+      pendingRequests.forEach((r) => {
+        if (r.homeId && r.latitude != null && r.longitude != null) {
+          locMap[r.homeId] = { latitude: r.latitude, longitude: r.longitude };
+        }
+      });
+
+      const missingIds = [...new Set(pendingRequests.map(r => r.homeId).filter(id => id && !locMap[id]))];
+      await Promise.all(
+        missingIds.map(async (homeId) => {
+          try {
             const loc = await FetchData.getLatAndLong(homeId);
-            return { homeId, loc };
-          })
-        );
-        const locMap = {};
-        locations.forEach(({ homeId, loc }) => {
-          locMap[homeId] = loc;
-        });
-        setRequestLocations(locMap);
-      } catch (error) {
-        console.log("[CleanerDashboard] Error fetching request locations:", error.message);
-      }
+            locMap[homeId] = loc;
+          } catch {
+            // Permission denied for unassigned homes — skip
+          }
+        })
+      );
+      setRequestLocations(locMap);
     };
 
     fetchRequestLocations();
